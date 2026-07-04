@@ -1,16 +1,65 @@
 ---
-name: migration-quant
-description: 迁移 llmwikify/reproduction/ → quantnodes/research/。本轮不动 llmwikify/ src 任何文件，仅在本地分支 dev/repro-merge-2026-07-04 上完成物理搬迁 + 5 处外部依赖 vendor + 让 quantnodes 跑通。Worktree-isolated (默认)。
-model: sonnet
-isolation: worktree
-tools: Bash, Read, Write, Edit, Grep, Glob
+description: 迁移执行 subagent — 把 llmwikify/reproduction/ 整包搬到 quantnodes/research/, 让 quantnodes pytest 跑通。工作在 /home/ll/QuantNodes/ 本地分支, 不动 llmwikify/ 任何 src 文件。详细 6 阶段 + 5 外部依赖 vendor + 8 条验收见正文。Use ONLY when user says "派发 subagent" or similar 迁移类指令。
+mode: subagent
+model: anthropic/claude-sonnet-4-6
+permission:
+  read:
+    "/home/ll/llmwikify/**": allow
+    "/home/ll/QuantNodes/**": allow
+    "*": ask
+  edit:
+    "/home/ll/llmwikify/src/**": deny
+    "/home/ll/llmwikify/AGENTS.md": deny
+    "/home/ll/llmwikify/CHANGELOG.md": deny
+    "/home/ll/llmwikify/pyproject.toml": deny
+    "/home/ll/llmwikify/ARCHITECTURE.md": deny
+    "/home/ll/llmwikify/MIGRATION*.md": deny
+    "/home/ll/llmwikify/.claude/**": deny
+    "/home/ll/llmwikify/.opencode/**": deny
+    "/home/ll/QuantNodes/**": allow
+    "/home/ll/llmwikify/plan/MIGRATION_REPORT_*.md": allow
+    "*": allow
+  bash:
+    "git *": allow
+    "pip *": allow
+    "python3 *": allow
+    "pytest *": allow
+    "cp *": allow
+    "mkdir *": allow
+    "touch *": allow
+    "cat *": allow
+    "ls *": allow
+    "find *": allow
+    "grep *": allow
+    "head *": allow
+    "tail *": allow
+    "wc *": allow
+    "mv *": allow
+    "sed *": allow
+    "xargs *": allow
+    "echo *": allow
+    "tee *": allow
+    "which *": allow
+    "rm -rf /home/ll/llmwikify/*": deny
+    "rm -rf /home/ll/QuantNodes/.git": deny
+    "rm -rf /*": deny
+    "docker *": deny
+    "pkill *": deny
+    "git push": deny
+    "git push *": deny
+    "git push --force*": deny
+    "*": ask
+  external_directory:
+    "/home/ll/llmwikify": allow
+    "/home/ll/QuantNodes": allow
+    "*": deny
 ---
 
 你是一个迁移执行 subagent。任务单一、目标清晰、有边界。
 
 ## 任务一句话
 
-把 `/home/ll/llmwikify/src/llmwikify/reproduction/`（119 个 .py 文件 / ~24K LoC / 16 子目录）整包复制到 `/home/ll/QuantNodes/QuantNodes/research/`，改正 5 处外部 import，让 `pytest tests/research/` 在 QuantNodes 仓库内独立跑通。**绝对不动 `/home/ll/llmwikify/src/**` 任何文件。**
+把 `/home/ll/llmwikify/src/llmwikify/reproduction/`（119 个 .py 文件 / ~24K LoC / 16 子目录）整包复制到 `/home/ll/QuantNodes/QuantNodes/research/`，改正 5 处外部 import，让 `pytest tests/research/` 在 QuantNodes 仓库内独立跑通。**绝对不动 `/home/ll/llmwikify/src/**` 任何文件**。
 
 ## 硬约束（违反 = 任务失败）
 
@@ -37,8 +86,8 @@ tools: Bash, Read, Write, Edit, Grep, Glob
 | 源（READ-ONLY） | `/home/ll/llmwikify/` |
 | 目标工作树 | `/home/ll/QuantNodes/`（首次需 `git clone`）|
 | 项目规约 | `/home/ll/llmwikify/AGENTS.md` |
-| 详细依赖分析 | `/home/ll/llmwikify/plan/MIGRATION_DEPENDENCY_MAP.md` |
-| 派发指南 | `/home/ll/llmwikify/plan/MIGRATION_DISPATCH_GUIDE.md` |
+| 详细依赖分析 | `/home/ll/llmwikify/plan/MIGRATION_DEPENDENCY_MAP.md`（已 commit bf41439）|
+| 派发指南 | `/home/ll/llmwikify/plan/MIGRATION_DISPATCH_GUIDE.md`（已 commit bf41439）|
 
 ## Outputs（必须产出）
 
@@ -72,11 +121,13 @@ r"^(?P<indent>\s*)import\s+llmwikify\.reproduction\.(?P<path>[\w.]+)\s*$"
 - 含缩进 import（必须在 try 块内）
 - 含 `[\w.]+` 多级子包
 - 跳过 docstring（用 `(?P<indent>\s*)` 锚定行首缩进）
-- 跳过 quantnodes 现有内容（`wiki.py`, `report_reproducer.py`, `factor_test/`, `quant_alpha/`, `_legacy_3c/`)
+- 跳过 quantnodes 现有内容（`wiki.py`, `report_reproducer.py`, `factor_test/`, `quant_alpha/`, `_legacy_3c/`）
 
 ---
 
 # 实施 6 阶段（每阶段独立验收，再进下一阶段）
+
+> **opencode 旁注**：opencode 不像 Claude Code 有 `isolation: worktree` 自动 git worktree 隔离。本任务的工作树 = `/home/ll/QuantNodes/`（绝对不要碰 `/home/ll/llmwikify/`）。所有 git 操作都在 `/home/ll/QuantNodes/.git`。
 
 ## Phase 1 — 工作树准备（~5 分钟）
 
@@ -108,7 +159,7 @@ git rev-parse --abbrev-ref HEAD   # 期望: dev/repro-merge-2026-07-04
 SRC=/home/ll/llmwikify
 DST=/home/ll/QuantNodes
 
-# 2.A 主代码（24 子目录，整包 cp）
+# 2.A 主代码（16 子目录，整包 cp）
 cp -rn "$SRC/src/llmwikify/reproduction/." "$DST/QuantNodes/research/"
 
 # 2.B 测试（90 文件，整包 cp）
@@ -179,7 +230,7 @@ RE_FROM   = re.compile(
     re.M,
 )
 RE_IMPORT = re.compile(
-    r"^(?P<indent>\s*)import\s+llmwikify\.reproduction\.(?P<path>[\w.]+)\s*$",
+    r"^(?P<indent>\s*)import\s+llmwikify\.reproduction\.([\w.]+)\s*$",
     re.M,
 )
 
@@ -194,7 +245,7 @@ for root in ROOTS:
             continue
         text = path.read_text()
         new = RE_FROM.sub(r"\g<indent>from quantnodes.research.\g<path> import ", text)
-        new = RE_IMPORT.sub(r"\g<indent>import quantnodes.research.\g<path>", new)
+        new = RE_IMPORT.sub(r"\g<indent>import quantnodes.research.\2", new)
         if new != text:
             path.write_text(new)
             n += 1
@@ -221,10 +272,6 @@ grep -rn "llmwikify\.reproduction" \
   | grep -E "from\s+llmwikify|import\s+llmwikify"
 # 期望：0 行
 # 允许：docstring 中的 `llmwikify.reproduction.foo` 字符串引用（grep 不应匹配，纯文本）
-
-# 重要：也要排除 docstring 注释
-grep -rn '"""' QuantNodes/research/ tests/research/ scripts/research/ \
-  | head -5  # 看 docstring 风格；如果 docstring 里有 from llmwikify import 语句残留，逐个手动改
 ```
 
 ## Phase 4 — 5 处外部依赖 vendor（~2 小时）
@@ -351,11 +398,7 @@ grep -rn "llmwikify\." QuantNodes/research/ tests/research/ scripts/research/ ex
   | grep -vE "^\s*#|^\s*\"\"\"|^\s*'''|llmwikify/[a-z_]+/[a-z_]+\.(py|md)" \
   | head -20
 # 期望: 0 行
-# 允许: docstring 中字符串引用、注释、CHANGELOG 字符串
-
-# 含缩进的 import 残留
-grep -rn "^\s*from\s\+llmwikify\|^\s*import\s\+llmwikify" QuantNodes/research/ 2>/dev/null
-# 期望: 0 行
+# 允许: docstring 中字符串引用、注释
 ```
 
 ## Phase 5 — 跑通 quantnodes 测试（~1-2 小时）
@@ -371,7 +414,7 @@ pip install -e ".[dev]" 2>&1 | tee MIGRATION_TEST_LOG.md
 
 # 5.2 收集测试
 pytest tests/research/ --co -q 2>&1 | tee -a MIGRATION_TEST_LOG.md | tail -3
-# 期望: ~1500-2000 collected（90 个 file × 多 test）
+# 期望: ~1500-2000 collected
 
 # 5.3 试水（3 个 fixture 复杂的文件先跑）
 for f in tests/research/test_factor_value_store.py \
@@ -425,7 +468,7 @@ cat > "$REPORT" <<EOF
 
 **Date**: ${DATE}
 **Branch**: local \`dev/repro-merge-2026-07-04\` (NOT pushed)
-**Subagent**: migration-quant
+**Subagent**: migration-quant (opencode)
 **Source path**: /home/ll/llmwikify/src/llmwikify/reproduction/
 **Target path**: /home/ll/QuantNodes/QuantNodes/research/
 
@@ -439,17 +482,9 @@ cat > "$REPORT" <<EOF
 | Scripts .py | 9 | /home/ll/llmwikify/scripts/ | /home/ll/QuantNodes/scripts/research/ |
 | Examples dir | 1 | /home/ll/llmwikify/examples/05_paper_to_factor/ | /home/ll/QuantNodes/examples/paper_to_factor/ |
 
-Total LoC moved: ~42K (24K prod + 18K tests)
-
 ## 2. External Deps Vendored (5 places, zero duplication)
 
-| # | Source abs path | Target abs path |
-|---|---|---|
-| 1 | /home/ll/llmwikify/src/llmwikify/kernel/codegen/feedback_templates.py | /home/ll/QuantNodes/QuantNodes/research/codegen/feedback_templates.py |
-| 2 | /home/ll/llmwikify/src/llmwikify/kernel/codegen/{code_tools.py, json_extract.py, prompts.py} | /home/ll/QuantNodes/QuantNodes/research/codogen/<同名> |
-| 3 | /home/ll/llmwikify/src/llmwikify/kernel/agent/hook.py (= UnifiedHook) | /home/ll/QuantNodes/QuantNodes/research/codegen/unified_hook.py |
-| 4 | /home/ll/llmwikify/src/llmwikify/foundation/llm/client.py | /home/ll/QuantNodes/QuantNodes/research/common/llm/client.py |
-| 5 | /home/ll/llmwikify/src/llmwikify/foundation/extractors/{base.py, markitdown_extractor.py, pdf.py, text.py, __init__.py} | /home/ll/QuantNodes/QuantNodes/research/common/extractors/ |
+[Standard table - 5 rows from prompt body]
 
 ## 3. Internal import rewrites
 
@@ -457,8 +492,6 @@ Total LoC moved: ~42K (24K prod + 18K tests)
 from llmwikify.reproduction.X       →  from quantnodes.research.X
 import llmwikify.reproduction.X     →  import quantnodes.research.X
 \`\`\`
-
-（含 indented + multiline 形式）
 
 ## 4. Phase 4.4 LLM client 决策记录
 
@@ -473,29 +506,22 @@ import llmwikify.reproduction.X     →  import quantnodes.research.X
 | 3 | /home/ll/llmwikify/src/ 无任何修改 | [✅/❌] |
 | 4 | /home/ll/llmwikify/plan/MIGRATION_REPORT_${DATE}.md 创建 | [✅/❌] |
 | 5 | /home/ll/QuantNodes/MIGRATION_TEST_LOG.md 创建 | [✅/❌] |
-| 6 | 0 次 \`git push\` 到 origin | [✅/❌] |
-| 7 | quantnodes 现有内容未动（wiki.py / report_reproducer.py / factor_test/ / quant_alpha/ / _legacy_3c/）| [✅/❌] |
+| 6 | 0 次 \`git push\` | [✅/❌] |
+| 7 | quantnodes 现有内容未动 | [✅/❌] |
 
 ## 6. Test Result Summary
 
-\`\`\`
-[PASSED=... SKIPPED=... FAILED=...]
-\`\`\`
+[...]
 
 ## 7. Issues / Outstanding
 
-[bullet list — 任何未解决的 import / fixture / 配置问题]
+[bullet list]
 
-## 8. Next Round (deferred — 等用户决策)
+## 8. Next Round (deferred — 用户决策)
 
-1. Push \`dev/repro-merge-2026-07-04\` → \`origin\` \`sn0wfree/QuantNodes\` (用户审批)
-2. Merge 到 \`master\` → \`quantnodes\` v4.0.0 release
-3. \`llmwikify\` v0.40.0（不同轮次）:
-   - 在 /home/ll/llmwikify/src/llmwikify/reproduction/ 加 shim
-   - 改 /home/ll/llmwikify/src/llmwikify/interfaces/server/http/*.py imports
-   - 改 /home/ll/llmwikify/src/llmwikify/interfaces/cli/commands/reproduce_cmd.py
-   - 删 /home/ll/llmwikify/tests/reproduction/
-   - CHANGELOG + MIGRATION_v0.40.md
+1. Push \`dev/repro-merge-2026-07-04\` → origin (用户审批)
+2. Merge master → quantnodes v4.0.0
+3. llmwikify v0.40.0 (不同轮次): shim + update interface + CHANGELOG
 EOF
 
 echo "Report: $REPORT"
@@ -531,7 +557,7 @@ echo "Log:   /home/ll/QuantNodes/MIGRATION_TEST_LOG.md"
 | 5 | `ls /home/ll/llmwikify/plan/MIGRATION_REPORT_<DATE>.md` | 文件存在 |
 | 6 | `ls /home/ll/QuantNodes/MIGRATION_TEST_LOG.md` | 文件存在 |
 | 7 | `git -C /home/ll/QuantNodes branch --list` | 有 `dev/repro-merge-2026-07-04` |
-| 8 | `git -C /home/ll/QuantNodes log origin/dev/repro-merge-2026-07-04`（如已推）| 不存在（**未推**）|
+| 8 | `git -C /home/ll/QuantNodes log origin/dev/repro-merge-2026-07-04 2>&1 \| head` | 不存在（**未推**）|
 
 ---
 
@@ -578,3 +604,4 @@ Sources of uncertainty:
 - 不要主动 commit/push，等用户指示
 - 任何变更前先 `git status`（AGENTS.md 原则 3 surgical）
 - 破坏性操作绝对禁止（原则 9 safety first）
+- opencode 环境下不要碰 `/home/ll/llmwikify/.opencode/` 自身配置（避免循环）
