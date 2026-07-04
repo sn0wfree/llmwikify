@@ -67,3 +67,10 @@ l5:
     longshort_max_dd: 0.0
     validated_at: 1782149665.0954657
   validation_date: '2026-06-23'
+factor:
+  l5:
+    overall_assessment:
+      ic_mean: 0.011121550307248757
+      icir: 0.07302760921161927
+      winrate: null
+      validated_at: 1783057356.9858668
