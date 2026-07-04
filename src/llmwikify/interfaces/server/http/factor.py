@@ -33,13 +33,18 @@ router = APIRouter(prefix="/api/factor", tags=["factor"])
 
 _WIKI_REGISTRY: Any = None
 _LLM_CLIENT: Any = None
+_FACTORS_ROOT: Path | None = None
+_OUTPUT_DIR: Path | None = None
 
 
 def set_factor_deps(wiki_registry: Any, llm_client: Any = None) -> None:
     """Set dependencies during app startup."""
-    global _WIKI_REGISTRY, _LLM_CLIENT
+    global _WIKI_REGISTRY, _LLM_CLIENT, _FACTORS_ROOT, _OUTPUT_DIR
     _WIKI_REGISTRY = wiki_registry
     _LLM_CLIENT = llm_client
+    wiki = wiki_registry.get_default_wiki()
+    _FACTORS_ROOT = wiki.root / "quant" / "factors"
+    _OUTPUT_DIR = wiki.root / "scripts" / "output"
 
 
 def _get_wiki(wiki_id: str | None = None) -> Any:
@@ -55,7 +60,8 @@ async def list_factors() -> dict[str, Any]:
     """List all factors from the factor library."""
     from llmwikify.reproduction.persist.factor_library import list_factors_by_category
 
-    categories = list_factors_by_category()
+    wiki = _get_wiki()
+    categories = list_factors_by_category(project_root=wiki.root)
     return {"categories": categories}
 
 
@@ -67,7 +73,8 @@ async def list_factor_library() -> dict[str, Any]:
     """List all factors from the factor library (quant/factors/)."""
     from llmwikify.reproduction.persist.factor_library import list_factors_by_category
 
-    categories = list_factors_by_category()
+    wiki = _get_wiki()
+    categories = list_factors_by_category(project_root=wiki.root)
     return {"categories": categories}
 
 
@@ -76,7 +83,8 @@ async def get_factor_library(name: str) -> dict[str, Any]:
     """Get a factor's full 6-layer YAML definition."""
     from llmwikify.reproduction.persist.factor_library import read_factor_yaml
 
-    factor = read_factor_yaml(name)
+    wiki = _get_wiki()
+    factor = read_factor_yaml(name, project_root=wiki.root)
     if factor is None:
         raise HTTPException(status_code=404, detail=f"Factor '{name}' not found in library")
     return {"name": name, "factor": factor}
@@ -87,15 +95,13 @@ async def update_factor_library(name: str, data: dict[str, Any]) -> dict[str, An
     """Update a factor's YAML definition."""
     from llmwikify.reproduction.persist.factor_library import write_factor_yaml
 
-    result = write_factor_yaml(name, data)
+    wiki = _get_wiki()
+    result = write_factor_yaml(name, data, project_root=wiki.root)
     return {"status": "ok", "message": result}
 
 
 # ─── Factor Family endpoints ────────────────────────────────
 # Must be defined before /{slug} to avoid route conflicts.
-
-_FACTORS_ROOT = Path(__file__).resolve().parents[5] / "quant" / "factors"
-_OUTPUT_DIR = Path(__file__).resolve().parents[5] / "scripts" / "output"
 
 _STATUS_MAP = {
     "verified": "已验证",
@@ -142,32 +148,79 @@ def _detect_families() -> list[dict[str, Any]]:
 
 
 def _list_members(family_slug: str) -> list[dict[str, Any]]:
-    """List member factors in a family directory."""
+    """List member factors in a family directory.
+
+    Reads from factor.yaml (primary) or index.yaml (fallback) for each subdirectory.
+    """
     family_dir = _FACTORS_ROOT / family_slug
     if not family_dir.exists():
         return []
+
+    import re
+    import yaml
+
+    # Build index.yaml lookup: alpha_index -> index entry
+    index_by_alpha: dict[int, dict] = {}
+    index_by_name: dict[str, dict] = {}
+    index_path = family_dir / "index.yaml"
+    if index_path.exists():
+        try:
+            index_data = yaml.safe_load(index_path.read_text(encoding="utf-8")) or {}
+            for entry in index_data.get("factors", []):
+                # file field is like "101_alphas/stk_alpha_001_f9f371"
+                file_ref = entry.get("file", "")
+                dir_name = file_ref.rsplit("/", 1)[-1] if "/" in file_ref else file_ref
+                if dir_name:
+                    index_by_name[dir_name] = entry
+                # Also index by alpha_number (e.g. stk_alpha_001_xxx -> 1)
+                name = entry.get("name", "")
+                m = re.match(r"stk_alpha_(\d+)_\w+", name)
+                if m:
+                    index_by_alpha[int(m.group(1))] = entry
+        except Exception:
+            pass
+
     members = []
     for entry in sorted(family_dir.iterdir()):
         if not entry.is_dir():
             continue
+
         factor_yaml = entry / "factor.yaml"
-        if not factor_yaml.exists():
-            continue
-        import yaml
-        data = yaml.safe_load(factor_yaml.read_text(encoding="utf-8")) or {}
-        meta_json = entry / "meta.json"
-        meta = {}
-        if meta_json.exists():
-            meta = json.loads(meta_json.read_text(encoding="utf-8"))
-        alpha_index = meta.get("alpha_index")
-        members.append({
-            "slug": f"{family_slug}/{entry.name}",
-            "name": data.get("name", entry.name),
-            "display_name": data.get("display_name", data.get("name", entry.name)),
-            "status": _normalize_status(data.get("status") or meta.get("status")),
-            "alpha_index": alpha_index,
-            "layers_present": [k for k in ("l1", "l2", "l3", "l4", "l5", "l6") if data.get(k)],
-        })
+        if factor_yaml.exists():
+            # Primary: read from factor.yaml + meta.json
+            data = yaml.safe_load(factor_yaml.read_text(encoding="utf-8")) or {}
+            meta_json = entry / "meta.json"
+            meta = {}
+            if meta_json.exists():
+                meta = json.loads(meta_json.read_text(encoding="utf-8"))
+            alpha_index = meta.get("alpha_index")
+            # Handle nested factor.yaml structure
+            factor_data = data.get("factor", data)
+            members.append({
+                "slug": f"{family_slug}/{entry.name}",
+                "name": factor_data.get("name", entry.name),
+                "display_name": factor_data.get("display_name", factor_data.get("name", entry.name)),
+                "status": _normalize_status(factor_data.get("status") or meta.get("status")),
+                "alpha_index": alpha_index,
+                "layers_present": [k for k in ("l1", "l2", "l3", "l4", "l5", "l6") if factor_data.get(k)],
+            })
+        else:
+            # Fallback: match from index.yaml by directory name or alpha_index
+            idx = index_by_name.get(entry.name)
+            if not idx:
+                m = re.match(r"stk_alpha_(\d+)_\w+", entry.name)
+                if m:
+                    idx = index_by_alpha.get(int(m.group(1)))
+            if idx:
+                members.append({
+                    "slug": f"{family_slug}/{entry.name}",
+                    "name": idx.get("name", entry.name),
+                    "display_name": idx.get("display_name", idx.get("name", entry.name)),
+                    "status": _normalize_status(idx.get("status")),
+                    "alpha_index": None,
+                    "layers_present": [],
+                })
+
     return members
 
 
@@ -296,7 +349,8 @@ async def get_factor(slug: str) -> dict[str, Any]:
     """Get a factor's definition from the factor library."""
     from llmwikify.reproduction.persist.factor_library import read_factor_yaml
 
-    factor = read_factor_yaml(slug)
+    wiki = _get_wiki()
+    factor = read_factor_yaml(slug, project_root=wiki.root)
     if factor is None:
         raise HTTPException(status_code=404, detail=f"Factor '{slug}' not found")
     return {"slug": slug, "factor": factor}
@@ -439,9 +493,8 @@ def _persist_factor_result(
     backtest_md = _build_factor_backtest_page(slug, factor, req, result, source, run_id)
     wiki_page = None
     try:
-        from llmwikify.reproduction.paper_understanding.quant_wiki import get_quant_wiki
-        quant = get_quant_wiki()
-        write_result = quant.write_page(backtest_slug, backtest_md, page_type="factorbacktest")
+        wiki = _get_wiki()
+        write_result = wiki.write_page(backtest_slug, backtest_md, page_type="factorbacktest")
         if "Created" in write_result or "Updated" in write_result:
             wiki_page = f"quant/factorbacktest/{backtest_slug}.md"
         else:
@@ -471,7 +524,7 @@ async def backtest_factor(slug: str, req: FactorBacktestRequest) -> dict[str, An
     from llmwikify.reproduction.persist.sessions import ReproductionDatabase
 
     wiki = _get_wiki()
-    factor_data = read_factor_yaml(slug)
+    factor_data = read_factor_yaml(slug, project_root=wiki.root)
     if factor_data is None:
         raise HTTPException(status_code=404, detail=f"Factor '{slug}' not found")
     factor = factor_data.get("factor", factor_data)
@@ -711,7 +764,8 @@ async def get_factor_backtest_results(slug: str, limit: int = 10) -> dict[str, A
     """
     from llmwikify.reproduction.persist.factor_library import read_backtest_duckdb
 
-    runs = read_backtest_duckdb(slug, limit=limit)
+    wiki = _get_wiki()
+    runs = read_backtest_duckdb(slug, limit=limit, project_root=wiki.root)
 
     # Fallback: try SQLite if DuckDB has no data
     if not runs:
@@ -765,7 +819,8 @@ async def validate_factor(slug: str, req: L5ValidateRequest) -> dict[str, Any]:
     from llmwikify.reproduction.backtest_pkg.l5_orchestrator import run_l5_pipeline
     from llmwikify.reproduction.persist.factor_library import read_factor_yaml
 
-    factor = read_factor_yaml(slug)
+    wiki = _get_wiki()
+    factor = read_factor_yaml(slug, project_root=wiki.root)
     if factor is None:
         raise HTTPException(status_code=404, detail=f"Factor '{slug}' not found")
 
