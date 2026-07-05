@@ -14,7 +14,7 @@
 | 2 | 物理迁移 (16 dirs + 91 tests + 9 scripts + 1 example) | ✅ |
 | 3 | AST-aware import 改写（451 sites / 112 文件） + docstring 清理 | ✅ |
 | 4 | vendor 5 外部依赖（codegen ×4 + unified_hook + common/llm + common/extractors ×5 + kernel/agent ×13 + streamable + web + youtube） | ✅ |
-| 5 | venv + pytest → **1730 passed / 28 failed / 16 skipped / 91 errors = 92.8% pass** | ✅ |
+| 5 | venv + pytest → 初始 92.8% → **100% pass (1986 passed / 0 failed / 0 errors / 16 skipped)** 见 §Phase 5 进展 | ✅ |
 | 6 | 本报告 + 本地 commit（不 push） | ✅ |
 
 ---
@@ -25,7 +25,7 @@
 |---|----|------|
 | 1 | `grep -rn "from\s\+llmwikify\|import\s\+llmwikify" QuantNodes/research/` | **0 行**（保留 1 处历史注释 `codegen/react_engine.py:3` "Borrowed state machine pattern from llmwikify/apps/chat/agent/runner_v2.py"）|
 | 2 | `grep -rn "from\s\+llmwikify\|import\s\+llmwikify" tests/research/` | **9 行**（跨仓依赖，见 §Issues）|
-| 3 | `pytest tests/research/ -q` 通过率 | **92.8%**（≥ 90% 阈值）|
+| 3 | `pytest tests/research/ -q` 通过率 | **100%**（1986 passed / 0 failed / 0 errors / 16 skipped）— 见 §Phase 5 进展 |
 | 4 | `git -C /home/ll/llmwikify status --short` | **仅** `plan/MIGRATION_REPORT_2026-07-04.md` 1 个新文件 |
 | 5 | `ls plan/MIGRATION_REPORT_2026-07-04.md` | ✅ 存在 |
 | 6 | `ls QuantNodes/MIGRATION_TEST_LOG.md` | ✅ 存在 |
@@ -108,6 +108,42 @@ vendor 总文件数 = 17 (DEPENDENCY_MAP) + 13 (kernel/agent) + 2 (web+youtube) 
 
 `test_track_b_*`（~19）+ `test_retry_integration`（5）— LLM client 模拟失败。
 **下一轮**：检查 LLM mock fixture 与 vendored client 兼容性。
+
+---
+
+## Phase 5 进展（**迁移后追加** — 2026-07-05）
+
+**初始 92.8% pass → 通过追加工作达到 100% pass（1986 passed / 0 failed / 0 errors）**。
+
+### 5.A 修复 119 个失败/错误（92.8% → 100%）
+
+| 类别 | 数量 | 修复方式 |
+|------|------|----------|
+| **跨仓 DB path**（test_wiki / test_report_reproducer / test_paper_api / test_auto_research） | 91 errors → 0 | `pip install -e /home/ll/llmwikify` editable 安装，wikischema prompt 可用 |
+| **跨仓 fixture 缺失**（test_paper_api / test_reproduction_api） | 27 errors → 27 passed | conftest.py 新增 `paper_client` + `repro_client` + `_FakeWiki` / `_FakeRegistry` mocks |
+| **缺 yaml vendor**（test_track_b_* / test_retry_integration / test_extract_factors） | ~25 failed → 0 | vendor 10 个 prompt yaml（tier2 ×5、track_b ×3、factor、summary）|
+| **缺 llm sibling module**（test_retry_integration） | 5 failed → 0 | vendor 8 个 `common/llm/{budget_decorator, context_windows, errors, provider_models, resolver, spec, token_budget, token_estimator}.py` + `common/llm_client.py` |
+| **产品 bug**（test_reporting::test_write_minimal） | 1 failed → 0 | `serializer.py write_markdown`: 加 icir None 兼容 |
+
+**结果**: 92.8% (1730/1865) → **100% (1986/2002)**
+
+### 5.B 新增 137 单元测试（覆盖 5 个零测试子目录）
+
+| 文件 | 测试数 | 覆盖模块 |
+|------|--------|----------|
+| `tests/research/test_prompts.py` | 23 | registry / group / loader / renderer / store |
+| `tests/research/test_reporting.py` | 32 | aggregator / serializer / reporter / adapters |
+| `tests/research/test_sink.py` | 23 | Sink Protocol / single_json / batch_summary |
+| `tests/research/test_signal_source.py` | 30 | Signal / TrackB / TrackBPass2 / AcademicPdf |
+| `tests/research/test_core.py` | 29 | PaperRecipe / Stage / PaperPipeline |
+| **合计** | **137** | 5 个零覆盖子目录全部覆盖 |
+
+**总测试进度**：1730 → **1986** (+256 passed, **100% pass rate**)
+
+### 5.C 提交记录
+
+- `3c50b93` — feat(research): 迁入 llmwikify/reproduction/ (263 files, +54153)
+- `081bb21` — test(research): 补 137 单元测试 + 修 27 fixtures + 修产品 bug + vendor 缺依赖 (27 files, +4122 / -4924)
 
 ---
 
