@@ -44,11 +44,9 @@ from .knowledge_gaps import KnowledgeGapsCommand, run_knowledge_gaps
 from .lint import LintCommand, run_lint
 from .log_cmd import LogCommand, run_log
 from .qmd import QmdCommand, run_qmd
-from .quant_init_cmd import QuantInitCommand, run_quant_init
 from .read_page import ReadPageCommand, run_read_page
 from .references import ReferencesCommand, run_references
 from .report import ReportCommand, run_report
-from .reproduce_cmd import ReproduceCommand, run_one_paper_cli
 from .search import SearchCommand, run_search
 from .serve import ServeCommand, run_serve
 from .sink_status import SinkStatusCommand, run_sink_status
@@ -91,8 +89,6 @@ register_command(ServeCommand())
 register_command(QmdCommand())
 register_command(DbCommand())
 register_command(DoctorCommand())
-register_command(QuantInitCommand())
-register_command(ReproduceCommand())
 register_command(HelpCommand())
 register_command(AuthCommand())
 
@@ -162,5 +158,4 @@ __all__ = [
     "DbCommand", "run_db",
     "DoctorCommand", "run_doctor",
     "HelpCommand",  # Phase 3 #6
-    "ReproduceCommand", "run_one_paper_cli", "run_batch",  # Phase 4 — paper reproduction
 ]

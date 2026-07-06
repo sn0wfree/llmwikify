@@ -683,11 +683,6 @@ def _register_agent_routes(
         pass
     app.include_router(create_openai_router(model=model_name))
 
-    try:
-        _register_reproduction_routes(app, registry, agent_service, data_dir=data_dir)
-    except ImportError as e:
-        logger.warning("Reproduction routes disabled (missing dependency: %s)", e)
-
     _mount_agent_spa(app)
 
 
@@ -751,89 +746,6 @@ def _register_skills_routes(app: FastAPI) -> None:
         return entry
 
     app.include_router(skills_router)
-
-
-def _register_reproduction_routes(
-    app: FastAPI,
-    registry: WikiRegistry,
-    agent_service: Any,
-    data_dir: Path | None = None,
-) -> None:
-    """Register paper/factor/strategy/reproduction routers and inject deps.
-
-    Lives here (not in ``_register_wiki_routes``) because the reproduction
-    routers need access to the LLM client and the reproduction session DB
-    that the agent service owns. v0.4.0 — end-to-end reproduction pipeline.
-    """
-    from llmwikify.interfaces.server.http.factor import (
-        router as factor_router,
-    )
-    from llmwikify.interfaces.server.http.factor import (
-        set_factor_deps,
-    )
-    from llmwikify.interfaces.server.http.paper import (
-        router as paper_router,
-    )
-    from llmwikify.interfaces.server.http.paper import (
-        set_paper_deps,
-    )
-    from llmwikify.interfaces.server.http.reproduction import (
-        router as reproduction_router,
-    )
-    from llmwikify.interfaces.server.http.reproduction import (
-        set_repro_deps,
-    )
-    from llmwikify.interfaces.server.http.strategy import (
-        router as strategy_router,
-    )
-    from llmwikify.interfaces.server.http.strategy import (
-        set_strategy_deps,
-    )
-    from llmwikify.reproduction.persist.sessions import ReproductionDatabase
-
-    if data_dir is None:
-        data_dir = Path.home() / ".llmwikify" / "agent"
-    data_dir.mkdir(parents=True, exist_ok=True)
-    repro_db = ReproductionDatabase(data_dir / "reproduction.db")
-    logger.info("Reproduction DB initialized at: %s", repro_db.db_path)
-
-    # raw_dir: use the default wiki's raw directory, not the code repo path
-    try:
-        raw_dir = registry.get_default_wiki().raw_dir
-    except Exception:
-        raw_dir = Path.home() / ".llmwikify" / "raw"
-    upload_dir = raw_dir
-    logger.info("paper raw_dir: %s, upload_dir: %s", raw_dir, upload_dir)
-
-    # Read parquet path from config
-    try:
-        _cfg_file = Path.home() / ".llmwikify" / "llmwikify.json"
-        _parquet_path = __import__("json").loads(_cfg_file.read_text()).get("parquet", {}).get("path") if _cfg_file.exists() else None
-    except Exception:
-        _parquet_path = None
-
-    set_paper_deps(
-        wiki_registry=registry,
-        llm_client=agent_service._get_llm(),
-        db=repro_db,
-        raw_dir=raw_dir,
-        upload_dir=upload_dir,
-        parquet_path=_parquet_path,
-    )
-    set_factor_deps(
-        wiki_registry=registry,
-        llm_client=agent_service._get_llm(),
-    )
-    set_strategy_deps(wiki_registry=registry)
-    set_repro_deps(db=repro_db, wiki_registry=registry)
-
-    app.include_router(paper_router)
-    app.include_router(factor_router)
-    app.include_router(strategy_router)
-    app.include_router(reproduction_router)
-    logger.info(
-        "Reproduction routers registered: paper, factor, strategy, reproduction"
-    )
 
 
 def _mount_agent_spa(app: FastAPI) -> None:
