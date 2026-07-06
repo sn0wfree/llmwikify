@@ -1,31 +1,23 @@
-"""Back-compat shim for ``llmwikify.apps.chat.research_engine.engine``.
+"""Back-compat shim — same module object as ``llmwikify.apps.research.engine``.
 
 v0.40 moved the canonical implementation to
-``llmwikify.apps.research.engine``. This shim re-exports from the
-canonical module so legacy imports
-``from llmwikify.apps.chat.research_engine.engine import ResearchEngine``
-return the SAME class object as the canonical path.
+``llmwikify.apps.research.engine``. This shim preserves the old
+import path ``from llmwikify.apps.chat.research_engine.engine``
+so existing tests and external callers keep working.
 
-Uses lazy attribute access (PEP 562) to avoid circular imports:
-``research_agent.py`` imports this shim while ``apps.research.engine``
-is mid-loading, and we must not re-trigger that load.
+The shim exposes the SAME module object as the canonical home (via
+``sys.modules`` trick) so that ``mock.patch.object`` on either path
+affects both — test compatibility.
+
+Note: an earlier draft kept a PEP 562 ``__getattr__`` lazy fallback for
+circular-import safety (``research_agent.py`` historically imported
+this shim while ``apps.research.engine`` was mid-loading). That
+concern is now moot: ``research_agent.py`` uses a ``TYPE_CHECKING``
+guard plus a lazy local import in ``__init__``, so the eager
+``from llmwikify.apps.research import engine`` below is safe.
 """
+import sys as _sys
 
-_LAZY_ATTRS = {
-    "ResearchEngine": ("llmwikify.apps.research.engine", "ResearchEngine"),
-}
+from llmwikify.apps.research import engine as _canonical  # noqa: F401
 
-
-def __getattr__(name: str):
-    if name in _LAZY_ATTRS:
-        from importlib import import_module
-
-        mod_path, attr = _LAZY_ATTRS[name]
-        mod = import_module(mod_path)
-        value = getattr(mod, attr)
-        globals()[name] = value
-        return value
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-
-
-__all__ = list(_LAZY_ATTRS.keys())
+_sys.modules[__name__] = _canonical

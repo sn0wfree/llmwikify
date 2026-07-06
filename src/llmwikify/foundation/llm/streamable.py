@@ -288,13 +288,27 @@ def is_arrearage_response(
     semantic tokens in the error body. They will NOT clear on
     retry, so callers should treat them as terminal.
 
-    Issue: MiniMax sometimes returns 401 (not 402/429) for quota
-    exhaustion. Check 401/402/429 for quota-related text markers.
+    Decision rules (matches tests/test_apps_chat_providers_borrow.py):
 
-    Used by 4xx error handlers to decide whether to log a
-    permanent-failure warning vs a transient-retry warning.
+    * ``status_code == 402`` → always arrearage (Payment Required
+      is reserved for billing by HTTP semantics).
+    * Any 4xx/5xx status (including 401, 429, 500) with body
+      containing a known billing marker → arrearage.
+    * 429 with no billing marker → NOT arrearage (transient rate
+      limit, retry).
+    * Other status codes without billing markers → not arrearage.
+
+    Issue: MiniMax sometimes returns 401 (not 402/429) for quota
+    exhaustion, hence the marker-based fallback for non-402
+    status codes. 402 is treated as the canonical arrearage
+    status and doesn't need a body marker (per the
+    ``test_402_is_arrearage`` contract).
     """
-    if status_code in (401, 402, 429):
+    if status_code == 402:
+        return True
+    if status_code is None:
+        return False
+    if 400 <= status_code < 600:
         lowered = (content or "").lower()
         return any(marker in lowered for marker in _NON_RETRYABLE_429_TEXT_MARKERS)
     return False
