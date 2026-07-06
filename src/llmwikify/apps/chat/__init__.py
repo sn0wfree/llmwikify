@@ -42,32 +42,49 @@ from .harness.structure_validator import StructureValidator
 from .reasoning_checker import ReasoningChecker
 from .research_agent import ResearchAgent
 
-# Back-compat re-exports: v0.41 modules moved from archive/ to
-# apps/chat/research_engine/ in 2026-06-19. The classes themselves
-# are unchanged; only the import path changed. Re-exported here so
-# existing callers (``from llmwikify.apps.chat import ResearchEngine``
-# or ``import llmwikify.apps.chat.engine``) still work.
-from .research_engine import (  # noqa: F401
-    ResearchEngine,  # noqa: F401
-    actions,  # noqa: F401
-    engine,  # noqa: F401
-    gates,  # noqa: F401
-    llm_step,  # noqa: F401
-    observer,  # noqa: F401
-    reasoner,  # noqa: F401
-    report,  # noqa: F401
-    resume,  # noqa: F401
-    routes,  # noqa: F401
-)
-from .research_engine.gates import (  # noqa: F401
-    ResearchGates,
-)
-from .research_engine.llm_step import (  # noqa: F401
-    LLMCallMetrics,
-)
-from .research_engine.report import (  # noqa: F401
-    ReportGenerator,
-)
+# v0.40: research_engine 已被合并到 apps.research/ 主包. chat.research_engine/
+# 留作 thin wrapper (back-compat). 旧 import 仍工作 (`from llmwikify.apps.chat
+# import ResearchEngine`) 但走 apps.research 路径以避免循环 import.
+#
+# IMPORTANT: use PEP 562 lazy attribute access (via __getattr__) — eager
+# imports would create cycles: research.engine imports chat.config which
+# imports this __init__, and research.engine is mid-loading.
+
+_LAZY_ATTRS = {
+    "ResearchEngine": "llmwikify.apps.research.engine",
+    "ResearchDatabase": "llmwikify.apps.research.db",
+    "WebSearch": "llmwikify.apps.research.web_search",
+    "research_router": "llmwikify.apps.research.routes",
+    "ResearchGates": "llmwikify.apps.research.gates",
+    "LLMCallMetrics": "llmwikify.apps.research.llm_step",
+    "ReportGenerator": "llmwikify.apps.research.report",
+}
+
+
+def __getattr__(name: str):
+    if name in _LAZY_ATTRS:
+        from importlib import import_module
+
+        mod_path = _LAZY_ATTRS[name]
+        # Resolve the submodule and look up the symbol.
+        mod = import_module(mod_path)
+        if hasattr(mod, name):
+            value = getattr(mod, name)
+            globals()[name] = value
+            return value
+        # Special handling: research_router is exported as ``router`` from
+        # the routes submodule, but the legacy chat-__init__ callers expect
+        # the attribute ``research_router``.
+        if name == "research_router" and hasattr(mod, "router"):
+            value = getattr(mod, "router")
+            globals()[name] = value
+            return value
+        raise AttributeError(
+            f"module {__name__!r} has no attribute {name!r} "
+            f"(looked in {mod_path})"
+        )
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 from .retry_managers import (
     DBRetryManager,
     LLMRetryManager,
@@ -82,18 +99,6 @@ from .state import (
     SessionMetrics,
 )
 from .synthesizer import ResearchSynthesizer
-
-# Register research_engine submodules in sys.modules so that legacy
-# direct-submodule imports (``import llmwikify.apps.chat.engine``)
-# still resolve to the new location.
-for _name in (
-    "actions", "engine", "observer", "gates", "reasoner", "report",
-    "llm_step", "resume", "routes",
-):
-    _sys.modules.setdefault(
-        f"llmwikify.apps.chat.{_name}",
-        _sys.modules[f"llmwikify.apps.chat.research_engine.{_name}"],
-    )
 
 __all__ = [
     # Engine

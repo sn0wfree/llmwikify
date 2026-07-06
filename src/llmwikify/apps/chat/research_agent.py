@@ -26,7 +26,9 @@ import asyncio
 from collections.abc import AsyncIterator
 from typing import Any
 
-from llmwikify.apps.chat.research_engine.engine import ResearchEngine
+# Lazy import: ResearchEngine lives in llmwikify.apps.research.engine.
+# Use lazy local import inside __init__ to avoid circular dependency
+# (research_engine.engine imports chat.__init__ which imports this file).
 
 from .base import ChatBase
 
@@ -54,7 +56,13 @@ class ResearchAgent(ChatBase):
         ),
     ) -> None:
         super().__init__(llm_client=llm_client, system_prompt=system_prompt)
-        self.engine = engine or ResearchEngine(llm_client=llm_client)
+        # Lazy import — avoid circular dependency: research_engine.engine
+        # imports chat.__init__ which imports this file. By the time
+        # __init__ runs, chat.research_engine.engine is fully loaded.
+        if engine is None:
+            from llmwikify.apps.research.engine import ResearchEngine as _RE
+            engine = _RE(llm_client=llm_client)
+        self.engine = engine
 
     # ── canonical chat-style interface ─────────────────────
 
