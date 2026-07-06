@@ -6,6 +6,7 @@ import os
 import tempfile
 from pathlib import Path
 
+import httpx
 import pytest
 
 
@@ -23,14 +24,44 @@ def _is_llm_available() -> bool:
     return False
 
 
+def _server_base_url() -> str:
+    """Server URL for availability check."""
+    return os.environ.get("SERVER_URL", "http://localhost:8765")
+
+
+def _is_server_available() -> bool:
+    """Check if the llmwikify server is reachable at SERVER_URL.
+
+    Used to auto-skip integration tests marked with ``@pytest.mark.requires_server``
+    when no server is running (e.g. CI jobs that don't start the server).
+    """
+    try:
+        response = httpx.get(
+            f"{_server_base_url()}/api/health", timeout=2.0
+        )
+        return response.status_code == 200
+    except (httpx.HTTPError, httpx.RequestError, OSError):
+        return False
+
+
 def pytest_collection_modifyitems(config, items):
-    """Auto-skip LLM tests when no API key is available."""
-    if _is_llm_available():
-        return
+    """Auto-skip tests when their prerequisites are unavailable.
+
+    - ``@pytest.mark.llm`` → skip when no LLM_API_KEY
+    - ``@pytest.mark.requires_server`` → skip when no server at SERVER_URL
+    """
     skip_llm = pytest.mark.skip(reason="LLM_API_KEY not set")
+    skip_server = pytest.mark.skip(
+        reason=f"server not available at {_server_base_url()} "
+        "(start with `llmwikify serve --port 8765` or set SERVER_URL)"
+    )
+    has_llm = _is_llm_available()
+    has_server = _is_server_available()
     for item in items:
-        if "llm" in item.keywords:
+        if not has_llm and "llm" in item.keywords:
             item.add_marker(skip_llm)
+        if not has_server and "requires_server" in item.keywords:
+            item.add_marker(skip_server)
 
 
 @pytest.fixture

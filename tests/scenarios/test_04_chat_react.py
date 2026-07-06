@@ -40,6 +40,7 @@ class TestChatReAct:
         """HTTP client for server requests."""
         return httpx.Client(base_url=server_url, timeout=30.0)
 
+    @pytest.mark.requires_server
     def test_4_1_health_check(self, client):
         """Step 4.1: Health check endpoint.
 
@@ -50,6 +51,7 @@ class TestChatReAct:
         data = response.json()
         assert data.get("status") == "ok"
 
+    @pytest.mark.requires_server
     def test_4_2_auth_optional(self, client):
         """Step 4.2: Authentication is optional by default.
 
@@ -62,6 +64,7 @@ class TestChatReAct:
         )
         assert response.status_code in [200, 401, 403]
 
+    @pytest.mark.requires_server
     def test_4_3_chat_sse(self, client):
         """Step 4.3: Streaming chat via Server-Sent Events.
 
@@ -82,6 +85,7 @@ class TestChatReAct:
                     events.append(line)
             assert len(events) > 0
 
+    @pytest.mark.requires_server
     def test_4_4_chat_with_wiki_tool(self, client):
         """Step 4.4: Chat can invoke wiki tools.
 
@@ -98,6 +102,7 @@ class TestChatReAct:
         )
         assert response.status_code == 200
 
+    @pytest.mark.requires_server
     def test_4_5_chat_session_list(self, client):
         """Step 4.5: List all chat sessions.
 

@@ -121,6 +121,7 @@ markers = [
   "integration: integration tests with real DB/H5 (run on push to main)",
   "llm: tests requiring real LLM API (gated by GHA secret, only main + nightly)",
   "slow: tests taking >10s (excluded from quick runs)",
+  "requires_server: tests requiring a running llmwikify server (auto-skipped when SERVER_URL unreachable)",
 ]
 
 [tool.coverage.run]
