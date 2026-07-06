@@ -269,10 +269,14 @@ graph TB
     UI --> Chat
     Chat --> Engine
     Research --> LLM
-    Paper --> LLM
-    Factor --> Storage
-    Backtest --> Factor
 ```
+
+> **v0.40 architecture**: strict 4-layer `foundation → kernel → apps →
+> interfaces` with single-direction dependencies. The quant module
+> (paper / factor / backtest / strategy) was stripped and migrated to
+> the sibling project [`quantnodes`](docs/quantnodes.md).
+> See [`docs/REFACTORING.md`](docs/REFACTORING.md) for the full
+> refactor history, dependency matrix, and cross-project migration.
 
 ---
 
