@@ -193,7 +193,7 @@ llmwikify init --llm --no-llm-prompt --llm-overwrite
 
 ---
 
-### `llmwikify doctor` (enhanced)
+### `llmwikify doctor` (enhanced in v0.40)
 
 ```bash
 llmwikify doctor                     # 9 checks, including LLM API call
@@ -202,19 +202,52 @@ llmwikify doctor --wiki-root /path   # Check specific wiki
 llmwikify doctor --json              # JSON for CI/scripts
 ```
 
-| # | Check | What it verifies |
-|---|-------|------------------|
-| 1 | Config | `~/.llmwikify/llmwikify.json` exists, parseable, has valid `api_key` |
-| 2 | Python | Version >= 3.10 |
-| 3 | Core deps | llmwikify, yaml, duckdb, jinja2 |
-| 4 | Optional extras | fastapi, fastmcp, watchdog, networkx, markitdown, tiktoken, httpx |
-| 5 | **LLM connectivity** | **Actual API call** (5s timeout) with `"Say hi"` |
-| 6 | **Wiki directory** | wiki.md, .llmwikify.db, index.md, raw/ present |
-| 7 | **Permissions** | `~/.llmwikify/` and wiki root are writable |
-| 8 | WebUI bundle | `ui/webui/dist/index.html` exists |
-| 9 | Server | `GET /api/health` returns 200 |
+| # | Check | Severity | What it verifies |
+|---|-------|----------|------------------|
+| 1 | Config | **FAIL** | `~/.llmwikify/llmwikify.json` exists, parseable, has valid `api_key` |
+| 2 | Python | **FAIL** | Version >= 3.10 |
+| 3 | Core deps | **FAIL** | llmwikify, yaml, duckdb, jinja2 |
+| 4 | Optional extras | INFO | fastapi, fastmcp, watchdog, networkx, markitdown, tiktoken, httpx |
+| 5 | **LLM connectivity** | **WARN** | **Actual API call** (5s timeout) with `"Say hi"` |
+| 6 | **Wiki directory** | **FAIL/WARN/INFO** | 4 functional paths + all page-type subdirs declared in `wiki.md` (parsed dynamically) |
+| 7 | **Permissions** | **FAIL** | `~/.llmwikify/` and wiki root are writable |
+| 8 | WebUI bundle | **WARN** | `ui/webui/dist/index.html` exists |
+| 9 | Server | **WARN** | `GET /api/health` returns 200 |
 
-**Exit codes**: 0 (all pass), 1 (failed), 2 (config missing).
+**Exit codes**: 0 (all critical pass; warnings/info allowed), 1 (one or
+more FAILs), 2 (config missing — run `llmwikify init-llm`).
+
+**Wiki check (Step 6) — the interesting one.** In v0.40 the wiki check
+is no longer a hardcoded path list. It parses `wiki.md` (the schema
+file `llmwikify init` writes) to extract page-type subdirs and compares
+against what's actually on disk. Three buckets:
+
+| Bucket | Meaning | Severity |
+|--------|---------|----------|
+| `in_both` | declared by `wiki.md` AND exists on disk | OK |
+| `declared_only` | declared by `wiki.md` but missing on disk | **WARN** |
+| `actual_only` | exists on disk but not in `wiki.md` | INFO (stale schema) |
+| missing functional (4 paths) | wiki cannot function | **FAIL** |
+
+If you add a new subdir to your `wiki.md` (e.g. `experiments/`), doctor
+picks it up automatically. Zero hardcoded page-type list.
+
+**Recommended actions block.** Every fail and actionable warn carries
+a **fix dict** with `commands` + `docs` + `cost` + `risk` + `auto`.
+Text mode shows them aggregated at the bottom:
+
+```
+📋 Recommended actions:
+
+  [FAIL 1/1] wiki (4 functional paths missing)
+      Fix:   llmwikify init
+      Docs:  docs/ONBOARDING.md#init
+      Cost:  ~5s    Risk: low    Auto: True
+```
+
+JSON mode (`--json`) puts the same `fix` field on the relevant check.
+See [`docs/DOCTOR.md`](DOCTOR.md) for the full reference (all 9 fix
+dicts, troubleshooting, CI recipes).
 
 ---
 

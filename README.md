@@ -169,16 +169,34 @@ llmwikify doctor --json              # JSON output for CI/scripts
 | 3 | **Core deps** | llmwikify, yaml, duckdb, jinja2 |
 | 4 | **Optional extras** | fastapi, fastmcp, watchdog, networkx, markitdown, tiktoken, httpx |
 | 5 | **LLM connectivity** | Actually calls provider API (5s timeout) with `"Say hi"` — verifies key works |
-| 6 | **Wiki directory** | wiki.md, .llmwikify.db, index.md, raw/ present |
+| 6 | **Wiki directory** | 4 functional paths (`raw/`, `wiki/`, `.llmwikify.db`, `wiki.md`) + all page-type subdirs declared in `wiki.md` (parsed dynamically from `Directory Structure` + `Page Types` sections). See [`docs/DOCTOR.md`](docs/DOCTOR.md#3-wiki-check-the-interesting-one) |
 | 7 | **Permissions** | `~/.llmwikify/` and wiki root are writable |
 | 8 | **WebUI bundle** | `ui/webui/dist/index.html` exists |
 | 9 | **Server** | `GET /api/health` returns 200 |
+
+### Severity and fix
+
+Every fail or actionable warn carries a **fix dict** (commands + docs +
+cost + risk + auto). In text mode these are aggregated at the bottom
+under **📋 Recommended actions**:
+
+```
+📋 Recommended actions:
+
+  [FAIL 1/1] wiki (4 functional paths missing)
+      Fix:   llmwikify init
+      Docs:  docs/ONBOARDING.md#init
+      Cost:  ~5s    Risk: low    Auto: True
+```
+
+In JSON mode (`--json`), each check has a `fix` field on actionable
+items. Severity: **FAIL** blocks exit 0; **WARN** and **INFO** do not.
 
 ### Exit codes
 
 | Code | Meaning |
 |------|---------|
-| 0 | All checks passed |
+| 0 | All checks passed (warnings/info allowed) |
 | 1 | One or more checks failed |
 | 2 | Config missing — run `llmwikify init-llm` |
 
@@ -190,7 +208,13 @@ llmwikify doctor --json --skip-llm | jq -e '.summary.failed == 0'
 
 # Quick check before running expensive operations
 llmwikify doctor --skip-llm  # ~1 second
+
+# Check a specific wiki
+llmwikify doctor --wiki-root /home/ll/Public/comovement
 ```
+
+For the full reference (all 9 checks, fix dict schema, troubleshooting,
+CI recipes), see [`docs/DOCTOR.md`](docs/DOCTOR.md).
 
 ---
 
@@ -477,6 +501,7 @@ Multi-wiki management:
 - [`examples/`](examples/README.md) — 8 runnable playbooks
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) — Layered architecture, modules, data flow
 - [`docs/CONFIGURATION_GUIDE.md`](docs/CONFIGURATION_GUIDE.md) — All config options + Doctor
+- [`docs/DOCTOR.md`](docs/DOCTOR.md) — `llmwikify doctor` reference: 9 checks, fix dicts, CI integration (v0.40+)
 - [`CONTRIBUTING.md`](CONTRIBUTING.md) — Development setup and workflow
 
 ---
