@@ -18,7 +18,6 @@ reproduction/codegen/llm_code.py 仍 re-export 这些 for backward compat。
 generate_factor_code (ReAct loop) 不在这里 — 在 kernel/agent/codegen_pipeline.py。
 """
 from .code_tools import (
-    _PYTHON_FENCE_RE,
     build_execute_namespace,
     execute_code,
     extract_python,

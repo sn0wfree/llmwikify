@@ -364,7 +364,6 @@ class LlmClientDriver(AgentDriver):
           3. Else (gradient switch off): fall back to env-based
              ``LLMClient.from_config({})`` for back-compat.
         """
-        from llmwikify.foundation.llm.resolver import resolver_enabled
 
         inherit_required = resolver_enabled_subagent()
 

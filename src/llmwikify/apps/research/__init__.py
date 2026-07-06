@@ -11,10 +11,13 @@ both into a single ``apps.research`` package so the public surface is:
     chat.config which imports chat.__init__ which imports
     chat.research_engine), this module is NOT eagerly imported here —
     callers must use ``from llmwikify.apps.research.engine import
-    ResearchEngine`` directly.
+    ResearchEngine`` directly. Also accessible via the PEP 562 lazy
+    attribute on ``apps.chat`` (``from llmwikify.apps.chat import
+    ResearchEngine``).
   - ``WebSearch`` (web_search.py) — unified web-search facade.
-  - ``BaseResearchConfig`` / ``BaseQualityGate`` (base.py) — abstract
-    base classes for chat subclasses.
+  - ``BaseResearchConfig`` (base.py) — shared default config keys
+    + merge helper. ``BaseQualityGate`` is planned (see base.py
+    Future batches note) but not yet exported.
 
 To avoid eager import cycles, only the leaf-level (non-cyclic) modules
 are exposed at the package top level. Submodules with chat dependencies

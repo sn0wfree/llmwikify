@@ -229,10 +229,6 @@ class ChatOrchestrator:
         # P1-2 (vendored from nanobot command/router.py): slash command
         # dispatch table. Commands are intercepted before the ReAct loop
         # so they bypass LLM round-trips (e.g. /stop, /help, /clear).
-        from llmwikify.apps.chat.command_router import (
-            CommandContext,
-            CommandRouter,
-        )
         self.command_router = self._build_default_command_router()
 
     def _get_tool_registry(

@@ -19,8 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from .._base import Command
-from .._output import ICON_SUCCESS, ICON_WARNING, print_success, print_warning
-
+from .._output import ICON_SUCCESS
 
 CONFIG_DIR = Path.home() / ".llmwikify"
 CONFIG_PATH = CONFIG_DIR / "llmwikify.json"
@@ -261,7 +260,7 @@ def _check_server(server_url: str, silent: bool = False) -> bool:
             return False
     except Exception:
         _check("Server reachable", False,
-               f"not running (start with: llmwikify serve --web)", silent=silent)
+               "not running (start with: llmwikify serve --web)", silent=silent)
         return False
 
 

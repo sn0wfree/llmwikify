@@ -253,7 +253,6 @@ def register_multi_wiki_tools(mcp: FastMCP, registry: Any) -> None:
         mcp: FastMCP server instance
         registry: WikiRegistry instance
     """
-    from llmwikify.kernel.multi_wiki.instance import WikiType
 
     @mcp.tool
     def wiki_list() -> str:

@@ -63,7 +63,7 @@ def export_html(graph: dict, communities: dict[int, list[str]] | None, output_pa
     Nodes with corresponding entity pages are clickable.
     """
     try:
-        import networkx as nx
+        import networkx as nx  # noqa: F401  (used by _build_networkx)
         from pyvis.network import Network
     except ImportError:
         raise ImportError("pyvis and networkx are required for HTML export. Install with: pip install pyvis networkx")
@@ -198,7 +198,7 @@ def _add_entity_click_handlers(html_path: Path, entity_nodes: set) -> None:
 def export_graphml(graph: dict, output_path: Path) -> dict:
     """Export graph to GraphML format (compatible with Gephi, yEd)."""
     try:
-        import networkx as nx
+        import networkx as nx  # noqa: F401  (used by _build_networkx)
     except ImportError:
         raise ImportError("networkx is required for GraphML export")
 
@@ -220,7 +220,7 @@ def export_graphml(graph: dict, output_path: Path) -> dict:
 def export_svg(graph: dict, output_path: Path) -> dict:
     """Export graph to SVG using graphviz."""
     try:
-        import networkx as nx
+        import networkx as nx  # noqa: F401  (used by _build_networkx)
     except ImportError:
         raise ImportError("networkx is required for SVG export")
 
@@ -268,7 +268,7 @@ def detect_communities(index: WikiIndex, algorithm: str = "leiden", resolution: 
         Dict with community info.
     """
     try:
-        import networkx as nx
+        import networkx as nx  # noqa: F401  (used by _build_networkx)
     except ImportError:
         raise ImportError("networkx is required for community detection")
 
@@ -400,7 +400,7 @@ def compute_surprise_score(
 def generate_report(index: WikiIndex, communities: dict | None = None, top_n: int = 10) -> str:
     """Generate a surprising connections report."""
     try:
-        import networkx as nx
+        import networkx as nx  # noqa: F401  (used by _build_networkx)
     except ImportError:
         raise ImportError("networkx is required for report generation")
 
@@ -460,7 +460,7 @@ def generate_report(index: WikiIndex, communities: dict | None = None, top_n: in
 
 def _build_networkx(graph: dict):
     """Build a NetworkX MultiDiGraph from graph dict."""
-    import networkx as nx
+    import networkx as nx  # noqa: F401  (used by _build_networkx)
 
     G = nx.MultiDiGraph()
 

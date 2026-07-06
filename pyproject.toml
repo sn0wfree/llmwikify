@@ -48,7 +48,6 @@ dev = [
     "build>=0.10.0",
     # ─── 锁 jaraco 生态在 2026-06 之前 ───
     "twine>=4.0.0,<5",
-    "import-linter>=2.0,<3",
     "keyring>=21.2.0,<24",
     "jaraco.context<5.4",
     "jaraco.functools>=3,<5",

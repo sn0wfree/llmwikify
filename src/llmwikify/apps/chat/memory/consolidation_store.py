@@ -15,7 +15,6 @@ Idempotent init via tables.py CREATE TABLE IF NOT EXISTS.
 
 from __future__ import annotations
 
-import json
 import logging
 import sqlite3
 import time

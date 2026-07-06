@@ -28,8 +28,7 @@ calls. The orchestrator layer wires it up to specific handlers (see
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -148,7 +147,6 @@ async def _call_handler(handler: Handler, ctx: CommandContext) -> list[dict]:
     All shapes are normalised to ``list[dict]`` for the caller to
     ``yield from`` or inspect uniformly.
     """
-    import asyncio
     import inspect
 
     result = handler(ctx)

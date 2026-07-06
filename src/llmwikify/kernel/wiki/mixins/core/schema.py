@@ -1,7 +1,6 @@
 """Wiki schema mixin — wiki.md schema reading, updating, page type mapping."""
 
 import logging
-import re
 
 from ...protocols import WikiProtocol
 

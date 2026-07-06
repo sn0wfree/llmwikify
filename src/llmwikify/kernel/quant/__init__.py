@@ -1,17 +1,21 @@
-"""kernel/quant/ — quant-domain abstractions shared across apps/ and reproduction/.
+"""kernel/quant/ — backward-compat shim (v0.40).
 
-This subpackage holds quant-specific code that:
+Historical: this subpackage held quant-domain abstractions shared between
+``apps/`` and ``reproduction/``. After v0.40's quant strip (Phase 1) and
+the G+Y architecture refactor:
 
-  - Does NOT depend on apps/chat/ (no unified/, no runner_v2)
-  - Does NOT depend on reproduction/ (no codegen/, no paper_understanding)
-  - CAN be imported by either apps/ or reproduction/
+  - ``codegen/`` (C1) was renamed to ``kernel/codegen/`` (G+Y commit 5),
+    because the contents are generic code-generation primitives, not
+    quant-specific. See ``kernel/codegen/__init__.py``.
+  - ``data_source/`` (planned C3) was never implemented; ``reproduction/``
+    was deleted in v0.40, so the use case is gone.
 
-This is the canonical home for quant-domain building blocks:
+What remains:
 
-  - codegen/        — LLM-driven code generation (extract / validate / execute) [C1]
-  - llm_client.py   — StreamableLLMClient construction from config [C2]
-  - data_source/    — DataSource Protocol + DataRouter (added in C3)
-
-C1 introduced this subpackage. PR scope: codegen/ + llm_client/ only.
+  - ``llm_client.py`` — re-exports ``build_llm_client`` /
+    ``load_llm_config`` / ``CONFIG_PATH`` from
+    ``llmwikify.foundation.llm.client``. Kept as a back-compat
+    shim for legacy imports; new code should import from
+    ``foundation.llm.client`` directly.
 """
 

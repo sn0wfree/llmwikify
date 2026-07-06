@@ -61,20 +61,15 @@ Design refs
 
 from __future__ import annotations
 
-import json
 import logging
 from typing import Any
 
 from llmwikify.apps.chat.agent.research_runner import (
-    EVENT_PHASE,
-    EVENT_REASONING,
-    EVENT_ROUND_COMPLETE,
     ReactConfig,
     ReactLoop,
 )
 from llmwikify.apps.chat.skills.actions.analyze_action import analyze_skill
 from llmwikify.apps.chat.skills.actions.plan_action import plan_skill
-from llmwikify.apps.chat.skills.actions.reason_action import reason_skill
 from llmwikify.apps.chat.skills.actions.revise_action import revise_skill
 from llmwikify.apps.chat.skills.actions.score_action import score_skill
 from llmwikify.apps.chat.skills.actions.summarize_action import summarize_skill
@@ -85,7 +80,6 @@ from llmwikify.apps.chat.skills.base import (
     SkillResult,
 )
 from llmwikify.apps.chat.skills.registry import (
-    SkillRegistry,
     default_registry,
 )
 

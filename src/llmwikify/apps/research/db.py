@@ -23,7 +23,6 @@ import json
 import logging
 import sqlite3
 import uuid
-from pathlib import Path
 from typing import Any
 
 from llmwikify.apps.db_base import BaseDatabase

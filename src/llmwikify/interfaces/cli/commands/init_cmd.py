@@ -7,7 +7,7 @@ import sys
 from typing import Any
 
 from .._base import Command
-from .._output import ICON_SUCCESS, ICON_WARNING, print_success, print_warning
+from .._output import print_success, print_warning
 
 
 def _maybe_prompt_llm_setup() -> int:
@@ -17,8 +17,11 @@ def _maybe_prompt_llm_setup() -> int:
         0 on skip, 1 on error.
     """
     from .init_llm_cmd import (
-        CONFIG_PATH, create_llm_config, auto_detect_provider, resolve_api_key,
-        _PROVIDER_ENV_KEY, _DEFAULT_MODELS,
+        _DEFAULT_MODELS,
+        _PROVIDER_ENV_KEY,
+        CONFIG_PATH,
+        auto_detect_provider,
+        create_llm_config,
     )
 
     if CONFIG_PATH.exists():

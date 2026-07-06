@@ -24,7 +24,6 @@ See ``docs/poc/plan-b-refactor.md`` §2 for the design.
 """
 from __future__ import annotations
 
-import asyncio
 import inspect
 import json
 import logging

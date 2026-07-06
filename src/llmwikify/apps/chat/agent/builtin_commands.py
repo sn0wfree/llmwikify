@@ -38,7 +38,7 @@ from collections.abc import AsyncIterator
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from llmwikify.apps.chat.command_router import CommandContext, CommandRouter
+    pass
 
 logger = logging.getLogger(__name__)
 

@@ -11,26 +11,7 @@ import json
 import logging
 import re
 import warnings
-from datetime import datetime, timezone
 from typing import TYPE_CHECKING
-
-from ..constants import (
-    JACCARD_OVERLAP_THRESHOLD,
-    MAX_CONTRADICTIONS,
-    MAX_CROSS_REF_HINTS,
-    MAX_DATED_CLAIM_HINTS,
-    MAX_MISSING_DISPLAY,
-    MAX_QUERY_OVERLAP_HINTS,
-    MAX_SUMMARY_ITEMS,
-    MIN_ASSERTION_LENGTH,
-    MIN_ASSERTIONS_FOR_GAP,
-    MIN_KEYWORD_LENGTH,
-    MIN_MISSING_REF_COUNT,
-    MIN_YEAR_THRESHOLD,
-    OUTDATED_YEAR_GAP,
-    STOP_WORDS,
-    YEAR_GAP_THRESHOLD,
-)
 
 if TYPE_CHECKING:
     from ..wiki import Wiki

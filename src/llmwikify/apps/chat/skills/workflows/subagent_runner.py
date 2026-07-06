@@ -42,10 +42,8 @@ from __future__ import annotations
 import json
 import logging
 import multiprocessing as mp
-import os
 import sys
 import time
-import traceback
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -86,7 +84,6 @@ class SubagentRequest:
     llm: LLMSpec | None = None   # LAL: parent-resolved LLM config (None for back-compat)
 
     def to_json(self) -> str:
-        from llmwikify.foundation.llm.spec import LLMSpec
         llm_dict = None
         if self.llm is not None:
             llm_dict = {

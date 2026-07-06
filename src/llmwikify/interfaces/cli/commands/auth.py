@@ -29,7 +29,6 @@ from llmwikify.foundation.auth import (
     chmod_600,
     ensure_dir_700,
     generate_pat,
-    hash_pat,
     local_token_path,
 )
 
@@ -63,7 +62,6 @@ def run_auth_init(wiki: Any, config: dict, args: Any) -> int:
         # Non-interactive: create user + issue PAT.
         from llmwikify.foundation.auth import (
             TokenClaims,
-            UserRepository,
             auto_first_admin,
             encode,
             get_secret,

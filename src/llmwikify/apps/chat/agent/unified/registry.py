@@ -86,7 +86,6 @@ def create_agent_loop(name: str, **kwargs: Any) -> Any:
     Raises:
         ValueError: 未知的 mode 名称
     """
-    from llmwikify.apps.chat.agent.unified.loop import UnifiedAgentLoop
     from llmwikify.kernel.agent import UnifiedAgentLoop as _UAL
 
     config = _MODE_REGISTRY.get(name)
@@ -182,7 +181,6 @@ def _register_codegen_mode() -> None:
     try:
         from llmwikify.kernel.agent import (
             CodeActor,
-            CodegenReasoner,
         )
         from llmwikify.kernel.agent.steps import CheckSuccessStep
 

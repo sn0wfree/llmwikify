@@ -12,8 +12,6 @@ a fast way to see the full picture::
 
 from __future__ import annotations
 
-from typing import Any
-
 from .._base import COMMAND_REGISTRY, Command
 
 # Subcommand aliases — populated by main() at startup.

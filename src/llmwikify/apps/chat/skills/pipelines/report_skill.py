@@ -29,7 +29,6 @@ Design ref: ``v0.32-skill-restructure.md`` §3.1 (#25)
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 from llmwikify.apps.chat.skills.base import (
     Skill,

@@ -14,7 +14,6 @@ import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from llmwikify.apps.chat.config import merge_six_step_config
 from llmwikify.apps.chat.gatherer import SourceGatherer
 from llmwikify.apps.chat.harness.quality_gate import QualityGate
 from llmwikify.apps.chat.harness.review import ResearchReviewer, ResearchRevisor
@@ -22,10 +21,8 @@ from llmwikify.apps.chat.prompts import _plan_fallback, _replan_fallback
 from llmwikify.apps.chat.session import ResearchSessionManager
 from llmwikify.apps.chat.state import (
     VALID_TRANSITIONS,
-    ActionMetrics,
     MetricsCollector,
     ResearchState,
-    SessionMetrics,
 )
 
 if TYPE_CHECKING:
@@ -808,15 +805,16 @@ async def _action_incomplete_impl(
     state.phase = "incomplete"
     sources = ctx.db.get_sources(state.session_id) or []
 
-    # Compute progress based on how many framework steps completed
+    # Compute progress based on how many framework steps completed.
+    # Aligned one-line `if` form is intentional for readability.
     step_progress = 0
-    if state.clarification is not None: step_progress += 1
-    if state.evidence_scores:            step_progress += 1
-    if state.synthesis is not None:      step_progress += 1
-    if state.reasoning_check is not None: step_progress += 1
-    if state.report_md:                  step_progress += 1
-    if state.structure_check is not None: step_progress += 1
-    if state.review is not None:         step_progress += 1
+    if state.clarification is not None: step_progress += 1  # noqa: E701
+    if state.evidence_scores:            step_progress += 1  # noqa: E701
+    if state.synthesis is not None:      step_progress += 1  # noqa: E701
+    if state.reasoning_check is not None: step_progress += 1  # noqa: E701
+    if state.report_md:                  step_progress += 1  # noqa: E701
+    if state.structure_check is not None: step_progress += 1  # noqa: E701
+    if state.review is not None:         step_progress += 1  # noqa: E701
     # 7 step-progress points → map to 0..1 with 0.85 cap
     progress = min(0.85, step_progress / 7 * 0.85)
 

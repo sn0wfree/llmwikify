@@ -7,13 +7,11 @@ from __future__ import annotations
 
 import json
 import os
-import sys
 from pathlib import Path
 from typing import Any
 
 from .._base import Command
-from .._output import ICON_SUCCESS, ICON_WARNING, print_success, print_warning
-
+from .._output import print_success, print_warning
 
 # Provider detection from env vars
 _ENV_PROVIDER_MAP = {

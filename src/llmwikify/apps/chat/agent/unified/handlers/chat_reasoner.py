@@ -18,7 +18,6 @@
 from __future__ import annotations
 
 import inspect
-import json
 import logging
 from collections.abc import AsyncIterator
 from typing import Any
@@ -26,10 +25,8 @@ from typing import Any
 from llmwikify.apps.chat.agent.unified.core import (
     StepResult,
     StreamingHandler,
-    UnifiedContext,
-    _maybe_await,
 )
-from llmwikify.apps.chat.agent.unified.spec import BaseSpec, ReasonResponse
+from llmwikify.apps.chat.agent.unified.spec import ReasonResponse
 
 logger = logging.getLogger(__name__)
 

@@ -13,7 +13,6 @@ from typing import Any
 
 from fastapi import APIRouter, Request
 
-from llmwikify.apps.chat.config import merge_six_step_config
 from llmwikify.apps.chat.db import AutoResearchDatabase
 from llmwikify.apps.chat.task_manager import get_task_manager
 

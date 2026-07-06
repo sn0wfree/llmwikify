@@ -32,8 +32,6 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from llmwikify.apps.db_base import get_app_db_path
-
 logger = logging.getLogger(__name__)
 
 

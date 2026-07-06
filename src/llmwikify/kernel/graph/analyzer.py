@@ -73,7 +73,7 @@ class GraphAnalyzer:
     def _build_graph(self, graph_data: dict):
         """Build NetworkX graph from graph data."""
         try:
-            import networkx as nx
+            import networkx as nx  # noqa: F401  (used by _build_networkx / G.degree)
         except ImportError:
             return None
 
@@ -97,7 +97,7 @@ class GraphAnalyzer:
             - authorities: Nodes with high in-degree (connected by many)
         """
         try:
-            import networkx as nx
+            import networkx as nx  # noqa: F401  (used by _build_networkx / G.degree)
         except ImportError:
             return {"error": "networkx is required for centrality analysis"}
 
@@ -211,7 +211,7 @@ class GraphAnalyzer:
             List of bridge nodes with their community connections.
         """
         try:
-            import networkx as nx
+            import networkx as nx  # noqa: F401  (used by _build_networkx / G.degree)
         except ImportError:
             return []
 
@@ -273,7 +273,7 @@ class GraphAnalyzer:
         suggestions = []
 
         try:
-            import networkx as nx
+            import networkx as nx  # noqa: F401  (used by _build_networkx / G.degree)
         except ImportError:
             return suggestions
 
@@ -353,7 +353,7 @@ class GraphAnalyzer:
     def _compute_stats(self, G) -> dict:
         """Compute graph statistics."""
         try:
-            import networkx as nx
+            import networkx as nx  # noqa: F401  (used by _build_networkx / G.degree)
         except ImportError:
             return {"error": "networkx required"}
 

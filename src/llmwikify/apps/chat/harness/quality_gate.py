@@ -12,8 +12,6 @@ class: ``check_evidence_quality``, ``check_reasoning_quality``,
 
 from __future__ import annotations
 
-from typing import Any
-
 from llmwikify.apps.research.base import BaseGateResult, BaseQualityGate
 
 # Public alias — preserve the original module-level name.

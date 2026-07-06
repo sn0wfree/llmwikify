@@ -17,9 +17,7 @@ from llmwikify.foundation.auth import (
     TokenClaims,
     decode,
     hash_pat,
-    is_local_default,
     require_secret,
-    verify_pat,
 )
 from llmwikify.foundation.auth.db import ApiKeyRepository, UserRepository
 from llmwikify.interfaces.server.constants import (

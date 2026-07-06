@@ -21,11 +21,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Iterator
 from typing import Any
 
 from llmwikify.apps.chat.bus.events import (
-    ALL_OUTBOUND_META,
     InboundMessage,
     OutboundMessage,
 )

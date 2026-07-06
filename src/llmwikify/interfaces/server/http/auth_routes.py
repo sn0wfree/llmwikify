@@ -33,7 +33,6 @@ from llmwikify.foundation.auth import (
     ApiKeyRepository,
     TokenClaims,
     UserRepository,
-    auth_db_path,
     decode,
     encode,
     env_host,
@@ -41,7 +40,6 @@ from llmwikify.foundation.auth import (
     hash_pat,
     is_local_default,
     require_secret,
-    verify_pat,
 )
 
 logger = logging.getLogger(__name__)

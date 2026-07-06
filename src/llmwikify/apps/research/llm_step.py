@@ -49,13 +49,11 @@ import asyncio
 import json
 import logging
 import time
-from collections.abc import Callable
 from typing import Any
 
 from llmwikify.apps.chat.engine_helpers import resolve_llm_params, safe_json_loads
 from llmwikify.apps.chat.prompts import (
     PROMPT_REGISTRY,
-    ResearchPrompt,
     render_framework_block,
 )
 from llmwikify.apps.chat.retry_managers import LLMRetryManager

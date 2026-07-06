@@ -9,7 +9,6 @@ from typing import Any
 from llmwikify.apps.chat.db import AutoResearchDatabase
 from llmwikify.apps.chat.harness.source_filter import SourceFilter
 from llmwikify.apps.chat.session import ResearchSessionManager
-from llmwikify.foundation.extractors.base import ExtractedContent
 from llmwikify.foundation.extractors.web import extract_url
 from llmwikify.foundation.extractors.youtube import extract_youtube
 

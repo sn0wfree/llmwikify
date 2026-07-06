@@ -24,7 +24,6 @@ observer** that emits 4 categories of observations:
 from __future__ import annotations
 
 from collections import Counter
-from typing import Any
 
 from llmwikify.apps.chat.skills.base import (
     Skill,

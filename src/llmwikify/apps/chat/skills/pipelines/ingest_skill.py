@@ -25,7 +25,6 @@ Design ref: ``v0.32-skill-restructure.md`` §3.1 (#24)
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 from llmwikify.apps.chat.skills.actions._helpers import wiki_from_ctx
 from llmwikify.apps.chat.skills.base import (

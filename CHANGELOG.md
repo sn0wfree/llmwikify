@@ -5,7 +5,7 @@ All notable changes to llmwikify will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.40.0] - 2026-07-XX — Refocus (BREAKING)
+## [0.40.0] - 2026-07-06 — Refocus (BREAKING)
 
 > **Project repositioning**: llmwikify is now a focused **Knowledge + Chat +
 > Research Assistant** tool. The quant research pipeline (paper → factor →

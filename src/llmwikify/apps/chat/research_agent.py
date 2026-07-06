@@ -24,11 +24,17 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import AsyncIterator
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 # Lazy import: ResearchEngine lives in llmwikify.apps.research.engine.
 # Use lazy local import inside __init__ to avoid circular dependency
 # (research_engine.engine imports chat.__init__ which imports this file).
+# TYPE_CHECKING guard keeps the type annotation resolvable by
+# typing.get_type_hints() (PEP 563 alone would lazy-eval the string but
+# any introspecting tool would still fail to resolve the name).
+
+if TYPE_CHECKING:
+    from llmwikify.apps.research.engine import ResearchEngine
 
 from .base import ChatBase
 

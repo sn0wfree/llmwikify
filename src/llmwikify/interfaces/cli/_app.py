@@ -25,12 +25,7 @@ subpackage now owns the name.
 """
 
 import argparse
-import glob as glob_module
-import json
 import logging
-import os
-import re
-import sys
 from pathlib import Path
 from typing import Any
 
@@ -61,7 +56,7 @@ from .commands.suggest_synthesis import run_suggest_synthesis
 from .commands.synthesize import run_synthesize
 from .commands.watch import run_watch
 from .commands.wikis import run_wikis
-from .commands.write_page import _get_content, run_write_page
+from .commands.write_page import run_write_page
 
 logger = logging.getLogger(__name__)
 
@@ -298,7 +293,7 @@ def main() -> int:
     # The import is idempotent: subsequent calls are no-ops.
     from ...foundation.logging import setup_logging
     from . import commands as _commands  # noqa: F401  (registration side effect)
-    from ._base import COMMAND_REGISTRY, CommandError, get_command
+    from ._base import CommandError, get_command
     from ._config import load_cli_config
     from ._output import print_error
 

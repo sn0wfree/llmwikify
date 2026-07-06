@@ -7,11 +7,9 @@ to do next based on intermediate results.
 
 from __future__ import annotations
 
-import json
 import logging
 import time
 from collections.abc import AsyncIterator, Awaitable, Callable
-from dataclasses import dataclass, field
 from functools import partial
 from typing import Any
 
@@ -35,7 +33,6 @@ from llmwikify.foundation.llm.streamable import StreamableLLMClient
 from . import actions
 from .actions import ActionContext
 from .gates import ResearchGates
-from .llm_step import run_prompt
 from .observer import ResearchObserver
 from .reasoner import ResearchReasoner
 from .report import ReportGenerator

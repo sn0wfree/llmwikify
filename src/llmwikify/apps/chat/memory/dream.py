@@ -36,11 +36,10 @@ Phase 6 (2026-06-19). See ``docs/poc/compare.md`` §10.8.
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import re
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -48,7 +47,6 @@ from llmwikify.apps.chat.memory.consolidation_store import (
     MemoryConsolidationStore,
 )
 from llmwikify.apps.chat.memory.facts_store import (
-    FactSource,
     MemoryFactsStore,
 )
 

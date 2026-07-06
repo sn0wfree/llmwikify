@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from .._base import Command
-from .._output import ICON_SUCCESS, ICON_WARNING, print_warning
+from .._output import ICON_SUCCESS, print_warning
 
 
 def run_fix_wikilinks(wiki: Any, args: Any) -> int:

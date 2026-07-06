@@ -15,14 +15,12 @@ through ``stderr_print`` from ``cli._output``.
 from __future__ import annotations
 
 import json
-import sys
 import warnings
 from typing import Any
 
 from .._base import Command
 from .._output import (
     print_error,
-    print_warning_stderr,
     stderr_print,
 )
 
