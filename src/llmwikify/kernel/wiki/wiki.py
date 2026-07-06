@@ -217,6 +217,156 @@ class Wiki(
         """Create raw/ directory if missing."""
         self.raw_dir.mkdir(parents=True, exist_ok=True)
 
+    # ───────────────────────────────────────────────────────────
+    # Layout introspection (for `llmwikify doctor`).
+    # These methods expose the wiki's expected file/dir layout as
+    # data so external tools (doctor, status, lint) can verify it
+    # without re-implementing the convention. wiki.md is the
+    # single source of truth for page-type subdirectories.
+    # ───────────────────────────────────────────────────────────
+
+    def _extract_subdirs_from_wiki_md(self) -> list[str]:
+        """Parse wiki.md to extract declared page-type subdirectories.
+
+        Two sources are merged (deduplicated):
+
+        1. **Directory Structure** tree (box-drawing characters).
+           Lines like ``├── sources/`` under a ``wiki/`` block.
+
+        2. **Page Types** table — markdown table cells containing
+           backtick paths like `` `wiki/sources/{slug}.md` ``.
+
+        Returns a sorted list of unique subdirectory names declared
+        in the schema. Empty list if wiki.md is missing or has no
+        recognizable page-type section.
+        """
+        import re
+
+        if not self.wiki_md_file.exists():
+            return []
+        try:
+            content = self.wiki_md_file.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            return []
+
+        subdirs: set[str] = set()
+
+        # Source 1: Directory Structure tree (box-drawing).
+        # We walk line-by-line, entering the wiki/ block when we see
+        # a `├── wiki/` or `└── wiki/` line, and exit when we hit
+        # `wiki.md` or `.wiki-config.yaml` (back at root level).
+        in_tree = False
+        for line in content.splitlines():
+            if not in_tree:
+                if re.match(r"^[\s│]*[├└]──\s+wiki/\s*(?:#.*)?$", line):
+                    in_tree = True
+                continue
+            # Capture dir entries (ending with `/`, not `.md`).
+            m = re.match(
+                r"^[\s│├└─]*[├└]──\s+([.\w][\w_-]*)/(?:\s+#.*)?\s*$",
+                line,
+            )
+            if m:
+                subdirs.add(m.group(1))
+            # Exit: back at root level (wiki.md or config).
+            if re.match(r"^[\s│]*[├└]──\s+wiki\.md\b", line):
+                break
+            if re.match(r"^└──\s+\.wiki-config", line):
+                break
+
+        # Source 2: Page Types table backtick paths.
+        # Match `wiki/<subdir>/...` inside backticks.
+        for m in re.finditer(r"`(wiki/[.\w][\w_-]*)/", content):
+            sub = m.group(1).replace("wiki/", "", 1)
+            if sub and sub != ".":
+                subdirs.add(sub)
+
+        return sorted(subdirs)
+
+    @property
+    def expected_layout(self) -> dict[str, Path]:
+        """Canonical wiki layout per this wiki's schema.
+
+        Combines:
+          - 4 hardcoded functional paths (raw/, wiki/, .llmwikify.db,
+            wiki.md) — wiki is non-functional without these.
+          - N page-type subdirs parsed from wiki.md (Directory
+            Structure + Page Types sections).
+
+        The page-type subdirs come from ``_extract_subdirs_from_wiki_md()``,
+        so the doctor (and any other consumer) automatically tracks
+        user-added custom subdirs. Zero hardcoded page-type list.
+
+        Returns ``{display_name: absolute_path}``.
+        """
+        layout: dict[str, Path] = {
+            "raw/": self.raw_dir,
+            "wiki/": self.wiki_dir,
+            ".llmwikify.db": self.db_path,
+            "wiki.md": self.wiki_md_file,
+        }
+        for name in self._extract_subdirs_from_wiki_md():
+            layout[f"wiki/{name}/"] = self.wiki_dir / name
+        return layout
+
+    @property
+    def actual_layout(self) -> dict[str, Path]:
+        """Files/dirs that actually exist on disk right now.
+
+        Filters out jupyter noise (``.ipynb_checkpoints/`` is created
+        by JupyterLab, not by llmwikify).
+
+        Returns ``{display_name: absolute_path}`` for everything
+        that currently exists in the expected functional set
+        (raw/, wiki/, db, wiki.md) plus any subdir of ``wiki/``.
+        """
+        actual: dict[str, Path] = {}
+        # Top-level functional paths
+        for name, path in [
+            ("raw/", self.raw_dir),
+            ("wiki/", self.wiki_dir),
+            (".llmwikify.db", self.db_path),
+            ("wiki.md", self.wiki_md_file),
+        ]:
+            if path.exists():
+                actual[name] = path
+        # Subdirs under wiki/
+        if self.wiki_dir.exists():
+            for child in self.wiki_dir.iterdir():
+                if child.is_dir() and child.name != ".ipynb_checkpoints":
+                    actual[f"wiki/{child.name}/"] = child
+        return actual
+
+    def check_layout(self) -> dict[str, bool]:
+        """For each path in ``expected_layout``, return whether it exists.
+
+        Returns ``{display_name: exists}``. Used by doctor to
+        produce a one-line-per-path status without re-implementing
+        the convention.
+        """
+        return {name: path.exists() for name, path in self.expected_layout.items()}
+
+    def layout_diff(self) -> dict[str, list[str]]:
+        """Compare declared (wiki.md) vs actual (disk) layout.
+
+        Returns a 3-way split:
+          - ``in_both``: declared by wiki.md AND exists on disk
+          - ``declared_only``: declared by wiki.md but missing on disk
+            (user/agent should create)
+          - ``actual_only``: exists on disk but not declared in wiki.md
+            (wiki.md is stale; user should update schema)
+
+        Both ``declared_only`` and ``actual_only`` are non-fatal:
+        they are informational, not breakage.
+        """
+        expected_names = set(self.expected_layout.keys())
+        actual_names = set(self.actual_layout.keys())
+        return {
+            "in_both": sorted(expected_names & actual_names),
+            "declared_only": sorted(expected_names - actual_names),
+            "actual_only": sorted(actual_names - expected_names),
+        }
+
     def _find_wiki_page_path(self, name: str) -> Path | None:
         """Find a wiki page by its stem name. Returns Path or None.
 
