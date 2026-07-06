@@ -5,6 +5,57 @@ All notable changes to llmwikify will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.40.0] - 2026-07-XX — Refocus (BREAKING)
+
+> **Project repositioning**: llmwikify is now a focused **Knowledge + Chat +
+> Research Assistant** tool. The quant research pipeline (paper → factor →
+> backtest) has been moved to [quantnodes](https://github.com/sn0wfree/quantnodes)
+> (>=4.0) as `quantnodes.research`. See [docs/migration/from-v0.39.md](docs/migration/from-v0.39.md).
+
+### Removed (BREAKING)
+- `reproduction/` package (24K LoC, 119 files) — moved to `quantnodes.research`
+- `tests/reproduction/` (91 files, 17K LoC)
+- `examples/05_paper_to_factor/`
+- HTTP routes: `/api/factor`, `/api/paper`, `/api/reproduction`, `/api/strategy`
+- CLI commands: `llmwikify quant-init`, `llmwikify reproduce`
+- 30 quant scripts in `scripts/` (alpha analysis, validation, factor migration)
+- `apps/agent/tools/quant_adapter.py`
+- 22 orphan `repro_*.yaml` prompt templates in `foundation/prompts/_defaults/`
+- 3 quant design docs in `docs/designs/` (loop_v4, workflow-pipeline, mcts_alpha)
+- `quantnodes` optional dependency (no longer needed)
+
+### Changed
+- **Project scope**: Knowledge + Chat + Research Assistant (no quant pipeline)
+- **Architecture**: `apps.research` becomes the canonical research package;
+  `apps.chat.research_engine/` becomes a thin backward-compat shim.
+  All 9 research submodules (engine, actions, gates, llm_step, observer,
+  reasoner, report, resume, routes) are now primary exports of `apps.research`.
+- **Tests**: 6,100+ → 4,300+ (test count focused on KB/Chat/Research)
+- **Total LoC**: ~130K → ~42K (-68%)
+- **README + CHANGELOG**: rewritten for new positioning
+- **version**: 0.38.0 → 0.40.0
+
+### Migration Guide (from v0.39 → v0.40)
+
+If you previously used:
+
+| Old (v0.39) | New (v0.40+) |
+|---|---|
+| `from llmwikify.reproduction.X import Y` | `from quantnodes.research.X import Y` (quantnodes>=4.0) |
+| `llmwikify reproduce` | `quantnodes reproduce` |
+| HTTP `/api/{factor,paper,reproduction,strategy}/*` | moved to `quantnodes` server |
+| `llmwikify quant-init` | removed (use `quantnodes research init`) |
+| `scripts/run_101_alphas_v2.py` etc. | moved to `quantnodes/scripts/research/` |
+
+### Notes
+- llmwikify is now a **leaf package** (no dependency on quantnodes).
+- The `llmwikify.apps.research` package hosts the **general-purpose** research
+  assistant (ReAct loop, multi-source synthesis). It is unrelated to quant
+  paper reproduction.
+- All migration work tracked in `plan/v0.40-refocus.md`.
+
+---
+
 ## [0.38.0] - 2026-07-02 — Onboarding + CI (actual release)
 
 > **Note**: This is the **actual published release** of v0.38.0. The previous

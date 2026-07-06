@@ -1,18 +1,22 @@
 # llmwikify
 
-> **Build persistent, LLM-maintained knowledge bases — and reproduce quant research from papers.**
+> **Knowledge + Chat + Research Assistant — LLM-maintained knowledge bases with chat & general research capabilities.**
 
 [![PyPI version](https://badge.fury.io/py/llmwikify.svg)](https://pypi.org/project/llmwikify/)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Tests](https://img.shields.io/badge/tests-6100%2B%20passed-brightgreen.svg)](https://github.com/sn0wfree/llmwikify)
-[![Version](https://img.shields.io/badge/version-0.38.0-blue.svg)](pyproject.toml)
+[![Tests](https://img.shields.io/badge/tests-4300%2B%20passed-brightgreen.svg)](https://github.com/sn0wfree/llmwikify)
+[![Version](https://img.shields.io/badge/version-0.40.0-blue.svg)](pyproject.toml)
 [![CI Tests](https://github.com/sn0wfree/llmwikify/actions/workflows/tests.yml/badge.svg)](https://github.com/sn0wfree/llmwikify/actions/workflows/tests.yml)
 [![Lint](https://github.com/sn0wfree/llmwikify/actions/workflows/lint.yml/badge.svg)](https://github.com/sn0wfree/llmwikify/actions/workflows/lint.yml)
-[![codecov](https://codecov.io/gh/sn0wfree/llmwikify/branch/main/graph/badge.svg)](https://codecov.io/gh/sn0wfree/llmwikify)
+[![codecov](https://codecov.io/gh/sn0wfree/llmwikify/branch/main/graph/badge.svg)](https://codecov.io/gh/sn0wfree/llmwikify/branch/main/graph/badge.svg)
 
 **llmwikify** is a Python CLI + library + unified server for building **persistent,
-LLM-maintained knowledge bases** with a dedicated **quant research reproduction pipeline**.
+LLM-maintained knowledge bases** with **chat** and **general research assistant** capabilities.
+
+> **v0.40 Refocus** — quant research pipeline (paper → factor → backtest) has moved to
+> [**quantnodes.research**](https://github.com/sn0wfree/quantnodes) (>=4.0). llmwikify
+> now focuses exclusively on wiki + chat + research-assistant use cases.
 
 ![Dashboard](docs/screenshots/dashboard.png)
 
@@ -25,23 +29,33 @@ LLM-maintained knowledge bases** with a dedicated **quant research reproduction 
 
 | | |
 |---|---|
+| 📚 **Knowledge Base** | LLM-maintained wiki with auto-linting, multi-wiki registry, section anchors |
+| 💬 **Chat Agent** | Streaming chat with tool calling, 50+ skills, subagents, memory |
+| 🔬 **Research Assistant** | Adaptive ReAct loop, multi-source synthesis, quality gates |
 | 🔍 **Smart Search** | SQLite FTS5 + optional QMD hybrid (BM25 + vector + LLM reranking) |
 | 🔗 **Bidirectional Links** | Automatic `[[wikilink]]` detection with section-level granularity |
 | 🧠 **Knowledge Graph** | 8 relation types, PageRank, community detection, interactive D3.js visualization |
-| 🤖 **ReAct Agent** | Streaming chat with tool calling, confirmations, and 26 MCP tools |
-| 📊 **Quant Pipeline** | Paper → 6-layer Factor YAML → DuckDB → Backtest → L5 reflection |
 | 🌐 **Unified Server** | MCP + REST + WebSocket + Web UI in one process |
 
 ---
 
 ## Features
 
-### Chat + ReAct Agent ⚠️ Under Active Development
-Streaming chat with tool calling, confirmations, and 26 MCP tools. The agent can search your wiki, analyze sources, and generate insights — all with human-in-the-loop confirmations.
-
-> ⚠️ **Note:** This feature is under active development and may be unstable.
+### 💬 Chat + Skills Agent
+Streaming chat with tool calling, confirmations, and 50+ built-in skills (CRUD,
+research, subagent, scheduler). The agent can search your wiki, manage pages,
+and orchestrate multi-step research — all with human-in-the-loop confirmations.
 
 ![Chat](docs/screenshots/chat.png)
+
+### 🔬 Research Assistant
+Adaptive ReAct research engine that breaks down questions into sub-queries,
+gathers sources, applies quality gates, and synthesizes structured reports.
+Configuration-driven via `~/.llmwikify/llmwikify.json`.
+
+### 📚 Knowledge Base (Wiki)
+LLM-maintained wiki with bidirectional wikilinks, multi-wiki registry,
+section-level anchors, YAML frontmatter + DuckDB storage, FTS5 full-text search.
 
 ### Markdown Editor
 Split-pane live markdown editor with page tree, front-matter panel, and wikilink autocomplete. Edit, preview, and manage your wiki pages in one view.
@@ -205,8 +219,8 @@ New to llmwikify? Start with our **5 end-to-end scenarios**:
 | **Smart Lint** | Broken links, orphans, contradictions, outdated pages, knowledge gaps |
 | **Knowledge Graph** | 8 relation types, PageRank, community detection, HTML/SVG/GraphML export |
 | **Chat + Agent** | ReAct streaming, 26 MCP tools, skills system, research engine |
-| **Quant Reproduction** | Paper extraction, 6-layer factors, DuckDB, backtesting, L5 reflection |
-| **Web UI** | React SPA: editor, graph, dashboard, chat, quant pages |
+| **Research Assistant** | Adaptive ReAct loop, multi-source synthesis, quality gates (general purpose) |
+| **Web UI** | React SPA: editor, graph, dashboard, chat pages |
 | **Extraction** | PDF, Word, Excel, PowerPoint, images, audio, web, YouTube |
 | **MCP Server** | 26 tools over stdio + HTTP, multi-wiki support |
 
@@ -346,10 +360,9 @@ pip install llmwikify[extractors]  # PDF/Office/media
 
 ### Quant Research
 
-| Command | Description |
-|---------|-------------|
-| `quant-init` | Scaffold `quant/` directory structure |
-| `reproduce` | Paper reproduction pipeline (Stage 0/1 + Track A/B) |
+> **v0.40 BREAKING**: `quant-init` and `reproduce` commands removed.
+> Quant research pipeline moved to [`quantnodes.research`](https://github.com/sn0wfree/quantnodes) (>=4.0).
+> Use `quantnodes reproduce` instead.
 
 ### Database & Health
 
