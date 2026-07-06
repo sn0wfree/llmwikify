@@ -27,33 +27,9 @@ const TaskMonitor = lazy(() =>
 const LLMSettings = lazy(() =>
   import('./components/agent/LLMSettings').then(m => ({ default: m.LLMSettings }))
 );
-const ReproductionPanel = lazy(() =>
-  import('./components/reproduction/ReproductionPanel').then(m => ({ default: m.ReproductionPanel }))
-);
-const PaperPanel = lazy(() =>
-  import('./components/paper/PaperPanel').then(m => ({ default: m.PaperPanel }))
-);
-const FactorList = lazy(() =>
-  import('./components/factor/FactorList').then(m => ({ default: m.FactorList }))
-);
-const FactorFamilyList = lazy(() =>
-  import('./components/factor/FactorFamilyList').then(m => ({ default: m.FactorFamilyList }))
-);
-const FamilyDetail = lazy(() =>
-  import('./components/factor/FamilyDetail').then(m => ({ default: m.FamilyDetail }))
-);
-const FactorDetail = lazy(() =>
-  import('./components/factor/FactorDetail').then(m => ({ default: m.FactorDetail }))
-);
-const StrategyList = lazy(() =>
-  import('./components/strategy/StrategyList').then(m => ({ default: m.StrategyList }))
-);
-const StrategyDetail = lazy(() =>
-  import('./components/strategy/StrategyDetail').then(m => ({ default: m.StrategyDetail }))
-);
-const BacktestPlatform = lazy(() =>
-  import('./components/backtest/BacktestPlatform').then(m => ({ default: m.BacktestPlatform }))
-);
+// v0.40 BREAKING: removed quant panel routes (ReproductionPanel, PaperPanel,
+// FactorList, FactorFamilyList, FamilyDetail, FactorDetail, StrategyList,
+// StrategyDetail, BacktestPlatform). Quant UI now lives in quantnodes."
 
 function Loading() {
   return <div className="p-6 text-muted-foreground">Loading...</div>;
@@ -84,17 +60,30 @@ function App() {
               <Route path="chat" element={<AgentChat />} />
               <Route path="research" element={<Navigate to="/agent/autoresearch" replace />} />
               <Route path="autoresearch" element={<AutoResearchPanel />} />
-              <Route path="reproduction" element={<ReproductionPanel />} />
-              <Route path="paper" element={<PaperPanel />} />
-              <Route path="factor" element={<FactorFamilyList />} />
-              <Route path="factor/fam/:family" element={<FamilyDetail />} />
-              <Route path="factor/families" element={<FactorFamilyList />} />
-              <Route path="factor/*" element={<FactorDetail />} />
-              <Route path="strategy" element={<StrategyList />} />
-              <Route path="strategy/:name" element={<StrategyDetail />} />
-              <Route path="backtest" element={<BacktestPlatform />} />
               <Route path="tasks" element={<TaskMonitor />} />
               <Route path="settings" element={<LLMSettings />} />
+              {/* v0.40: removed /reproduction, /paper, /factor/*, /strategy/*, /backtest
+                  — moved to quantnodes (https://github.com/sn0wfree/quantnodes) */}
+              <Route
+                path="reproduction"
+                element={<Navigate to="/agent/chat?notice=reproduction-moved-to-quantnodes" replace />}
+              />
+              <Route
+                path="paper"
+                element={<Navigate to="/agent/chat?notice=paper-moved-to-quantnodes" replace />}
+              />
+              <Route
+                path="factor/*"
+                element={<Navigate to="/agent/chat?notice=factor-moved-to-quantnodes" replace />}
+              />
+              <Route
+                path="strategy/*"
+                element={<Navigate to="/agent/chat?notice=strategy-moved-to-quantnodes" replace />}
+              />
+              <Route
+                path="backtest"
+                element={<Navigate to="/agent/chat?notice=backtest-moved-to-quantnodes" replace />}
+              />
             </Route>
           </Route>
         </Routes>

@@ -552,13 +552,7 @@ export const api = {
     revert: (id: string) => request<Record<string, unknown>>(`/agent/ingest/log/${id}/revert`, { method: 'POST' }),
   },
 
-  factorLibrary: {
-    list: () => request<{ categories: Record<string, unknown[]> }>('/factor/library/list'),
-    get: (name: string) => request<{ name: string; factor: Record<string, unknown> }>(`/factor/library/${encodeURIComponent(name)}`),
-    update: (name: string, data: Record<string, unknown>) =>
-      request<{ status: string; message: string }>(`/factor/library/${encodeURIComponent(name)}`, {
-        method: 'PUT',
-        body: JSON.stringify(data),
-      }),
-  },
+  // v0.40 BREAKING: factorLibrary removed.
+  // Quant research pipeline moved to quantnodes. See:
+  // https://github.com/sn0wfree/quantnodes (>=4.0)
 };
