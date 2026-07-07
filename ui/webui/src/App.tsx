@@ -1,7 +1,6 @@
 import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { WikiLayout } from './components/wiki/WikiLayout';
-import { AgentLayout } from './components/agent/AgentLayout';
+import { AppShell } from './components/shared/AppShell';
 import { LoginPage } from './components/auth/LoginPage';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import { AuthInitBanner } from './components/auth/AuthInitBanner';
@@ -47,7 +46,7 @@ function App() {
           {/* Protected routes */}
           <Route element={<ProtectedRoute />}>
             {/* Wiki routes */}
-            <Route path="/" element={<WikiLayout />}>
+            <Route path="/" element={<AppShell />}>
               <Route index element={<Navigate to="/edit" replace />} />
               <Route path="edit" element={<Editor />} />
               <Route path="dashboard" element={<KnowledgeGrowth />} />
@@ -55,7 +54,7 @@ function App() {
             </Route>
 
             {/* Agent routes */}
-            <Route path="/agent" element={<AgentLayout />}>
+            <Route path="/agent" element={<AppShell />}>
               <Route index element={<Navigate to="/agent/chat" replace />} />
               <Route path="chat" element={<AgentChat />} />
               <Route path="research" element={<Navigate to="/agent/autoresearch" replace />} />
