@@ -106,6 +106,12 @@ def test_observer_reloads_sources_and_sub_queries():
         def get_sub_queries(self, session_id):
             return self.sub_queries
 
+        def get_source_count(self, session_id):
+            return len(self.sources)
+
+        def get_sub_query_count(self, session_id):
+            return len(self.sub_queries)
+
     class FakeEngine:
         db = FakeDB()
 
@@ -149,6 +155,12 @@ def test_observer_populates_observations_on_analyzed_sources():
 
         def get_sub_queries(self, session_id):
             return self.sub_queries
+
+        def get_source_count(self, session_id):
+            return len(self.sources)
+
+        def get_sub_query_count(self, session_id):
+            return len(self.sub_queries)
 
     class FakeEngine:
         db = FakeDB()

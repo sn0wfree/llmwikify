@@ -50,19 +50,18 @@ def test_autoresearch_does_not_import_from_deprecated_adapters():
 def test_autoresearch_engine_imports_streamable_from_new_home():
     """engine.py uses the new home for StreamableLLMClient.
 
-    D4 (2026-06-19): The v0.41 ResearchEngine was git-mv'd from
-    ``archive/llmwikify_v0_41_legacy/chat_legacy/engine.py`` to
-    ``apps/chat/research_engine/engine.py`` (its production home).
-    The test now reads the production source to verify the
-    canonical import path.
+    v0.40 (2026-07-05): The canonical home for ResearchEngine moved
+    to ``llmwikify.apps.research.engine`` (Phase 4). The shim at
+    ``llmwikify.apps.chat.research_engine.engine`` only re-exports
+    via PEP 562, so the test now reads the canonical source to
+    verify the import path.
     """
     engine_path = (
         Path(__file__).parent.parent
         / "src"
         / "llmwikify"
         / "apps"
-        / "chat"
-        / "research_engine"
+        / "research"
         / "engine.py"
     )
     src = engine_path.read_text()
@@ -71,10 +70,21 @@ def test_autoresearch_engine_imports_streamable_from_new_home():
 
 
 def test_autoresearch_actions_imports_streamable_from_new_home():
-    """actions.py uses the new home for StreamableLLMClient."""
-    from llmwikify.apps.chat import actions
+    """actions.py uses the new home for StreamableLLMClient.
 
-    src = Path(actions.__file__).read_text()
+    v0.40: The canonical home for research actions is
+    ``llmwikify.apps.research.actions``. The shim at
+    ``llmwikify.apps.chat.actions`` re-exports the canonical symbols.
+    """
+    actions_path = (
+        Path(__file__).parent.parent
+        / "src"
+        / "llmwikify"
+        / "apps"
+        / "research"
+        / "actions.py"
+    )
+    src = actions_path.read_text()
     assert "from llmwikify.foundation.llm.streamable import StreamableLLMClient" in src
     assert "from llmwikify._legacy.adapters import" not in src
 
