@@ -1,9 +1,11 @@
 import { useState, useEffect, useMemo } from 'react';
 import {
   FileText, Database, Activity, AlertTriangle, Sparkles, PlayCircle,
-  RefreshCw, Circle, BarChart3, Clock,
+  RefreshCw, Circle, BarChart3, Clock, Network,
 } from 'lucide-react';
-import { api, WikiStatus, SinkStatus, WikiDreamEdit } from '../../api';
+import { api, WikiStatus, SinkStatus, WikiDreamEdit, GraphNode, GraphEdge, GraphAnalysis } from '../../api';
+import { GraphView } from './GraphView';
+import { GraphAnalysisPanel } from './GraphAnalysisPanel';
 import { useWikiStore } from '../../stores/wikiStore';
 import { LoadingState, EmptyState } from '../ui/states';
 import { cn } from '@/lib/utils';
@@ -37,20 +39,34 @@ export function KnowledgeGrowth({ currentWikiId: propWikiId, isMultiWikiMode: pr
   const [wikiDreamLog, setWikiDreamLog] = useState<WikiDreamEdit[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [graphNodes, setGraphNodes] = useState<GraphNode[]>([]);
+  const [graphEdges, setGraphEdges] = useState<GraphEdge[]>([]);
+  const [graphLoading, setGraphLoading] = useState(false);
+  const [allTypes, setAllTypes] = useState<string[]>([]);
+  const [analysis, setAnalysis] = useState<GraphAnalysis | null>(null);
+  const [analysisLoading, setAnalysisLoading] = useState(false);
 
   useEffect(() => { loadData(); }, [currentWikiId, isMultiWikiMode]);
 
   const loadData = async () => {
+    setGraphLoading(true);
+    setAnalysisLoading(true);
     try {
-      const [status, sink, wikiDream] = await Promise.all([
+      const [status, sink, wikiDream, graphData, analysisResult] = await Promise.all([
         isMultiWikiMode && currentWikiId ? api.wiki.scoped.status(currentWikiId).catch(() => null) : api.wiki.status().catch(() => null),
         isMultiWikiMode && currentWikiId ? api.wiki.scoped.sinkStatus(currentWikiId).catch(() => null) : api.wiki.sinkStatus().catch(() => null),
         api.wikiDream.log(50).catch(() => []),
+        api.wiki.graph({}).catch(() => ({ nodes: [], edges: [], all_types: [], stats: { total_nodes: 0, displayed_nodes: 0, mode: '' } })),
+        api.wiki.graphAnalyze().catch(() => null),
       ]);
       setWikiStatus(status);
       setSinkStatus(sink);
       setWikiDreamLog(wikiDream);
-    } catch { /* Ignore */ } finally { setLoading(false); }
+      setGraphNodes(graphData.nodes || []);
+      setGraphEdges(graphData.edges || []);
+      if (graphData.all_types) setAllTypes(graphData.all_types);
+      setAnalysis(analysisResult);
+    } catch { /* Ignore */ } finally { setLoading(false); setGraphLoading(false); setAnalysisLoading(false); }
   };
 
   const handleRefresh = async () => {
@@ -89,6 +105,12 @@ export function KnowledgeGrowth({ currentWikiId: propWikiId, isMultiWikiMode: pr
 
   const maxSinkEntries = useMemo(() => Math.max(...sinkDistribution.map((s) => s.entry_count), 1), [sinkDistribution]);
 
+  const typeCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    graphNodes.forEach((n) => { counts[n.page_type] = (counts[n.page_type] ?? 0) + 1; });
+    return counts;
+  }, [graphNodes]);
+
   if (loading) return <LoadingState message="Loading dashboard…" />;
 
   return (
@@ -116,7 +138,10 @@ export function KnowledgeGrowth({ currentWikiId: propWikiId, isMultiWikiMode: pr
           </button>
         </div>
 
-        {/* KPI Grid */}
+        {/* ── KPI Metrics ── */}
+        <div className="flex items-center gap-2 mb-4">
+          <div className="h-px flex-1 bg-border/30" />
+        </div>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-8">
           <KPICard label="Pages" value={metrics.pages} icon={FileText} tone="primary" />
           <KPICard label="Sink Entries" value={metrics.sinkEntries} icon={Database} tone="warning" />
@@ -126,8 +151,71 @@ export function KnowledgeGrowth({ currentWikiId: propWikiId, isMultiWikiMode: pr
           <KPICard label="Wiki Dream Runs" value={metrics.wikiDreamRuns} icon={PlayCircle} tone="info" />
         </div>
 
-        {/* Charts Grid */}
+        {/* ── Knowledge Graph ── */}
+        <div className="flex items-center gap-2 mb-4 mt-10">
+          <Network className="w-4 h-4 text-primary" />
+          <h2 className="text-xs font-semibold text-foreground uppercase tracking-[0.1em]">Knowledge Graph</h2>
+          <div className="h-px flex-1 bg-border/30" />
+        </div>
+        <div className="space-y-4 mb-8">
+          <div className="rounded-xl glass p-5">
+            <h2 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+              <Network className="w-4 h-4 text-primary" />
+              Graph Overview
+            </h2>
+            <div className="h-[400px] overflow-hidden rounded-lg border border-border/30">
+              <GraphView
+                nodes={graphNodes}
+                edges={graphEdges}
+                allTypes={allTypes}
+                currentNode={null}
+                onNodeClick={() => {}}
+                isLoading={graphLoading}
+              />
+            </div>
+            <div className="mt-3 flex items-center gap-1.5 flex-wrap text-xs">
+              <span className="text-muted-foreground font-medium mr-1">Types:</span>
+              {allTypes.slice(0, 8).map((t) => (
+                <span
+                  key={t}
+                  className="px-2 py-0.5 rounded-md glass text-foreground/85 font-mono tabular-nums"
+                  title={`${t}: ${typeCounts[t] ?? 0} nodes`}
+                >
+                  {t} <span className="text-muted-foreground">{typeCounts[t] ?? 0}</span>
+                </span>
+              ))}
+              <span className="ml-auto text-muted-foreground font-mono tabular-nums shrink-0">
+                {graphNodes.length} nodes · {graphEdges.length} edges
+              </span>
+            </div>
+          </div>
+          <GraphAnalysisPanel
+            data={analysis}
+            loading={analysisLoading}
+            hideRunButton
+          />
+        </div>
+
+        {/* ── System Activity ── */}
+        <div className="flex items-center gap-2 mb-4">
+          <Activity className="w-4 h-4 text-primary" />
+          <h2 className="text-xs font-semibold text-foreground uppercase tracking-[0.1em]">System Activity</h2>
+          <div className="h-px flex-1 bg-border/30" />
+        </div>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+          {/* Knowledge Health (moved from Knowledge Graph section) */}
+          <div className="rounded-xl glass p-5">
+            <h2 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+              <Activity className="w-4 h-4 text-primary" />
+              Knowledge Health
+            </h2>
+            <HealthDonut
+              pages={metrics.pages}
+              sinkEntries={metrics.sinkEntries}
+              wikiDreamEdits={metrics.wikiDreamEdits}
+              urgentSinks={metrics.urgentSinks}
+            />
+          </div>
           {/* Sink Distribution */}
           <div className="rounded-xl glass p-5">
             <div className="flex items-center justify-between mb-4">
@@ -179,22 +267,6 @@ export function KnowledgeGrowth({ currentWikiId: propWikiId, isMultiWikiMode: pr
                 })}
               </div>
             )}
-          </div>
-
-          {/* Knowledge Health Donut */}
-          <div className="rounded-xl glass p-5">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
-                <Activity className="w-4 h-4 text-primary" />
-                Knowledge Health
-              </h2>
-            </div>
-            <HealthDonut
-              pages={metrics.pages}
-              sinkEntries={metrics.sinkEntries}
-              wikiDreamEdits={metrics.wikiDreamEdits}
-              urgentSinks={metrics.urgentSinks}
-            />
           </div>
 
           {/* Wiki Dream Activity */}

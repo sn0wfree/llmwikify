@@ -280,6 +280,42 @@ export interface GraphData {
   all_types: string[];
 }
 
+export interface GraphAnalysis {
+  status: 'success' | 'empty';
+  message?: string;
+  centrality: {
+    pagerank: Array<{ node: string; score: number }>;
+    hubs: Array<{ node: string; out_degree: number }>;
+    authorities: Array<{ node: string; in_degree: number }>;
+  };
+  communities: {
+    num_communities: number;
+    modularity: number;
+    communities: Record<string, {
+      label: string;
+      size: number;
+      members: string[];
+      total_members: number;
+    }>;
+    bridges: Array<{ node: string; communities_connected: number; observation: string }>;
+  };
+  suggestions: Array<{
+    type: string;
+    node?: string;
+    concept?: string;
+    priority: 'high' | 'medium' | 'low' | string;
+    observation: string;
+    suggestion: string;
+  }>;
+  stats: {
+    nodes: number;
+    edges: number;
+    density: number;
+    avg_degree: number;
+    is_connected: boolean;
+  };
+}
+
 async function request<T>(endpoint: string, options?: RequestInit): Promise<T> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   const token = getAuthToken();
@@ -336,7 +372,7 @@ export const api = {
     suggestSynthesis: (wikiId?: string) =>
       request<unknown[]>(wikiId ? `/wiki/${wikiId}/suggest_synthesis` : '/wiki/suggest_synthesis'),
     graphAnalyze: (wikiId?: string) =>
-      request<unknown>(wikiId ? `/wiki/${wikiId}/graph_analyze` : '/wiki/graph_analyze'),
+      request<GraphAnalysis>(wikiId ? `/wiki/${wikiId}/graph_analyze` : '/wiki/graph_analyze'),
     graph: (params: { currentPage?: string; mode?: string; wikiId?: string } = {}) => {
       const q = new URLSearchParams();
       if (params.currentPage) q.set('current_page', params.currentPage);
