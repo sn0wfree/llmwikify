@@ -62,28 +62,6 @@ function App() {
               <Route path="autoresearch" element={<AutoResearchPanel />} />
               <Route path="tasks" element={<TaskMonitor />} />
               <Route path="settings" element={<LLMSettings />} />
-              {/* v0.40: removed /reproduction, /paper, /factor/*, /strategy/*, /backtest
-                  — moved to quantnodes (https://github.com/sn0wfree/quantnodes) */}
-              <Route
-                path="reproduction"
-                element={<Navigate to="/agent/chat?notice=reproduction-moved-to-quantnodes" replace />}
-              />
-              <Route
-                path="paper"
-                element={<Navigate to="/agent/chat?notice=paper-moved-to-quantnodes" replace />}
-              />
-              <Route
-                path="factor/*"
-                element={<Navigate to="/agent/chat?notice=factor-moved-to-quantnodes" replace />}
-              />
-              <Route
-                path="strategy/*"
-                element={<Navigate to="/agent/chat?notice=strategy-moved-to-quantnodes" replace />}
-              />
-              <Route
-                path="backtest"
-                element={<Navigate to="/agent/chat?notice=backtest-moved-to-quantnodes" replace />}
-              />
             </Route>
           </Route>
         </Routes>

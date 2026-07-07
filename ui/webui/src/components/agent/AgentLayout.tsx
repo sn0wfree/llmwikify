@@ -3,7 +3,6 @@ import { NavLink, Outlet } from 'react-router-dom';
 import {
   MessageSquare, Search, CheckSquare, Settings, ArrowLeft,
   PanelLeftClose, PanelLeftOpen, Sparkles, Bot, Activity,
-  Beaker, FileText, TrendingUp,
 } from 'lucide-react';
 import { WikiSelector } from '../wiki/WikiSelector';
 import { WikiManager } from '../wiki/WikiManager';
@@ -22,13 +21,6 @@ interface BadgeCounts {
 const NAV_PRIMARY = [
   { to: '/agent/chat', label: 'Chat', icon: MessageSquare },
   { to: '/agent/autoresearch', label: 'Research', icon: Search },
-] as const;
-
-const NAV_QUANT = [
-  { to: '/agent/paper', label: 'Paper', icon: FileText },
-  { to: '/agent/factor', label: 'Factor', icon: Beaker },
-  { to: '/agent/strategy', label: 'Strategy', icon: TrendingUp },
-  { to: '/agent/backtest', label: 'Backtest', icon: Activity },
 ] as const;
 
 const NAV_SECONDARY = [
@@ -119,21 +111,6 @@ export function AgentLayout() {
             </div>
             {NAV_PRIMARY.map(({ to, label, icon: Icon }) => (
               <NavLink key={to} to={to} className={linkClass} end={to === '/agent/chat'}>
-                {({ isActive }) => (
-                  <>
-                    <Icon className={cn('w-4 h-4 shrink-0 transition-colors', isActive && 'text-primary')} />
-                    <span className="flex-1 truncate">{label}</span>
-                    {isActive && <span className="nav-rail-active-indicator" />}
-                  </>
-                )}
-              </NavLink>
-            ))}
-
-            <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-[0.12em] px-3 py-1.5 mt-3">
-              Quant
-            </div>
-            {NAV_QUANT.map(({ to, label, icon: Icon }) => (
-              <NavLink key={to} to={to} className={linkClass}>
                 {({ isActive }) => (
                   <>
                     <Icon className={cn('w-4 h-4 shrink-0 transition-colors', isActive && 'text-primary')} />
