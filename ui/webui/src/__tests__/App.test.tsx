@@ -69,7 +69,8 @@ describe('App', () => {
     render(<App />);
 
     await waitFor(() => {
-      expect(screen.getByText('Insights')).toBeInTheDocument();
+      const links = screen.getAllByText('Insights');
+      expect(links.length).toBeGreaterThanOrEqual(1);
     });
   });
 

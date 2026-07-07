@@ -4,7 +4,7 @@ import remarkGfm from 'remark-gfm';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import {
   Save, FileText, Network, Eye, PanelLeftClose, PanelLeftOpen,
-  Check, AlertCircle, Loader2, Pencil, Hash,
+  Check, AlertCircle, Loader2, Pencil, Hash, Clock, FolderTree,
 } from 'lucide-react';
 import { api, WikiPage, GraphNode, GraphEdge } from '../../api';
 import { useWikiStore } from '../../stores/wikiStore';
@@ -13,6 +13,8 @@ import { EmptyState, LoadingState } from '../ui/states';
 import { FrontMatterPanel, FrontMatterData } from './FrontMatterPanel';
 import { GraphView } from './GraphView';
 import { PageTree } from './PageTree';
+import { EditHistory } from './EditHistory';
+import { FileTree } from './FileTree';
 import { cn } from '@/lib/utils';
 
 interface EditorProps {
@@ -21,7 +23,7 @@ interface EditorProps {
   currentWikiId?: string | null;
 }
 
-type ViewMode = 'edit' | 'graph' | 'preview';
+type ViewMode = 'edit' | 'graph' | 'preview' | 'history' | 'filetree';
 
 function parseFrontMatter(content: string): { metadata: FrontMatterData; body: string } {
   const match = content.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
@@ -268,8 +270,8 @@ export function Editor({
           <div className="flex items-center gap-1 ml-auto">
             {/* Mode toggle */}
             <div className="inline-flex p-0.5 rounded-md bg-white/[0.04] border border-border/40">
-              {(['edit', 'graph', 'preview'] as const).map((m) => {
-                const Icon = m === 'edit' ? Pencil : m === 'graph' ? Network : Eye;
+              {(['edit', 'graph', 'preview', 'history', 'filetree'] as const).map((m) => {
+                const Icon = m === 'edit' ? Pencil : m === 'graph' ? Network : m === 'preview' ? Eye : m === 'history' ? Clock : FolderTree;
                 return (
                   <button
                     key={m}
@@ -283,7 +285,7 @@ export function Editor({
                     )}
                   >
                     <Icon className="w-3 h-3" />
-                    <span className="hidden md:inline">{m === 'edit' ? 'Edit' : m === 'graph' ? 'Graph' : 'Preview'}</span>
+                    <span className="hidden md:inline">{m === 'edit' ? 'Edit' : m === 'graph' ? 'Graph' : m === 'preview' ? 'Preview' : m === 'history' ? 'History' : 'Tree'}</span>
                   </button>
                 );
               })}
@@ -353,7 +355,7 @@ export function Editor({
                 {body || '*No content*'}
               </ReactMarkdown>
             </div>
-          ) : (
+          ) : mode === 'graph' ? (
             <PanelGroup direction="horizontal" className="h-full">
               <Panel defaultSize={60} minSize={30} className="overflow-hidden relative">
                 <div className="absolute inset-0">
@@ -377,6 +379,10 @@ export function Editor({
                 </div>
               </Panel>
             </PanelGroup>
+          ) : mode === 'history' ? (
+            <EditHistory />
+          ) : (
+            <FileTree onSelect={handlePageSelect} currentWikiId={currentWikiId || undefined} />
           )}
         </div>
       </div>

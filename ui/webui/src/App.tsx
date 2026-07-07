@@ -14,6 +14,15 @@ const KnowledgeGrowth = lazy(() =>
 const Insights = lazy(() =>
   import('./components/wiki/Insights').then(m => ({ default: m.Insights }))
 );
+const DreamPage = lazy(() =>
+  import('./components/wiki/DreamPage').then(m => ({ default: m.DreamPage }))
+);
+const SinkPage = lazy(() =>
+  import('./components/wiki/SinkPage').then(m => ({ default: m.SinkPage }))
+);
+const Confirmations = lazy(() =>
+  import('./components/wiki/Confirmations').then(m => ({ default: m.Confirmations }))
+);
 const AgentChat = lazy(() =>
   import('./components/agent/AgentChat').then(m => ({ default: m.AgentChat }))
 );
@@ -51,6 +60,8 @@ function App() {
               <Route path="edit" element={<Editor />} />
               <Route path="dashboard" element={<KnowledgeGrowth />} />
               <Route path="insights" element={<Insights />} />
+              <Route path="insights/dream" element={<DreamPage />} />
+              <Route path="insights/sink" element={<SinkPage />} />
             </Route>
 
             {/* Agent routes */}
@@ -59,6 +70,7 @@ function App() {
               <Route path="chat" element={<AgentChat />} />
               <Route path="research" element={<Navigate to="/agent/autoresearch" replace />} />
               <Route path="autoresearch" element={<AutoResearchPanel />} />
+              <Route path="confirmations" element={<Confirmations />} />
               <Route path="tasks" element={<TaskMonitor />} />
               <Route path="settings" element={<LLMSettings />} />
             </Route>

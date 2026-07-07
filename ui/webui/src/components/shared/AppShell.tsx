@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
-import { NavLink, Outlet, useLocation } from 'react-router-dom';
+import { useState, useEffect, useCallback } from 'react';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   BookOpen, Sparkles, FileText, BarChart3, Lightbulb,
   MessageSquare, Search, CheckSquare, Settings,
   PanelLeftClose, PanelLeftOpen, Bot, Moon, Sun,
+  Database, AlertTriangle,
 } from 'lucide-react';
 import { Backdrop } from './Backdrop';
 import { Notifications } from '../wiki/Notifications';
@@ -11,21 +12,28 @@ import { HealthStatus } from '../wiki/HealthStatus';
 import { WikiSelector } from '../wiki/WikiSelector';
 import { WikiManager } from '../wiki/WikiManager';
 import { Badge } from '../ui/badge';
+import { UnifiedSearch } from './UnifiedSearch';
 import { api } from '../../api';
 import { useWikiStore } from '../../stores/wikiStore';
 import { cn } from '@/lib/utils';
 
 const NAV_WIKI = [
-  { to: '/edit', label: 'Editor', icon: FileText },
   { to: '/dashboard', label: 'Dashboard', icon: BarChart3 },
-  { to: '/insights', label: 'Insights', icon: Lightbulb },
+  { to: '/edit', label: 'Editor', icon: FileText },
 ] as const;
 
 const NAV_AGENT = [
   { to: '/agent/chat', label: 'Chat', icon: MessageSquare },
   { to: '/agent/autoresearch', label: 'Research', icon: Search },
+  { to: '/agent/confirmations', label: 'Confirmations', icon: AlertTriangle },
   { to: '/agent/tasks', label: 'Tasks', icon: CheckSquare },
   { to: '/agent/settings', label: 'Settings', icon: Settings },
+] as const;
+
+const NAV_INSIGHTS = [
+  { to: '/insights', label: 'Insights', icon: Lightbulb },
+  { to: '/insights/dream', label: 'Dream', icon: Sparkles },
+  { to: '/insights/sink', label: 'Sink', icon: Database },
 ] as const;
 
 interface BadgeCounts {
@@ -40,9 +48,25 @@ export function AppShell() {
     () => (document.documentElement.getAttribute('data-theme') as 'dark' | 'light') || 'dark',
   );
   const [badges, setBadges] = useState<BadgeCounts>({ confirmations: 0, proposals: 0 });
+  const [searchOpen, setSearchOpen] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
   const isAgent = location.pathname.startsWith('/agent');
   const { loadWikis, currentWikiId, wikis } = useWikiStore();
+
+  const handleSearchOpen = useCallback(() => setSearchOpen(true), []);
+  const handleSearchClose = useCallback(() => setSearchOpen(false), []);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setSearchOpen(true);
+      }
+    };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, []);
 
   useEffect(() => {
     loadWikis();
@@ -119,7 +143,7 @@ export function AppShell() {
               Wiki
             </div>
             {NAV_WIKI.map(({ to, label, icon: Icon }) => (
-              <NavLink key={to} to={to} className={linkClass} end={to === '/edit'}>
+              <NavLink key={to} to={to} className={linkClass} end={to === '/dashboard'}>
                 {({ isActive }) => (
                   <>
                     <Icon className={cn('w-4 h-4 shrink-0 transition-colors', isActive && 'text-primary')} />
@@ -130,11 +154,30 @@ export function AppShell() {
               </NavLink>
             ))}
 
-            <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-[0.12em] px-3 py-1.5 mt-3">
+            <div className="border-t border-sidebar-border/30 mx-2 my-1.5" />
+
+            <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-[0.12em] px-3 py-1.5">
               Agent
             </div>
             {NAV_AGENT.map(({ to, label, icon: Icon }) => (
               <NavLink key={to} to={to} className={linkClass}>
+                {({ isActive }) => (
+                  <>
+                    <Icon className={cn('w-4 h-4 shrink-0 transition-colors', isActive && 'text-primary')} />
+                    <span className="flex-1 truncate">{label}</span>
+                    {isActive && <span className="nav-rail-active-indicator" />}
+                  </>
+                )}
+              </NavLink>
+            ))}
+
+            <div className="border-t border-sidebar-border/30 mx-2 my-1.5" />
+
+            <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-[0.12em] px-3 py-1.5">
+              Insights
+            </div>
+            {NAV_INSIGHTS.map(({ to, label, icon: Icon }) => (
+              <NavLink key={to} to={to} className={linkClass} end={to === '/insights'}>
                 {({ isActive }) => (
                   <>
                     <Icon className={cn('w-4 h-4 shrink-0 transition-colors', isActive && 'text-primary')} />
@@ -216,6 +259,14 @@ export function AppShell() {
               {currentWiki?.name ? `${currentWiki.name}` : 'No wiki selected'}
             </span>
           </div>
+          <button
+            onClick={handleSearchOpen}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg glass hover:bg-white/[0.04] text-muted-foreground hover:text-foreground transition-colors text-xs"
+            aria-label="Search (⌘K)"
+          >
+            <Search className="w-3.5 h-3.5" />
+            <kbd className="hidden sm:inline px-1 py-0.5 rounded bg-white/[0.06] text-[10px] font-mono">⌘K</kbd>
+          </button>
           <div className="flex items-center gap-2 shrink-0">
             {badges.confirmations > 0 && (
               <Badge variant="destructive" title="Pending confirmations">
@@ -239,6 +290,7 @@ export function AppShell() {
       </main>
 
       {showManager && <WikiManager onClose={() => setShowManager(false)} />}
+      <UnifiedSearch open={searchOpen} onClose={handleSearchClose} />
     </div>
   );
 }
