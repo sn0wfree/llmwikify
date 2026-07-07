@@ -247,7 +247,7 @@ class WikiService:
         if not wiki_id:
             return []
         editor = self._get_wiki_dream_editor(wiki_id)
-        return editor.get_edit_log(limit)
+        return editor.get_wiki_dream_edit_log(limit)
 
     def get_wiki_dream_proposals(
         self, wiki_id: str | None = None

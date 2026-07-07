@@ -184,6 +184,13 @@ class TestWikiDreamLifecycle:
         result = wiki_service.get_wiki_dream_log(None)
         assert result == []
 
+    def test_get_dream_log_with_real_editor(self, wiki_service: WikiService) -> None:
+        # Regression: 658637a rename missed the call site at service.py:250
+        # (get_edit_log → get_wiki_dream_edit_log). When wiki_id is provided,
+        # service must call the renamed method, not raise AttributeError.
+        result = wiki_service.get_wiki_dream_log("test_wiki", limit=20)
+        assert result == []
+
     def test_get_dream_proposals_no_wiki(self, wiki_service: WikiService) -> None:
         wiki_service.wiki_registry.default_id = None
         result = wiki_service.get_wiki_dream_proposals(None)
