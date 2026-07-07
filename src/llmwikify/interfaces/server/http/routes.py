@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
+from fastapi.responses import FileResponse
 
 from llmwikify.apps.chat.channels.websocket import _register_websocket_routes
 from llmwikify.kernel import Wiki
@@ -15,6 +16,24 @@ from llmwikify.kernel.multi_wiki.instance import WikiType
 from llmwikify.kernel.multi_wiki.registry import WikiRegistry
 
 logger = logging.getLogger(__name__)
+
+
+def _serve_wiki_file(wiki_root: Path, path: str) -> FileResponse:
+    """Resolve a wiki-relative file path safely and return a FileResponse.
+
+    Rejects absolute paths and any resolved path that escapes ``wiki_root``.
+    """
+    if not path:
+        raise HTTPException(status_code=400, detail="path required")
+    root = wiki_root.resolve()
+    target = (root / path).resolve()
+    try:
+        target.relative_to(root)
+    except ValueError:
+        raise HTTPException(status_code=403, detail=f"Path escapes wiki root: {path}") from None
+    if not target.exists() or not target.is_file():
+        raise HTTPException(status_code=404, detail=f"File not found: {path}")
+    return FileResponse(target)
 
 
 
@@ -175,6 +194,15 @@ def _register_wiki_routes(
         """Return graph data optimized for visualization."""
         from llmwikify.kernel.graph.visualizer import build_visualization_data
         return build_visualization_data(wiki.index, wiki, current_page, mode)
+
+    @wiki_router.get("/file/{path:path}")
+    async def wiki_serve_file(path: str, wiki: Wiki = Depends(get_wiki)):  # noqa: B008
+        """Serve a raw file from the wiki root (PDF, markdown, source).
+
+        Security: path must resolve under the wiki root; absolute paths and
+        ``..`` traversal are rejected with 403/404.
+        """
+        return _serve_wiki_file(wiki.root, path)
 
     app.include_router(wiki_router)
 
@@ -399,6 +427,15 @@ def _register_wiki_routes(
         try:
             wiki = get_wiki_by_id(wiki_id)
             return wiki.sink_status()
+        except KeyError:
+            raise HTTPException(status_code=404, detail=f"Wiki not found: {wiki_id}")
+
+    @wiki_router.get("/{wiki_id}/file/{path:path}")
+    async def wiki_serve_file_by_id(wiki_id: str, path: str):
+        """Serve a raw file from the named wiki (PDF, markdown, source)."""
+        try:
+            wiki = get_wiki_by_id(wiki_id)
+            return _serve_wiki_file(wiki.root, path)
         except KeyError:
             raise HTTPException(status_code=404, detail=f"Wiki not found: {wiki_id}")
 

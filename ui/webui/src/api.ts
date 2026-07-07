@@ -396,6 +396,10 @@ export const api = {
       pages: (wikiId: string) => request<{ pages: string[] }>(`/wiki/${wikiId}/pages`),
       graph: (wikiId: string, currentPage?: string) => api.wiki.graph({ wikiId, currentPage }),
     },
+    fileUrl: (path: string, wikiId?: string) => {
+      const encoded = path.split('/').map(encodeURIComponent).join('/');
+      return wikiId ? `/api/wiki/${wikiId}/file/${encoded}` : `/api/wiki/file/${encoded}`;
+    },
   },
 
   search: {

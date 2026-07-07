@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Search, Loader2, FileText, Sparkles, X } from 'lucide-react';
 import { api, SearchResult } from '../../api';
 import { useWikiStore } from '../../stores/wikiStore';
@@ -11,6 +12,7 @@ interface SinkEntry {
 }
 
 export function UnifiedSearch({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const navigate = useNavigate();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [sinks, setSinks] = useState<SinkEntry[]>([]);
@@ -71,7 +73,7 @@ export function UnifiedSearch({ open, onClose }: { open: boolean; onClose: () =>
     setQuery('');
     setResults([]);
     onClose();
-    window.location.href = `/edit?page=${encodeURIComponent(page)}`;
+    navigate(`/edit?page=${encodeURIComponent(page)}`);
   };
 
   useEffect(() => {

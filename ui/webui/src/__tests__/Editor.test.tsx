@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { fireEvent } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { render, screen, act, waitFor } from './test-utils';
 import { Editor } from '../components/wiki/Editor';
 import { ToastProvider } from '../components/wiki/Toast';
@@ -19,11 +20,13 @@ vi.mock('../api', () => ({
   },
 }));
 
-function renderEditor(selectedPage: string | null = null) {
+function renderEditor(selectedPage: string | null = null, initialPath = '/edit') {
   return render(
-    <ToastProvider>
-      <Editor selectedPage={selectedPage} onPageSelect={vi.fn()} />
-    </ToastProvider>
+    <MemoryRouter initialEntries={[initialPath]}>
+      <ToastProvider>
+        <Editor selectedPage={selectedPage} onPageSelect={vi.fn()} />
+      </ToastProvider>
+    </MemoryRouter>,
   );
 }
 
@@ -53,9 +56,11 @@ describe('Editor', () => {
   it('should show error toast when page load fails', async () => {
     mockReadPage.mockRejectedValue(new Error('Page not found'));
     render(
-      <ToastProvider>
-        <Editor selectedPage="Missing" onPageSelect={vi.fn()} />
-      </ToastProvider>,
+      <MemoryRouter>
+        <ToastProvider>
+          <Editor selectedPage="Missing" onPageSelect={vi.fn()} />
+        </ToastProvider>
+      </MemoryRouter>,
     );
     await waitFor(() => {
       expect(screen.getByText(/Failed to load page: Page not found/)).toBeInTheDocument();
@@ -67,9 +72,11 @@ describe('Editor', () => {
     mockWritePage.mockRejectedValue(new Error('Network error'));
 
     render(
-      <ToastProvider>
-        <Editor selectedPage="Test" onPageSelect={vi.fn()} />
-      </ToastProvider>,
+      <MemoryRouter>
+        <ToastProvider>
+          <Editor selectedPage="Test" onPageSelect={vi.fn()} />
+        </ToastProvider>
+      </MemoryRouter>,
     );
 
     await waitFor(() => {

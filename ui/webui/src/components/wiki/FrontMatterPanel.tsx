@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import {
   ChevronDown, FileText, Folder, Calendar, User, Hash,
-  Building2, Tag, FileCode, Braces,
+  Building2, Tag, FileCode, Braces, ExternalLink, FileSearch,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { api } from '../../api';
 
 export interface FrontMatterData {
   title?: string;
@@ -18,6 +19,8 @@ export interface FrontMatterData {
 
 interface FrontMatterPanelProps {
   metadata: FrontMatterData;
+  currentWikiId?: string | null;
+  onPageClick?: (page: string) => void;
 }
 
 const FIELD_ICONS: Record<string, typeof FileText> = {
@@ -37,7 +40,11 @@ function formatValue(key: string, value: unknown): string {
   return String(value ?? '');
 }
 
-export function FrontMatterPanel({ metadata }: FrontMatterPanelProps) {
+function isPdfPath(p: string): boolean {
+  return /\.pdf$/i.test(p.trim());
+}
+
+export function FrontMatterPanel({ metadata, currentWikiId, onPageClick }: FrontMatterPanelProps) {
   const [collapsed, setCollapsed] = useState(true);
 
   const entries = DISPLAY_ORDER
@@ -74,6 +81,7 @@ export function FrontMatterPanel({ metadata }: FrontMatterPanelProps) {
         <div className="px-4 pb-3 pt-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 animate-slide-up">
           {entries.map(([key, value]) => {
             const Icon = FIELD_ICONS[key] || FileCode;
+            const isSourcesList = key === 'sources' && Array.isArray(value);
             return (
               <div
                 key={key}
@@ -94,6 +102,50 @@ export function FrontMatterPanel({ metadata }: FrontMatterPanelProps) {
                           {tag}
                         </span>
                       ))}
+                    </div>
+                  ) : isSourcesList ? (
+                    <div className="flex flex-col gap-1 mt-1">
+                      {(value as unknown[]).map((entry, i) => {
+                        const path = String(entry);
+                        const name = path.split('/').pop() || path;
+                        if (isPdfPath(path)) {
+                          const url = api.wiki.fileUrl(path, currentWikiId || undefined);
+                          return (
+                            <a
+                              key={i}
+                              href={url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-foreground/90 hover:text-primary transition-colors truncate"
+                              title={path}
+                            >
+                              <FileText className="w-3 h-3 text-muted-foreground shrink-0" />
+                              <span className="truncate">{name}</span>
+                              <ExternalLink className="w-2.5 h-2.5 text-muted-foreground shrink-0" />
+                            </a>
+                          );
+                        }
+                        if (onPageClick) {
+                          return (
+                            <button
+                              key={i}
+                              type="button"
+                              onClick={() => onPageClick(path)}
+                              className="inline-flex items-center gap-1 text-foreground/90 hover:text-primary transition-colors truncate text-left"
+                              title={path}
+                            >
+                              <FileSearch className="w-3 h-3 text-muted-foreground shrink-0" />
+                              <span className="truncate">{name}</span>
+                            </button>
+                          );
+                        }
+                        return (
+                          <span key={i} className="inline-flex items-center gap-1 text-foreground/90 truncate" title={path}>
+                            <FileText className="w-3 h-3 text-muted-foreground shrink-0" />
+                            <span className="truncate">{name}</span>
+                          </span>
+                        );
+                      })}
                     </div>
                   ) : (
                     <div className="text-foreground/90 mt-0.5 break-words">

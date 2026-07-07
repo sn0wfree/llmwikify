@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import ReactMarkdown from 'react-markdown';
+import { useSearchParams } from 'react-router-dom';
 import remarkGfm from 'remark-gfm';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import {
@@ -15,6 +15,7 @@ import { GraphView } from './GraphView';
 import { PageTree } from './PageTree';
 import { EditHistory } from './EditHistory';
 import { FileTree } from './FileTree';
+import { WikiMarkdown } from './WikiMarkdown';
 import { cn } from '@/lib/utils';
 
 interface EditorProps {
@@ -60,6 +61,8 @@ export function Editor({
 }: EditorProps) {
   const { addToast } = useToast();
   const { isMultiWikiMode } = useWikiStore();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlPage = searchParams.get('page');
   const [internalSelectedPage, setInternalSelectedPage] = useState<string | null>(initialPage || null);
   const [page, setPage] = useState<WikiPage | null>(null);
   const [content, setContent] = useState('');
@@ -77,17 +80,29 @@ export function Editor({
   const [graphLoading, setGraphLoading] = useState(false);
   const [showLabels, setShowLabels] = useState(true);
 
-  const selectedPage = internalSelectedPage;
+  const selectedPage = internalSelectedPage ?? urlPage ?? null;
 
   const handlePageSelect = useCallback((pageName: string) => {
-    if (dirty) {
+    if (dirty && pageName !== internalSelectedPage) {
       const ok = window.confirm('You have unsaved changes. Discard and switch?');
       if (!ok) return;
     }
     setInternalSelectedPage(pageName);
     setDirty(false);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set('page', pageName);
+      return next;
+    }, { replace: true });
     externalOnSelect?.(pageName);
-  }, [externalOnSelect, dirty]);
+  }, [externalOnSelect, dirty, internalSelectedPage, setSearchParams]);
+
+  useEffect(() => {
+    if (urlPage && urlPage !== internalSelectedPage) {
+      if (dirty) return;
+      setInternalSelectedPage(urlPage);
+    }
+  }, [urlPage]);
 
   useEffect(() => { loadTree(); }, []);
 
@@ -320,7 +335,13 @@ export function Editor({
         </div>
 
         {/* Front Matter Panel */}
-        {hasMetadata && <FrontMatterPanel metadata={metadata} />}
+        {hasMetadata && (
+          <FrontMatterPanel
+            metadata={metadata}
+            currentWikiId={currentWikiId}
+            onPageClick={handlePageSelect}
+          />
+        )}
 
         {/* Content */}
         <div className="flex-1 overflow-hidden">
@@ -343,17 +364,13 @@ export function Editor({
               <PanelResizeHandle className="w-1 bg-border/40 hover:bg-primary/60 transition-colors cursor-col-resize" />
               <Panel defaultSize={50} minSize={25} className="overflow-hidden">
                 <div className="w-full h-full overflow-y-auto p-4 markdown-body">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                    {body || '*No content*'}
-                  </ReactMarkdown>
+                  <WikiMarkdown remarkPlugins={[remarkGfm]} source={body || '*No content*'} />
                 </div>
               </Panel>
             </PanelGroup>
           ) : mode === 'preview' ? (
             <div className="w-full h-full overflow-y-auto p-6 markdown-body max-w-3xl mx-auto">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {body || '*No content*'}
-              </ReactMarkdown>
+              <WikiMarkdown remarkPlugins={[remarkGfm]} source={body || '*No content*'} />
             </div>
           ) : mode === 'graph' ? (
             <PanelGroup direction="horizontal" className="h-full">
@@ -373,9 +390,7 @@ export function Editor({
               <PanelResizeHandle className="w-1 bg-border/40 hover:bg-primary/60 transition-colors cursor-col-resize" />
               <Panel defaultSize={40} minSize={20} className="overflow-hidden">
                 <div className="w-full h-full overflow-y-auto p-4 markdown-body">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                    {body || '*No content*'}
-                  </ReactMarkdown>
+                  <WikiMarkdown remarkPlugins={[remarkGfm]} source={body || '*No content*'} />
                 </div>
               </Panel>
             </PanelGroup>
