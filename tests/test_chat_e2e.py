@@ -88,6 +88,7 @@ def chat_client(tmp_path, monkeypatch):
         enable_dream_scheduler=False,
         enable_auto_compact=False,
         enable_webui=False,
+        local_mode=True,
     )
     with TestClient(server.app) as client:
         yield client

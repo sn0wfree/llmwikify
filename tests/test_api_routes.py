@@ -9,7 +9,10 @@ from llmwikify.interfaces.server import WikiServer
 @pytest.fixture
 def api_client(wiki_instance):
     """Create a TestClient for the WikiServer."""
-    server = WikiServer(wiki_instance, enable_webui=False)
+    # local_mode=True disables JWT auth middleware so the in-process
+    # TestClient can hit routes without a token. See decision 12
+    # (JWTAuthMiddleware is pass-through on loopback).
+    server = WikiServer(wiki_instance, enable_webui=False, local_mode=True)
     return TestClient(server.app)
 
 
@@ -226,24 +229,43 @@ class TestWikiServerConfiguration:
         assert data.get("state") == "idle"
 
     def test_server_with_api_key(self, wiki_instance):
-        """Test server with API key authentication."""
-        server = WikiServer(wiki_instance, api_key="test-secret-key", enable_webui=False)
+        """Test that the api_key parameter is wired through to WS auth.
+
+        v0.39 (2026-06-19): the static ``api_key`` check that previously
+        gated the HTTP middleware has been replaced by the JWT-based
+        ``JWTAuthMiddleware`` (decisions 1, 4, 7, 12). The
+        ``api_key=`` parameter on ``WikiServer`` is now consumed only
+        by ``_register_websocket_routes`` (``api_key or ""``); the
+        HTTP layer no longer reads it.
+
+        This test verifies the new contract: GET requests pass
+        through with ``public_read=True`` (decision 1), while a
+        POST to a write endpoint requires a JWT. The static
+        ``api_key`` parameter has no effect on the HTTP layer.
+        """
+        server = WikiServer(
+            wiki_instance, api_key="test-secret-key", enable_webui=False
+        )
         client = TestClient(server.app)
 
-        # /api/health is excluded from auth, should work without key
+        # /api/health is excluded from auth, should work without token
         response = client.get("/api/health")
         assert response.status_code == 200
 
-        # /api/wiki/status should require authentication
+        # GET /api/wiki/status passes through because
+        # public_read=True (decision 1: GETs are world-readable).
         response = client.get("/api/wiki/status")
-        assert response.status_code == 401
-
-        # With correct API key, should work
-        response = client.get(
-            "/api/wiki/status",
-            headers={"Authorization": "Bearer test-secret-key"}
-        )
         assert response.status_code == 200
+
+        # POST to a write endpoint requires a JWT — the static
+        # api_key is no longer recognized by the middleware.
+        response = client.post(
+            "/api/wiki/page",
+            json={"page_name": "NewPage", "content": "# New"},
+        )
+        # 401 (no token, public_read irrelevant for writes) or
+        # 403 (auth required for this scope). Either is correct.
+        assert response.status_code in (401, 403)
 
     def test_server_with_cors_disabled(self, wiki_instance):
         """Test server with CORS disabled."""
