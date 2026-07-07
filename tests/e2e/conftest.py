@@ -104,3 +104,27 @@ def start_server(test_wiki, server_port):
 def wiki_server(start_server):
     """Return the server URL for tests."""
     return start_server
+
+
+@pytest.fixture
+def page():
+    """Playwright sync page bound to chromium.
+
+    E2E tests in this directory were originally written to assume a
+    top-level ``page`` fixture (the standard Playwright pytest
+    fixture name) but the conftest never provided one — only
+    ``wiki_server``. This fixture is a thin wrapper that creates a
+    chromium page, navigates to ``wiki_server``, and yields it.
+
+    The browser is closed on teardown so we don't leak processes
+    across the test session.
+    """
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch()
+        context = browser.new_context()
+        page = context.new_page()
+        yield page
+        context.close()
+        browser.close()

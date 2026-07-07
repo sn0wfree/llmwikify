@@ -46,6 +46,15 @@ class TestWikiIndex:
         )
         assert cursor.fetchone()[0] == 1
 
+        # Check content_seg column is populated (non-CJK -> same as content)
+        row = index.conn.execute(
+            "SELECT content, content_seg FROM pages_fts WHERE page_name = ?",
+            ("test-page",)
+        ).fetchone()
+        assert row is not None
+        assert row["content"] == content
+        assert row["content_seg"] == content  # non-CJK, no segmentation
+
         # Check links
         cursor = index.conn.execute(
             "SELECT COUNT(*) FROM page_links WHERE source_page = ?",
@@ -158,7 +167,7 @@ class TestWikiIndex:
 
         content = """
         # Test
-        
+
         Simple: [[page-a]]
         Custom: [[page-b|Display]]
         Section: [[page-c#section]]

@@ -181,8 +181,16 @@ class WikiPageIOMixin(WikiProtocol):
         return "Logged"
 
     def build_index(self, auto_export: bool = True, output_path: Path | None = None) -> dict:
-        """Build reference index."""
+        """Build reference index and auto-generate jieba dictionary."""
         result = self.index.build_index_from_files(self.wiki_dir, batch_size=self._batch_size)
+
+        # Auto-generate jieba user dictionary from page content
+        try:
+            from ....storage.jieba_dict_gen import generate_user_dict
+            dict_result = generate_user_dict(self.db_path, self.root)
+            result["dict_terms"] = dict_result
+        except Exception as e:
+            logger.warning("Auto-generate jieba dict failed: %s", e)
 
         if auto_export:
             export_path = output_path or self.ref_index_path

@@ -126,6 +126,13 @@ class WikiInitMixin(WikiProtocol):
         else:
             skipped.append("wiki/.sink/")
 
+        meta_dir = self.root / ".wiki"
+        if not meta_dir.exists():
+            meta_dir.mkdir(parents=True, exist_ok=True)
+            created.append(".wiki/")
+        else:
+            skipped.append(".wiki/")
+
     def _create_core_files(self, created: list, skipped: list, overwrite: bool = False) -> None:
         """Create index.md, log.md, overview.md, and config example."""
         for file_path, name, generator in [

@@ -1,13 +1,38 @@
 """WikiIndex - SQLite FTS5 full-text search and reference tracking."""
 
 import json
+import logging
+import re
 import sqlite3
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+import jieba
+
 from .backend import is_path_excluded
+
+logger = logging.getLogger(__name__)
+
+
+# v0.40.1+ tokenizer: CJK-friendly. Splits on Unicode Letter/Number/Combining/
+# Connector categories. NOTE: SQLite's unicode61 still treats contiguous CJK
+# text as a single token (each CJK char is its own Unicode Letter, but they
+# are NOT separated unless there is punctuation/space). This tokenizer helps
+# for mixed Chinese+English content but does NOT solve pure 2-3-char Chinese
+# search. The LIKE fallback in `search()` is what actually rescues short CJK
+# queries — keep it.
+_FTS5_TOKENIZE = 'unicode61 categories \'L* N* Co Mn\' tokenchars \'_\''
+
+# Legacy tokenizer schema string. Detected on startup for auto-migration.
+_LEGACY_FTS5_TOKENIZE_MARKERS = ("porter", "unicode61")
+_LEGACY_FTS5_TOKENIZE_EXCLUDE = "categories"
+
+# Built-in jieba dictionary paths (shipped with the package).
+_DICT_DIR = Path(__file__).parent
+_BUILTIN_DICT = _DICT_DIR / "jieba_dict.txt"
+_STOP_WORDS_PATH = _DICT_DIR / "jieba_stopwords.txt"
 
 
 class WikiIndex:
@@ -17,6 +42,8 @@ class WikiIndex:
         self.db_path = db_path
         self._conn: sqlite3.Connection | None = None
         self._lock = threading.Lock()
+        self._dict_loaded: bool = False
+        self._stop_words: set[str] = set()
 
     @property
     def conn(self) -> sqlite3.Connection:
@@ -27,12 +54,22 @@ class WikiIndex:
         return self._conn
 
     def initialize(self) -> None:
-        """Create all tables if they don't exist."""
-        self.conn.executescript("""
-            -- FTS5 full-text search
+        """Create all tables if they don't exist.
+
+        v0.40.1+: Auto-detects legacy `porter unicode61` schema and rebuilds
+        `pages_fts` with the CJK-friendly tokenizer. Migration is one-shot
+        and idempotent.
+        """
+        # Auto-migrate legacy tokenizer schema BEFORE the CREATE TABLE call.
+        # CREATE VIRTUAL TABLE IF NOT EXISTS is a no-op when the table exists,
+        # so we must DROP + CREATE ourselves to switch the tokenizer.
+        self._migrate_fts_schema_if_needed()
+
+        self.conn.executescript(f"""
+            -- FTS5 full-text search (v0.40.1+: CJK-friendly tokenizer + content_seg)
             CREATE VIRTUAL TABLE IF NOT EXISTS pages_fts USING fts5(
-                page_name, content,
-                tokenize='porter unicode61'
+                page_name, content, content_seg,
+                tokenize="{_FTS5_TOKENIZE}"
             );
 
             -- Reference links
@@ -61,6 +98,99 @@ class WikiIndex:
         """)
         self.conn.commit()
 
+    def _get_fts_schema_sql(self) -> str | None:
+        """Read the CREATE TABLE SQL for pages_fts from sqlite_master."""
+        row = self.conn.execute(
+            "SELECT sql FROM sqlite_master "
+            "WHERE type='table' AND name='pages_fts'"
+        ).fetchone()
+        return row[0] if row else None
+
+    def _needs_migration(self, schema_sql: str) -> bool:
+        """True if the current pages_fts needs a schema upgrade.
+
+        Triggers on:
+        - Legacy tokenizer (`porter unicode61`, no `categories` clause)
+        - Missing ``content_seg`` column (needed for jieba-segmented search)
+        """
+        has_categories = _LEGACY_FTS5_TOKENIZE_EXCLUDE in schema_sql
+        has_content_seg = "content_seg" in schema_sql
+        return (not has_categories) or (not has_content_seg)
+
+    def _migrate_fts_schema_if_needed(self) -> None:
+        """Drop + rebuild pages_fts with the new tokenizer if legacy detected.
+
+        Refills from the `pages` metadata table (which stores raw content);
+        pages without stored content are silently skipped and will be
+        reindexed on next `upsert_page` call.
+        """
+        schema_sql = self._get_fts_schema_sql()
+        if schema_sql is None:
+            return  # first init — let CREATE TABLE handle it
+        if not self._needs_migration(schema_sql):
+            return  # already on new tokenizer
+
+        logger.info(
+            "WikiIndex: schema upgrade needed; migrating to "
+            "CJK-friendly tokenizer + content_seg column"
+        )
+        try:
+            self._ensure_dict()
+            self.conn.executescript(f"""
+                DROP TABLE IF EXISTS pages_fts;
+                CREATE VIRTUAL TABLE pages_fts USING fts5(
+                    page_name, content, content_seg,
+                    tokenize="{_FTS5_TOKENIZE}"
+                );
+            """)
+            # Refill from the metadata table.
+            # `pages` only has metadata (lengths/counts) — content lives in
+            # .md files. Try a few common locations under the wiki root;
+            # skip rows that we can't find; they will be picked up by the
+            # next upsert or by running `llmwikify build-index`.
+            cursor = self.conn.execute(
+                "SELECT page_name, file_path FROM pages"
+            )
+            migrated = 0
+            skipped = 0
+            wiki_root = self.db_path.parent
+            candidate_roots = (wiki_root, wiki_root / "wiki", wiki_root / "raw")
+            for row in cursor.fetchall():
+                page_name = row["page_name"]
+                file_path = row["file_path"]
+                if not file_path:
+                    skipped += 1
+                    continue
+                rel = Path(file_path)
+                md_file = None
+                for root in candidate_roots:
+                    candidate = root / rel
+                    if candidate.exists():
+                        md_file = candidate
+                        break
+                if md_file is None:
+                    skipped += 1
+                    continue
+                content = md_file.read_text(errors="replace")
+                fts_content = self._segment(content) if self._should_segment(content) else content
+                self.conn.execute(
+                    "INSERT INTO pages_fts (page_name, content, content_seg) "
+                    "VALUES (?, ?, ?)",
+                    (page_name, content, fts_content),
+                )
+                migrated += 1
+            self.conn.commit()
+            logger.info(
+                "WikiIndex: migrated %d pages to new schema; "
+                "%d skipped (run `llmwikify build-index` to refill)",
+                migrated,
+                skipped,
+            )
+        except Exception as e:
+            logger.error("WikiIndex: FTS5 schema migration failed: %s", e)
+            # Don't raise — keep the connection usable; search will fall back
+            # to LIKE if the legacy tokenizer still works.
+
     def _execute(self, query: str, params: tuple = ()) -> sqlite3.Cursor:
         """Thread-safe SQL execution."""
         with self._lock:
@@ -76,13 +206,75 @@ class WikiIndex:
         with self._lock:
             self.conn.commit()
 
+    # ── jieba dict lazy loading ──────────────────────────────────────
+
+    def _ensure_dict(self) -> None:
+        """Lazy-load jieba dictionary: built-in → stop words → user dict."""
+        if self._dict_loaded:
+            return
+        if _BUILTIN_DICT.exists():
+            jieba.load_userdict(str(_BUILTIN_DICT))
+        if _STOP_WORDS_PATH.exists():
+            self._stop_words = {
+                line.strip()
+                for line in _STOP_WORDS_PATH.read_text().splitlines()
+                if line.strip() and not line.startswith("#")
+            }
+        wiki_root = self.db_path.parent
+        for subpath in (".wiki", ".wiki/jieba.dict", ".wiki/jieba.pmi.dict"):
+            p = wiki_root / subpath
+            if p.suffix == ".dict" and p.exists():
+                jieba.load_userdict(str(p))
+        self._dict_loaded = True
+
+    # ── CJK detection & segmentation ────────────────────────────────
+
+    @staticmethod
+    def _should_segment(text: str) -> bool:
+        """True if CJK characters make up >= 5% of the text."""
+        if not text:
+            return False
+        cjk = sum(
+            1 for c in text
+            if '\u4e00' <= c <= '\u9fff' or '\u3000' <= c <= '\u303f'
+        )
+        return cjk / len(text) >= 0.05
+
+    def _segment(self, text: str) -> str:
+        """Segment text with jieba and join with spaces."""
+        words = jieba.cut(text)
+        if self._stop_words:
+            words = (w for w in words if w not in self._stop_words)
+        return " ".join(words)
+
+    @staticmethod
+    def _extract_snippet(content: str, query: str, context: int = 80) -> str:
+        """Extract centred snippet around first match with **highlight**."""
+        idx = content.lower().find(query.lower())
+        if idx == -1:
+            return content[:200]
+        start = max(0, idx - context)
+        end = min(len(content), idx + len(query) + context)
+        prefix = "..." if start > 0 else ""
+        suffix = "..." if end < len(content) else ""
+        snippet = content[start:end]
+        snippet = re.sub(
+            re.escape(query), r'**\g<0>**', snippet, flags=re.IGNORECASE
+        )
+        return f"{prefix}{snippet}{suffix}"
+
+    # ── Core operations ─────────────────────────────────────────────
+
     def upsert_page(self, page_name: str, content: str, file_path: str = "") -> None:
         """Insert or update a page in all indexes."""
-        # 1. Update FTS5
+        self._ensure_dict()
+
+        # 1. Update FTS5 — raw in content, segmented in content_seg
         self._execute("DELETE FROM pages_fts WHERE page_name = ?", (page_name,))
+        fts_content = self._segment(content) if self._should_segment(content) else content
         self._execute(
-            "INSERT INTO pages_fts (page_name, content) VALUES (?, ?)",
-            (page_name, content)
+            "INSERT INTO pages_fts (page_name, content, content_seg) VALUES (?, ?, ?)",
+            (page_name, content, fts_content)
         )
 
         # 2. Parse links from content
@@ -129,48 +321,76 @@ class WikiIndex:
 
         Returns:
             List of search results with page_name, score, and snippet
+
+        Fallback chain:
+        1. QMD if requested (currently a no-op until QMD ships)
+        2. jieba-segmented FTS5 MATCH on content_seg with BM25 ranking
+        3. LIKE + TF scoring fallback if FTS5 returns 0 rows or errors
         """
+        self._ensure_dict()
+
         # Try QMD if requested and available
         if backend == "qmd":
             qmd_results = self._try_qmd_search(query, limit)
             if qmd_results:
                 return qmd_results
 
-        # Default FTS5 search
+        # Segment query for FTS5 if CJK
+        query_seg = self._segment(query) if self._should_segment(query) else query
+
+        # FTS5 match on segmented content
         try:
             cursor = self.conn.execute(
                 """SELECT page_name,
                           snippet(pages_fts, 1, '**', '**', '...', 32) as snippet,
                           bm25(pages_fts) as score
                    FROM pages_fts
-                   WHERE pages_fts MATCH ?
+                   WHERE content_seg MATCH ?
                    ORDER BY score
                    LIMIT ?""",
-                (query, limit)
+                (query_seg, limit)
             )
         except sqlite3.OperationalError:
-            # FTS5 query syntax error, fallback to LIKE
-            cursor = self.conn.execute(
-                """SELECT page_name,
-                          substr(content, 1, 200) as snippet,
-                          0 as score
-                   FROM pages_fts
-                   WHERE content LIKE ?
-                   LIMIT ?""",
-                (f"%{query}%", limit)
-            )
+            return self._like_search(query, limit, mode="fts5-syntax-fallback")
 
-        results = []
-        for row in cursor.fetchall():
-            snippet = row['snippet']
-            results.append({
+        rows = cursor.fetchall()
+        if not rows:
+            like_results = self._like_search(query, limit, mode="fts5-zero-fallback")
+            if like_results:
+                return like_results
+
+        return [
+            {
                 "page_name": row['page_name'],
                 "score": abs(row['score']),
-                "snippet": snippet,
+                "snippet": row['snippet'],
                 "mode": "fts5",
-            })
+            }
+            for row in rows
+        ]
 
-        return results
+    def _like_search(self, query: str, limit: int, mode: str = "fts5") -> list[dict]:
+        """LIKE fallback with simple TF (term frequency) scoring.
+
+        Used when FTS5 MATCH syntax errors or returns zero rows.
+        Results are ranked by TF descending; snippet from raw content.
+        """
+        cursor = self.conn.execute(
+            "SELECT page_name, content FROM pages_fts WHERE content LIKE ?",
+            (f"%{query}%",)
+        )
+        scored = []
+        for row in cursor.fetchall():
+            content = row['content']
+            tf = content.count(query)
+            scored.append({
+                "page_name": row['page_name'],
+                "score": tf,
+                "snippet": self._extract_snippet(content, query),
+                "mode": mode,
+            })
+        scored.sort(key=lambda x: x['score'], reverse=True)
+        return scored[:limit]
 
     def _try_qmd_search(self, query: str, limit: int, mode: str = "hybrid") -> list[dict]:
         """Attempt QMD search if the QMD module is available.

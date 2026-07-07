@@ -5,6 +5,57 @@ All notable changes to llmwikify will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.40.1] - 2026-07-07 — Search CJK Recall Fix
+
+### Changed
+- **FTS5 schema**: `pages_fts` switched from `tokenize='porter unicode61'` to
+  `tokenize='unicode61 categories "L* N* Co Mn" tokenchars "_"'`. This
+  drops the `porter` stemmer (English-specific noise) and explicitly opts
+  into Letter / Number / Combining / Connector categories for tokenization.
+  Mixed Chinese+English content (e.g. "机器学习 algorithm") tokenizes better.
+- **Startup migration**: `WikiIndex.initialize()` auto-detects legacy `porter
+  unicode61` schema and rebuilds `pages_fts` from the `pages` metadata table.
+  No user action required; first server start after upgrade takes ~1s extra.
+- **LIKE fallback expanded**: When FTS5 MATCH returns 0 rows (regardless of
+  reason), the search now transparently retries with `LIKE '%query%'` against
+  the content table. This is what actually rescues short (2-3 char) Chinese
+  queries like `配置` / `中文` / `算法`, since SQLite's unicode61 tokenizer
+  (even with `categories` configured) still treats contiguous CJK text as a
+  single token.
+
+### Removed
+- `porter` stemmer from FTS5 tokenizer — was English-specific noise without
+  meaningful benefit for non-English queries.
+
+### Migration Guide (v0.40.0 → v0.40.1)
+- **Automatic**: Just restart the server. The migration is one-shot and idempotent.
+- **Manual verification** (optional):
+  ```python
+  import sqlite3
+  from pathlib import Path
+  db = sqlite3.connect(Path.home() / ".llmwikify" / "index.db")
+  print(db.execute("SELECT sql FROM sqlite_master WHERE name='pages_fts'").fetchone()[0])
+  # Should contain: tokenize = 'unicode61 categories ...
+  ```
+- **Index size**: Slight decrease for English-heavy wikis (no porter stemmer).
+  Negligible for personal wikis.
+
+### Notes
+- **Important**: SQLite FTS5 has no built-in CJK word-segmentation tokenizer.
+  Short (2-3 character) Chinese queries like `配置` will fall through FTS5
+  and hit the LIKE fallback. Results from LIKE fallback have score=0 (no
+  BM25 ranking). For best Chinese recall, consider:
+  - Using longer (4+ char) queries
+  - Running `llmwikify build-index` periodically to keep the index fresh
+- Snippet highlighting still uses FTS5's `snippet()` function — works correctly
+  with the new tokenizer.
+- BM25 ranking preserved for English queries — no regression.
+- The `backend="qmd"` path is unchanged (still a silent no-op until QMD ships).
+
+See [docs/releases/v0.40.1-search-cjk.md](docs/releases/v0.40.1-search-cjk.md).
+
+---
+
 ## [0.40.0] - 2026-07-06 — Refocus (BREAKING)
 
 > **Project repositioning**: llmwikify is now a focused **Knowledge + Chat +

@@ -25,6 +25,7 @@ from .batch import BatchCommand, run_batch
 from .build_index import BuildIndexCommand, run_build_index
 from .community_detect import CommunityDetectCommand, run_community_detect
 from .db import DbCommand, run_db
+from .dict_cmd import DictCommand, run_dict
 from .doctor_cmd import DoctorCommand, run_doctor
 from .export_graph import ExportGraphCommand, run_export_graph
 from .fix_wikilinks import FixWikilinksCommand, run_fix_wikilinks
@@ -88,6 +89,7 @@ register_command(GraphAnalyzeCommand())
 register_command(ServeCommand())
 register_command(QmdCommand())
 register_command(DbCommand())
+register_command(DictCommand())
 register_command(DoctorCommand())
 register_command(HelpCommand())
 register_command(AuthCommand())

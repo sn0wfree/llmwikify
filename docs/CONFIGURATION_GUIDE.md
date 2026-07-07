@@ -205,13 +205,23 @@ v0.22+ 支持 QMD 混合检索（BM25 + 向量 + LLM rerank）。FTS5 是默认�
 ```yaml
 search:
   backend: "fts5"          # "fts5" (default) | "qmd"
+
+  # v0.40.1+ — FTS5 tokenizer (CJK-friendly default)
+  tokenize: "unicode61 categories 'L* N* Co Mn' tokenchars '_'"
+  # - "porter unicode61" → 旧 schema (英文 porter + 整段中文), 不推荐
+  # - "unicode61" → 基础 unicode, 无 categories
+  # - "unicode61 categories 'L* N* Co Mn' tokenchars '_'" → 中文单字 + 英文单词, 推荐
+
   qmd:
     host: "127.0.0.1"
     port: 8181
     auto_start: false
 ```
 
-详见 [QMD Setup Guide](./QMD_SETUP.md)。
+**首次启动**检测到旧 `tokenize` 参数 → 自动 `DROP TABLE pages_fts` → 用新
+tokenize 重建 → 从 `pages` metadata 表回填。**完全自动，无需手动**。
+
+详见 [QMD Setup Guide](./QMD_SETUP.md)、[v0.40.1 release notes](./releases/v0.40.1-search-cjk.md)。
 
 ---
 
