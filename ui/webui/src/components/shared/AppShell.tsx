@@ -1,37 +1,47 @@
 import { useState, useEffect } from 'react';
-import { NavLink, Outlet } from 'react-router-dom';
+import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import {
-  MessageSquare, Search, CheckSquare, Settings, ArrowLeft,
-  PanelLeftClose, PanelLeftOpen, Sparkles, Bot, Activity,
+  BookOpen, Sparkles, FileText, BarChart3, Lightbulb,
+  MessageSquare, Search, CheckSquare, Settings,
+  PanelLeftClose, PanelLeftOpen, Bot, Moon, Sun,
 } from 'lucide-react';
+import { Backdrop } from './Backdrop';
+import { Notifications } from '../wiki/Notifications';
+import { HealthStatus } from '../wiki/HealthStatus';
 import { WikiSelector } from '../wiki/WikiSelector';
 import { WikiManager } from '../wiki/WikiManager';
 import { Badge } from '../ui/badge';
-import { Backdrop } from '../shared/Backdrop';
-import { useWikiStore } from '../../stores/wikiStore';
 import { api } from '../../api';
+import { useWikiStore } from '../../stores/wikiStore';
 import { cn } from '@/lib/utils';
 
-interface BadgeCounts {
-  confirmations: number;
-  proposals: number;
-  notifications: number;
-}
-
-const NAV_PRIMARY = [
-  { to: '/agent/chat', label: 'Chat', icon: MessageSquare },
-  { to: '/agent/autoresearch', label: 'Research', icon: Search },
+const NAV_WIKI = [
+  { to: '/edit', label: 'Editor', icon: FileText },
+  { to: '/dashboard', label: 'Dashboard', icon: BarChart3 },
+  { to: '/insights', label: 'Insights', icon: Lightbulb },
 ] as const;
 
-const NAV_SECONDARY = [
+const NAV_AGENT = [
+  { to: '/agent/chat', label: 'Chat', icon: MessageSquare },
+  { to: '/agent/autoresearch', label: 'Research', icon: Search },
   { to: '/agent/tasks', label: 'Tasks', icon: CheckSquare },
   { to: '/agent/settings', label: 'Settings', icon: Settings },
 ] as const;
 
-export function AgentLayout() {
+interface BadgeCounts {
+  confirmations: number;
+  proposals: number;
+}
+
+export function AppShell() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showManager, setShowManager] = useState(false);
-  const [badges, setBadges] = useState<BadgeCounts>({ confirmations: 0, proposals: 0, notifications: 0 });
+  const [theme, setTheme] = useState<'dark' | 'light'>(
+    () => (document.documentElement.getAttribute('data-theme') as 'dark' | 'light') || 'dark',
+  );
+  const [badges, setBadges] = useState<BadgeCounts>({ confirmations: 0, proposals: 0 });
+  const location = useLocation();
+  const isAgent = location.pathname.startsWith('/agent');
   const { loadWikis, currentWikiId, wikis } = useWikiStore();
 
   useEffect(() => {
@@ -42,13 +52,11 @@ export function AgentLayout() {
     const fetchBadges = async () => {
       try {
         const status = await api.agent.status(currentWikiId || undefined);
-        const proposalsCount = Object.values(status.wiki_dream_proposals || {}).reduce(
-          (a: number, b) => a + (Number(b) || 0), 0
-        ) as number;
+        const proposalsCount = Object.values(status.wiki_dream_proposals || {})
+          .reduce((a: number, b) => a + (Number(b) || 0), 0);
         setBadges({
           confirmations: status.pending_confirmations || 0,
-          proposals: proposalsCount || 0,
-          notifications: status.unread_notifications || 0,
+          proposals: proposalsCount,
         });
       } catch { /* silent */ }
     };
@@ -56,6 +64,10 @@ export function AgentLayout() {
     const interval = setInterval(fetchBadges, 30000);
     return () => clearInterval(interval);
   }, [currentWikiId]);
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+  }, [theme]);
 
   const linkClass = ({ isActive }: { isActive: boolean }) =>
     cn(
@@ -65,7 +77,6 @@ export function AgentLayout() {
         : 'text-muted-foreground hover:bg-white/[0.04] hover:text-foreground',
     );
 
-  const totalActivity = badges.confirmations + badges.proposals + badges.notifications;
   const currentWiki = wikis.find((w) => w.wiki_id === currentWikiId);
 
   return (
@@ -75,12 +86,11 @@ export function AgentLayout() {
           className="w-64 shrink-0 flex flex-col border-r border-sidebar-border glass"
           style={{ background: 'color-mix(in srgb, var(--sidebar) 75%, transparent)' }}
         >
-          {/* Brand */}
           <div className="px-4 py-4 flex items-center justify-between border-b border-sidebar-border/50">
             <div className="flex items-center gap-2.5 min-w-0">
               <div className="relative shrink-0">
                 <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-soft">
-                  <Sparkles className="w-4 h-4 text-primary-foreground" strokeWidth={2.5} />
+                  <BookOpen className="w-4 h-4 text-primary-foreground" strokeWidth={2.5} />
                 </div>
                 <div className="absolute -inset-0.5 rounded-lg bg-gradient-to-br from-primary/40 to-accent/0 blur-md -z-10 opacity-60" />
               </div>
@@ -89,7 +99,7 @@ export function AgentLayout() {
                   llmwikify
                 </h1>
                 <p className="text-[10px] text-muted-foreground mt-0.5 leading-none">
-                  Agent workspace
+                  Workspace
                 </p>
               </div>
             </div>
@@ -104,13 +114,12 @@ export function AgentLayout() {
 
           <WikiSelector onOpenManager={() => setShowManager(true)} />
 
-          {/* Primary nav */}
           <nav className="px-2 pt-2 space-y-0.5">
             <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-[0.12em] px-3 py-1.5">
-              Workspace
+              Wiki
             </div>
-            {NAV_PRIMARY.map(({ to, label, icon: Icon }) => (
-              <NavLink key={to} to={to} className={linkClass} end={to === '/agent/chat'}>
+            {NAV_WIKI.map(({ to, label, icon: Icon }) => (
+              <NavLink key={to} to={to} className={linkClass} end={to === '/edit'}>
                 {({ isActive }) => (
                   <>
                     <Icon className={cn('w-4 h-4 shrink-0 transition-colors', isActive && 'text-primary')} />
@@ -122,9 +131,9 @@ export function AgentLayout() {
             ))}
 
             <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-[0.12em] px-3 py-1.5 mt-3">
-              System
+              Agent
             </div>
-            {NAV_SECONDARY.map(({ to, label, icon: Icon }) => (
+            {NAV_AGENT.map(({ to, label, icon: Icon }) => (
               <NavLink key={to} to={to} className={linkClass}>
                 {({ isActive }) => (
                   <>
@@ -135,45 +144,41 @@ export function AgentLayout() {
                 )}
               </NavLink>
             ))}
-
-            <div className="my-2 border-t border-sidebar-border/50" />
-            <NavLink to="/" className={linkClass}>
-              <ArrowLeft className="w-4 h-4 shrink-0" />
-              <span className="flex-1 truncate">Back to Wiki</span>
-            </NavLink>
           </nav>
-
-          {/* Activity */}
-          {totalActivity > 0 && (
-            <div className="mx-2 mt-2 p-3 rounded-lg glass-strong space-y-1.5">
-              <div className="flex items-center gap-1.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-[0.12em]">
-                <Activity className="w-3 h-3" />
-                <span>Activity</span>
-              </div>
-              {badges.confirmations > 0 && (
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-muted-foreground">Confirmations</span>
-                  <Badge variant="destructive">{badges.confirmations}</Badge>
-                </div>
-              )}
-              {badges.proposals > 0 && (
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-muted-foreground">Proposals</span>
-                  <Badge variant="outline">{badges.proposals}</Badge>
-                </div>
-              )}
-              {badges.notifications > 0 && (
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-muted-foreground">Notifications</span>
-                  <Badge>{badges.notifications}</Badge>
-                </div>
-              )}
-            </div>
-          )}
 
           <div className="flex-1" />
 
-          {/* User / status footer */}
+          <HealthStatus currentWiki={currentWiki} />
+
+          <div className="m-2 mt-0 flex items-center gap-1 p-1 rounded-lg glass-strong">
+            <button
+              onClick={() => setTheme('dark')}
+              className={cn(
+                'flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-md text-xs transition-colors',
+                theme === 'dark'
+                  ? 'bg-primary/15 text-primary'
+                  : 'text-muted-foreground hover:text-foreground',
+              )}
+              aria-label="Dark theme"
+            >
+              <Moon className="w-3.5 h-3.5" />
+              <span>Dark</span>
+            </button>
+            <button
+              onClick={() => setTheme('light')}
+              className={cn(
+                'flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-md text-xs transition-colors',
+                theme === 'light'
+                  ? 'bg-primary/15 text-primary'
+                  : 'text-muted-foreground hover:text-foreground',
+              )}
+              aria-label="Light theme"
+            >
+              <Sun className="w-3.5 h-3.5" />
+              <span>Light</span>
+            </button>
+          </div>
+
           <div className="m-2 p-2.5 rounded-lg glass-strong">
             <div className="flex items-center gap-2.5">
               <div className="shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-primary/30 to-accent/30 border border-primary/20 flex items-center justify-center">
@@ -204,7 +209,30 @@ export function AgentLayout() {
       )}
 
       <main className="flex-1 flex flex-col overflow-hidden min-w-0">
-        <Backdrop />
+        <div className="px-4 py-2.5 border-b border-border/50 flex items-center justify-between gap-3 glass">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground min-w-0">
+            <Sparkles className="w-3.5 h-3.5 text-primary shrink-0" />
+            <span className="truncate">
+              {currentWiki?.name ? `${currentWiki.name}` : 'No wiki selected'}
+            </span>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {badges.confirmations > 0 && (
+              <Badge variant="destructive" title="Pending confirmations">
+                {badges.confirmations}
+              </Badge>
+            )}
+            {badges.proposals > 0 && (
+              <Badge variant="outline" title="Wiki dream proposals">
+                {badges.proposals}
+              </Badge>
+            )}
+            <Notifications />
+          </div>
+        </div>
+
+        {isAgent && <Backdrop />}
+
         <div className="flex-1 flex flex-col overflow-hidden">
           <Outlet />
         </div>
