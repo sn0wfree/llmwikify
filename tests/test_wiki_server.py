@@ -56,8 +56,11 @@ class TestWikiServerApp:
     def test_mcp_mounted_when_enabled(self, wiki_instance):
         """Test that MCP ASGI app is mounted when enabled."""
         server = WikiServer(wiki_instance, enable_webui=False)
-        # Verify MCP is mounted by checking the routes exist
-        route_paths = [route.path for route in server.app.routes]
+        # Verify MCP is mounted by checking the routes exist. Some
+        # routes are ``_IncludedRouter`` objects (from
+        # ``app.include_router``) which don't expose ``.path``; use
+        # ``getattr(..., "path", "")`` so the iteration is uniform.
+        route_paths = [getattr(r, "path", "") for r in server.app.routes]
         assert any("/mcp" in path for path in route_paths) or server.mcp is not None
 
     def test_mcp_not_mounted_when_disabled(self, wiki_instance):
