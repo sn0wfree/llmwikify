@@ -319,10 +319,27 @@ def _register_wiki_routes(
 
     @wikis_router.post("/scan")
     async def scan_wikis(request: Request):
-        """Trigger directory scan for wikis."""
+        """Trigger directory scan for wikis.
+
+        Only paths under the user's home directory are accepted to
+        prevent filesystem enumeration attacks.
+        """
         body = await request.json()
-        scan_paths = body.get("scan_paths", ["."])
+        raw_paths = body.get("scan_paths", ["."])
         scan_depth = body.get("scan_depth", 2)
+
+        # Path traversal guard: only allow paths under $HOME
+        home = Path.home().resolve()
+        scan_paths: list[str] = []
+        for p in raw_paths:
+            resolved = Path(p).resolve()
+            if not (resolved == home or str(resolved).startswith(str(home) + "/")):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Path outside home directory: {p}",
+                )
+            scan_paths.append(str(resolved))
+
         new_wikis = registry.scan_directories(scan_paths, scan_depth)
         return {
             "new_wikis": [w.to_dict() for w in new_wikis],
@@ -608,13 +625,13 @@ def _build_research_config_overrides() -> dict[str, Any]:
     existing deployments get a working web-search provider without any
     config change:
 
-    - If ``research.minimax_api_key`` is unset and the LLM provider is
-      ``minimax``, reuse ``llm.api_key``. Most users with a MiniMax Coding
-      Plan key use it for both chat and search; explicitly setting
-      ``research.minimax_api_key`` always wins.
     - If ``research.minimax_api_host`` is unset, derive it from
       ``llm.base_url`` (stripping the ``/v1`` suffix) so the search
       endpoint resolves to the same host as chat.
+
+    Note: ``minimax_api_key`` is intentionally NOT included here to
+    avoid leaking credentials through config dicts that may be logged.
+    The search provider resolves it from the LLM config at runtime.
 
     Returns an empty dict when no overrides apply or the config file is
     missing. Never raises.
@@ -623,22 +640,15 @@ def _build_research_config_overrides() -> dict[str, Any]:
         user_cfg = _load_research_config() or {}
         out: dict[str, Any] = {k: v for k, v in user_cfg.items() if v is not None}
 
-        needs_key = (
-            out.get("minimax_api_key") is None
-            and (out.get("search_provider", "auto") in (None, "auto", "minimax"))
-        )
-        if needs_key:
+        # Derive minimax_api_host from llm.base_url when not explicitly set.
+        if "minimax_api_host" not in out:
             llm_cfg = _load_llm_config() or {}
-            if llm_cfg.get("provider") == "minimax":
-                api_key = llm_cfg.get("api_key")
-                if api_key:
-                    out["minimax_api_key"] = api_key
-                base_url = llm_cfg.get("base_url")
-                if base_url and "minimax_api_host" not in out:
-                    host = base_url.rstrip("/")
-                    if host.endswith("/v1"):
-                        host = host[: -len("/v1")]
-                    out["minimax_api_host"] = host
+            base_url = llm_cfg.get("base_url")
+            if base_url:
+                host = base_url.rstrip("/")
+                if host.endswith("/v1"):
+                    host = host[: -len("/v1")]
+                out["minimax_api_host"] = host
         return out
     except Exception as e:
         logger.warning("Failed to build research config overrides: %s", e)

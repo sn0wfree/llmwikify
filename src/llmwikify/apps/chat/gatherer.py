@@ -78,7 +78,7 @@ class SourceGatherer:
                     self.session_manager.fail_sub_query(sq_id, f"Gathering timed out after {per_query_timeout}s")
                     return [{"type": "sub_query_failed", "sub_query_id": sq_id, "error": f"Gathering timed out after {per_query_timeout}s"}]
 
-        tasks = {asyncio.create_task(process_one(sq)): sq for sq in sub_queries}
+        tasks = {asyncio.create_task(process_one(sq), name=f"gather-{i}"): sq for i, sq in enumerate(sub_queries)}
         total = len(tasks)
         done_count = 0
         threshold_reached = False

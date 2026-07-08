@@ -220,6 +220,30 @@ class FallbackSearchProvider:
 # Factory
 # ---------------------------------------------------------------------------
 
+
+def _resolve_minimax_key_from_llm_config() -> str | None:
+    """Resolve MiniMax API key from the global LLM config as fallback.
+
+    When ``research.minimax_api_key`` is not explicitly set, most users
+    with a MiniMax Coding Plan use the same key for chat and search.
+    This reads ``~/.llmwikify/llmwikify.json`` → ``llm.api_key``.
+    """
+    import json as _json
+    from pathlib import Path
+
+    config_file = Path.home() / ".llmwikify" / "llmwikify.json"
+    if not config_file.exists():
+        return None
+    try:
+        data = _json.loads(config_file.read_text())
+        llm_cfg = data.get("llm", {})
+        if llm_cfg.get("provider") == "minimax":
+            return llm_cfg.get("api_key")
+    except Exception:
+        pass
+    return None
+
+
 def create_search_provider(config: dict[str, Any]) -> FallbackSearchProvider:
     """Create search provider chain based on config.
 
@@ -240,7 +264,7 @@ def create_search_provider(config: dict[str, Any]) -> FallbackSearchProvider:
             logger.info("Registered SearXNG provider: %s", searxng_url)
 
     if provider_name in ("auto", "minimax"):
-        minimax_key = config.get("minimax_api_key")
+        minimax_key = config.get("minimax_api_key") or _resolve_minimax_key_from_llm_config()
         if minimax_key:
             minimax_host = config.get("minimax_api_host", "https://api.minimaxi.com")
             chain.append(MiniMaxSearchProvider(minimax_key, minimax_host))

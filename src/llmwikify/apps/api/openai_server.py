@@ -322,7 +322,7 @@ async def _stream_chat_completion(
         finally:
             await queue.put(None)
 
-    pump_task = asyncio.create_task(_pump())
+    pump_task = asyncio.create_task(_pump(), name="openai_pump")
     try:
         while True:
             chunk = await asyncio.wait_for(queue.get(), timeout=timeout_s)

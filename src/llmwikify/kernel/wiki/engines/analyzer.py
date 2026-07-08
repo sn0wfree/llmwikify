@@ -39,6 +39,30 @@ class WikiAnalyzer:
         # LLM-based investigations, sink warnings, etc.
         self._lint_engine = LintEngine(wiki, rules=RULES)
 
+    def _scan_all_pages(self) -> tuple[dict[str, int], set[str]]:
+        """Single filesystem pass: extract link targets + detect orphan candidates.
+
+        Returns:
+            link_counts: target page name → reference count across all pages
+            orphan_candidates: set of page names with zero inbound links
+        """
+        link_counts: dict[str, int] = {}
+        page_names: list[str] = []
+        for page in self.wiki._wiki_pages():
+            name = self.wiki._page_display_name(page)
+            if self.wiki._should_exclude_orphan(name, page):
+                continue
+            page_names.append(name)
+            content = page.read_text()
+            for link in re.findall(r'\[\[(.*?)\]\]', content):
+                target = self.wiki._parse_wikilink_target(link)
+                if target not in (self.wiki._index_page_name, self.wiki._log_page_name):
+                    link_counts[target] = link_counts.get(target, 0) + 1
+
+        inbound_counts = self.wiki.index.count_inbound_for_pages(page_names)
+        orphan_candidates = {name for name in page_names if not inbound_counts.get(name)}
+        return link_counts, orphan_candidates
+
     # ── Rule-based detectors ──────────────────────────────────────────
 
     def _run_rule(self, rule_name: str) -> list[dict]:
@@ -252,6 +276,9 @@ class WikiAnalyzer:
         """
         issues = []
 
+        link_counts, orphan_candidates = self._scan_all_pages()
+
+        # Broken links: need page content to extract wikilinks
         for page in self.wiki._wiki_pages():
             content = page.read_text()
             links = re.findall(r'\[\[(.*?)\]\]', content)
@@ -267,14 +294,10 @@ class WikiAnalyzer:
                         "file": str(page),
                     })
 
+        # Orphans: use batch result from _scan_all_pages
         for page in self.wiki._wiki_pages():
             page_name = self.wiki._page_display_name(page)
-
-            if self.wiki._should_exclude_orphan(page_name, page):
-                continue
-
-            inbound = self.wiki.index.get_inbound_links(page_name)
-            if not inbound:
+            if page_name in orphan_candidates:
                 issues.append({
                     "type": "orphan_page",
                     "page": page_name,
@@ -367,18 +390,9 @@ class WikiAnalyzer:
 
     def recommend(self) -> dict:
         """Generate smart recommendations."""
+        link_counts, orphan_candidates = self._scan_all_pages()
+
         missing_pages = []
-        orphan_pages = []
-
-        link_counts = {}
-        for page in self.wiki._wiki_pages():
-            content = page.read_text()
-            links = re.findall(r'\[\[(.*?)\]\]', content)
-            for link in links:
-                target = self.wiki._parse_wikilink_target(link)
-                if target not in (self.wiki._index_page_name, self.wiki._log_page_name):
-                    link_counts[target] = link_counts.get(target, 0) + 1
-
         for target, count in link_counts.items():
             if count >= 2:
                 if self.wiki._resolve_wikilink_target(target) is None:
@@ -387,15 +401,7 @@ class WikiAnalyzer:
                         "reference_count": count,
                     })
 
-        for page in self.wiki._wiki_pages():
-            page_name = self.wiki._page_display_name(page)
-
-            if self.wiki._should_exclude_orphan(page_name, page):
-                continue
-
-            inbound = self.wiki.index.get_inbound_links(page_name)
-            if not inbound:
-                orphan_pages.append({"page": page_name})
+        orphan_pages = [{"page": name} for name in orphan_candidates]
 
         return {
             "missing_pages": missing_pages,
@@ -422,30 +428,14 @@ class WikiAnalyzer:
         """Internal: generate smart suggestions for wiki improvement."""
         hints = []
 
-        orphan_count = 0
-        for page in self.wiki._wiki_pages():
-            page_name = self.wiki._page_display_name(page)
-            if self.wiki._should_exclude_orphan(page_name, page):
-                continue
-            inbound = self.wiki.index.get_inbound_links(page_name)
-            if not inbound:
-                orphan_count += 1
+        link_counts, orphan_candidates = self._scan_all_pages()
 
-        if orphan_count > 0:
+        if orphan_candidates:
             hints.append({
                 "type": "orphan",
                 "priority": "medium",
-                "message": f"You have {orphan_count} orphan page(s). Consider adding cross-references to connect them.",
+                "message": f"You have {len(orphan_candidates)} orphan page(s). Consider adding cross-references to connect them.",
             })
-
-        link_counts = {}
-        for page in self.wiki._wiki_pages():
-            content = page.read_text()
-            links = re.findall(r'\[\[(.*?)\]\]', content)
-            for link in links:
-                target = self.wiki._parse_wikilink_target(link)
-                if target not in (self.wiki._index_page_name, self.wiki._log_page_name):
-                    link_counts[target] = link_counts.get(target, 0) + 1
 
         missing = []
         for target, count in link_counts.items():
@@ -474,6 +464,7 @@ class WikiAnalyzer:
                 "message": "Wiki is growing well. Consider running lint to check health.",
             })
 
+        # Broken links: need page content to extract wikilinks
         broken_count = 0
         for page in self.wiki._wiki_pages():
             content = page.read_text()

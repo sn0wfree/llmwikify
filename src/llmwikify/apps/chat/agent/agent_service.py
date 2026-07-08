@@ -330,7 +330,7 @@ class AgentService:
                 raise
 
         import asyncio
-        self._auto_compact_task = asyncio.create_task(_periodic_tick())
+        self._auto_compact_task = asyncio.create_task(_periodic_tick(), name="auto_compact_tick")
         logger.info(
             "AgentService: auto_compact started (ttl=%dm, interval=%.0fs)",
             ttl_minutes, interval_seconds,

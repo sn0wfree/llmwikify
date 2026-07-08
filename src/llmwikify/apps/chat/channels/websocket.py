@@ -401,7 +401,7 @@ def _register_websocket_routes(
             "server_time": time.time(),
         })
         # Spawn the writer task (drains out_queue → ws.send_json)
-        writer_task = asyncio.create_task(_writer_loop(conn))
+        writer_task = asyncio.create_task(_writer_loop(conn), name="ws_writer")
         try:
             while True:
                 raw = await websocket.receive_text()
@@ -603,7 +603,7 @@ async def _handle_client_msg(
                 content=content,
                 orchestrator=orchestrator,
                 session_map=session_map or get_default_ws_session_map(),
-            ))
+            ), name=f"ws_chat-{chat_id}")
             return
 
         # Fallback: Phase 14 echo. Used when no chat_service is

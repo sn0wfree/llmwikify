@@ -446,6 +446,22 @@ class WikiIndex:
             for row in cursor.fetchall()
         ]
 
+    def count_inbound_for_pages(self, page_names: list[str]) -> dict[str, int]:
+        """Batch: count inbound links for multiple pages in one query.
+
+        Returns a dict mapping page_name → inbound link count.
+        Pages with zero inbound links are omitted from the result.
+        """
+        if not page_names:
+            return {}
+        placeholders = ",".join("?" * len(page_names))
+        cursor = self.conn.execute(
+            f"SELECT target_page, COUNT(*) FROM page_links "
+            f"WHERE target_page IN ({placeholders}) GROUP BY target_page",
+            page_names,
+        )
+        return {row[0]: row[1] for row in cursor.fetchall()}
+
     def get_outbound_links(self, page_name: str) -> list[dict]:
         """Get pages that this page links to."""
         cursor = self.conn.execute(
