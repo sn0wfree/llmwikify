@@ -124,17 +124,3 @@ class Pipeline(StepHandler):
     def __repr__(self) -> str:
         names = " → ".join(type(s).__name__ for s in self._steps)
         return f"Pipeline({names})"
-
-
-# ─── 辅助函数 ───────────────────────────────────────────
-
-
-async def _maybe_await(fn_or_coro: Any, *args: Any, **kwargs: Any) -> Any:
-    """调用 sync 或 async callable，统一 await。"""
-    if callable(fn_or_coro):
-        result = fn_or_coro(*args, **kwargs)
-    else:
-        result = fn_or_coro
-    if hasattr(result, "__await__"):
-        return await result
-    return result

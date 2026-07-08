@@ -13,11 +13,12 @@ import logging
 from collections.abc import AsyncIterator, Callable
 from typing import TYPE_CHECKING, Any
 
+from llmwikify.foundation.utils import maybe_await as _maybe_await
+
 from ._core_types import (
     StepHandler,
     StepResult,
     StreamingHandler,
-    _maybe_await,
 )
 from .context import UnifiedContext
 from .hook import UnifiedHook

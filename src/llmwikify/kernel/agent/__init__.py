@@ -18,7 +18,6 @@ from ._core_types import (
     StepHandler,
     StepResult,
     StreamingHandler,
-    _maybe_await,
 )
 from .codegen_pipeline import (
     CodeActor,
@@ -63,5 +62,4 @@ __all__ = [
     "StepResult",
     "StreamingHandler",
     "Pipeline",
-    "_maybe_await",
 ]
