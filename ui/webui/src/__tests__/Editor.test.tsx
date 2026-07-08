@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { fireEvent } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { render, screen, act, waitFor } from './test-utils';
 import { Editor } from '../components/wiki/Editor';
 import { ToastProvider } from '../components/wiki/Toast';
@@ -109,5 +109,83 @@ describe('Editor', () => {
     // Three mode buttons: Edit, Graph, Preview
     expect(screen.getByText('Graph')).toBeInTheDocument();
     expect(screen.getByText('Preview')).toBeInTheDocument();
+  });
+
+  it('shows dirty=true when textarea content changes', async () => {
+    mockReadPage.mockResolvedValue({ page_name: 'TestPage', content: '# TestPage' });
+    render(
+      <MemoryRouter initialEntries={['/edit?page=TestPage']}>
+        <ToastProvider>
+          <Editor selectedPage="TestPage" onPageSelect={vi.fn()} />
+        </ToastProvider>
+      </MemoryRouter>,
+    );
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText(/Start writing markdown/)).toBeInTheDocument();
+    });
+
+    const textarea = screen.getByPlaceholderText(/Start writing markdown/);
+    fireEvent.change(textarea, { target: { value: 'Changed content' } });
+
+    // Save button becomes enabled (disabled when not dirty)
+    const saveButton = screen.getByText('Save');
+    expect(saveButton).not.toBeDisabled();
+    // Dirty indicator (●) appears in toolbar
+    expect(document.body.textContent).toContain('●');
+  });
+});
+
+describe('Editor URL-sync (Bug 2 fix)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockStatus.mockResolvedValue({
+      pages_by_type: {
+        root: ['PageA', 'PageB', 'PageC'],
+      },
+    });
+    mockReadPage.mockImplementation((name: string) =>
+      Promise.resolve({ page_name: name, content: '# ' + name }),
+    );
+  });
+
+  function renderEditorWithSearch(search: string) {
+    const initialEntries = search ? [`/edit?${search}`] : ['/edit'];
+    return render(
+      <MemoryRouter initialEntries={initialEntries}>
+        <Routes>
+          <Route path="/edit" element={<Editor onPageSelect={vi.fn()} />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+  }
+
+  it('loads the page specified in the URL ?page= query param', async () => {
+    renderEditorWithSearch('page=PageA');
+    await waitFor(() => {
+      expect(mockReadPage).toHaveBeenCalledWith('PageA');
+    });
+  });
+
+  it('does NOT load a page when no ?page= and no selectedPage prop', async () => {
+    renderEditorWithSearch('');
+    await waitFor(() => {
+      expect(mockStatus).toHaveBeenCalled();
+    });
+    expect(mockReadPage).not.toHaveBeenCalled();
+  });
+
+  it('URL takes precedence over selectedPage prop (single source of truth)', async () => {
+    // URL drives selection, not the now-deprecated prop
+    render(
+      <MemoryRouter initialEntries={['/edit?page=PageA']}>
+        <Routes>
+          <Route path="/edit" element={<Editor selectedPage="PageB" onPageSelect={vi.fn()} />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    await waitFor(() => {
+      expect(mockReadPage).toHaveBeenCalledWith('PageA');
+    });
+    expect(mockReadPage).not.toHaveBeenCalledWith('PageB');
   });
 });
