@@ -20,6 +20,7 @@ Pass ``_prompt_name="..."`` in generation_params to label calls in logs.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -957,7 +958,7 @@ async def _post_with_retry_async(
                     config.max_retries + 1, wait, e,
                 )
                 last_exc = e
-                time.sleep(wait)
+                await asyncio.sleep(wait)
                 continue
             _record_retry_outcome(
                 success=False, status_code=None, exc=e,
@@ -976,7 +977,7 @@ async def _post_with_retry_async(
                 config.max_retries + 1, wait, reason,
             )
             await resp.aclose()
-            time.sleep(wait)
+            await asyncio.sleep(wait)
             continue
 
         _record_retry_outcome(
@@ -1424,7 +1425,7 @@ class StreamableLLMClient(LLMClient):
                             config.max_retries + 1, wait, e,
                         )
                         last_exc = e
-                        time.sleep(wait)
+                        await asyncio.sleep(wait)
                         continue
                     _record_retry_outcome(
                         success=False, status_code=None, exc=e,
@@ -1443,7 +1444,7 @@ class StreamableLLMClient(LLMClient):
                         config.max_retries + 1, wait, reason,
                     )
                     await stream_ctx.__aexit__(None, None, None)
-                    time.sleep(wait)
+                    await asyncio.sleep(wait)
                     continue
 
                 _record_retry_outcome(

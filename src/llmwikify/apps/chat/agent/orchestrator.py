@@ -814,6 +814,7 @@ class ChatOrchestrator:
                         accumulated_tools,
                         research_run_id,
                     )
+                    ctx.add_assistant_message(final)
                     if self.tool_executor._save_error_count > 0:
                         yield ChatEvent.save_warning(
                             f"已丢弃 {self.tool_executor._save_error_count} 条消息的持久化失败",

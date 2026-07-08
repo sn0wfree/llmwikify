@@ -32,6 +32,7 @@ class SkillService:
         self.memory_manager = memory_manager
         self.wiki_service = wiki_service
         self._initialized = False
+        self._actions_registered = False
 
     def initialize(self) -> None:
         """Initialize registry + runtime if not provided.
@@ -55,16 +56,11 @@ class SkillService:
         self.initialize()
 
     def register_all(self) -> None:
-        """Register all built-in skills.
-
-        This includes:
-        - 23 base actions (Phase 5)
-        - 4 CRUD skills (Phase 12b)
-        - 2 pipelines (Phase 12a)
-        - 1 aggregator (Phase 12c)
-        - research_skill (Phase 6)
-        """
+        """Register all built-in skills. Idempotent — safe to call repeatedly."""
         self.initialize()
+        if self._actions_registered:
+            return
+        self._actions_registered = True
         # 23 base actions
         try:
             from llmwikify.apps.chat.skills.actions import (
