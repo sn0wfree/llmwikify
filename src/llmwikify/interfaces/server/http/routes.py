@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import logging
+import mimetypes
 import os
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote, unquote
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse
@@ -22,9 +24,11 @@ def _serve_wiki_file(wiki_root: Path, path: str) -> FileResponse:
     """Resolve a wiki-relative file path safely and return a FileResponse.
 
     Rejects absolute paths and any resolved path that escapes ``wiki_root``.
+    Handles URL-encoded paths (defense in depth against double encoding).
     """
     if not path:
         raise HTTPException(status_code=400, detail="path required")
+    path = unquote(path)
     root = wiki_root.resolve()
     target = (root / path).resolve()
     try:
@@ -33,7 +37,16 @@ def _serve_wiki_file(wiki_root: Path, path: str) -> FileResponse:
         raise HTTPException(status_code=403, detail=f"Path escapes wiki root: {path}") from None
     if not target.exists() or not target.is_file():
         raise HTTPException(status_code=404, detail=f"File not found: {path}")
-    return FileResponse(target)
+    media_type, _ = mimetypes.guess_type(str(target))
+    # RFC 5987: filename*=UTF-8''<percent-encoded> for non-ASCII filenames
+    ascii_name = target.name.encode('ascii', 'replace').decode('ascii')
+    encoded_name = quote(target.name, safe='')
+    content_disp = f'inline; filename="{ascii_name}"; filename*=UTF-8\'\'{encoded_name}'
+    return FileResponse(
+        target,
+        media_type=media_type or "application/octet-stream",
+        headers={"Content-Disposition": content_disp},
+    )
 
 
 

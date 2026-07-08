@@ -397,7 +397,17 @@ export const api = {
       graph: (wikiId: string, currentPage?: string) => api.wiki.graph({ wikiId, currentPage }),
     },
     fileUrl: (path: string, wikiId?: string) => {
-      const encoded = path.split('/').map(encodeURIComponent).join('/');
+      // Decode first in case the path is already URL-encoded (react-markdown's
+      // urlTransform pre-encodes hrefs/src for ASCII files; raw CJK paths come
+      // through with %E4%... already in them). Re-encoding without decoding
+      // produces double-encoded %25E4%25... which 404s on the server.
+      let normalized = path;
+      try {
+        normalized = decodeURIComponent(path);
+      } catch {
+        normalized = path;
+      }
+      const encoded = normalized.split('/').map(encodeURIComponent).join('/');
       return wikiId ? `/api/wiki/${wikiId}/file/${encoded}` : `/api/wiki/file/${encoded}`;
     },
   },
