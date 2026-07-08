@@ -190,7 +190,7 @@ class LLMClient:
         try:
             import requests
         except ImportError:
-            raise ImportError("requests is required for LLM client: pip install requests")
+            raise ImportError("requests is required for LLM client: pip install requests") from None
 
         url = f"{self.base_url}/chat/completions" if self.base_url.endswith("/v1") else f"{self.base_url}/v1/chat/completions"
 
@@ -217,9 +217,9 @@ class LLMClient:
             data = resp.json()
             return data["choices"][0]["message"]["content"]
         except requests.exceptions.RequestException as e:
-            raise ConnectionError(f"LLM API request failed: {e}")
+            raise ConnectionError(f"LLM API request failed: {e}") from e
         except (KeyError, IndexError) as e:
-            raise ValueError(f"Unexpected LLM API response format: {e}")
+            raise ValueError(f"Unexpected LLM API response format: {e}") from e
 
     @check_token_budget(lambda self: self._budget_checker)
     def chat_json(

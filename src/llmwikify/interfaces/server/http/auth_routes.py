@@ -79,7 +79,7 @@ def _build_router() -> APIRouter:
         try:
             body = await request.json()
         except Exception:
-            raise HTTPException(status_code=400, detail={"error": "invalid_json", "detail": "Request body must be JSON."})
+            raise HTTPException(status_code=400, detail={"error": "invalid_json", "detail": "Request body must be JSON."}) from None
 
         email = (body.get("email") or "").strip().lower()
         if not email or "@" not in email:
@@ -138,7 +138,7 @@ def _build_router() -> APIRouter:
         try:
             body = await request.json()
         except Exception:
-            raise HTTPException(status_code=400, detail={"error": "invalid_json", "detail": "Request body must be JSON."})
+            raise HTTPException(status_code=400, detail={"error": "invalid_json", "detail": "Request body must be JSON."}) from None
 
         pat = (body.get("pat") or "").strip()
         if not pat:
@@ -295,7 +295,7 @@ def _build_router() -> APIRouter:
                 detail={"error": "not_authenticated", "detail": "No session cookie. POST /auth/verify first."},
             )
 
-        if llmwikify_token == "local-mode-no-auth":
+        if llmwikify_token == "local-mode-no-auth":  # noqa: S105 — sentinel, not a password
             return {
                 "authenticated": True,
                 "user": {
@@ -313,7 +313,7 @@ def _build_router() -> APIRouter:
             raise HTTPException(
                 status_code=401,
                 detail={"error": "invalid_token", "detail": f"Token invalid: {type(exc).__name__}"},
-            )
+            ) from exc
 
         if not claims.sub.startswith("user:"):
             raise HTTPException(

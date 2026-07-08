@@ -250,7 +250,7 @@ def generate_user_dict(db_path: Path, wiki_root: Path) -> dict[str, Any]:
             page_count = row[0] if row else 0
             conn.close()
         except Exception:
-            pass
+            logger.debug("Failed to count pages from db, defaulting to 0")
 
     _write_meta(meta_path, fast_count, slow_count, page_count)
 

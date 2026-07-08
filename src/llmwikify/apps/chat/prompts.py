@@ -237,7 +237,7 @@ def source_hash(source: dict[str, Any]) -> str:
         12-character lowercase hex string.
     """
     key = source.get("url") or source.get("title", "unknown")
-    return hashlib.md5(key.encode()).hexdigest()[:12]
+    return hashlib.md5(key.encode()).hexdigest()[:12]  # noqa: S324 — short ID, not cryptographic
 
 
 # ─── fallback functions ───────────────────────────────────────────────

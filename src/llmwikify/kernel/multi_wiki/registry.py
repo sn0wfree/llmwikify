@@ -325,7 +325,7 @@ class WikiRegistry:
                     status = self.get_wiki_status(instance.wiki_id)
                     instance.page_count = status.get("page_count", 0)
                 except Exception:
-                    pass
+                    logger.debug("Failed to refresh page_count for %s", instance.wiki_id)
         return list(self._instances.values())
 
     def get_default_wiki(self) -> Any:

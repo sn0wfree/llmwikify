@@ -152,7 +152,7 @@ class LocalFileBackend:
         try:
             path.relative_to(self.wiki_dir)
         except ValueError:
-            raise ValueError(f"Page path escapes wiki/ directory: {name!r}")
+            raise ValueError(f"Page path escapes wiki/ directory: {name!r}") from None
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content)
 

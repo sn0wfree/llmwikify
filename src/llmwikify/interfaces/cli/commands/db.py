@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import json
+import logging
 import sqlite3
 from typing import Any
 
 from .._base import Command
 from .._output import print_error, print_warning
+
+logger = logging.getLogger(__name__)
 
 
 def _resolve_data_dir(wiki: Any) -> Any:
@@ -61,13 +64,13 @@ def _get_wiki_stats(app_db: Any, wiki_id: str) -> dict:
                 "SELECT COUNT(*) FROM chat_sessions WHERE wiki_id = ?"
             )
         except Exception:
-            pass
+            logger.debug("chat_sessions table missing or inaccessible for wiki %s", wiki_id)
         try:
             out["research_sessions"] = count(
                 "SELECT COUNT(*) FROM autoresearch_sessions WHERE wiki_id = ?"
             )
         except Exception:
-            pass
+            logger.debug("autoresearch_sessions table missing or inaccessible for wiki %s", wiki_id)
         try:
             out["research_sources"] = count(
                 """SELECT COUNT(*) FROM autoresearch_sources s
@@ -75,7 +78,7 @@ def _get_wiki_stats(app_db: Any, wiki_id: str) -> dict:
                    WHERE s2.wiki_id = ?"""
             )
         except Exception:
-            pass
+            logger.debug("autoresearch_sources table missing or inaccessible for wiki %s", wiki_id)
         try:
             out["tool_calls"] = count(
                 """SELECT COUNT(*) FROM tool_calls t
@@ -83,12 +86,12 @@ def _get_wiki_stats(app_db: Any, wiki_id: str) -> dict:
                    WHERE c.wiki_id = ?"""
             )
         except Exception:
-            pass
+            logger.debug("tool_calls table missing or inaccessible for wiki %s", wiki_id)
         for t in ("dream_proposals", "notifications", "confirmations", "ingest_log"):
             try:
                 out[t] = count(f"SELECT COUNT(*) FROM {t} WHERE wiki_id = ?")
             except Exception:
-                pass
+                logger.debug("%s table missing or inaccessible for wiki %s", t, wiki_id)
     return out
 
 
@@ -107,7 +110,7 @@ def _list_all_wikis(app_db: Any) -> list[dict]:
                 for r in rows:
                     wiki_ids.add(r[0])
             except Exception:
-                pass
+                logger.debug("Could not query wiki_ids from %s", tbl)
     return [
         _get_wiki_stats(app_db, wid) for wid in sorted(wiki_ids)
     ]
@@ -129,46 +132,46 @@ def _delete_wiki_data(app_db: Any, wiki_id: str) -> dict:
                 )
                 result[tbl] = cur.rowcount
             except Exception:
-                pass
-        # Cascading deletes
-        try:
-            cur = conn.execute(
-                """DELETE FROM chat_messages
-                   WHERE session_id IN
-                   (SELECT id FROM chat_sessions WHERE wiki_id = ?)""",
-                (wiki_id,),
-            )
-            result["chat_messages"] = cur.rowcount
-        except Exception:
-            pass
-        try:
-            cur = conn.execute(
-                """DELETE FROM autoresearch_sub_queries
-                   WHERE session_id IN
-                   (SELECT id FROM autoresearch_sessions WHERE wiki_id = ?)""",
-                (wiki_id,),
-            )
-            result["autoresearch_sub_queries"] = cur.rowcount
-        except Exception:
-            pass
-        try:
-            cur = conn.execute(
-                """DELETE FROM autoresearch_sources
-                   WHERE session_id IN
-                   (SELECT id FROM autoresearch_sessions WHERE wiki_id = ?)""",
-                (wiki_id,),
-            )
-            result["autoresearch_sources"] = cur.rowcount
-        except Exception:
-            pass
-        for t in ("dream_proposals", "notifications", "confirmations", "ingest_log"):
+                logger.debug("DELETE from %s failed for wiki %s", tbl, wiki_id)
+            # Cascading deletes
             try:
                 cur = conn.execute(
-                    f"DELETE FROM {t} WHERE wiki_id = ?", (wiki_id,)
+                    """DELETE FROM chat_messages
+                       WHERE session_id IN
+                       (SELECT id FROM chat_sessions WHERE wiki_id = ?)""",
+                    (wiki_id,),
                 )
-                result[t] = cur.rowcount
+                result["chat_messages"] = cur.rowcount
             except Exception:
-                pass
+                logger.debug("DELETE from chat_messages failed for wiki %s", wiki_id)
+            try:
+                cur = conn.execute(
+                    """DELETE FROM autoresearch_sub_queries
+                       WHERE session_id IN
+                       (SELECT id FROM autoresearch_sessions WHERE wiki_id = ?)""",
+                    (wiki_id,),
+                )
+                result["autoresearch_sub_queries"] = cur.rowcount
+            except Exception:
+                logger.debug("DELETE from autoresearch_sub_queries failed for wiki %s", wiki_id)
+            try:
+                cur = conn.execute(
+                    """DELETE FROM autoresearch_sources
+                       WHERE session_id IN
+                       (SELECT id FROM autoresearch_sessions WHERE wiki_id = ?)""",
+                    (wiki_id,),
+                )
+                result["autoresearch_sources"] = cur.rowcount
+            except Exception:
+                logger.debug("DELETE from autoresearch_sources failed for wiki %s", wiki_id)
+            for t in ("dream_proposals", "notifications", "confirmations", "ingest_log"):
+                try:
+                    cur = conn.execute(
+                        f"DELETE FROM {t} WHERE wiki_id = ?", (wiki_id,)
+                    )
+                    result[t] = cur.rowcount
+                except Exception:
+                    logger.debug("DELETE from %s failed for wiki %s", t, wiki_id)
         conn.commit()
     return result
 

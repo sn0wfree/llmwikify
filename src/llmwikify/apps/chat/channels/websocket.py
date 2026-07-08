@@ -429,7 +429,7 @@ def _register_websocket_routes(
             try:
                 await writer_task
             except (asyncio.CancelledError, Exception):
-                pass
+                logger.debug("Writer task cancellation settled for peer %s", peer, exc_info=True)
 
     @router.post("/api/ws/token")
     async def issue_token(
@@ -528,7 +528,7 @@ async def _run_ws_chat(
                 "error": "Internal error while streaming chat response",
             })
         except Exception:
-            pass
+            logger.debug("Failed to send error fan-out to chat %s", chat_id, exc_info=True)
 
 
 async def _handle_client_msg(

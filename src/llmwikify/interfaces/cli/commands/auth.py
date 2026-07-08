@@ -21,8 +21,11 @@ Decisions:
 from __future__ import annotations
 
 import json
+import logging
 import sys
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 from llmwikify.foundation.auth import (
     ApiKeyRepository,
@@ -136,9 +139,9 @@ def run_auth_create_token(wiki: Any, config: dict, args: Any) -> int:
                 if claims.sub.startswith("user:"):
                     user = repo.get_by_id(claims.sub[len("user:"):])
             except Exception:
-                pass
+                logger.debug("Could not decode existing token for user lookup", exc_info=True)
     except FileNotFoundError:
-        pass
+        logger.debug("No existing local_token file found")
 
     if user is None:
         for row in repo._connect().execute("SELECT * FROM users LIMIT 1"):
@@ -199,7 +202,7 @@ def run_auth_list_tokens(wiki: Any, config: dict, args: Any) -> int:
             if claims.sub.startswith("user:"):
                 user = repo.get_by_id(claims.sub[len("user:"):])
     except Exception:
-        pass
+        logger.debug("Could not decode existing token for list-tokens", exc_info=True)
 
     if user is None:
         print("[!] No users found. Run `llmwikify auth init` first.", file=sys.stderr)
@@ -245,7 +248,7 @@ def run_auth_revoke_token(wiki: Any, config: dict, args: Any) -> int:
             if claims.sub.startswith("user:"):
                 user = repo.get_by_id(claims.sub[len("user:"):])
     except Exception:
-        pass
+        logger.debug("Could not decode existing token for revoke-token", exc_info=True)
 
     if user is None:
         print("[!] No users found.", file=sys.stderr)
@@ -284,9 +287,9 @@ def run_auth_token(wiki: Any, config: dict, args: Any) -> int:
                 if claims.sub.startswith("user:"):
                     user = repo.get_by_id(claims.sub[len("user:"):])
             except Exception:
-                pass
+                logger.debug("Could not decode existing token for auth token", exc_info=True)
     except FileNotFoundError:
-        pass
+        logger.debug("No existing local_token file found")
 
     if user is None:
         for row in repo._connect().execute("SELECT * FROM users LIMIT 1"):
@@ -325,7 +328,7 @@ def run_auth_whoami(wiki: Any, config: dict, args: Any) -> int:
     except FileNotFoundError:
         print("[!] No local_token. Run `llmwikify auth init` first.", file=sys.stderr)
         return 1
-    if not token or token == "local-mode-no-auth":
+    if not token or token == "local-mode-no-auth":  # noqa: S105 — sentinel, not a password
         print("[!] local_token is the local-mode marker.", file=sys.stderr)
         return 1
     try:

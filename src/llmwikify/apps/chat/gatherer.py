@@ -182,7 +182,7 @@ class SourceGatherer:
                     if isinstance(result, list):
                         events.extend(result)
                 except Exception:
-                    pass
+                    logger.debug("Remaining gather task failed", exc_info=True)
 
         return events
 
@@ -218,7 +218,7 @@ class SourceGatherer:
                             timeout=15,
                         )
                 except asyncio.TimeoutError:
-                    raise ValueError(f"Search timed out for: {query}")
+                    raise ValueError(f"Search timed out for: {query}") from None
                 # Filter out already-seen URLs
                 for r in search_results:
                     if r.url and self._normalize_url(r.url) not in seen_urls:

@@ -66,7 +66,7 @@ def export_html(graph: dict, communities: dict[int, list[str]] | None, output_pa
         import networkx as nx  # noqa: F401  (used by _build_networkx)
         from pyvis.network import Network
     except ImportError:
-        raise ImportError("pyvis and networkx are required for HTML export. Install with: pip install pyvis networkx")
+        raise ImportError("pyvis and networkx are required for HTML export. Install with: pip install pyvis networkx") from None
 
     G = _build_networkx(graph)
 
@@ -200,7 +200,7 @@ def export_graphml(graph: dict, output_path: Path) -> dict:
     try:
         import networkx as nx  # noqa: F401  (used by _build_networkx)
     except ImportError:
-        raise ImportError("networkx is required for GraphML export")
+        raise ImportError("networkx is required for GraphML export") from None
 
     G = _build_networkx(graph)
 
@@ -222,14 +222,14 @@ def export_svg(graph: dict, output_path: Path) -> dict:
     try:
         import networkx as nx  # noqa: F401  (used by _build_networkx)
     except ImportError:
-        raise ImportError("networkx is required for SVG export")
+        raise ImportError("networkx is required for SVG export") from None
 
     try:
         import subprocess
 
         from networkx.drawing.nx_agraph import write_dot
     except ImportError:
-        raise ImportError("pygraphviz is required for SVG export. Install with: pip install pygraphviz")
+        raise ImportError("pygraphviz is required for SVG export. Install with: pip install pygraphviz") from None
 
     G = _build_networkx(graph)
     G_undirected = G.to_undirected()
@@ -238,7 +238,7 @@ def export_svg(graph: dict, output_path: Path) -> dict:
     write_dot(G_undirected, dot_path)
 
     # Convert DOT to SVG
-    result = subprocess.run(
+    result = subprocess.run(  # noqa: S603 — dot is a well-known binary
         ["dot", "-Tsvg", dot_path, "-o", str(output_path)],
         capture_output=True, text=True
     )
@@ -270,7 +270,7 @@ def detect_communities(index: WikiIndex, algorithm: str = "leiden", resolution: 
     try:
         import networkx as nx  # noqa: F401  (used by _build_networkx)
     except ImportError:
-        raise ImportError("networkx is required for community detection")
+        raise ImportError("networkx is required for community detection") from None
 
     graph = build_graph(index)
     G = _build_networkx(graph)
@@ -300,7 +300,7 @@ def detect_communities(index: WikiIndex, algorithm: str = "leiden", resolution: 
         try:
             import community as community_louvain
         except ImportError:
-            raise ImportError("python-louvain is required for Louvain algorithm")
+            raise ImportError("python-louvain is required for Louvain algorithm") from None
 
         partition = community_louvain.best_partition(G.to_undirected(), resolution=resolution, weight="weight")
         modularity = community_louvain.modularity(partition, G.to_undirected(), weight="weight")
@@ -402,7 +402,7 @@ def generate_report(index: WikiIndex, communities: dict | None = None, top_n: in
     try:
         import networkx as nx  # noqa: F401  (used by _build_networkx)
     except ImportError:
-        raise ImportError("networkx is required for report generation")
+        raise ImportError("networkx is required for report generation") from None
 
     graph = build_graph(index)
     G = _build_networkx(graph)

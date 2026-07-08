@@ -28,6 +28,7 @@ class PotentialContradictionsRule(Rule):
     name = "contradiction"  # logical name; type field uses concrete subtypes
 
     def run(self, wiki: Wiki) -> list[dict[str, Any]]:
+        # TODO(refactor): C901=33 — too complex, consider splitting
         contradictions: list[dict[str, Any]] = []
         seen_pairs: set = set()
 

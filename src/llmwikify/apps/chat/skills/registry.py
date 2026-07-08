@@ -124,7 +124,7 @@ class SkillRegistry:
                 try:
                     skill.teardown()
                 except Exception:
-                    pass
+                    logger.debug("Skill teardown failed for %s", name, exc_info=True)
 
     # ── lookup ─────────────────────────────────────────────────
 

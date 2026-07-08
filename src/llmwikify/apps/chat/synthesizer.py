@@ -70,7 +70,7 @@ class ResearchSynthesizer:
                                     "content_preview": str(page_content)[:2000],
                                 })
                         except Exception:
-                            pass
+                            logger.debug("Failed to read wiki page %s for comparison", page_name, exc_info=True)
             except Exception as e:
                 logger.debug("Wiki comparison search failed: %s", e)
 

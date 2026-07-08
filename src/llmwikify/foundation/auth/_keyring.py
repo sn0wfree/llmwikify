@@ -87,9 +87,9 @@ def get_secret() -> bytes:
         if value:
             return bytes.fromhex(value)
     except keyring.errors.KeyringError:
-        pass  # fall through to file
+        logger.debug("OS keyring unavailable, falling back to file", exc_info=True)
     except Exception:
-        pass
+        logger.debug("OS keyring read failed, falling back to file", exc_info=True)
 
     # 2. Fallback: file.
     return _read_file_secret()

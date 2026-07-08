@@ -144,6 +144,7 @@ class WikiUtilityMixin(WikiProtocol):
 
     @staticmethod
     def _parse_sections(content: str) -> list:
+        # TODO(refactor): C901=13 — too complex, consider splitting
         """Parse markdown into list of (section_header, section_body).
 
         Only parses H2 headers (## Header) for top-level sections.

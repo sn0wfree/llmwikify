@@ -483,7 +483,7 @@ class BaseResearchTaskManager:
                     if session and session.get("status") not in ("done", "cancelled", "paused", "timeout", "error"):
                         db.update_research_status(session_id, "paused", session.get("current_step"))
                 except Exception:
-                    pass
+                    logger.debug("Failed to pause research session %s on cancel", session_id, exc_info=True)
                 raise
             except Exception as e:
                 logger.error("Research task %s failed: %s", session_id, e, exc_info=True)

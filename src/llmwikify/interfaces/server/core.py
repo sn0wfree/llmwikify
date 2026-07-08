@@ -13,6 +13,7 @@ from typing import Any
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
+from llmwikify import __version__
 from llmwikify.foundation.logging import setup_logging
 from llmwikify.interfaces.server.constants import DEFAULT_HOST, DEFAULT_PORT
 from llmwikify.kernel import Wiki
@@ -247,7 +248,7 @@ class WikiServer:
 
         app = FastAPI(
             title="llmwikify",
-            version="0.38.0",
+            version=__version__,
             description="LLM Wiki Knowledge Base API",
             docs_url="/docs",
             redoc_url="/redoc",
@@ -336,7 +337,7 @@ class WikiServer:
             if is_multi:
                 return {
                     "status": "ok",
-                    "version": "0.38.0",
+                    "version": __version__,
                     "mode": "multi-wiki",
                     "wiki_count": wiki_count,
                     "default_wiki_id": self.registry.get_default_wiki_id(),
@@ -376,7 +377,7 @@ class WikiServer:
                 page_count = len(list(self.wiki.wiki_dir.glob("**/*.md"))) if self.wiki.wiki_dir.exists() else 0
                 return {
                     "status": "ok",
-                    "version": "0.38.0",
+                    "version": __version__,
                     "mode": "single-wiki",
                     "wiki": {
                         "initialized": self.wiki.is_initialized(),

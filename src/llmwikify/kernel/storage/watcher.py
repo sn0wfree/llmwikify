@@ -75,7 +75,7 @@ class FileSystemWatcher:
             raise ImportError(
                 "watchdog package is required. "
                 "Install with: pip install watchdog"
-            )
+            ) from None
 
         self._on_event = on_event
         self._running = True

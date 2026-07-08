@@ -85,7 +85,7 @@ def _qmd_mcp(wiki: Any, args: Any) -> int:
     print("Press Ctrl+C to stop")
 
     try:
-        subprocess.run(cmd, cwd=wiki.root)
+        subprocess.run(cmd, cwd=wiki.root)  # noqa: S603 — cmd is hardcoded above
     except KeyboardInterrupt:
         print("\nServer stopped")
     except FileNotFoundError:

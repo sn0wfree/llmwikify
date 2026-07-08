@@ -218,6 +218,7 @@ class RelationEngine:
         return best_match
 
     def resolve_entity(self, name: str, fuzzy_threshold: float = 0.85) -> str:
+        # TODO(refactor): C901=14 — too complex, consider splitting
         """Resolve entity name to canonical form.
 
         Resolution order:
@@ -597,7 +598,7 @@ class RelationEngine:
         try:
             import networkx as nx
         except ImportError:
-            raise ImportError("networkx is required for graph operations")
+            raise ImportError("networkx is required for graph operations") from None
 
         G = nx.MultiDiGraph()
 

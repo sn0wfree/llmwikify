@@ -85,6 +85,7 @@ class WikiRelationMixin(WikiProtocol):
         return analyzer.get_suggested_pages_report()
 
     def execute_operations(self, operations: list) -> dict:
+        # TODO(refactor): C901=16 — too complex, consider splitting
         """Execute a list of wiki operations from LLM processing.
 
         Args:
@@ -191,4 +192,4 @@ class WikiRelationMixin(WikiProtocol):
                 if snapshot_dir.exists():
                     shutil.rmtree(snapshot_dir)
             except Exception:
-                pass
+                logger.debug("Failed to clean up snapshot dir %s", snapshot_dir)

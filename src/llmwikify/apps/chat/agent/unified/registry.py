@@ -19,7 +19,10 @@
 """
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
+
+logger = logging.getLogger(__name__)
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -133,7 +136,7 @@ def _chat_precheck(ctx: Any) -> bool:
                 ctx.stop_reason = "goal_abandoned"
                 return True
         except Exception:
-            pass
+            logger.debug("goal_active_predicate raised", exc_info=True)
     return False
 
 

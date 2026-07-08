@@ -55,18 +55,17 @@ class WikiPageIOMixin(WikiProtocol):
         else:
             full_path = page_name
 
-        if '\\n' in content or '\\t' in content:
-            try:
-                content = content.encode('utf-8').decode('unicode_escape')
-            except (UnicodeDecodeError, UnicodeEncodeError):
-                pass
+        if '\\n' in content:
+            content = content.replace('\\n', '\n')
+        if '\\t' in content:
+            content = content.replace('\\t', '\t')
 
         page_path = (self.wiki_dir / f"{full_path}.md").resolve()
 
         try:
             page_path.relative_to(self.wiki_dir.resolve())
         except ValueError:
-            raise ValueError(f"Page path escapes wiki/ directory: {full_path!r}")
+            raise ValueError(f"Page path escapes wiki/ directory: {full_path!r}") from None
 
         action = "Updated" if page_path.exists() else "Created"
         self._backend.put_page(full_path, content)
@@ -204,6 +203,7 @@ class WikiPageIOMixin(WikiProtocol):
         return self.index.export_json(output_path)
 
     def _extract_page_summary(self, page_path: Path, max_len: int = 120) -> str:
+        # TODO(refactor): C901=17 — too complex, consider splitting
         """Extract a one-line summary from a wiki page.
 
         Priority:
@@ -282,6 +282,7 @@ class WikiPageIOMixin(WikiProtocol):
         return {'topics': topics, 'entities': entities}
 
     def _update_index_file(self) -> None:
+        # TODO(refactor): C901=24 — too complex, consider splitting
         """Update index.md with current wiki contents, summaries, and sink status.
 
         Groups pages by type (Sources, Concepts, Entities, etc.).

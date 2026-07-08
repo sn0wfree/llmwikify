@@ -16,6 +16,7 @@ Phase 2a additions (decisions 12, 13, 14, 15):
 from __future__ import annotations
 
 import asyncio  # Phase 3 #6 — used by stdio/http/sse paths
+import logging
 import os  # Phase 2a: LLMWIKIFY_HOST env var
 import sys  # Phase 2a: print to stderr
 from pathlib import Path
@@ -24,6 +25,8 @@ from typing import Any
 from llmwikify.interfaces.mcp.adapter import MCPAdapter  # Phase 3 #6
 
 from .._base import Command
+
+logger = logging.getLogger(__name__)
 
 
 def run_serve(wiki: Any, config: dict, args: Any) -> int:
@@ -118,7 +121,7 @@ def run_serve(wiki: Any, config: dict, args: Any) -> int:
                 _first_user = _row_to_user(row)
                 break
         except Exception:
-            pass
+            logger.debug("Could not query users table for first user lookup")
         if _first_user:
             _ak_repo = ApiKeyRepository()
             _keys = _ak_repo.list_by_user(_first_user.id)
@@ -203,7 +206,7 @@ def run_serve(wiki: Any, config: dict, args: Any) -> int:
                         print("  ⚠️  WebUI bundle not built — the page may be blank.")
                         print("     Fix: cd ui/webui && pnpm install && pnpm build")
                 except Exception:
-                    pass
+                    logger.debug("Could not verify WebUI bundle existence")
             print()
 
             server.run(host=final_host, port=port)

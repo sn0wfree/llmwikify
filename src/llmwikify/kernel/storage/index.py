@@ -48,9 +48,11 @@ class WikiIndex:
     @property
     def conn(self) -> sqlite3.Connection:
         if self._conn is None:
-            self._conn = sqlite3.connect(str(self.db_path), check_same_thread=False)
-            self._conn.row_factory = sqlite3.Row
-            self.initialize()
+            with self._lock:
+                if self._conn is None:
+                    self._conn = sqlite3.connect(str(self.db_path), check_same_thread=False)
+                    self._conn.row_factory = sqlite3.Row
+                    self.initialize()
         return self._conn
 
     def initialize(self) -> None:
@@ -404,7 +406,7 @@ class WikiIndex:
             if qmd.is_available():
                 return qmd.search(query, limit=limit, mode=mode)
         except Exception:
-            pass
+            logger.debug("QMD search unavailable, falling back to empty results")
         return []
 
     def get_qmd_recommendation(self) -> dict:

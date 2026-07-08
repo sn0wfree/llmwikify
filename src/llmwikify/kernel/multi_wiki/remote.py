@@ -83,12 +83,12 @@ class RemoteWiki:
             )
             response.raise_for_status()
             return response.json()
-        except requests.exceptions.Timeout:
-            raise TimeoutError(f"Remote wiki timed out: {self.url}")
+        except requests.exceptions.Timeout as e:
+            raise TimeoutError(f"Remote wiki timed out: {self.url}") from e
         except requests.exceptions.ConnectionError as e:
-            raise ConnectionError(f"Cannot connect to remote wiki: {self.url} - {e}")
+            raise ConnectionError(f"Cannot connect to remote wiki: {self.url} - {e}") from e
         except requests.exceptions.HTTPError as e:
-            raise RuntimeError(f"Remote wiki HTTP error: {e}")
+            raise RuntimeError(f"Remote wiki HTTP error: {e}") from e
 
     def health(self) -> dict[str, Any]:
         """Check remote server health.

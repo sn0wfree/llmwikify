@@ -348,7 +348,7 @@ class WikiService:
             if conf:
                 tool_name = conf.get("tool")
         except Exception:
-            pass
+            logger.debug("Failed to fetch confirmation %s", confirmation_id, exc_info=True)
         registry = self.get_tool_registry(wiki_id)
         result = registry.confirm_execution(
             confirmation_id, arguments=arguments

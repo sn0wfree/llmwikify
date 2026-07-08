@@ -28,6 +28,7 @@ class QueryPageOverlapRule(Rule):
     name = "topic_overlap"
 
     def run(self, wiki: Wiki) -> list[dict[str, Any]]:
+        # TODO(refactor): C901=13 — too complex, consider splitting
         hints: list[dict[str, Any]] = []
         if not wiki.wiki_dir.exists():
             return hints

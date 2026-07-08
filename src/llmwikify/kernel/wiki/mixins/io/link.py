@@ -37,6 +37,7 @@ class WikiLinkMixin(WikiProtocol):
         return None
 
     def fix_wikilinks(self, dry_run: bool = True) -> dict:
+        # TODO(refactor): C901=12 — too complex, consider splitting
         """Scan all wiki pages and fix broken wikilinks by adding directory prefix.
 
         When a wikilink [[X]] is broken but a page with base name X exists in a

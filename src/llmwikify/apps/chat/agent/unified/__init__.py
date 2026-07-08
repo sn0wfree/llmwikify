@@ -57,10 +57,38 @@ from llmwikify.kernel.agent.steps import (
     WrapStep,
 )
 
-from .events import *  # noqa: F401,F403
+from .events import (  # noqa: F401
+    ACTION_ERROR,
+    COMMAND_DONE,
+    COMPACTED,
+    CONFIRMATION_REQUIRED,
+    DONE,
+    ERROR,
+    MESSAGE_DELTA,
+    OBSERVATION_ERROR,
+    PHASE,
+    REASONING,
+    RESEARCH_RUN_STARTED,
+    ROUND_COMPLETE,
+    SAVE_WARNING,
+    SESSION_CREATED,
+    SESSION_INIT,
+    THINKING,
+    TIMEOUT,
+    TOOL_CALL_END,
+    TOOL_CALL_ERROR,
+    TOOL_CALL_START,
+    USER_MESSAGE,
+)
 from .handlers import ChatReasoner, ToolActor  # noqa: F401
-from .hook_adapter import *  # noqa: F401,F403
-from .registry import *  # noqa: F401,F403
+from .hook_adapter import AgentHookAdapter  # noqa: F401
+from .registry import (  # noqa: F401
+    AgentModeConfig,
+    create_agent_loop,
+    get_mode_config,
+    list_modes,
+    register_mode,
+)
 
 # chat-specific
 from .spec import ChatSpec
@@ -106,4 +134,34 @@ __all__ = [
     # Chat-specific
     "ChatReasoner",
     "ToolActor",
+    # Hook adapter
+    "AgentHookAdapter",
+    # Registry
+    "AgentModeConfig",
+    "register_mode",
+    "get_mode_config",
+    "list_modes",
+    "create_agent_loop",
+    # Events (from .events import *)
+    "SESSION_CREATED",
+    "SESSION_INIT",
+    "USER_MESSAGE",
+    "MESSAGE_DELTA",
+    "THINKING",
+    "TOOL_CALL_START",
+    "TOOL_CALL_END",
+    "TOOL_CALL_ERROR",
+    "CONFIRMATION_REQUIRED",
+    "COMPACTED",
+    "COMMAND_DONE",
+    "RESEARCH_RUN_STARTED",
+    "DONE",
+    "ERROR",
+    "SAVE_WARNING",
+    "PHASE",
+    "REASONING",
+    "ACTION_ERROR",
+    "OBSERVATION_ERROR",
+    "ROUND_COMPLETE",
+    "TIMEOUT",
 ]

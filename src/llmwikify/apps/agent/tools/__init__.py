@@ -465,7 +465,7 @@ class WikiToolRegistry:
         key = (url or "").strip() or (title or "").strip()
         if not key:
             return None
-        h = hashlib.md5(key.encode()).hexdigest()[:12]
+        h = hashlib.md5(key.encode()).hexdigest()[:12]  # noqa: S324 — short ID, not cryptographic
         return f"src-{h}"
 
     @staticmethod
@@ -485,7 +485,7 @@ class WikiToolRegistry:
             if not key:
                 continue
             display_title = title_raw or url or "untitled"
-            h = hashlib.md5(key.encode()).hexdigest()[:12]
+            h = hashlib.md5(key.encode()).hexdigest()[:12]  # noqa: S324 — short ID, not cryptographic
             slug = f"src-{h}"
             link_map[h] = {"slug": slug, "title": display_title, "url": url}
         return link_map
@@ -630,7 +630,7 @@ class WikiToolRegistry:
                             if s.get("source_type") != "wiki" and s.get("content")
                         )
                 except Exception:
-                    pass
+                    logger.debug("Failed to count raw sources for session %s", session_id, exc_info=True)
 
             return {
                 "session_id": session_id,

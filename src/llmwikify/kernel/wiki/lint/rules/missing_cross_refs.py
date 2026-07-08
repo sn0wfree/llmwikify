@@ -26,6 +26,7 @@ class MissingCrossRefsRule(Rule):
     name = "missing_cross_ref"
 
     def run(self, wiki: Wiki) -> list[dict[str, Any]]:
+        # TODO(refactor): C901=13 — too complex, consider splitting
         hints: list[dict[str, Any]] = []
 
         if not wiki.wiki_dir.exists():

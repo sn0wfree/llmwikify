@@ -349,7 +349,7 @@ class AgentService:
         try:
             await self._auto_compact_task
         except BaseException:  # noqa: BLE001 — CancelledError + bubbled errors
-            pass
+            logger.debug("AutoCompact task cancellation settled", exc_info=True)
         finally:
             self._auto_compact_task = None
             self.auto_compact = None

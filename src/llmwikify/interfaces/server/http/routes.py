@@ -153,7 +153,7 @@ def _register_wiki_routes(
                 return {**page_data, **sink_info}
             return page_data
         except Exception as e:
-            raise HTTPException(status_code=404, detail=str(e))
+            raise HTTPException(status_code=404, detail=str(e)) from e
 
     @wiki_router.post("/page")
     async def wiki_write_page(request: Request, wiki: Wiki = Depends(get_wiki)):  # noqa: B008
@@ -274,7 +274,7 @@ def _register_wiki_routes(
             instance = registry.get_wiki_instance(wiki_id)
             return instance.to_dict()
         except KeyError:
-            raise HTTPException(status_code=404, detail=f"Wiki not found: {wiki_id}")
+            raise HTTPException(status_code=404, detail=f"Wiki not found: {wiki_id}") from None
 
     @wikis_router.put("/{wiki_id}")
     async def update_wiki(wiki_id: str, request: Request):
@@ -289,7 +289,7 @@ def _register_wiki_routes(
                 registry.set_default_wiki(wiki_id)
             return instance.to_dict()
         except KeyError:
-            raise HTTPException(status_code=404, detail=f"Wiki not found: {wiki_id}")
+            raise HTTPException(status_code=404, detail=f"Wiki not found: {wiki_id}") from None
 
     @wikis_router.delete("/{wiki_id}")
     async def unregister_wiki(wiki_id: str):
@@ -298,7 +298,7 @@ def _register_wiki_routes(
             registry.unregister_wiki(wiki_id)
             return {"message": f"Wiki {wiki_id} unregistered"}
         except KeyError:
-            raise HTTPException(status_code=404, detail=f"Wiki not found: {wiki_id}")
+            raise HTTPException(status_code=404, detail=f"Wiki not found: {wiki_id}") from None
 
     @wikis_router.post("/{wiki_id}/reload")
     async def reload_wiki(wiki_id: str):
@@ -315,7 +315,7 @@ def _register_wiki_routes(
             status = registry.get_wiki_status(wiki_id)
             return status
         except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail=str(e)) from e
 
     @wikis_router.post("/scan")
     async def scan_wikis(request: Request):
@@ -344,7 +344,7 @@ def _register_wiki_routes(
                 status["all_types"] = list(status["pages_by_type"].keys())
             return status
         except KeyError:
-            raise HTTPException(status_code=404, detail=f"Wiki not found: {wiki_id}")
+            raise HTTPException(status_code=404, detail=f"Wiki not found: {wiki_id}") from None
 
     @wiki_router.get("/{wiki_id}/pages")
     async def wiki_pages_by_id(wiki_id: str):
@@ -354,7 +354,7 @@ def _register_wiki_routes(
             page_names = wiki._get_existing_page_names()
             return {"pages": page_names, "count": len(page_names)}
         except KeyError:
-            raise HTTPException(status_code=404, detail=f"Wiki not found: {wiki_id}")
+            raise HTTPException(status_code=404, detail=f"Wiki not found: {wiki_id}") from None
 
     @wiki_router.get("/{wiki_id}/search")
     async def wiki_search_by_id(wiki_id: str, q: str, limit: int = 10, backend: str = "fts5"):
@@ -363,7 +363,7 @@ def _register_wiki_routes(
             wiki = get_wiki_by_id(wiki_id)
             return wiki.search(q, limit, backend=backend)
         except KeyError:
-            raise HTTPException(status_code=404, detail=f"Wiki not found: {wiki_id}")
+            raise HTTPException(status_code=404, detail=f"Wiki not found: {wiki_id}") from None
 
     @wiki_router.get("/{wiki_id}/page/{page_name:path}")
     async def wiki_read_page_by_id(wiki_id: str, page_name: str):
@@ -378,9 +378,9 @@ def _register_wiki_routes(
                 return {**page_data, **sink_info}
             return page_data
         except KeyError:
-            raise HTTPException(status_code=404, detail=f"Wiki not found: {wiki_id}")
+            raise HTTPException(status_code=404, detail=f"Wiki not found: {wiki_id}") from None
         except Exception as e:
-            raise HTTPException(status_code=404, detail=str(e))
+            raise HTTPException(status_code=404, detail=str(e)) from e
 
     @wiki_router.post("/{wiki_id}/page")
     async def wiki_write_page_by_id(wiki_id: str, request: Request):
@@ -395,7 +395,7 @@ def _register_wiki_routes(
             result = wiki.write_page(page_name, content)
             return {"message": result, "page_name": page_name}
         except KeyError:
-            raise HTTPException(status_code=404, detail=f"Wiki not found: {wiki_id}")
+            raise HTTPException(status_code=404, detail=f"Wiki not found: {wiki_id}") from None
 
     @wiki_router.get("/{wiki_id}/lint")
     async def wiki_lint_by_id(
@@ -409,7 +409,7 @@ def _register_wiki_routes(
             wiki = get_wiki_by_id(wiki_id)
             return wiki.lint(mode=mode, limit=limit, force=force)
         except KeyError:
-            raise HTTPException(status_code=404, detail=f"Wiki not found: {wiki_id}")
+            raise HTTPException(status_code=404, detail=f"Wiki not found: {wiki_id}") from None
 
     @wiki_router.get("/{wiki_id}/recommend")
     async def wiki_recommend_by_id(wiki_id: str):
@@ -418,7 +418,7 @@ def _register_wiki_routes(
             wiki = get_wiki_by_id(wiki_id)
             return wiki.recommend()
         except KeyError:
-            raise HTTPException(status_code=404, detail=f"Wiki not found: {wiki_id}")
+            raise HTTPException(status_code=404, detail=f"Wiki not found: {wiki_id}") from None
 
     @wiki_router.get("/{wiki_id}/graph")
     async def wiki_graph_by_id(
@@ -432,7 +432,7 @@ def _register_wiki_routes(
             from llmwikify.kernel.graph.visualizer import build_visualization_data
             return build_visualization_data(wiki.index, wiki, current_page, mode)
         except KeyError:
-            raise HTTPException(status_code=404, detail=f"Wiki not found: {wiki_id}")
+            raise HTTPException(status_code=404, detail=f"Wiki not found: {wiki_id}") from None
 
     @wiki_router.get("/{wiki_id}/sink/status")
     async def wiki_sink_status_by_id(wiki_id: str):
@@ -441,7 +441,7 @@ def _register_wiki_routes(
             wiki = get_wiki_by_id(wiki_id)
             return wiki.sink_status()
         except KeyError:
-            raise HTTPException(status_code=404, detail=f"Wiki not found: {wiki_id}")
+            raise HTTPException(status_code=404, detail=f"Wiki not found: {wiki_id}") from None
 
     @wiki_router.get("/{wiki_id}/file/{path:path}")
     async def wiki_serve_file_by_id(wiki_id: str, path: str):
@@ -450,7 +450,7 @@ def _register_wiki_routes(
             wiki = get_wiki_by_id(wiki_id)
             return _serve_wiki_file(wiki.root, path)
         except KeyError:
-            raise HTTPException(status_code=404, detail=f"Wiki not found: {wiki_id}")
+            raise HTTPException(status_code=404, detail=f"Wiki not found: {wiki_id}") from None
 
     # Legacy fallback routes (backward compatible - use default wiki)
     @wiki_router.get("/status")
@@ -695,7 +695,7 @@ def _register_agent_routes(
         try:
             autoresearch_llm = agent_service._get_llm()
         except Exception:
-            pass
+            logger.debug("agent_service._get_llm() unavailable, proceeding without LLM client for autoresearch")
     research_overrides = _build_research_config_overrides()
     set_autoresearch_deps(
         db=db,
@@ -730,7 +730,7 @@ def _register_agent_routes(
         if provider and getattr(provider, "model", None):
             model_name = provider.model
     except Exception:
-        pass
+        logger.debug("Could not resolve default provider model, using fallback %r", model_name)
     app.include_router(create_openai_router(model=model_name))
 
     _mount_agent_spa(app)

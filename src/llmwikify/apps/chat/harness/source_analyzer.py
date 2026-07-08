@@ -76,7 +76,7 @@ class SourceAnalyzer:
 
         # Write to raw/ for wiki to analyze
         url_or_title = source.get("url") or source.get("title", "unknown")
-        content_hash = hashlib.md5(url_or_title.encode()).hexdigest()[:12]
+        content_hash = hashlib.md5(url_or_title.encode()).hexdigest()[:12]  # noqa: S324 — short ID, not cryptographic
         raw_dir = self.wiki.root / "raw" / "research"
         raw_dir.mkdir(parents=True, exist_ok=True)
         raw_path = raw_dir / f"{content_hash}.txt"

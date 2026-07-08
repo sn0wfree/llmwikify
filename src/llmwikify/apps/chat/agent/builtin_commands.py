@@ -151,7 +151,7 @@ async def title_handler(ctx: Any) -> dict:
         try:
             ctx.db.update_chat_session_title(ctx.session_id, new_title)
         except Exception:
-            pass
+            logger.debug("Failed to update chat session title", exc_info=True)
     return command_done_event(
         "/title", True, f"Title set: {new_title[:50]}",
     )

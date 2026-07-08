@@ -769,7 +769,7 @@ def _handle_grep(
         return {"error": f"path resolve failed: {e!r}"}
 
     try:
-        out = subprocess.run(
+        out = subprocess.run(  # noqa: S603 — path validated above
             ["rg", "--no-heading", "-n", "--", pattern, str(target)],
             capture_output=True,
             text=True,

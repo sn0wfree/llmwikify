@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import inspect
 import json
+import logging
 import uuid
 from datetime import datetime, timezone
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 from llmwikify.apps.chat.skills.base import SkillContext, SkillResult
 
@@ -153,7 +156,7 @@ class SkillToolAdapter:
             try:
                 llm_spec = self.wiki_service.get_llm_spec()
             except Exception:
-                pass
+                logger.debug("Failed to resolve llm_spec from wiki_service", exc_info=True)
         config: dict[str, Any] = {"wiki_id": self.wiki_id} if self.wiki_id else {}
         # Phase 10-E (2026-06-20): expose SubagentManager + safe child
         # tool registry to subagent_skill via SkillContext.config.
@@ -203,7 +206,7 @@ class SkillToolAdapter:
             try:
                 llm_spec = self.wiki_service.get_llm_spec()
             except Exception:
-                pass
+                logger.debug("Failed to resolve llm_spec from wiki_service", exc_info=True)
         config: dict[str, Any] = {"wiki_id": self.wiki_id} if self.wiki_id else {}
         if self.subagent_manager is not None:
             config["subagent_manager"] = self.subagent_manager
