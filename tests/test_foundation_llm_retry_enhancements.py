@@ -17,7 +17,6 @@ from llmwikify.foundation.llm.streamable import (
     _compute_backoff,
     _extract_retry_after,
     _parse_retry_after,
-    _post_with_retry_sync,
     get_retry_metrics,
     reset_retry_metrics,
 )

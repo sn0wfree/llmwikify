@@ -146,7 +146,6 @@ class TestPromptSectionsHaveRuntimeContextTags:
     async def test_react_prompt_not_wrapped(self) -> None:
         """ReAct prompt is real instruction; not wrapped."""
         from llmwikify.apps.chat.agent.prompt_builder import (
-            REACT_SYSTEM_PROMPT,
             BuildContext,
         )
 

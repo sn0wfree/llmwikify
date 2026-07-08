@@ -3,7 +3,6 @@
 import json
 import urllib.request
 
-import pytest
 
 
 def test_debug_insights_dom(page, wiki_server):

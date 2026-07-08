@@ -320,7 +320,6 @@ def test_resume_loader_tolerates_missing_self_loop_fields():
     """resume_loader must not crash if self_loop_*_json columns are
     NULL or malformed (forward-compat with sessions written by
     pre-fix engine versions)."""
-    import json
 
     from llmwikify.apps.chat.research_engine.resume import ResearchResumeLoader
     from llmwikify.apps.chat.state import ResearchState

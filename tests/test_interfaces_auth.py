@@ -65,7 +65,6 @@ from llmwikify.foundation.auth import (  # noqa: E402
     UserRepository,
     encode,
     generate_pat,
-    hash_pat,
     require_secret,
     set_secret,
 )

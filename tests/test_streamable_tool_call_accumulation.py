@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import json
 
-import pytest
 
 
 def _accumulate_tool_calls(chunks: list[dict]) -> list[dict]:

@@ -7,7 +7,6 @@ backend.
 
 from __future__ import annotations
 
-import json
 import shutil
 import sys
 import tempfile
@@ -203,7 +202,6 @@ def test_local_backend_index_path_traversal_safe(backend):
 
 def test_wiki_backend_protocol_is_protocol():
     """WikiBackend is a typing.Protocol — LocalFileBackend satisfies it structurally."""
-    from typing import runtime_checkable
 
     assert hasattr(WikiBackend, "get_page")
     assert hasattr(WikiBackend, "put_page")

@@ -2,7 +2,6 @@
 
 import asyncio
 import socket
-import subprocess
 import tempfile
 import threading
 import time

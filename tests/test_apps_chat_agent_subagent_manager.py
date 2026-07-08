@@ -25,7 +25,6 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from llmwikify.apps.chat.agent.spec import ChatRunResult
 from llmwikify.apps.chat.agent.subagent_manager import (
     SubagentManager,
     SubagentResult,

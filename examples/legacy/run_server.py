@@ -31,7 +31,7 @@ def example_1_basic_server():
 
     import tempfile
 
-    from llmwikify import Wiki, create_wiki
+    from llmwikify import create_wiki
     from llmwikify.interfaces.server import WikiServer
     with tempfile.TemporaryDirectory() as tmpdir:
         wiki = create_wiki(tmpdir)
@@ -61,7 +61,7 @@ def example_2_with_auth():
 
     import tempfile
 
-    from llmwikify import Wiki, create_wiki
+    from llmwikify import create_wiki
     from llmwikify.interfaces.server import WikiServer
     with tempfile.TemporaryDirectory() as tmpdir:
         wiki = create_wiki(tmpdir)
@@ -92,7 +92,7 @@ def example_3_mcp_only():
 
     import tempfile
 
-    from llmwikify import Wiki, create_wiki
+    from llmwikify import create_wiki
     from llmwikify.interfaces.server import WikiServer
     with tempfile.TemporaryDirectory() as tmpdir:
         wiki = create_wiki(tmpdir)

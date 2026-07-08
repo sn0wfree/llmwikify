@@ -16,7 +16,6 @@ import ast
 import re
 from pathlib import Path
 
-
 # Scenario number → name mapping (for header ordering)
 SCENARIO_ORDER = [
     (1, "Wiki Core", "wiki_core"),

@@ -26,8 +26,9 @@ graph LR
 """
 
 
-import subprocess
 import shutil
+import subprocess
+
 import pytest
 
 

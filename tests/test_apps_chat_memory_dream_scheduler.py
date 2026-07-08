@@ -17,9 +17,6 @@ Note: These tests use real APScheduler (not mocked) because:
 
 from __future__ import annotations
 
-import asyncio
-import time
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest

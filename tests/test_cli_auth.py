@@ -12,7 +12,6 @@ from __future__ import annotations
 import io
 import json
 import os
-import sys
 import tempfile
 from pathlib import Path
 from unittest.mock import patch
@@ -37,8 +36,6 @@ keyring.delete_password = lambda s, u: _KEYRING_STORE.pop((s, u), None)  # type:
 from llmwikify.foundation.auth import (  # noqa: E402
     ApiKeyRepository,
     UserRepository,
-    generate_pat,
-    hash_pat,
 )
 from llmwikify.interfaces.cli.commands.auth import (  # noqa: E402
     run_auth_create_token,

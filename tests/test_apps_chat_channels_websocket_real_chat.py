@@ -18,16 +18,12 @@ Covers:
 from __future__ import annotations
 
 import asyncio
-import json
 from typing import Any
 
 import pytest
 
 from llmwikify.apps.chat.bus import (
-    BusAdapter,
     MessageBus,
-    get_default_bus,
-    reset_default_bus,
 )
 from llmwikify.apps.chat.channels.websocket import (
     WebSocketManager,
@@ -39,7 +35,6 @@ from llmwikify.apps.chat.channels.websocket import (
     _register_websocket_routes,
     _run_ws_chat,
     get_default_ws_session_map,
-    reset_default_ws_manager,
     reset_default_ws_session_map,
 )
 

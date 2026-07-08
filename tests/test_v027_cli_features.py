@@ -1,11 +1,8 @@
 """Tests for CLI features added in v0.27.0: json format, fix-wikilinks, build-index --force."""
 
 import json
-import tempfile
-from pathlib import Path
 
 from llmwikify.interfaces.cli.commands import WikiCLI
-from llmwikify.kernel.wiki.wiki import Wiki
 
 
 class Args:

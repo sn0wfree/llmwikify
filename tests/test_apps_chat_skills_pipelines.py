@@ -10,9 +10,8 @@ from __future__ import annotations
 
 import pytest
 
-from llmwikify.apps.chat.skills import SkillContext, SkillResult
+from llmwikify.apps.chat.skills import SkillContext
 from llmwikify.apps.chat.skills.pipelines.ingest_skill import (
-    IngestSkill,
     _derive_page_name,
     _ingest,
     ingest_skill,

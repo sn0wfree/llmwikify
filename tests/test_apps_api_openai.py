@@ -16,10 +16,9 @@ Covers:
 
 from __future__ import annotations
 
-import asyncio
 import json
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -346,7 +345,6 @@ class TestCreateOpenaiRouter:
 def app_with_mock_service(monkeypatch):
     """Build a FastAPI app with the OpenAI router and a mocked AgentService."""
     from fastapi import FastAPI
-    from fastapi.testclient import TestClient
 
     from llmwikify.apps.api.openai_server import create_openai_router
 

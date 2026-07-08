@@ -17,7 +17,6 @@ from __future__ import annotations
 import asyncio
 import time
 from pathlib import Path
-from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -27,13 +26,9 @@ from llmwikify.apps.chat.memory.consolidation_store import (
     MemoryConsolidationStore,
 )
 from llmwikify.apps.chat.memory.dream import (
-    CURSOR_FILENAME,
     Dream,
     DreamConfig,
     DreamResult,
-)
-from llmwikify.apps.chat.memory.facts_store import (
-    MemoryFactsStore,
 )
 
 # ─── helpers ─────────────────────────────────────────────────────

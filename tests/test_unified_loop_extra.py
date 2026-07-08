@@ -8,7 +8,6 @@
 """
 from __future__ import annotations
 
-import asyncio
 
 import pytest
 
@@ -16,7 +15,6 @@ from llmwikify.apps.chat.agent.unified.core import (
     StepHandler,
     StepResult,
     StreamingHandler,
-    UnifiedContext,
     UnifiedHook,
 )
 from llmwikify.apps.chat.agent.unified.loop import UnifiedAgentLoop

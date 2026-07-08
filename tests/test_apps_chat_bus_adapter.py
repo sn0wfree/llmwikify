@@ -23,8 +23,6 @@ import pytest
 from llmwikify.apps.chat.bus import (
     BusAdapter,
     MessageBus,
-    WSTranslatedType,
-    get_default_bus,
     reset_default_bus,
 )
 from llmwikify.apps.chat.bus.adapter import WSTranslatedType as _WT

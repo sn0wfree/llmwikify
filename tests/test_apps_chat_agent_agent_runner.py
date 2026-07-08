@@ -15,17 +15,14 @@ Covers:
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Any
+from dataclasses import dataclass
 
 import pytest
 
 from llmwikify.apps.chat.agent.agent_runner import AgentRunner
 from llmwikify.apps.chat.agent.runner_v2 import ChatRunnerV2
-from llmwikify.apps.chat.agent.spec import ChatRunResult, ChatRunSpec
 from llmwikify.apps.chat.agent.subagent_manager import (
     SubagentManager,
-    SubagentSpec,
 )
 
 # ── ABC enforcement ─────────────────────────────────────────────

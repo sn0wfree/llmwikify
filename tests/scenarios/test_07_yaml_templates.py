@@ -18,8 +18,9 @@ project docs, academic research (long timeout), industry news
 """
 
 
-import pytest
 from pathlib import Path
+
+import pytest
 
 
 class TestYAMLTemplates:

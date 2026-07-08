@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import pytest
 
-from llmwikify.apps.chat.agent.unified.core import StepResult
 from llmwikify.apps.chat.agent.unified.spec import ActResult, ReasonResponse
 from llmwikify.apps.chat.agent.unified.steps import (
     BuildFeedbackStep,
@@ -13,7 +12,6 @@ from llmwikify.apps.chat.agent.unified.steps import (
     CheckToolCallsStep,
     CodeExecResult,
     ExtractCodeStep,
-    ExtractJSONStep,
     MapStep,
     TruncateStep,
     ValidateSyntaxStep,

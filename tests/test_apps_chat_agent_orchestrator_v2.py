@@ -12,9 +12,7 @@ from __future__ import annotations
 import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
-import pytest
 
-from llmwikify.apps.chat.agent.context_manager import AgentContext
 from llmwikify.apps.chat.agent.orchestrator import (
     ChatOrchestrator,
     _V2PersistenceHook,

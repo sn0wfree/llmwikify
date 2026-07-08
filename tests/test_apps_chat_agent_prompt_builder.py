@@ -15,7 +15,6 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
-import pytest
 
 from llmwikify.apps.chat.agent.prompt_builder import (
     BOOTSTRAP_FILES,

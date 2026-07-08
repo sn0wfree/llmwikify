@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pytest
 
 from llmwikify.apps.chat.memory.memory_config import (
     DEFAULT_CONFIG_FILENAME,

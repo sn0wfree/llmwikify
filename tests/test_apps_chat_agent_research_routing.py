@@ -22,7 +22,6 @@ import asyncio
 import re
 from pathlib import Path
 
-import pytest
 
 from llmwikify.apps.chat.agent.prompt_builder import (
     BuildContext,

@@ -1,6 +1,5 @@
 """Tests for direct lint (schema-aware gap detection)."""
 
-import json
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch

@@ -14,7 +14,6 @@ Refs:
 
 from __future__ import annotations
 
-import pytest
 
 from llmwikify.foundation.llm.streamable import (
     _enforce_role_alternation,

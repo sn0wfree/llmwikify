@@ -11,7 +11,6 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-import pytest
 
 from llmwikify.apps.chat.agent.orchestrator import goal_active_predicate
 

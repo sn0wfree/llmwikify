@@ -12,9 +12,7 @@ Covers:
 import asyncio
 import json
 import sqlite3
-import tempfile
-from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -2124,9 +2122,6 @@ class TestResume:
 
     def test_resume_from_incomplete_allows_entry(self, db):
         """routes.py should allow resume from 'incomplete' status."""
-        from llmwikify.apps.chat.research_engine.routes import (
-            resume_autoresearch,
-        )
         sid = db.create_research_session("w", "q")
         db.update_research_status(sid, "incomplete", "done", 1.0)
         session = db.get_research_session(sid)

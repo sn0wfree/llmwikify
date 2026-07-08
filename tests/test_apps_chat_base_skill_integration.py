@@ -22,7 +22,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-from typing import Any
 
 import pytest
 
@@ -30,18 +29,12 @@ from llmwikify.apps.chat.base import (
     DEFAULT_MAX_TOOL_ITERATIONS,
     ChatBase,
     ChatMessage,
-    ChatSession,
 )
 from llmwikify.apps.chat.skills.actions import (
-    clarify_skill,
-    filter_skill,
-    plan_skill,
     register_all_actions,
-    score_skill,
 )
 from llmwikify.apps.chat.skills.base import (
     SkillContext,
-    SkillResult,
 )
 from llmwikify.apps.chat.skills.registry import (
     SkillRegistry,

@@ -1,6 +1,5 @@
 """Tests for P1 features: cross-source synthesis, smart lint, knowledge graph enhancements."""
 
-import json
 import shutil
 import tempfile
 from pathlib import Path

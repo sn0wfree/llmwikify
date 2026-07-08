@@ -1,6 +1,5 @@
 """Tests for P1.3: Graph analyzer features."""
 
-import json
 import shutil
 import tempfile
 from pathlib import Path

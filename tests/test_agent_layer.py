@@ -1,10 +1,6 @@
 """Tests for Agent layer components."""
 
 import asyncio
-import json
-import tempfile
-from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -22,7 +18,6 @@ def _run_async(coro):
 
 
 from llmwikify.kernel import Wiki
-from llmwikify.kernel.storage.query_sink import QuerySink
 
 
 @pytest.fixture

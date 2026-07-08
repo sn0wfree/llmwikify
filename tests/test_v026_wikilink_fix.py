@@ -1,7 +1,5 @@
 """Tests for wikilink resolution and auto-fix (v0.26.0)."""
 
-import tempfile
-from pathlib import Path
 
 from llmwikify.kernel.storage.index import WikiIndex
 from llmwikify.kernel.wiki.wiki import Wiki

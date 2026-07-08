@@ -27,8 +27,9 @@ Wiki pages with auto-linking
 """
 
 
-import subprocess
 import shutil
+import subprocess
+
 import pytest
 
 

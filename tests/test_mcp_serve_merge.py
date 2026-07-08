@@ -23,7 +23,6 @@ Also includes 2 regression guards:
      ``commands/__init__.py``.
 """
 
-import argparse
 import inspect
 import io
 import sys

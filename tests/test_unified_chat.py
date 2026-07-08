@@ -1,12 +1,11 @@
 """Tests for unified/handlers/ — ChatReasoner + ToolActor (mock LLM)。"""
 from __future__ import annotations
 
-import json
 from typing import Any
 
 import pytest
 
-from llmwikify.apps.chat.agent.unified.core import StepResult, StreamingHandler
+from llmwikify.apps.chat.agent.unified.core import StepResult
 from llmwikify.apps.chat.agent.unified.spec import ActResult, ChatSpec, ReasonResponse
 
 # ── Mock LLM service ──────────────────────────────────────

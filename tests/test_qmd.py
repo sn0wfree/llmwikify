@@ -1,8 +1,5 @@
 """Unit tests for QMD hybrid search integration."""
 
-import json
-import sys
-from pathlib import Path
 
 import pytest
 

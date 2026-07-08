@@ -25,7 +25,6 @@ These tests validate:
 from __future__ import annotations
 
 import inspect
-import re
 
 import pytest
 
@@ -230,7 +229,6 @@ def test_wiki_analyzer_has_lint_engine():
     import inspect
 
     from llmwikify.kernel.wiki.engines.analyzer import WikiAnalyzer
-    from llmwikify.kernel.wiki.lint import LintEngine
     src = inspect.getsource(WikiAnalyzer.__init__)
     assert "LintEngine" in src, (
         "WikiAnalyzer.__init__ should construct a LintEngine"

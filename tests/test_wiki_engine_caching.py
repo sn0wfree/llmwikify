@@ -19,7 +19,6 @@ Tests cover:
 
 import inspect
 
-import pytest
 
 
 def test_wiki_caches_analyzer_in_init():

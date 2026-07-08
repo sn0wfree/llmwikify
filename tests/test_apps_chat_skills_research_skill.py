@@ -19,14 +19,11 @@ from __future__ import annotations
 
 import asyncio
 import tempfile
-from pathlib import Path
-from typing import Any
 
 import pytest
 
 from llmwikify.apps.chat.agent.research_runner import (
     EVENT_ACTION_ERROR,
-    EVENT_OBSERVATION_ERROR,
     EVENT_PHASE,
     EVENT_REASONING,
     EVENT_ROUND_COMPLETE,
@@ -39,7 +36,6 @@ from llmwikify.apps.chat.skills import (
 from llmwikify.apps.chat.skills.actions import register_all_actions
 from llmwikify.apps.chat.skills.research_skill import (
     RESEARCH_REASON_PROMPT,
-    ResearchSkill,
     _act_analyze,
     _act_gather,
     _act_plan,

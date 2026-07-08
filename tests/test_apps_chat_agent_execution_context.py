@@ -19,8 +19,6 @@ These tests cover:
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
@@ -32,7 +30,6 @@ from llmwikify.apps.chat.agent.execution_context import (
 from llmwikify.apps.chat.agent.runner_v2 import ChatRunnerV2
 from llmwikify.apps.chat.agent.subagent_manager import (
     SubagentManager,
-    SubagentResult,
     SubagentSpec,
 )
 from llmwikify.foundation.callback import NoOpHook

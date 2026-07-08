@@ -7,11 +7,9 @@ verify the new ``unicode61 categories 'L* N* Co Mn' tokenchars '_'``
 tokenizer correctly indexes each CJK character as an independent token.
 """
 
-import sqlite3
 import sys
 from pathlib import Path
 
-import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 

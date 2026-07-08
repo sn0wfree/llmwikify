@@ -18,9 +18,8 @@ from __future__ import annotations
 
 import pytest
 
-from llmwikify.apps.chat.skills import SkillContext, SkillResult
+from llmwikify.apps.chat.skills import SkillContext
 from llmwikify.apps.chat.skills.crud.memory_skill import (
-    MemorySkill,
     _add,
     _clear,
     _list,
@@ -28,14 +27,12 @@ from llmwikify.apps.chat.skills.crud.memory_skill import (
     memory_skill,
 )
 from llmwikify.apps.chat.skills.crud.notify_skill import (
-    NotifySkill,
     _list_notifications,
     _mark_read,
     _subscribe,
     notify_skill,
 )
 from llmwikify.apps.chat.skills.crud.scheduler_skill import (
-    SchedulerSkill,
     _add_job,
     _list_jobs,
     _remove_job,
@@ -43,7 +40,6 @@ from llmwikify.apps.chat.skills.crud.scheduler_skill import (
     scheduler_skill,
 )
 from llmwikify.apps.chat.skills.crud.wiki_dream_skill import (
-    WikiDreamSkill,
     _approve,
     _get_proposals,
     _reject,

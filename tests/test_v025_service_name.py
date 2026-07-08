@@ -539,7 +539,6 @@ class TestFastMCPIntegration:
 
     def test_mcp_tools_registered(self, wiki):
         """7.2: MCP should have wiki_init tool registered."""
-        import asyncio
         mcp = create_mcp_server(wiki, name='tools-test')
 
         async def check_tools():

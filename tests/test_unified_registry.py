@@ -10,7 +10,6 @@ from llmwikify.apps.chat.agent.unified.registry import (
     list_modes,
     register_mode,
 )
-from llmwikify.apps.chat.agent.unified.spec import ActResult, BaseSpec, ReasonResponse
 
 # ── Mock handlers ─────────────────────────────────────────
 

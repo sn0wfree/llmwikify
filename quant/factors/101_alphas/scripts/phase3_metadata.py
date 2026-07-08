@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import time
 from pathlib import Path
 
 import yaml
@@ -34,7 +33,6 @@ def run_phase3(
     batch_size: int = 3,
 ):
     """运行 Phase 3 元数据提取."""
-    from llmwikify.reproduction.codegen_utils import build_llm_client
     from llmwikify.reproduction.factor_extractor import extract_batch
 
     print("=" * 60)

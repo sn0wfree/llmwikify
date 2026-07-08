@@ -13,7 +13,6 @@ algorithm as ``SkillToolAdapter._tool_name``).
 
 from __future__ import annotations
 
-import pytest
 
 from llmwikify.apps.chat.skills.base import Skill, SkillAction, SkillResult
 from llmwikify.apps.chat.skills.registry import SkillRegistry

@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import asyncio
 
-import pytest
 
 from llmwikify.apps.chat.agent.session_manager import SessionManager
 

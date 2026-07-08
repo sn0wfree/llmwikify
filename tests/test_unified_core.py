@@ -1,7 +1,6 @@
 """Tests for unified/core.py — StepResult, Pipeline, UnifiedContext, UnifiedHook."""
 from __future__ import annotations
 
-import asyncio
 
 import pytest
 
@@ -9,7 +8,6 @@ from llmwikify.apps.chat.agent.unified.core import (
     Pipeline,
     StepHandler,
     StepResult,
-    StreamingHandler,
     UnifiedContext,
     UnifiedHook,
     _maybe_await,

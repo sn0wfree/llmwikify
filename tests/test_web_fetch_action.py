@@ -22,7 +22,6 @@ from llmwikify.apps.chat.skills import (
 from llmwikify.apps.chat.skills.actions import (
     ALL_ACTIONS,
     register_all_actions,
-    unregister_all_actions,
     web_fetch_skill,
 )
 from llmwikify.apps.chat.skills.actions.web_fetch_action import (
@@ -31,7 +30,6 @@ from llmwikify.apps.chat.skills.actions.web_fetch_action import (
     MAX_HARD_CAP,
     _extract_title,
     _strip_html,
-    fetch_url,
     fetch_url_sync,
 )
 

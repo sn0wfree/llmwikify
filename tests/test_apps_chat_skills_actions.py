@@ -27,30 +27,15 @@ import pytest
 from llmwikify.apps.chat.skills import (
     SkillContext,
     SkillRegistry,
-    SkillResult,
     SkillRuntime,
 )
 from llmwikify.apps.chat.skills.actions import (
     ALL_ACTIONS,
     ALL_DETECT_SKILLS,
-    analyze_skill,
     clarify_skill,
-    extract_skill,
-    filter_skill,
-    graph_skill,
-    lint_skill,
-    observe_skill,
-    plan_skill,
-    read_skill,
-    reason_skill,
     register_all_actions,
-    revise_skill,
-    score_skill,
-    search_skill,
-    summarize_skill,
     unregister_all_actions,
     web_search_skill,
-    write_skill,
 )
 from llmwikify.apps.chat.skills.actions.clarify_action import _clarify_fallback
 from llmwikify.apps.chat.skills.actions.detect import (

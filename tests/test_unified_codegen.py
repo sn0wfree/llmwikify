@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import pytest
 
-from llmwikify.apps.chat.agent.unified.core import StepResult
 from llmwikify.apps.chat.agent.unified.pipelines.codegen import (
     CodeActor,
     CodegenReasoner,

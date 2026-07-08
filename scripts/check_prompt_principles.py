@@ -8,9 +8,9 @@ Usage:
     python scripts/check_prompt_principles.py --threshold 0.90  # Fail below threshold
 """
 
-import sys
-import json
 import argparse
+import json
+import sys
 from pathlib import Path
 
 # Add project root to path

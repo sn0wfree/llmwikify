@@ -17,7 +17,6 @@ Covers:
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 import pytest
@@ -30,7 +29,6 @@ from llmwikify.apps.chat.providers.registry import (
     list_providers,
 )
 from llmwikify.foundation import config as foundation_config
-from llmwikify.foundation.llm import errors as lal_errors
 from llmwikify.foundation.llm.errors import (
     LLMError,
     LLMModelNotSupportedError,
@@ -39,7 +37,6 @@ from llmwikify.foundation.llm.errors import (
     SubagentLLMError,
 )
 from llmwikify.foundation.llm.resolver import apply_provider_alias
-from llmwikify.foundation.llm.spec import LLMSpec
 from llmwikify.foundation.llm.streamable import StreamableLLMClient
 from llmwikify.foundation.llm_client import LLMClient, _legacy_fallback_enabled
 

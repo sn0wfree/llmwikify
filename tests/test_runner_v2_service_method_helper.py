@@ -12,10 +12,8 @@ behaviour of the two callers.
 
 from __future__ import annotations
 
-import asyncio
 from unittest.mock import MagicMock
 
-import pytest
 
 from llmwikify.apps.chat.agent.runner_v2 import ChatRunnerV2
 

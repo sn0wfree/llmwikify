@@ -25,12 +25,10 @@ from llmwikify.apps.chat.skills.workflows.dag import (
 )
 from llmwikify.apps.chat.skills.workflows.subagent_runner import (
     SubagentRequest,
-    SubagentResult,
 )
 from llmwikify.apps.chat.skills.workflows.subagent_worker import (
     LlmClientDriver,
     MockDriver,
-    _current_request,
     _request_ctx,
     resolver_enabled_subagent,
     run_subagent,

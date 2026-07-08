@@ -17,10 +17,7 @@ Covers:
 
 from __future__ import annotations
 
-import asyncio
-import tempfile
 from pathlib import Path
-from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -29,7 +26,6 @@ from llmwikify.apps.chat.agent.agent_service import AgentService
 from llmwikify.apps.chat.memory.dream_scheduler import DreamScheduler
 from llmwikify.apps.chat.memory.memory_config import (
     DEFAULT_CONFIG_FILENAME,
-    MemoryConfig,
 )
 
 

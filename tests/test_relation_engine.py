@@ -2,9 +2,7 @@
 
 import pytest
 
-from llmwikify.kernel import WikiIndex
 from llmwikify.kernel.wiki.engines.relation import (
-    CONFIDENCE_LEVELS,
     DEFAULT_RELATION_TYPES,
     RelationEngine,
 )

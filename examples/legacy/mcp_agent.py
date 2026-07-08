@@ -24,9 +24,9 @@ def example_1_mcp_server():
 
     import tempfile
 
-    from llmwikify.mcp import create_mcp_server, serve_mcp
+    from llmwikify.mcp import create_mcp_server
 
-    from llmwikify import Wiki, create_wiki
+    from llmwikify import create_wiki
     with tempfile.TemporaryDirectory() as tmpdir:
         wiki = create_wiki(tmpdir)
         wiki.init()

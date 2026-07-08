@@ -18,7 +18,6 @@ from __future__ import annotations
 import argparse
 import io
 import os
-import sys
 import tempfile
 from unittest.mock import MagicMock, patch
 

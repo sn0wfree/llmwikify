@@ -18,7 +18,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from llmwikify.apps.chat.skills import SkillContext, SkillResult
+from llmwikify.apps.chat.skills import SkillContext
 from llmwikify.apps.chat.skills.pipelines.gather_skill import (
     _gather,
     gather_skill,

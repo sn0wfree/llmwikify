@@ -1,6 +1,5 @@
 """Tests for multi-wiki API routes (Phase 2)."""
 
-from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient

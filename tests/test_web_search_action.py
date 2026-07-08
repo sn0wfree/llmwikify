@@ -23,13 +23,11 @@ import pytest
 from llmwikify.apps.chat.skills import (
     SkillContext,
     SkillRegistry,
-    SkillResult,
     SkillRuntime,
 )
 from llmwikify.apps.chat.skills.actions import (
     ALL_ACTIONS,
     register_all_actions,
-    unregister_all_actions,
     web_search_skill,
 )
 from llmwikify.apps.research.web_search import SearchResult

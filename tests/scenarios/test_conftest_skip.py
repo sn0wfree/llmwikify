@@ -20,7 +20,6 @@ import importlib.util
 from pathlib import Path
 
 import httpx
-import pytest
 
 
 def _reload_conftest():

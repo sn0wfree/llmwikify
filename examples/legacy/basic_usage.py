@@ -14,11 +14,10 @@ llmwikify 基础使用示例
 5. 知识库健康检查
 """
 
-import os
 import tempfile
 from pathlib import Path
 
-from llmwikify import Wiki, create_wiki
+from llmwikify import create_wiki
 
 
 def example_1_create_and_open():

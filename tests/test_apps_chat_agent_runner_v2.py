@@ -819,7 +819,6 @@ def test_complete_emits_done_with_stop_reason() -> None:
 
 def test_composite_hook_lifecycle_invoked() -> None:
     from llmwikify.foundation.callback import CompositeHook
-    from llmwikify.foundation.callback.integrations.wiki import WikiHook
 
     class _Spy(CompositeHook):
         def __init__(self):
@@ -1374,7 +1373,7 @@ def test_hook_before_iteration_called_per_iteration() -> None:
     only fires when an iteration completes tool execution (not on no-tool-calls
     completion path).
     """
-    from llmwikify.foundation.callback import AgentHook, NoOpHook
+    from llmwikify.foundation.callback import NoOpHook
 
     class _CountingHook(NoOpHook):
         def __init__(self) -> None:
@@ -1404,7 +1403,7 @@ def test_hook_before_iteration_called_per_iteration() -> None:
 
 def test_hook_after_iteration_called_with_tool_calls() -> None:
     """after_iteration fires when the iteration has tool calls."""
-    from llmwikify.foundation.callback import AgentHook, NoOpHook
+    from llmwikify.foundation.callback import NoOpHook
 
     class _CountingHook(NoOpHook):
         def __init__(self) -> None:
@@ -1429,7 +1428,7 @@ def test_hook_after_iteration_called_with_tool_calls() -> None:
 
 def test_hook_on_stream_called_per_delta() -> None:
     """on_stream should fire for each message_delta emitted."""
-    from llmwikify.foundation.callback import AgentHook, NoOpHook
+    from llmwikify.foundation.callback import NoOpHook
 
     class _DeltaCounter(NoOpHook):
         def __init__(self) -> None:
@@ -1455,7 +1454,7 @@ def test_hook_on_stream_called_per_delta() -> None:
 
 def test_hook_emit_reasoning_called_for_thinking() -> None:
     """emit_reasoning should fire for thinking chunks."""
-    from llmwikify.foundation.callback import AgentHook, NoOpHook
+    from llmwikify.foundation.callback import NoOpHook
 
     class _ThinkingSpy(NoOpHook):
         def __init__(self) -> None:
@@ -1480,7 +1479,7 @@ def test_hook_emit_reasoning_called_for_thinking() -> None:
 
 def test_hook_before_execute_tools_called_once_per_iteration() -> None:
     """before_execute_tools should be called once before tool execution."""
-    from llmwikify.foundation.callback import AgentHook, NoOpHook
+    from llmwikify.foundation.callback import NoOpHook
 
     class _ExecSpy(NoOpHook):
         def __init__(self) -> None:
@@ -1531,7 +1530,7 @@ def test_hook_error_isolation_hook_failure_does_not_break() -> None:
 
 def test_hook_on_tool_error_fires_for_raising_tool() -> None:
     """on_tool_error should fire when tool execution raises."""
-    from llmwikify.foundation.callback import AgentHook, NoOpHook
+    from llmwikify.foundation.callback import NoOpHook
 
     class _ToolErrSpy(NoOpHook):
         def __init__(self) -> None:
@@ -1563,7 +1562,7 @@ def test_hook_on_tool_error_fires_for_raising_tool() -> None:
 
 def test_hook_on_confirmation_fires_for_confirmation_required() -> None:
     """on_confirmation should fire when tool returns confirmation_required."""
-    from llmwikify.foundation.callback import AgentHook, NoOpHook
+    from llmwikify.foundation.callback import NoOpHook
 
     class _ConfSpy(NoOpHook):
         def __init__(self) -> None:
@@ -1595,7 +1594,7 @@ def test_hook_on_confirmation_fires_for_confirmation_required() -> None:
 
 def test_hook_on_error_fires_when_error_event_emitted() -> None:
     """on_error should fire when LLM stream raises."""
-    from llmwikify.foundation.callback import AgentHook, NoOpHook
+    from llmwikify.foundation.callback import NoOpHook
 
     class _ErrSpy(NoOpHook):
         def __init__(self) -> None:
@@ -1785,7 +1784,6 @@ def test_compacted_count_persists_across_iterations() -> None:
 
 def test_run_context_messages_appended_after_tool_call() -> None:
     """After ACT, ctx.messages should have a tool message appended."""
-    from llmwikify.apps.chat.agent.runner_v2 import _RunContext
 
     runner, _llm, _exec, _pb = _make_full_runner(
         llm_events=[
@@ -3097,7 +3095,7 @@ def test_concurrent_runs_state_independent() -> None:
 
 
 def test_hook_before_iteration_can_modify_ctx() -> None:
-    from llmwikify.foundation.callback import AgentHook, NoOpHook
+    from llmwikify.foundation.callback import NoOpHook
 
     class _Mutator(NoOpHook):
         def before_iteration(self, ctx):
@@ -3114,7 +3112,7 @@ def test_hook_before_iteration_can_modify_ctx() -> None:
 
 
 def test_hook_after_tool_executed_receives_compacted() -> None:
-    from llmwikify.foundation.callback import AgentHook, NoOpHook
+    from llmwikify.foundation.callback import NoOpHook
 
     captured = []
 
@@ -3311,7 +3309,7 @@ def test_hook_with_long_name_works() -> None:
 
 
 def test_hook_iteration_count_in_context() -> None:
-    from llmwikify.foundation.callback import AgentHook, NoOpHook
+    from llmwikify.foundation.callback import NoOpHook
 
     iterations_seen = []
 
@@ -3330,7 +3328,7 @@ def test_hook_iteration_count_in_context() -> None:
 
 
 def test_hook_messages_in_context() -> None:
-    from llmwikify.foundation.callback import AgentHook, NoOpHook
+    from llmwikify.foundation.callback import NoOpHook
 
     seen_messages = []
 
@@ -3350,7 +3348,7 @@ def test_hook_messages_in_context() -> None:
 
 
 def test_hook_finalize_content_called_with_final() -> None:
-    from llmwikify.foundation.callback import AgentHook, NoOpHook
+    from llmwikify.foundation.callback import NoOpHook
 
     class _Spy(NoOpHook):
         def finalize_content(self, ctx, content):
@@ -3367,7 +3365,7 @@ def test_hook_finalize_content_called_with_final() -> None:
 
 
 def test_hook_finalize_content_exception_falls_back() -> None:
-    from llmwikify.foundation.callback import AgentHook, NoOpHook
+    from llmwikify.foundation.callback import NoOpHook
 
     class _Boom(NoOpHook):
         def finalize_content(self, ctx, content):
@@ -4126,7 +4124,7 @@ def test_12_confirmation_required_event_required_fields() -> None:
 
 
 def test_12_session_init_event_when_hook_wants_streaming() -> None:
-    from llmwikify.foundation.callback import AgentHook, NoOpHook
+    from llmwikify.foundation.callback import NoOpHook
 
     class _StreamHook(NoOpHook):
         def wants_streaming(self):
@@ -5258,7 +5256,7 @@ def test_19_concurrent_runs_isolated_messages() -> None:
 
 
 def test_19_hook_receives_messages_snapshot() -> None:
-    from llmwikify.foundation.callback import AgentHook, NoOpHook
+    from llmwikify.foundation.callback import NoOpHook
 
     received = []
 
@@ -5686,7 +5684,7 @@ def test_24_prompt_builder_none_returns_empty() -> None:
 
 
 def test_25_precheck_false_proceeds_to_reason() -> None:
-    from llmwikify.foundation.callback import AgentHook, NoOpHook
+    from llmwikify.foundation.callback import NoOpHook
 
     prechecks = []
 
@@ -5767,7 +5765,7 @@ def test_25_reason_raises_goes_to_error() -> None:
 
 
 def test_25_act_all_tools_run_then_observe() -> None:
-    from llmwikify.foundation.callback import AgentHook, NoOpHook
+    from llmwikify.foundation.callback import NoOpHook
 
     observations = []
 
@@ -5790,7 +5788,7 @@ def test_25_act_all_tools_run_then_observe() -> None:
 
 
 def test_25_act_confirmation_stops_iteration_no_observe() -> None:
-    from llmwikify.foundation.callback import AgentHook, NoOpHook
+    from llmwikify.foundation.callback import NoOpHook
 
     after_iters = []
 
@@ -5857,7 +5855,7 @@ def test_25_act_exception_continues_to_next_tool() -> None:
 
 
 def test_25_observe_appends_observation_after_iteration() -> None:
-    from llmwikify.foundation.callback import AgentHook, NoOpHook
+    from llmwikify.foundation.callback import NoOpHook
 
     captured = []
 
@@ -6054,7 +6052,7 @@ def test_26_cancel_at_precheck_iter1() -> None:
 
 
 def test_26_cancel_at_precheck_iter2_via_hook() -> None:
-    from llmwikify.foundation.callback import AgentHook, NoOpHook
+    from llmwikify.foundation.callback import NoOpHook
 
     iter_count = [0]
 
@@ -6095,7 +6093,7 @@ def test_26_pause_at_reason_via_precheck() -> None:
 
 
 def test_26_pause_at_act_via_precheck() -> None:
-    from llmwikify.foundation.callback import AgentHook, NoOpHook
+    from llmwikify.foundation.callback import NoOpHook
 
     class _PHook(NoOpHook):
         def before_iteration(self, ctx):
@@ -6128,7 +6126,7 @@ def test_26_timeout_during_act_via_precheck() -> None:
 
 
 def test_26_timeout_during_reason_via_precheck() -> None:
-    from llmwikify.foundation.callback import AgentHook, NoOpHook
+    from llmwikify.foundation.callback import NoOpHook
 
     class _THook(NoOpHook):
         def before_iteration(self, ctx):
@@ -6293,7 +6291,7 @@ def test_27_different_runners_concurrent() -> None:
 
 
 def test_27_hook_called_concurrently_per_run() -> None:
-    from llmwikify.foundation.callback import AgentHook, NoOpHook
+    from llmwikify.foundation.callback import NoOpHook
 
     seen_specs = []
 
@@ -7060,7 +7058,7 @@ def test_30_back_to_back_iterations() -> None:
 def test_30_hook_latency_doesnt_affect_timeout() -> None:
     import asyncio as _a
 
-    from llmwikify.foundation.callback import AgentHook, NoOpHook
+    from llmwikify.foundation.callback import NoOpHook
 
     class _SlowHook(NoOpHook):
         async def before_iteration(self, ctx):
@@ -7268,7 +7266,7 @@ def test_31_tool_result_with_circular_ref_safe() -> None:
 
 
 def test_32_hook_can_observe_ctx_state() -> None:
-    from llmwikify.foundation.callback import AgentHook, NoOpHook
+    from llmwikify.foundation.callback import NoOpHook
 
     seen_iterations = []
 
@@ -7292,7 +7290,7 @@ def test_32_hook_can_observe_ctx_state() -> None:
 
 
 def test_32_hook_sees_consistent_iteration_count() -> None:
-    from llmwikify.foundation.callback import AgentHook, NoOpHook
+    from llmwikify.foundation.callback import NoOpHook
 
     iters = []
 
@@ -7317,7 +7315,7 @@ def test_32_hook_sees_consistent_iteration_count() -> None:
 
 
 def test_32_hook_observes_messages_growth() -> None:
-    from llmwikify.foundation.callback import AgentHook, NoOpHook
+    from llmwikify.foundation.callback import NoOpHook
 
     sizes = []
 
@@ -7340,7 +7338,7 @@ def test_32_hook_observes_messages_growth() -> None:
 
 
 def test_32_hook_can_read_tools_used() -> None:
-    from llmwikify.foundation.callback import AgentHook, NoOpHook
+    from llmwikify.foundation.callback import NoOpHook
 
     captured = []
 
@@ -7362,7 +7360,7 @@ def test_32_hook_can_read_tools_used() -> None:
 
 
 def test_32_hook_observes_compacted_count() -> None:
-    from llmwikify.foundation.callback import AgentHook, NoOpHook
+    from llmwikify.foundation.callback import NoOpHook
 
     runner, _llm, _exec, _pb = _make_full_runner(
         llm_events=[
@@ -7386,7 +7384,7 @@ def test_32_hook_observes_compacted_count() -> None:
 
 
 def test_32_hook_observes_final_content() -> None:
-    from llmwikify.foundation.callback import AgentHook, NoOpHook
+    from llmwikify.foundation.callback import NoOpHook
 
     seen = []
 
@@ -7452,7 +7450,7 @@ def test_32_two_run_streams_interleaved() -> None:
 
 
 def test_32_hook_callback_during_hook() -> None:
-    from llmwikify.foundation.callback import AgentHook, NoOpHook
+    from llmwikify.foundation.callback import NoOpHook
 
     depth = [0]
     max_depth = [0]
@@ -7569,7 +7567,6 @@ def test_33_execute_tool_raises_runtime_error_no_executor() -> None:
 
 
 def test_33_safe_truncate_with_coroutine_return() -> None:
-    import asyncio as _a
 
     class _LLMCoroTrunc:
         config: dict = {}
@@ -7697,7 +7694,7 @@ def test_33_emit_done_with_finalize_raises() -> None:
 
 
 def test_33_hook_ctx_messages_are_copy() -> None:
-    from llmwikify.foundation.callback import AgentHook, NoOpHook
+    from llmwikify.foundation.callback import NoOpHook
 
     captured = []
 
@@ -8433,7 +8430,7 @@ def test_36_invariant_messages_unchanged_after_run() -> None:
 def test_37_fuzz_random_ctx_cancelled_at_random_iter() -> None:
     import random
 
-    from llmwikify.foundation.callback import AgentHook, NoOpHook
+    from llmwikify.foundation.callback import NoOpHook
 
     random.seed(42)
     for _trial in range(5):
@@ -8465,7 +8462,7 @@ def test_37_fuzz_random_ctx_cancelled_at_random_iter() -> None:
 def test_37_fuzz_random_pause_at_random_iter() -> None:
     import random
 
-    from llmwikify.foundation.callback import AgentHook, NoOpHook
+    from llmwikify.foundation.callback import NoOpHook
 
     random.seed(43)
     for _trial in range(5):
@@ -8526,7 +8523,7 @@ def test_37_fuzz_random_tool_results() -> None:
 def test_37_fuzz_random_observation_in_hook() -> None:
     import random
 
-    from llmwikify.foundation.callback import AgentHook, NoOpHook
+    from llmwikify.foundation.callback import NoOpHook
 
     random.seed(45)
     for trial in range(5):
@@ -9036,7 +9033,7 @@ def test_39_streaming_done_event_compacted_count_zero() -> None:
 
 
 def test_40_hook_before_iteration_per_iter() -> None:
-    from llmwikify.foundation.callback import AgentHook, NoOpHook
+    from llmwikify.foundation.callback import NoOpHook
 
     count = [0]
 
@@ -9058,7 +9055,7 @@ def test_40_hook_before_iteration_per_iter() -> None:
 
 
 def test_40_hook_after_iteration_per_non_break() -> None:
-    from llmwikify.foundation.callback import AgentHook, NoOpHook
+    from llmwikify.foundation.callback import NoOpHook
 
     count = [0]
 
@@ -9093,7 +9090,7 @@ def test_40_hook_emit_done_called_once() -> None:
 
 
 def test_40_hook_finalize_content_called_once() -> None:
-    from llmwikify.foundation.callback import AgentHook, NoOpHook
+    from llmwikify.foundation.callback import NoOpHook
 
     count = [0]
 
@@ -9112,7 +9109,7 @@ def test_40_hook_finalize_content_called_once() -> None:
 
 
 def test_40_hook_on_stream_per_chunk() -> None:
-    from llmwikify.foundation.callback import AgentHook, NoOpHook
+    from llmwikify.foundation.callback import NoOpHook
 
     chunks = []
 
@@ -9136,7 +9133,7 @@ def test_40_hook_on_stream_per_chunk() -> None:
 
 
 def test_40_hook_emit_reasoning_per_chunk() -> None:
-    from llmwikify.foundation.callback import AgentHook, NoOpHook
+    from llmwikify.foundation.callback import NoOpHook
 
     chunks = []
 
@@ -9158,7 +9155,7 @@ def test_40_hook_emit_reasoning_per_chunk() -> None:
 
 
 def test_40_hook_before_execute_tools_per_iter() -> None:
-    from llmwikify.foundation.callback import AgentHook, NoOpHook
+    from llmwikify.foundation.callback import NoOpHook
 
     count = [0]
 
@@ -9179,7 +9176,7 @@ def test_40_hook_before_execute_tools_per_iter() -> None:
 
 
 def test_40_hook_after_tool_executed_per_tool() -> None:
-    from llmwikify.foundation.callback import AgentHook, NoOpHook
+    from llmwikify.foundation.callback import NoOpHook
 
     count = [0]
 
@@ -9201,7 +9198,7 @@ def test_40_hook_after_tool_executed_per_tool() -> None:
 
 
 def test_40_hook_on_error_called_on_error() -> None:
-    from llmwikify.foundation.callback import AgentHook, NoOpHook
+    from llmwikify.foundation.callback import NoOpHook
 
     count = [0]
 
@@ -9235,7 +9232,7 @@ def test_40_hook_on_error_called_on_error() -> None:
 
 
 def test_40_hook_on_confirmation_called_on_confirmation() -> None:
-    from llmwikify.foundation.callback import AgentHook, NoOpHook
+    from llmwikify.foundation.callback import NoOpHook
 
     count = [0]
 

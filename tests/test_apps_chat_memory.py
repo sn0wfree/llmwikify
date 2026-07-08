@@ -10,7 +10,6 @@ import pytest
 from llmwikify.apps.chat.memory import (
     ContextStore,
     ConversationStore,
-    KnowledgeStore,
     MemoryIndex,
     MemoryManager,
     ReActStateStore,

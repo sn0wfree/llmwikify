@@ -22,9 +22,7 @@ from pathlib import Path
 
 from llmwikify import create_wiki
 from llmwikify.kernel.multi_wiki import (
-    WikiInstance,
     WikiRegistry,
-    WikiType,
 )
 
 

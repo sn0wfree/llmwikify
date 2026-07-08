@@ -20,7 +20,6 @@ Target: 30+ tests, no I/O, mocks for managers.
 from __future__ import annotations
 
 import asyncio
-import json
 import tempfile
 import warnings
 from pathlib import Path

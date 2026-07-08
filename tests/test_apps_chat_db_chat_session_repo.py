@@ -1,7 +1,6 @@
 """Tests for ChatSessionRepository (chat_sessions table)."""
 from __future__ import annotations
 
-import tempfile
 from pathlib import Path
 
 import pytest

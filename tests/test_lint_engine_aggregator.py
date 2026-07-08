@@ -33,7 +33,6 @@ from __future__ import annotations
 
 import inspect
 
-import pytest
 
 # ============================================================================
 # WikiAnalyzer is a thin aggregator

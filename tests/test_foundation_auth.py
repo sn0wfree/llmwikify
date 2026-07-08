@@ -15,7 +15,6 @@ import os
 import tempfile
 import time
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 
@@ -27,7 +26,6 @@ os.environ["LLMWIKIFY_HOME"] = str(TEST_HOME)
 from llmwikify.foundation.auth import (  # noqa: E402
     AuthError,
     TokenClaims,
-    auth_db_path,
     auto_first_admin,
     decode,
     encode,
@@ -38,9 +36,7 @@ from llmwikify.foundation.auth import (  # noqa: E402
     verify_pat,
 )
 from llmwikify.foundation.auth.db import (  # noqa: E402
-    ApiKey,
     ApiKeyRepository,
-    User,
     UserRepository,
 )
 

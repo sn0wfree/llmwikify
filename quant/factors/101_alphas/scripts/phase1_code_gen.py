@@ -129,7 +129,10 @@ def run_one_alpha(
         )
     else:
         # 1-shot 模式
-        from llmwikify.reproduction.codegen_utils import SYSTEM_PROMPT_CODE, build_llm_client
+        from llmwikify.reproduction.codegen_utils import (
+            SYSTEM_PROMPT_CODE,
+            build_llm_client,
+        )
 
         if llm_client is None:
             llm_client = build_llm_client()

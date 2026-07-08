@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import json
 
-import pytest
 
 from llmwikify.foundation.llm.streamable import _parse_sse_line
 

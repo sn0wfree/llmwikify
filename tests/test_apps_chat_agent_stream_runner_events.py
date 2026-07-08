@@ -10,7 +10,6 @@ ERROR) directly testable.
 from __future__ import annotations
 
 import asyncio
-from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
@@ -23,7 +22,6 @@ from llmwikify.apps.chat.agent.events import (
     TOOL_CALL_END,
 )
 from llmwikify.apps.chat.agent.orchestrator import (
-    ChatEvent,
     ChatOrchestrator,
 )
 
