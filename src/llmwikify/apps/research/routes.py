@@ -154,6 +154,36 @@ async def start_autoresearch(request: Request):
 
     engine = _get_engine(wiki_id)
     session_id = engine.session_manager.create_session(query, wiki_id or "default")
+
+    # Phase 4 diagnostic: persist search provider configuration to the
+    # session's event log so operators / UI can introspect which
+    # providers the engine will try, without grepping the engine config.
+    # The 'config_info' event type is a no-op for UI consumers that
+    # don't recognize it (existing event log schema is open-ended).
+    config = engine.config
+    config_info_payload = {
+        "type": "config_info",
+        "phase": "start",
+        "search_provider": config.get("search_provider", "auto"),
+        "minimax_configured": bool(config.get("minimax_api_key")),
+        "max_react_rounds": config.get("max_react_rounds"),
+        "max_replan_attempts": config.get("max_replan_attempts"),
+        "web_search_results_per_query": config.get("web_search_results_per_query"),
+    }
+    try:
+        engine.db.append_events(session_id, [config_info_payload])
+    except Exception as e:
+        logger.warning("Failed to persist config_info event: %s", e)
+    logger.info(
+        "autoresearch start: session=%s provider=%s minimax_key=%s "
+        "max_react_rounds=%s max_replan=%s",
+        session_id,
+        config_info_payload["search_provider"],
+        config_info_payload["minimax_configured"],
+        config_info_payload["max_react_rounds"],
+        config_info_payload["max_replan_attempts"],
+    )
+
     tm = get_task_manager()
     tm.start(session_id, query, engine, resume=False)
     return {"session_id": session_id, "status": "running"}

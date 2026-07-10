@@ -142,8 +142,16 @@ async def _gather(args: dict, ctx: SkillContext) -> SkillResult:
                 try:
                     from llmwikify.apps.research.web_search import WebSearch
                     searcher = WebSearch(ctx.config or {})
+                    logger.info(
+                        "gather_skill web_search fallback: querying %r "
+                        "(num_results=%d)", query, max_per_query,
+                    )
                     web_results = await searcher.search(
                         query, num_results=max_per_query,
+                    )
+                    logger.info(
+                        "gather_skill web_search fallback for %r: %d results",
+                        query, len(web_results),
                     )
                     for wr in web_results:
                         if not wr.url or wr.url in existing_urls:
@@ -158,8 +166,9 @@ async def _gather(args: dict, ctx: SkillContext) -> SkillResult:
                         existing_urls.add(wr.url)
                         new_sources += 1
                 except Exception as e:
-                    logger.debug(
-                        "web_search fallback failed for %s: %s", query, e,
+                    logger.warning(
+                        "gather_skill web_search fallback failed for %r: %s",
+                        query, e,
                     )
 
         except Exception as e:

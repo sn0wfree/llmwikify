@@ -206,6 +206,10 @@ class SourceGatherer:
             if source_type in ("web", "youtube") and not url:
                 from llmwikify.apps.research.web_search import WebSearch
                 searcher = WebSearch(self.config)
+                logger.info(
+                    "Gather sub_query %s (%s): invoking WebSearch for %r "
+                    "(num_results=%d)", sq_id, source_type, query, num_results,
+                )
                 try:
                     if source_type == "youtube":
                         search_results = await asyncio.wait_for(
@@ -217,13 +221,26 @@ class SourceGatherer:
                             searcher.search(query, num_results=num_results),
                             timeout=15,
                         )
+                    logger.info(
+                        "Gather sub_query %s: WebSearch returned %d results",
+                        sq_id, len(search_results),
+                    )
                 except asyncio.TimeoutError:
+                    logger.warning(
+                        "Gather sub_query %s: WebSearch timed out for %r",
+                        sq_id, query,
+                    )
                     raise ValueError(f"Search timed out for: {query}") from None
                 # Filter out already-seen URLs
                 for r in search_results:
                     if r.url and self._normalize_url(r.url) not in seen_urls:
                         urls_to_fetch.append(r.url)
                 if not urls_to_fetch:
+                    logger.warning(
+                        "Gather sub_query %s: WebSearch returned 0 new URLs "
+                        "for %r (all results already seen or empty)",
+                        sq_id, query,
+                    )
                     raise ValueError(f"No new search results for: {query}")
             elif url:
                 if self._normalize_url(url) in seen_urls:

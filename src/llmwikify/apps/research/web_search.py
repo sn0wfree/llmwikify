@@ -200,6 +200,12 @@ class FallbackSearchProvider:
 
     def __init__(self, providers: list[SearchProvider]):
         self.providers = providers
+        # Phase 4 diagnostic: log the resolved chain once at construction
+        # so operators can verify provider ordering without grepping code.
+        logger.info(
+            "WebSearch fallback chain (in order): [%s]",
+            ", ".join(type(p).__name__ for p in providers),
+        )
 
     async def search(self, query: str, num_results: int) -> list[SearchResult]:
         for provider in self.providers:
