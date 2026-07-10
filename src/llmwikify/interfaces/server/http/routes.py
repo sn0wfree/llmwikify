@@ -604,18 +604,22 @@ def _load_research_config() -> dict[str, Any] | None:
 def _load_llm_config() -> dict[str, Any] | None:
     """Load llm config from global config file (~/.llmwikify/llmwikify.json).
 
+    Thin wrapper over ``foundation.llm.client.load_llm_config`` that
+    preserves the legacy ``None``-on-missing contract (the foundation
+    helper returns ``{}`` instead) AND the legacy call-time
+    ``Path.home()`` resolution (the foundation helper uses a module-
+    level ``CONFIG_PATH`` constant evaluated at import time, which
+    breaks tests that monkeypatch ``Path.home``). One source of truth
+    lives in ``foundation/llm/client.py``; this shim exists for
+    backward compat with the two test files and one in-tree caller in
+    this module.
+
     Reads the "llm" section if present. Returns None if file doesn't exist.
     """
-    import json as _json
-
-    config_file = Path.home() / ".llmwikify" / "llmwikify.json"
-    if not config_file.exists():
-        return None
-    try:
-        data = _json.loads(config_file.read_text())
-        return data.get("llm")
-    except Exception:
-        return None
+    from llmwikify.foundation.llm.client import load_llm_config
+    return load_llm_config(
+        config_path=Path.home() / ".llmwikify" / "llmwikify.json",
+    ) or None
 
 
 def _build_research_config_overrides() -> dict[str, Any]:
@@ -628,10 +632,15 @@ def _build_research_config_overrides() -> dict[str, Any]:
     - If ``research.minimax_api_host`` is unset, derive it from
       ``llm.base_url`` (stripping the ``/v1`` suffix) so the search
       endpoint resolves to the same host as chat.
+    - If ``research.minimax_api_key`` is unset AND the user has not
+      pinned a different ``research.search_provider``, reuse
+      ``llm.api_key`` so a single credential covers both chat and
+      search. Skipped for non-minimax LLM providers to avoid injecting
+      a stranger's minimax key into another vendor's search config.
 
-    Note: ``minimax_api_key`` is intentionally NOT included here to
-    avoid leaking credentials through config dicts that may be logged.
-    The search provider resolves it from the LLM config at runtime.
+    The injected ``minimax_api_key`` is only used to construct the
+    search provider client inside the request handler — the override
+    dict itself is logged at DEBUG, not INFO/WARNING.
 
     Returns an empty dict when no overrides apply or the config file is
     missing. Never raises.
@@ -649,6 +658,23 @@ def _build_research_config_overrides() -> dict[str, Any]:
                 if host.endswith("/v1"):
                     host = host[: -len("/v1")]
                 out["minimax_api_host"] = host
+
+        # Derive minimax_api_key from llm.api_key when not explicitly set,
+        # and the user has not pinned a non-minimax search provider.
+        # "auto" is treated as minimax-compatible (it picks a provider at
+        # runtime, defaulting to minimax), so the fallback still applies.
+        if "minimax_api_key" not in out:
+            llm_cfg = _load_llm_config() or {}
+            search_provider = out.get("search_provider")
+            if (
+                llm_cfg.get("provider") == "minimax"
+                and llm_cfg.get("api_key")
+                and (
+                    not search_provider
+                    or search_provider in {"minimax", "auto"}
+                )
+            ):
+                out["minimax_api_key"] = llm_cfg["api_key"]
         return out
     except Exception as e:
         logger.warning("Failed to build research config overrides: %s", e)

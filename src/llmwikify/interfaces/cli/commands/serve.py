@@ -45,6 +45,48 @@ def run_serve(wiki: Any, config: dict, args: Any) -> int:
     from llmwikify.foundation.config import get_wikis_config
     from llmwikify.interfaces.server import WikiServer
 
+    # Phase 7+ (2026-07-08): wire the default LLM provider into WikiServer
+    # so Phase 6 DreamScheduler + Phase 9 AutoCompact can actually start.
+    # Without this, MemoryManager.dream stays None and lifespan logs
+    # "dream_scheduler start skipped" + "auto_compact start skipped" at
+    # every CLI startup. Behaviour follows get_default_provider() Option C:
+    #   - llm.enabled=false / config missing → None, no log (legit no-LLM)
+    #   - llm.enabled=true + ok                 → provider
+    #   - llm.enabled=true + broken             → RuntimeError
+    # force_skip_dream (CLI flag, default off) downgrades the RuntimeError
+    # to a warning so serve still starts (the memory pipeline becomes a
+    # silent no-op, same as if llm.enabled=false had been set).
+    force_skip_dream = getattr(args, "force_skip_dream", False)
+    provider: Any = None
+    try:
+        from llmwikify.apps.chat.providers.registry import get_default_provider
+        provider = get_default_provider()
+        if provider is not None:
+            logger.info(
+                "serve: LLM provider wired (model=%s)",
+                getattr(provider, "model", "?"),
+            )
+    except RuntimeError as exc:
+        if force_skip_dream:
+            logger.warning(
+                "serve: --force-skip-dream set; ignoring provider error: %s",
+                exc,
+            )
+            provider = None
+        else:
+            print(
+                f"\n[!] LLM provider initialization failed:\n    {exc}\n",
+                file=sys.stderr,
+            )
+            print(
+                "    To start serve anyway, pass --force-skip-dream "
+                "(dream/auto_compact will be disabled).\n"
+                "    Otherwise, fix llm.enabled / provider / api_key in "
+                "~/.llmwikify/llmwikify.json.\n",
+                file=sys.stderr,
+            )
+            return 1
+
     mcp_config = config.get("mcp", {})
 
     name = getattr(args, "name", None)
@@ -183,6 +225,7 @@ def run_serve(wiki: Any, config: dict, args: Any) -> int:
                 enable_webui=web,
                 public_read=server_public_read,
                 local_mode=server_local_mode,
+                provider=provider,
             )
 
             wiki_count = len(registry.list_wikis())
@@ -221,6 +264,7 @@ def run_serve(wiki: Any, config: dict, args: Any) -> int:
                     enable_webui=True,
                     public_read=server_public_read,
                     local_mode=server_local_mode,
+                    provider=provider,
                 )
 
                 print(f"Starting Unified Server '{service_name}' on {final_host}:{port}")
@@ -311,6 +355,17 @@ def setup_serve_parser(subparsers: Any) -> None:
         ),
     )
     p.add_argument("--multi-wiki", action="store_true", help="Enable multi-wiki mode")
+    p.add_argument(
+        "--force-skip-dream",
+        action="store_true",
+        help=(
+            "If llm.enabled=true but the LLM provider fails to initialize "
+            "(missing api_key, unknown provider, etc.), start serve anyway "
+            "with dream_scheduler + auto_compact disabled. Default: exit "
+            "with error and a fix-it hint. Has no effect when llm.enabled=false "
+            "or the config is missing (those already return None silently)."
+        ),
+    )
 
 
 class ServeCommand(Command):
