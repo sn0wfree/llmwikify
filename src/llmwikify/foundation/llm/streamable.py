@@ -27,6 +27,7 @@ import os
 import random
 import threading
 import time
+import uuid
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -415,6 +416,8 @@ def _enforce_role_alternation(
 
     last_popped: dict[str, Any] | None = None
     while merged and merged[-1].get("role") == "assistant":
+        if merged[-1].get("tool_calls"):
+            break  # Don't pop assistant messages with tool_calls
         last_popped = merged.pop()
 
     if (
@@ -425,6 +428,34 @@ def _enforce_role_alternation(
         recovered = dict(last_popped)
         recovered["role"] = "user"
         merged.append(recovered)
+
+    # Drop leading orphan tool messages (those whose declaring
+    # assistant+tool_calls isn't preserved in the kept window).
+    # Walks past leading ``system`` first, then strips any tool at
+    # the front that has no preceding assistant+tool_calls in the
+    # original ``messages`` sequence that declared its tool_call_id.
+    # Without this, a recovered (truncate-cut) tool with no surviving
+    # owner would be sent to the provider and trigger error 2013.
+    i = 0
+    while i < len(merged) and merged[i].get("role") == "system":
+        i += 1
+    while i < len(merged) and merged[i].get("role") == "tool":
+        target_id = merged[i].get("tool_call_id", "")
+        owner_found = False
+        for orig in messages:
+            if orig is merged[i]:
+                break
+            tcs = (
+                orig.get("tool_calls")
+                if orig.get("role") == "assistant"
+                else None
+            )
+            if tcs and any(tc.get("id") == target_id for tc in tcs):
+                owner_found = True
+                break
+        if owner_found:
+            break
+        del merged[i]
 
     # Safety net: first non-system message must not be bare assistant.
     for i, msg in enumerate(merged):
@@ -502,6 +533,28 @@ def _extract_retry_after(resp: Any, max_seconds: float) -> float | None:
     return None
 
 
+def _normalize_tool_call_ids(tool_call_buffer: dict[int, dict[str, Any]]) -> None:
+    """Force provider tool_call IDs to locally generated 24-hex UUIDs in-place.
+
+    Defends against MiniMax-side quirks observed in d8a24ecf / error 2013:
+      - prefix-based dedup when batch IDs share a nanosecond-counter prefix
+      - mixed-format returns (Anthropic ``call_function_*_<seq>`` alongside
+        OpenAI-style ``call_<24hex>`` in the same batch)
+      - empty IDs from text-mode or older streamable paths
+
+    Each entry's ``id`` field is overwritten with a fresh
+    ``call_<24hex>`` whenever the existing value is missing, malformed,
+    or already seen within this batch.
+    """
+    seen: set[str] = set()
+    for entry in tool_call_buffer.values():
+        cid = entry.get("id", "") or ""
+        if not cid.startswith("call_") or cid in seen:
+            entry["id"] = f"call_{uuid.uuid4().hex[:24]}"
+        else:
+            seen.add(cid)
+
+
 def _parse_sse_line(
     line: str,
     accumulated: str,
@@ -567,6 +620,11 @@ def _parse_sse_line(
     # Finish — flush tool calls and emit done
     finish = chunk.get("choices", [{}])[0].get("finish_reason", "")
     if finish in ("stop", "tool_calls", "length"):
+        # Force locally-unique ids before yielding, since providers like
+        # MiniMax have been observed emitting batch ids that share a
+        # prefix or mix Anthropic/OpenAI formats — both patterns have
+        # tripped the same-batch dedup logic and triggered error 2013.
+        _normalize_tool_call_ids(tool_call_buffer)
         for entry in tool_call_buffer.values():
             events.append({
                 "type": "tool_call",

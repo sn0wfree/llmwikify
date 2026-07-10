@@ -50,6 +50,7 @@ def count_messages(messages: list[dict[str, str]], model: str = "gpt-4o") -> int
 
     Each message has ~4 tokens of framing overhead (role, separators).
     Supports both string content and multipart content (list of dicts).
+    Also counts tool_calls tokens for assistant messages.
     """
     total = 0
     for msg in messages:
@@ -61,4 +62,12 @@ def count_messages(messages: list[dict[str, str]], model: str = "gpt-4o") -> int
             for part in content:
                 if isinstance(part, dict) and "text" in part:
                     total += count_tokens(part["text"], model)
+        # Count tool_calls tokens (OpenAI/MiniMax format)
+        tool_calls = msg.get("tool_calls")
+        if tool_calls and isinstance(tool_calls, list):
+            for tc in tool_calls:
+                total += 4  # tool call framing
+                func = tc.get("function", {})
+                total += count_tokens(func.get("name", ""), model)
+                total += count_tokens(func.get("arguments", ""), model)
     return total

@@ -249,3 +249,178 @@ class TestPrepareMessages:
         # First message is system; structure reflects compact+truncate
         assert result[0]["role"] == "system"
         assert len(result) <= len(msgs)
+
+
+# ─── D-route reload (2026-07-10 fix for MiniMax error 2013) ────
+#
+# Verifies that ``ContextManager.get_or_create`` reconstructs the
+# missing ``role=tool`` messages for every assistant(tool_calls)
+# row pulled from the DB. The DB persists
+# ``{tool, args, result, call_id, status}`` per assistant message;
+# the schema has no ``role=tool`` rows, so on TTL-expiry reload we
+# must rebuild them in-memory before sending the next LLM call.
+
+
+class TestDRouteReload:
+    @pytest.mark.asyncio
+    async def test_get_or_create_rebuilds_tool_pair_from_db(self) -> None:
+        cm = ContextManager(
+            config={
+                "compaction_enabled": False,
+                "context_store_max_size": 100,
+                "context_store_ttl_seconds": 1800,
+                "context_reserve_tokens": 0,
+                "context_window_override": 1_000_000,
+            },
+        )
+        history = [
+            {"role": "user", "content": "search"},
+            {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": '[{"tool": "web_search", "args": {"q": "x"},'
+                ' "call_id": "call_abc123",'
+                ' "result": {"status": "ok", "data": "found"}}]',
+            },
+        ]
+        ctx = await cm.get_or_create(
+            session_id="s1",
+            wiki_id=None,
+            history_loader=AsyncMock(return_value=history),
+            db=None,
+        )
+        assert len(ctx.messages) == 3
+        assert ctx.messages[1]["role"] == "assistant"
+        assert ctx.messages[1]["tool_calls"][0]["id"] == "call_abc123"
+        assert ctx.messages[2]["role"] == "tool"
+        assert ctx.messages[2]["tool_call_id"] == "call_abc123"
+
+    @pytest.mark.asyncio
+    async def test_get_or_create_generates_id_when_missing(self) -> None:
+        cm = ContextManager(
+            config={
+                "compaction_enabled": False,
+                "context_store_max_size": 100,
+                "context_store_ttl_seconds": 1800,
+                "context_reserve_tokens": 0,
+                "context_window_override": 1_000_000,
+            },
+        )
+        history = [
+            {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": '[{"tool": "calc", "args": {"a": 1},'
+                ' "call_id": "", "result": {"r": 42}}]',
+            },
+        ]
+        ctx = await cm.get_or_create(
+            session_id="s2",
+            wiki_id=None,
+            history_loader=AsyncMock(return_value=history),
+            db=None,
+        )
+        # Fallback id is 5-char "call_" + 24 hex chars
+        new_id = ctx.messages[0]["tool_calls"][0]["id"]
+        assert new_id.startswith("call_")
+        assert len(new_id) == 5 + 24
+        # And the matching tool message references the same id
+        assert ctx.messages[1]["tool_call_id"] == new_id
+
+    @pytest.mark.asyncio
+    async def test_get_or_create_skips_tool_when_result_absent(self) -> None:
+        """An assistant(tool_calls) with no ``result`` field does NOT
+        emit a tool message. This is consistent with the runtime
+        helper only persisting results when the tool actually ran."""
+        cm = ContextManager(
+            config={
+                "compaction_enabled": False,
+                "context_store_max_size": 100,
+                "context_store_ttl_seconds": 1800,
+                "context_reserve_tokens": 0,
+                "context_window_override": 1_000_000,
+            },
+        )
+        history = [
+            {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": '[{"tool": "calc", "args": {},'
+                ' "call_id": "call_no_result"}]',
+            },
+        ]
+        ctx = await cm.get_or_create(
+            session_id="s3",
+            wiki_id=None,
+            history_loader=AsyncMock(return_value=history),
+            db=None,
+        )
+        # Only the assistant message is rebuilt; no tool message.
+        assert len(ctx.messages) == 1
+        assert ctx.messages[0]["role"] == "assistant"
+
+
+class TestTruncationPreciseCallID:
+    """When truncation cuts off the assistant+tool_calls declaration
+    for a ``role=tool`` message, the recovered assistant MUST be the
+    one that actually owns this ``tool_call_id`` (NOT any random
+    assistant with tool_calls). This was the source of the MiniMax
+    error 2013 cascade observed in session d8a24ecf."""
+
+    def test_truncate_recovers_assistant_with_matching_call_id(self) -> None:
+        cm = ContextManager(
+            config={
+                "compaction_enabled": False,
+                "context_store_max_size": 100,
+                "context_store_ttl_seconds": 1800,
+                "context_reserve_tokens": 0,
+                # Tight budget ensures truncation runs.
+                "context_window_override": 800,
+            },
+            llm_client=MagicMock(
+                model="gpt-4o",
+                _budget_checker=MagicMock(context_window=800),
+            ),
+        )
+        msgs = [
+            {"role": "system", "content": "sys"},
+            {"role": "user", "content": "u1"},
+            {"role": "assistant", "content": "a1"},  # unrelated
+            {"role": "user", "content": "u2"},
+            {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [{
+                    "id": "match_me",
+                    "type": "function",
+                    "function": {"name": "t", "arguments": "{}"},
+                }],
+            },
+            {
+                "role": "tool",
+                "name": "t",
+                "content": "r",
+                "tool_call_id": "match_me",
+            },
+            {"role": "user", "content": "u3"},
+        ]
+        result = cm.truncate(msgs)
+        # Find the tool message in the output
+        tool_idx = next(
+            (
+                i for i, m in enumerate(result)
+                if m.get("role") == "tool"
+                and m.get("tool_call_id") == "match_me"
+            ),
+            None,
+        )
+        assert tool_idx is not None, "tool message dropped entirely"
+        # The preceding message in the output MUST be the assistant
+        # that owned it (with matching tool_calls) — NOT a random
+        # earlier assistant.
+        preceding = result[tool_idx - 1]
+        assert preceding.get("role") == "assistant"
+        assert any(
+            tc.get("id") == "match_me"
+            for tc in preceding.get("tool_calls", [])
+        )

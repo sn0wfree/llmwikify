@@ -12,7 +12,9 @@ Manages:
 
 from __future__ import annotations
 
+import json
 import logging
+import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
@@ -127,7 +129,12 @@ class ContextManager:
                 _observation_limit=self.config.get("observation_limit", 10),
                 _observation_summary_limit=self.config.get("observation_summary_limit", 5),
             )
-            # Restore conversation history
+            # Restore conversation history. D-route: for each
+            # assistant message that has DB-formatted tool_calls, also
+            # reconstruct the matching ``role=tool`` messages from the
+            # ``result`` field so that reloaded contexts see the full
+            # turn — without this, providers like MiniMax return
+            # error 2013 on the next iteration.
             db_messages = await history_loader(session_id)
             for msg in db_messages:
                 role = msg.get("role", "")
@@ -135,7 +142,65 @@ class ContextManager:
                 if role == "user":
                     ctx.messages.append({"role": "user", "content": content})
                 elif role == "assistant":
-                    ctx.messages.append({"role": "assistant", "content": content})
+                    entry: dict[str, Any] = {"role": "assistant", "content": content}
+                    tc_raw = msg.get("tool_calls")
+                    if tc_raw:
+                        try:
+                            parsed = (
+                                json.loads(tc_raw)
+                                if isinstance(tc_raw, str)
+                                else tc_raw
+                            )
+                            if isinstance(parsed, list) and parsed:
+                                api_tcs: list[dict[str, Any]] = []
+                                results: list[Any] = []
+                                for tc in parsed:
+                                    args = tc.get("args", {})
+                                    args_str = (
+                                        json.dumps(args, ensure_ascii=False)
+                                        if isinstance(args, (dict, list))
+                                        else str(args or "")
+                                    )
+                                    call_id = (
+                                        tc.get("call_id")
+                                        or f"call_{uuid.uuid4().hex[:24]}"
+                                    )
+                                    api_tcs.append({
+                                        "id": call_id,
+                                        "type": "function",
+                                        "function": {
+                                            "name": tc.get("tool", ""),
+                                            "arguments": args_str,
+                                        },
+                                    })
+                                    results.append(tc.get("result"))
+                                entry["tool_calls"] = api_tcs
+                                ctx.messages.append(entry)
+                                for tc, result in zip(api_tcs, results, strict=True):
+                                    if result is not None:
+                                        ctx.messages.append({
+                                            "role": "tool",
+                                            "name": tc["function"]["name"],
+                                            "content": json.dumps(
+                                                result, ensure_ascii=False,
+                                            ),
+                                            "tool_call_id": tc["id"],
+                                        })
+                        except (json.JSONDecodeError, TypeError):
+                            pass
+                    else:
+                        ctx.messages.append(entry)
+                elif role == "tool":
+                    # Defensive: only reachable if a future migration
+                    # adds ``tool_call_id`` (and ``name``) to the
+                    # ``chat_messages`` table. Older DBs never have
+                    # ``role=tool`` rows, so this branch is a no-op.
+                    ctx.messages.append({
+                        "role": "tool",
+                        "name": msg.get("name", ""),
+                        "content": content,
+                        "tool_call_id": msg.get("tool_call_id", ""),
+                    })
             # Restore wiki_id from session
             if not wiki_id and db is not None:
                 session = db.get_chat_session(session_id)
@@ -274,6 +339,24 @@ class ContextManager:
             kept_tokens += msg_tokens
 
         kept.reverse()
+
+        # Ensure tool_call/tool_result pairing survives truncation: if
+        # ``kept[0]`` is a tool message, prepend the assistant message
+        # whose ``tool_calls`` actually contains that ``tool_call_id``
+        # (NOT any random assistant with tool_calls). Without this,
+        # orphan tool references trigger provider error 2013.
+        if kept and kept[0].get("role") == "tool":
+            target_id = kept[0].get("tool_call_id", "")
+            for msg in reversed(messages[1:]):
+                if msg is kept[0]:
+                    break
+                if msg.get("role") == "assistant" and msg.get("tool_calls"):
+                    if any(
+                        tc.get("id") == target_id for tc in msg["tool_calls"]
+                    ):
+                        kept.insert(0, msg)
+                        kept_tokens += count_messages([msg], model_name)
+                    break
         dropped = len(messages) - 1 - len(kept)
 
         if not kept and len(messages) > 1 and dropped > 0:
