@@ -62,14 +62,24 @@ async def translate_react_events(
                 yield {"type": "error", "error": f"Research timed out after {timeout_seconds}s"}
                 update_status(session_id, "timeout", _state_get(state, "phase", ""), -1)
 
-            elif phase == "done" and reason == "max_rounds":
+            elif phase == "done" and reason in ("max_rounds", None):
+                # reason is None when ReactLoop.run() exhausts the
+                # for-range(max_rounds) without triggering done_condition
+                # (the yielded dict has no "reason" key).  Treat it the
+                # same as an explicit max_rounds signal so the consumer
+                # sees a terminal event instead of silence.
                 round_idx = _state_get(state, "round", 0)
                 max_rounds = _state_get(state, "max_rounds", 0)
                 yield {"type": "round_max", "round": round_idx, "message": f"Reached max rounds ({max_rounds})"}
+                update_status(session_id, "error", _state_get(state, "phase", ""), -1)
 
-            elif phase == "done" and reason == "reason_returned_done" and action_done_handler is not None:
-                async for done_ev in action_done_handler(state):
-                    yield done_ev
+            elif phase == "done" and reason == "reason_returned_done":
+                if action_done_handler is not None:
+                    async for done_ev in action_done_handler(state):
+                        yield done_ev
+                else:
+                    yield {"type": "completed", "phase": _state_get(state, "phase", "")}
+                    update_status(session_id, "completed", _state_get(state, "phase", ""), -1)
 
         elif event_type == "reasoning":
             phase_name = _state_get(state, "phase", "")

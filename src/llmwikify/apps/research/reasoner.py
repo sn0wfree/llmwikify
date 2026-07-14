@@ -232,6 +232,7 @@ class ResearchReasoner:
             "failed_sq": failed_sq,
             "sources_count": len(state.sources),
             "analyzed_count": analyzed_count,
+            "synthesis_exists": state.synthesis is not None,
             "report_exists": state.report_md is not None,
             "review_exists": state.review is not None,
             "observations_text": obs_text,
@@ -260,6 +261,13 @@ class ResearchReasoner:
             logger.info(
                 "LLM reason returned 'plan' but report exists; "
                 "applying rule-based fallback to break the loop"
+            )
+            return self.rule_based(state)
+
+        if action == "synthesize" and state.synthesis is not None:
+            logger.info(
+                "LLM reason returned 'synthesize' but synthesis exists; "
+                "applying rule-based fallback"
             )
             return self.rule_based(state)
 

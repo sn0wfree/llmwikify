@@ -72,7 +72,7 @@ class ResearchEngine:
         self._report_llm = self._resolve_model("report_model") or llm_client
 
         # ReAct config
-        self._max_react_rounds = self.config.get("max_react_rounds", 5)
+        self._max_react_rounds = self.config.get("max_react_rounds", 15)
         self._quality_threshold = self.config.get("quality_threshold", 7)
         self._max_replan = self.config.get("max_replan_attempts", 2)
 
