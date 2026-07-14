@@ -456,7 +456,7 @@ class BaseResearchTaskManager:
         Issue#10: signal the per-task ``_wakeup_event`` after each put
         so idle SSE consumers stop busy-waiting on a 1s timeout.
         """
-        lock = _get_wiki_lock(engine)
+        lock = await _get_wiki_lock(engine)
         wakeup = self._wakeup_events.get(session_id)
         # Issue#2: emit callback that puts events onto the same queue
         # the outer for-loop reads from. Safe because asyncio.Queue.put
