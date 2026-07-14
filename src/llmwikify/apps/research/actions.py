@@ -498,6 +498,14 @@ async def action_analyze(
         for event in events:
             yield event
 
+    # Refresh state.sources from DB so the reasoner sees the updated
+    # analysis status on the next iteration. Without this, observer's
+    # Issue#8 source-count skip optimization leaves state.sources stale
+    # (analysis updates don't change source count), and the LLM-based
+    # reasoner keeps returning "analyze" because analyzed_count stays 0.
+    state.sources = ctx.db.get_sources(state.session_id) or []
+    state._cached_source_count = len(state.sources)
+
     yield {"type": "progress", "progress": 0.55, "message": "Analysis complete"}
 
 
