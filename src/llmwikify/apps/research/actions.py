@@ -634,7 +634,7 @@ async def action_report(
         yield {"type": "progress", "progress": 0.75, "message": "Report generated"}
     except Exception as e:
         if not streaming_failed:
-            logger.error("Report generation failed: %s", e)
+            logger.error("Report generation failed: %s", e, exc_info=True)
         yield {"type": "error", "error": f"Report generation failed: {e}"}
         ctx.session_manager.update_status(state.session_id, "error", "report", -1)
         state.phase = "error"
