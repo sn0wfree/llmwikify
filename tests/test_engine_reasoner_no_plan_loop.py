@@ -125,27 +125,52 @@ class TestRuleBasedAntiSpinGather:
         )
 
     def test_below_threshold_still_replans(self) -> None:
-        """Regression: legitimate first-pass replans must still work.
-        When _consecutive_plan is below _max_replan, the gap-replan
-        path should trigger as designed.
+        """After synthesis exists, replan is blocked — knowledge gaps
+        are addressed in the report, not by infinite replanning.
         """
         from llmwikify.apps.chat.research_engine.reasoner import ResearchReasoner
 
         r = ResearchReasoner(_FakeEngine(max_replan=2))
         state = self._build_state(consecutive_plan=1)
         result = r.rule_based(state)
-        assert result == "plan", (
-            f"legitimate replan below the threshold should still return "
-            f"'plan', got {result!r}"
+        assert result == "report", (
+            f"after synthesis, should go to report, got {result!r}"
         )
 
     def test_zero_consecutive_plans_still_replans(self) -> None:
-        """The very first plan call is a normal 'plan'."""
+        """After synthesis exists, even the first plan call is blocked."""
         from llmwikify.apps.chat.research_engine.reasoner import ResearchReasoner
 
         r = ResearchReasoner(_FakeEngine(max_replan=2))
         state = self._build_state(consecutive_plan=0)
-        assert r.rule_based(state) == "plan"
+        assert r.rule_based(state) == "report"
+
+    def test_replan_allowed_before_synthesis(self) -> None:
+        """When synthesis is None, rule_based returns 'synthesize'
+        before reaching the replan check — replan is only reachable
+        when synthesis exists.
+        """
+        from llmwikify.apps.chat.research_engine.reasoner import ResearchReasoner
+
+        r = ResearchReasoner(_FakeEngine(max_replan=2))
+        state = ResearchState(
+            round=1,
+            max_rounds=5,
+            clarification={"q": "x"},
+            sub_queries=[{"id": 1}, {"id": 2}],
+            sources=[
+                {"sub_query_id": 1, "analysis": {"status": "ok"}},
+                {"sub_query_id": 2, "analysis": {"status": "ok"}},
+            ],
+            synthesis=None,
+            report_md=None,
+        )
+        state.knowledge_gaps = ["gap-a"]
+        state.budget_remaining = 0.9
+        state._consecutive_plan = 0
+        result = r.rule_based(state)
+        # rule_based checks synthesis before replan, so returns "synthesize"
+        assert result == "synthesize"
 
     def test_error_state_unaffected_by_anti_spin(self) -> None:
         """The anti-spin guard must come AFTER the error-state short

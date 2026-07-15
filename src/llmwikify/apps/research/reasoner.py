@@ -165,8 +165,15 @@ class ResearchReasoner:
         # (where N == _max_replan), the replan budget is effectively
         # exhausted. Suppress this branch so control falls through
         # to "report" (or "review" / "done" depending on state).
+        #
+        # CRITICAL: once synthesis exists, never replan.  Knowledge
+        # gaps at this point should be addressed in the report, not
+        # by an infinite gather→analyze→synthesize loop.  Without
+        # this guard the engine burns through max_rounds on
+        # synthesize→plan→gather→analyze→synthesize cycles.
         consecutive_plan = getattr(state, "_consecutive_plan", 0)
         if (state.knowledge_gaps
+                and state.synthesis is None
                 and state.budget_remaining > 0.15
                 and state.round < self._max_replan + 1
                 and state.report_md is None

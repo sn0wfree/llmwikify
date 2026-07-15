@@ -161,3 +161,22 @@ async def test_rule_based_returns_synthesize_when_no_synthesis():
 
     result = reasoner.rule_based(state)
     assert result == "synthesize"
+
+
+@pytest.mark.asyncio
+async def test_rule_based_no_replan_after_synthesis():
+    """rule_based skips replan when synthesis exists, even with knowledge_gaps."""
+    engine = _make_engine()
+    reasoner = ResearchReasoner(engine)
+    state = _state(
+        synthesis={"knowledge_gaps": ["gap1"]},
+        knowledge_gaps=["gap1"],
+        budget_remaining=0.8,
+        round=0,
+        report_md=None,
+    )
+
+    result = reasoner.rule_based(state)
+    # Should NOT return "plan" even though knowledge_gaps is non-empty
+    # and budget is high — synthesis already exists.
+    assert result == "report"
