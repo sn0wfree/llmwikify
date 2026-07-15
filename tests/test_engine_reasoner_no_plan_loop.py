@@ -283,8 +283,9 @@ class TestLlmReasonAntiSpin:
         assert result == "review", f"expected 'review', got {result!r}"
 
     async def test_llm_says_plan_without_report_passes_through(self) -> None:
-        """When there is no report yet, the LLM's 'plan' decision is
-        legitimate (it can mean 'replan') and must be honored.
+        """When synthesis exists but no report, LLM 'plan' is blocked
+        by the synthesis guard — falls back to rule_based which returns
+        'report' (synthesis exists, replan blocked).
         """
         from llmwikify.apps.chat.research_engine.reasoner import ResearchReasoner
 
@@ -304,8 +305,8 @@ class TestLlmReasonAntiSpin:
         finally:
             reasoner_mod.run_prompt = original
 
-        assert result == "plan", (
-            f"LLM 'plan' with no report should pass through, got {result!r}"
+        assert result == "report", (
+            f"LLM 'plan' with synthesis should be blocked, got {result!r}"
         )
 
 

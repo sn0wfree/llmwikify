@@ -271,6 +271,13 @@ class ResearchReasoner:
             )
             return self.rule_based(state)
 
+        if action == "plan" and state.synthesis is not None:
+            logger.info(
+                "LLM reason returned 'plan' but synthesis exists; "
+                "applying rule-based fallback (replan blocked after synthesis)"
+            )
+            return self.rule_based(state)
+
         if action == "synthesize" and state.synthesis is not None:
             logger.info(
                 "LLM reason returned 'synthesize' but synthesis exists; "
