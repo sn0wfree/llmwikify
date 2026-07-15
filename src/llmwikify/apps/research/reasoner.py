@@ -141,7 +141,20 @@ class ResearchReasoner:
             if sq["id"] not in gathered_ids and sq.get("status") != "failed"
         ]
         if ungathered:
-            return "gather"
+            # Anti-stale-gather: if gather has been running for 2+
+            # rounds without adding new sources, the ungathered
+            # sub-queries are likely unreachable (failed silently,
+            # or sources lack sub_query_id).  Skip to analyze to
+            # avoid burning through max_rounds on no-op gather loops.
+            stale = getattr(state, "_stale_gather_rounds", 0)
+            if stale >= 2:
+                logger.info(
+                    "Stale gather: %d rounds with no new sources; "
+                    "skipping to analyze",
+                    stale,
+                )
+            else:
+                return "gather"
 
         # Not all analyzed → analyze
         sources = self._db.get_sources(state.session_id)

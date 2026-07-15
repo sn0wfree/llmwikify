@@ -325,6 +325,19 @@ class ResearchEngine:
             else:
                 state._consecutive_plan = 0
 
+            # Anti-stale-gather: track rounds where gather runs but
+            # no new sources are added.  Reset on any other action.
+            if action == "gather":
+                prev_count = getattr(state, "_prev_source_count", len(state.sources))
+                if len(state.sources) <= prev_count:
+                    state._stale_gather_rounds = getattr(state, "_stale_gather_rounds", 0) + 1
+                else:
+                    state._stale_gather_rounds = 0
+                state._prev_source_count = len(state.sources)
+            else:
+                state._stale_gather_rounds = 0
+                state._prev_source_count = len(state.sources)
+
             # Framework compliance gate: intercept "done"
             if action == "done":
                 if engine_ref.config.get("strict_exit", True):
