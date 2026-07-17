@@ -27,7 +27,7 @@ export function EditHistory() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [currentWikiId]);
 
   useEffect(() => {
     loadHistory();

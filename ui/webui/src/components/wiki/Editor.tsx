@@ -57,10 +57,11 @@ function buildFrontMatter(metadata: FrontMatterData, body: string): string {
 }
 
 export function Editor({
-  selectedPage: initialPage, handlePageSelect: externalOnSelect, currentWikiId,
+  selectedPage: initialPage, handlePageSelect: externalOnSelect, currentWikiId: propWikiId,
 }: EditorProps) {
   const { addToast } = useToast();
-  const { isMultiWikiMode } = useWikiStore();
+  const { isMultiWikiMode, currentWikiId: storeWikiId } = useWikiStore();
+  const currentWikiId = propWikiId ?? storeWikiId;
   const [searchParams, setSearchParams] = useSearchParams();
   const urlPage = searchParams.get('page');
   const [page, setPage] = useState<WikiPage | null>(null);
@@ -96,7 +97,7 @@ export function Editor({
     externalOnSelect?.(pageName);
   }, [externalOnSelect, dirty, initialPage, urlPage, setSearchParams]);
 
-  useEffect(() => { loadTree(); }, []);
+  useEffect(() => { loadTree(currentWikiId || undefined); }, [currentWikiId]);
 
   useEffect(() => {
     if (selectedPage) {
@@ -109,10 +110,6 @@ export function Editor({
       setBody('');
     }
   }, [selectedPage, currentWikiId]);
-
-  useEffect(() => {
-    if (currentWikiId) loadTree(currentWikiId);
-  }, [currentWikiId]);
 
   const loadGraphData = useCallback(async (currentPage: string, wikiId?: string) => {
     setGraphLoading(true);

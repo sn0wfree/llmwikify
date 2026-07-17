@@ -20,7 +20,7 @@ export function IngestLog() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [currentWikiId]);
 
   useEffect(() => {
     loadLog();

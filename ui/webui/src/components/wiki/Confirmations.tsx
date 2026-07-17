@@ -25,7 +25,7 @@ export function Confirmations() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [currentWikiId]);
 
   useEffect(() => {
     loadConfirmations();

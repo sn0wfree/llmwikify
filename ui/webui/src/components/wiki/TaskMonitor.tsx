@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { api, TaskInfo } from '../../api';
 import { useWikiStore } from '../../stores/wikiStore';
 import { EmptyState } from '../agent/StateViews';
@@ -11,13 +11,7 @@ export function TaskMonitor() {
   const [loading, setLoading] = useState(true);
   const { currentWikiId } = useWikiStore();
 
-  useEffect(() => {
-    loadTasks();
-    const interval = setInterval(loadTasks, 10000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const loadTasks = async () => {
+  const loadTasks = useCallback(async () => {
     try {
       const status = await api.agent.status(currentWikiId || undefined);
       setTasks(status.scheduler_tasks);
@@ -26,7 +20,13 @@ export function TaskMonitor() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentWikiId]);
+
+  useEffect(() => {
+    loadTasks();
+    const interval = setInterval(loadTasks, 10000);
+    return () => clearInterval(interval);
+  }, [loadTasks]);
 
   if (loading) {
     return (

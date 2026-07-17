@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Lightbulb, Sparkles, Network, RefreshCw, Loader2, FileText,
   Link2, AlertTriangle, BarChart3, CheckCircle2, ArrowRight,
@@ -7,6 +7,7 @@ import {
 import { api, GraphAnalysis } from '../../api';
 import { GraphAnalysisPanel } from './GraphAnalysisPanel';
 import { LoadingState, EmptyState } from '../ui/states';
+import { useWikiStore } from '../../stores/wikiStore';
 import { cn } from '@/lib/utils';
 
 interface SynthesisResult {
@@ -24,13 +25,12 @@ export function Insights() {
   const [loading, setLoading] = useState(true);
   const [synthesisLoading, setSynthesisLoading] = useState(false);
   const [graphLoading, setGraphLoading] = useState(false);
+  const { currentWikiId } = useWikiStore();
 
-  useEffect(() => { loadInsights(); }, []);
-
-  const loadInsights = async () => {
+  const loadInsights = useCallback(async () => {
     setLoading(true);
     try {
-      const recs = await api.wiki.recommend() as unknown as Record<string, unknown>;
+      const recs = await api.wiki.recommend(currentWikiId || undefined) as unknown as Record<string, unknown>;
       const flattened: Array<Record<string, unknown>> = [];
       if (recs && typeof recs === 'object') {
         const missingPages = (recs.missing_pages as Array<Record<string, unknown>>) || [];
@@ -40,26 +40,28 @@ export function Insights() {
       }
       setRecommendations(flattened);
     } catch { setRecommendations([]); } finally { setLoading(false); }
-  };
+  }, [currentWikiId]);
 
-  const loadSynthesis = async () => {
+  const loadSynthesis = useCallback(async () => {
     setSynthesisLoading(true);
     try {
-      const result = await api.wiki.suggestSynthesis() as unknown as Record<string, unknown>;
+      const result = await api.wiki.suggestSynthesis(currentWikiId || undefined) as unknown as Record<string, unknown>;
       if (result && typeof result === 'object') {
         const suggestions = (result.suggestions as Array<Record<string, unknown>>) || [];
         setSynthesisResults(suggestions as unknown as SynthesisResult[]);
       }
     } catch { setSynthesisResults([]); } finally { setSynthesisLoading(false); }
-  };
+  }, [currentWikiId]);
 
-  const loadGraphAnalysis = async () => {
+  const loadGraphAnalysis = useCallback(async () => {
     setGraphLoading(true);
     try {
-      const result = await api.wiki.graphAnalyze();
+      const result = await api.wiki.graphAnalyze(currentWikiId || undefined);
       setGraphAnalysis(result as unknown as GraphAnalysis);
     } catch { setGraphAnalysis(null); } finally { setGraphLoading(false); }
-  };
+  }, [currentWikiId]);
+
+  useEffect(() => { loadInsights(); }, [loadInsights]);
 
   if (loading) return <LoadingState message="Loading insights…" />;
 

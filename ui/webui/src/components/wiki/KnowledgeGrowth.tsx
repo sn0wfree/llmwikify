@@ -56,8 +56,8 @@ export function KnowledgeGrowth({ currentWikiId: propWikiId, isMultiWikiMode: pr
         isMultiWikiMode && currentWikiId ? api.wiki.scoped.status(currentWikiId).catch(() => null) : api.wiki.status().catch(() => null),
         isMultiWikiMode && currentWikiId ? api.wiki.scoped.sinkStatus(currentWikiId).catch(() => null) : api.wiki.sinkStatus().catch(() => null),
         api.wikiDream.log(50).catch(() => []),
-        api.wiki.graph({}).catch(() => ({ nodes: [], edges: [], all_types: [], stats: { total_nodes: 0, displayed_nodes: 0, mode: '' } })),
-        api.wiki.graphAnalyze().catch(() => null),
+        isMultiWikiMode && currentWikiId ? api.wiki.scoped.graph(currentWikiId).catch(() => ({ nodes: [], edges: [], all_types: [], stats: { total_nodes: 0, displayed_nodes: 0, mode: '' } })) : api.wiki.graph({}).catch(() => ({ nodes: [], edges: [], all_types: [], stats: { total_nodes: 0, displayed_nodes: 0, mode: '' } })),
+        api.wiki.graphAnalyze(currentWikiId || undefined).catch(() => null),
       ]);
       setWikiStatus(status);
       setSinkStatus(sink);

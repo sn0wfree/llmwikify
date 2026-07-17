@@ -28,7 +28,7 @@ export function WikiDreamProposals() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [currentWikiId]);
 
   useEffect(() => {
     loadProposals();
