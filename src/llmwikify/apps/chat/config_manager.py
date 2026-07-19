@@ -1,10 +1,14 @@
-"""Global + per-wiki LLM configuration manager."""
+"""Global + per-wiki LLM configuration manager.
 
+v0.41: 默认配置从 ``foundation/templates/llmwikify.default.json`` 读取，
+不再硬编码 DEFAULT_LLM_CONFIG。
+"""
 from __future__ import annotations
 
 import copy
 import json
 import logging
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -13,23 +17,48 @@ logger = logging.getLogger(__name__)
 GLOBAL_CONFIG_DIR = Path.home() / ".llmwikify"
 GLOBAL_CONFIG_FILE = GLOBAL_CONFIG_DIR / "llmwikify.json"
 
-DEFAULT_LLM_CONFIG: dict[str, Any] = {
-    "enabled": True,
-    "provider": "minimax",
-    "model": "MiniMax-M3",
-    "base_url": "https://api.minimaxi.com/v1",
-    "api_key": "",
-    "timeout": 120,
-}
+# 用户配置模板路径（包内）
+_DEFAULT_TEMPLATE_PATH = Path(__file__).parent.parent.parent / "foundation" / "templates" / "llmwikify.default.json"
+
+
+@lru_cache(maxsize=1)
+def _load_default_template() -> dict[str, Any]:
+    """Load default config from llmwikify.default.json template.
+
+    Returns:
+        The template as a dict, or empty dict if template is missing.
+    """
+    if not _DEFAULT_TEMPLATE_PATH.exists():
+        logger.warning("Default template not found at %s", _DEFAULT_TEMPLATE_PATH)
+        return {}
+    try:
+        return json.loads(_DEFAULT_TEMPLATE_PATH.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as exc:
+        logger.warning("Failed to parse default template: %s", exc)
+        return {}
+
+
+def get_default_llm_config() -> dict[str, Any]:
+    """Get the default ``llm`` section from the template."""
+    template = _load_default_template()
+    return copy.deepcopy(template.get("llm", {}))
+
+
+def get_default_research_config() -> dict[str, Any]:
+    """Get the default ``research`` section from the template."""
+    template = _load_default_template()
+    return copy.deepcopy(template.get("research", {}))
 
 
 class GlobalConfigManager:
     """Manages global and per-wiki LLM configuration.
 
     Config priority (highest to lowest):
-        1. per-wiki .wiki-config.yaml llm section (if exists)
+        1. per-wiki .wiki-config.yaml llm section (if exists, v0.40 兼容)
         2. global ~/.llmwikify/llmwikify.json llm section (if exists)
-        3. DEFAULT_LLM_CONFIG (hardcoded defaults)
+        3. foundation/templates/llmwikify.default.json (template)
+
+    v0.41: LLM config 默认值从 ``llmwikify.default.json`` 模板读取。
     """
 
     def __init__(self, agent_service_ref: Any = None):
@@ -65,9 +94,9 @@ class GlobalConfigManager:
     def load_effective_llm_config(self, wiki_root: Path | None = None) -> dict[str, Any]:
         """Load the effective LLM config by merging global + per-wiki overrides.
 
-        Priority: per-wiki .wiki-config.yaml > global config > DEFAULT_LLM_CONFIG
+        Priority: per-wiki .wiki-config.yaml > global config > template default
         """
-        llm_cfg = copy.deepcopy(DEFAULT_LLM_CONFIG)
+        llm_cfg = get_default_llm_config()
 
         global_cfg = self.load_global_config()
         if global_cfg and "llm" in global_cfg:
@@ -76,12 +105,23 @@ class GlobalConfigManager:
         if wiki_root:
             wiki_cfg = self._load_wiki_config(wiki_root)
             if wiki_cfg and "llm" in wiki_cfg:
+                # v0.41: warn if wiki config still has llm section (deprecated)
+                logger.warning(
+                    "[config] .wiki-config.yaml 'llm' section is deprecated "
+                    "since v0.41. Please move llm config to "
+                    "~/.llmwikify/llmwikify.json instead. Ignoring wiki-level llm section."
+                )
+                # Still apply for backward compatibility, but warn
                 llm_cfg = _deep_merge(llm_cfg, wiki_cfg["llm"])
 
         return llm_cfg
 
     def _load_wiki_config(self, wiki_root: Path) -> dict[str, Any] | None:
-        """Load per-wiki config from .wiki-config.yaml."""
+        """Load per-wiki config from .wiki-config.yaml.
+
+        v0.41: LLM section is deprecated but still read for backward compat.
+        Other sections (directories, database, wikis) remain valid.
+        """
         config_path = wiki_root / ".wiki-config.yaml"
         if not config_path.exists():
             return None

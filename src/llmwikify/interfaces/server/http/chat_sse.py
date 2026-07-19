@@ -499,10 +499,35 @@ async def batch_approve(request: Request):
 
 @router.get("/config")
 async def get_llm_config():
+    """GET /config — return mutable LLM config + chat_mutable + research_mutable.
+
+    v0.41: API 只暴露 mutable 配置。immutable 配置不出现在返回中。
+    如需调试 immutable，可使用 GET /config/debug (内部端点)。
+    """
+    from llmwikify.apps.chat.config import get_mutable_defaults
     from llmwikify.apps.chat.config_manager import get_global_config_manager
+
     manager = get_global_config_manager()
     llm_cfg = manager.load_effective_llm_config()
     result = manager.mask_api_key(llm_cfg)
+
+    # v0.41: 附加 chat_mutable 和 research_mutable
+    mutable_defaults = get_mutable_defaults()
+    result["chat_mutable"] = mutable_defaults
+    # research_mutable 直接读取 YAML
+    try:
+        from pathlib import Path
+
+        import yaml
+        _research_yaml = Path(__file__).parent.parent.parent.parent.parent / "apps" / "research" / "config_defaults.yaml"
+        if _research_yaml.exists():
+            raw = yaml.safe_load(_research_yaml.read_text(encoding="utf-8"))
+            result["research_mutable"] = raw.get("mutable", {})
+        else:
+            result["research_mutable"] = {}
+    except Exception:
+        result["research_mutable"] = {}
+
     # v0.40: include custom system prompt from user preferences
     try:
         service = get_agent_service()
@@ -516,6 +541,10 @@ async def get_llm_config():
 
 @router.put("/config")
 async def save_llm_config(request: Request):
+    """PUT /config — save mutable LLM config fields.
+
+    v0.41: 只接受 mutable 字段。immutable 字段（如果客户端发送）会被忽略。
+    """
     from llmwikify.apps.chat.config_manager import get_global_config_manager
     body = await request.json()
     req = SaveConfigRequest(**body)
@@ -529,6 +558,9 @@ async def save_llm_config(request: Request):
         config_dict["api_key"] = current.get("api_key", incoming_key)
     # v0.40: system_prompt is stored in user preferences, not LLM config
     system_prompt = config_dict.pop("system_prompt", None)
+    # v0.41: chat_mutable 和 research_mutable 暂不通过此端点保存
+    config_dict.pop("chat_mutable", None)
+    config_dict.pop("research_mutable", None)
     manager.save_global_config(config_dict)
     manager.reload()
     if system_prompt is not None:
@@ -541,6 +573,23 @@ async def save_llm_config(request: Request):
         except Exception as e:
             logger.warning("Failed to save system prompt: %s", e)
     return {"saved": True}
+
+
+@router.get("/config/debug")
+async def get_llm_config_debug():
+    """GET /config/debug — return ALL config (mutable + immutable) for debugging.
+
+    v0.41: 新增调试端点，返回完整配置（含 immutable）。
+    """
+    from llmwikify.apps.chat.config import get_all_defaults
+    from llmwikify.apps.chat.config_manager import get_global_config_manager
+
+    manager = get_global_config_manager()
+    llm_cfg = manager.load_effective_llm_config()
+    result = manager.mask_api_key(llm_cfg)
+    # 附加完整业务默认值（mutable + immutable）
+    result["chat_defaults"] = get_all_defaults()
+    return result
 
 
 @router.post("/config/reload")
