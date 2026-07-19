@@ -1,0 +1,61 @@
+# Research 配置默认值
+#
+# v0.41: 从 apps/research/base.py 硬编码迁移到 YAML 文件。
+#
+# 分两类：
+# - mutable: 可修改配置（暴露到 API/UI，用户可覆盖）
+# - immutable: 不可修改配置（仅用于调试，不暴露到 API/UI）
+
+# ─── 可修改配置（暴露到 API/UI）──────────────────────────────────
+mutable:
+  # 搜索配置
+  search_provider: "auto"
+
+  # 任务控制
+  max_sub_queries: 20
+  research_timeout_minutes: 30
+  max_parallel_gathering: 5
+  web_search_results_per_query: 5
+
+  # 重试/循环
+  max_retry_attempts: 3
+  max_review_rounds: 2
+
+# ─── 不可修改配置（不暴露到 API/UI，仅配置文件中可见）────────────────
+immutable:
+  max_source_content_length: 500000
+  similarity_threshold: 0.92
+  planning_model: null
+  report_model: null
+  llm_call_timeout_seconds: 120
+
+  # Search provider config (credentials fall back to llm.api_key at runtime)
+  search_provider: "auto"
+  searxng_url: null
+  minimax_api_key: null  # fallback: llm.api_key when provider=minimax
+  minimax_api_host: "https://api.minimaxi.com"
+  tavily_api_key: null
+
+  # ReAct config
+  max_react_rounds: 15
+  quality_threshold: 7
+  max_replan_attempts: 2
+  parallel_wiki_search: true
+
+  # Source filter config
+  source_filter_enabled: true
+  source_min_content_length: 100
+  source_min_quality_score: 0.3
+
+  # Report content budget
+  report_max_per_source: 4000
+  report_max_total_content: 60000
+
+  # Quality gate config (base 4 gates)
+  gate_enabled: true
+  gate_min_sources: 3
+  gate_min_type_diversity: 2
+  gate_min_analyzed: 2
+  gate_min_avg_credibility: 5
+  gate_max_knowledge_gaps: 3
+  gate_min_reinforced_claims: 2

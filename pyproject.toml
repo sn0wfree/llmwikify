@@ -102,6 +102,8 @@ llmwikify = [ "py.typed",]
 "llmwikify.foundation.templates" = [ "*.json", "_gitignore", "skill_llmwikify/*.md", "skill_llmwikify/resources/*.md",]
 "llmwikify.foundation.prompts._defaults" = [ "*.yaml",]
 "llmwikify.foundation.llm" = [ "providers.yaml",]  # v0.41: Provider 元数据唯一来源
+"llmwikify.apps.chat" = [ "config_defaults.yaml",]  # v0.41: Chat 业务默认值
+"llmwikify.apps.research" = [ "config_defaults.yaml",]  # v0.41: Research 业务默认值
 "llmwikify.reproduction.prompts" = [ "builtin/**/*.yaml",]  # v0.40: deprecated, kept for back-compat (no files)
 "llmwikify.apps.chat.skills.workflows.builtins" = [ "*.yaml", "actor_prompts/*.md",]
 

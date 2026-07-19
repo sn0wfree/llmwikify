@@ -1,0 +1,101 @@
+# Chat 配置默认值
+#
+# v0.41: 从 apps/chat/config.py 硬编码迁移到 YAML 文件。
+#
+# 分两类：
+# - mutable: 可修改配置（暴露到 API/UI，用户可覆盖）
+# - immutable: 不可修改配置（仅用于调试，不暴露到 API/UI）
+#
+# 用户配置文件 ~/.llmwikify/llmwikify.json 中的 chat_mutable 段会覆盖
+# mutable 段的默认值。immutable 段不出现在用户配置模板中。
+
+# ─── 可修改配置（暴露到 API/UI）──────────────────────────────────
+mutable:
+  # 对话控制
+  max_chat_rounds: 4
+  max_messages: 50
+  observation_limit: 10
+
+  # LLM 重试
+  llm_retry_max_attempts: 3
+  llm_retry_base_delay: 2.0
+  llm_retry_call_timeout: 120.0
+  llm_retry_max_delay: 30.0
+
+  # DB 重试
+  chat_db_retry_max_attempts: 3
+  chat_db_retry_base_delay: 0.2
+
+# ─── 不可修改配置（不暴露到 API/UI，仅配置文件中可见）────────────────
+immutable:
+  # 观察/摘要
+  observation_summary_limit: 5
+  summary_truncate_chars: 500
+  content_truncate_chars: 10000
+
+  # 上下文管理
+  context_store_max_size: 200
+  context_store_ttl_seconds: 1800
+  context_reserve_tokens: 4096
+  context_window_override: 0
+  compaction_enabled: true
+  compaction_threshold_ratio: 0.8
+  compaction_min_messages: 6
+  compaction_max_tokens: 4000
+
+  # 重试/解析
+  clarify_max_retries: 2
+  evidence_max_retries: 2
+  stage_max_retries: 2
+  stage_retry_base_delay: 2.0
+  llm_parse_max_retries: 3
+  db_retry_base_delay: 1.0
+  db_retry_max_retries: 3
+  self_loop_budget_ratio: 0.3
+
+  # 6-step framework switches
+  clarify_enabled: true
+  reasoning_check_enabled: true
+  structure_check_enabled: true
+  evidence_scoring_enabled: true
+  framework_check_enabled: true
+  strict_exit: true
+
+  # 6-step gate thresholds
+  gate_min_evidence_score: 0.5
+  gate_min_traceable_sources: 2
+  gate_min_reasoning_score: 7
+  gate_max_reasoning_issues: 3
+  gate_min_structure_score: 7
+  gate_min_source_refs: 3
+
+  # LLM call params per prompt
+  llm_params:
+    research_plan:
+      max_tokens: 2048
+      temperature: 0.3
+      json_mode: true
+    research_replan:
+      max_tokens: 1024
+      temperature: 0.3
+      json_mode: true
+    research_clarify:
+      max_tokens: 4096
+      temperature: 0.3
+      json_mode: true
+    research_reason:
+      max_tokens: 1024
+      temperature: 0.1
+      json_mode: true
+    research_report:
+      max_tokens: 8192
+      temperature: 0.3
+      json_mode: false
+    research_review:
+      max_tokens: 2048
+      temperature: 0.1
+      json_mode: true
+    research_revise:
+      max_tokens: 8192
+      temperature: 0.3
+      json_mode: false

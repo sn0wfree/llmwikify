@@ -1,5 +1,8 @@
 """AutoResearch independent configuration.
 
+v0.41: 默认值从 ``config_defaults.yaml`` 读取，代码中不再硬编码。
+mutable/immutable 分类用于控制 API/UI 暴露范围。
+
 Defines the 6-step framework configuration, self-loop settings,
 and retry parameters.
 
@@ -11,91 +14,62 @@ structure / strict-exit / retry managers / per-prompt
 ``llm_params``) are kept in this module as ``_SIX_STEP_EXTRAS``
 and merged with the base defaults at module load.
 """
-
 from __future__ import annotations
 
+from functools import lru_cache
+from pathlib import Path
 from typing import Any
 
 from llmwikify.apps.research.base import BaseResearchConfig
 
-_SIX_STEP_EXTRAS: dict[str, Any] = {
-    # ─── 6-step framework switches (no off-switch for self-loop) ───
-    "clarify_enabled": True,
-    "reasoning_check_enabled": True,
-    "structure_check_enabled": True,
-    "evidence_scoring_enabled": True,
-    "framework_check_enabled": True,
+_DEFAULTS_FILE = Path(__file__).parent / "config_defaults.yaml"
 
-    # ─── Strict exit gate (v6) ───
-    # When True (default), the done gate also enforces quality thresholds:
-    # review approved, quality_score >= quality_threshold, knowledge_gaps
-    # <= gate_max_knowledge_gaps, sources >= gate_min_sources. If any
-    # check fails, the engine redirects to the missing action (revise /
-    # synthesize / gather) instead of marking done. Disable for legacy
-    # behavior where any session with all 6 framework steps can be done.
-    "strict_exit": True,
 
-    # ─── 6-step gate thresholds ───
-    "gate_min_evidence_score": 0.5,
-    "gate_min_traceable_sources": 2,
-    "gate_min_reasoning_score": 7,
-    "gate_max_reasoning_issues": 3,
-    "gate_min_structure_score": 7,
-    "gate_min_source_refs": 3,
+@lru_cache(maxsize=1)
+def _load_defaults() -> dict[str, Any]:
+    """Load chat config defaults from YAML.
 
-    # ─── Self-loop (must be enabled, no off-switch) ───
-    "clarify_max_retries": 2,
-    "evidence_max_retries": 2,
-    "self_loop_budget_ratio": 0.3,
+    Returns:
+        dict with two keys: 'mutable' and 'immutable', each containing
+        the default config values.
+    """
+    if not _DEFAULTS_FILE.exists():
+        return {"mutable": {}, "immutable": {}}
+    import yaml
 
-    # ─── Retry managers (3 independent) ───
-    "stage_max_retries": 2,
-    "stage_retry_base_delay": 2.0,
-    "llm_parse_max_retries": 3,
-    "db_retry_base_delay": 1.0,
-    "db_retry_max_retries": 3,
+    try:
+        data = yaml.safe_load(_DEFAULTS_FILE.read_text(encoding="utf-8"))
+        if not isinstance(data, dict):
+            return {"mutable": {}, "immutable": {}}
+        return {
+            "mutable": data.get("mutable", {}),
+            "immutable": data.get("immutable", {}),
+        }
+    except Exception:
+        return {"mutable": {}, "immutable": {}}
 
-    # ─── Chat service parameters (v0.38) ───
-    "max_chat_rounds": 4,
-    "max_messages": 50,
-    "observation_limit": 10,
-    "observation_summary_limit": 5,
-    "summary_truncate_chars": 500,
-    "content_truncate_chars": 10_000,
 
-    # ─── Context store limits (v0.39 P0-1) ───
-    "context_store_max_size": 200,
-    "context_store_ttl_seconds": 1800,  # 30 minutes
+def get_mutable_defaults() -> dict[str, Any]:
+    """Get mutable defaults (exposed via API/UI)."""
+    return dict(_load_defaults().get("mutable", {}))
 
-    # ─── Token-aware truncation (v0.39 P0-2) ───
-    "context_reserve_tokens": 4096,  # reserve for LLM output
-    "context_window_override": 0,    # 0 = use model's actual context window
 
-    # ─── Message compaction (v0.39 P1-1) ───
-    "compaction_enabled": True,
-    "compaction_threshold_ratio": 0.8,  # trigger at 80% of budget
-    "compaction_min_messages": 6,        # need at least 6 messages to compact
-    "compaction_max_tokens": 4000,       # max tokens to summarize at once
-    "llm_retry_max_attempts": 3,
-    "llm_retry_base_delay": 2.0,
-    "llm_retry_call_timeout": 120.0,
-    "llm_retry_max_delay": 30.0,
-    "chat_db_retry_max_attempts": 3,
-    "chat_db_retry_base_delay": 0.2,
+def get_immutable_defaults() -> dict[str, Any]:
+    """Get immutable defaults (debug only, not exposed via API/UI)."""
+    return dict(_load_defaults().get("immutable", {}))
 
-    # ─── LLM call params per prompt (overridable, fed to resolve_llm_params) ───
-    # Each section is a per-prompt dict. Priority chain:
-    #   1. this config → 2. prompt YAML → 3. DEFAULT_LLM_PARAMS safety net.
-    "llm_params": {
-        "research_plan":   {"max_tokens": 2048, "temperature": 0.3, "json_mode": True},
-        "research_replan": {"max_tokens": 1024, "temperature": 0.3, "json_mode": True},
-        "research_clarify":{"max_tokens": 4096, "temperature": 0.3, "json_mode": True},
-        "research_reason": {"max_tokens": 1024, "temperature": 0.1, "json_mode": True},
-        "research_report": {"max_tokens": 8192, "temperature": 0.3, "json_mode": False},
-        "research_review": {"max_tokens": 2048, "temperature": 0.1, "json_mode": True},
-        "research_revise": {"max_tokens": 8192, "temperature": 0.3, "json_mode": False},
-    },
-}
+
+def get_all_defaults() -> dict[str, Any]:
+    """Get all defaults (mutable + immutable merged)."""
+    defaults = _load_defaults()
+    merged: dict[str, Any] = {}
+    merged.update(defaults.get("immutable", {}))
+    merged.update(defaults.get("mutable", {}))
+    return merged
+
+
+# Backward-compat: keep _SIX_STEP_EXTRAS but load from YAML
+_SIX_STEP_EXTRAS: dict[str, Any] = get_all_defaults()
 
 
 DEFAULT_SIX_STEP_CONFIG: dict[str, Any] = {
@@ -121,3 +95,13 @@ def merge_six_step_config(overrides: dict[str, Any] | None = None) -> dict[str, 
 
 # Backward-compat alias; the engine and tests still reference the old name.
 merge_research_config = merge_six_step_config
+
+
+__all__ = [
+    "DEFAULT_SIX_STEP_CONFIG",
+    "merge_six_step_config",
+    "merge_research_config",
+    "get_mutable_defaults",
+    "get_immutable_defaults",
+    "get_all_defaults",
+]
