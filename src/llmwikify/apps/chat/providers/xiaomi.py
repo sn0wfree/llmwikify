@@ -1,4 +1,8 @@
-"""Xiaomi MiMo LLM Provider."""
+"""Xiaomi MiMo LLM Provider.
+
+v0.41: Provider 元数据（base_url、default_model、supported_models）
+从 ``foundation/llm/providers.yaml`` 读取，代码中不再硬编码。
+"""
 
 from __future__ import annotations
 
@@ -8,25 +12,29 @@ from .base import BaseLLMProvider
 
 
 class XiaomiProvider(BaseLLMProvider):
-    """Xiaomi MiMo provider using OpenAI-compatible API with api-key auth."""
+    """Xiaomi MiMo provider using OpenAI-compatible API with api-key auth.
+
+    v0.41: All defaults loaded from ``providers.yaml``.
+    """
+
+    _PROVIDER_ID = "xiaomi"
 
     def provider_name(self) -> str:
-        return "xiaomi"
+        return self._PROVIDER_ID
+
+    def _metadata(self) -> dict:
+        from llmwikify.foundation.llm.resolver import get_provider_metadata
+
+        return get_provider_metadata(self._PROVIDER_ID)
 
     def default_base_url(self) -> str:
-        return "https://token-plan-cn.xiaomimimo.com/v1"
+        return self._metadata().get("base_url", "")
 
     def default_model(self) -> str:
-        return "mimo-v2.5-pro"
+        return self._metadata().get("default_model", "")
 
     def supported_models(self) -> list[str]:
-        return [
-            "mimo-v2.5-pro",
-            "mimo-v2.5",
-            "mimo-v2-flash",
-            "mimo-v2-pro",
-            "mimo-v2-omni",
-        ]
+        return list(self._metadata().get("supported_models", []))
 
     def from_config(self, config: dict) -> Any:
         from llmwikify.foundation.llm.resolver import resolve_chat_llm, resolver_enabled

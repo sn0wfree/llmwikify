@@ -32,7 +32,10 @@ class ChatRunSpec:
     tool_registry: Any
     session_id: str
     wiki_id: str | None = None
-    model: str = "MiniMax-M2.7"
+    # v0.41: empty default. Actual model resolved at runtime via
+    # foundation.llm.resolver.resolve_chat_llm() — code should not
+    # hardcode model names here.
+    model: str = ""
     max_iterations: int = 10
     max_tool_result_chars: int = 50000
     temperature: float | None = None

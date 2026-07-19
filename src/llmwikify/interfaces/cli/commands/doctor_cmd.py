@@ -199,25 +199,28 @@ def _check_llm_connectivity() -> tuple[bool, float, str]:
         return False, 0.0, "api_key missing"
 
     provider = llm.get("provider", "openai")
-    model = llm.get("model", "gpt-4o")
+    # v0.41: base_url and model from providers.yaml + resolver
+    from llmwikify.foundation.llm.resolver import resolve_chat_llm
+
+    spec = resolve_chat_llm({"llm": llm})
+    base_url = llm.get("base_url") or spec.base_url
+    model = llm.get("model") or spec.model
     api_key = llm["api_key"]
 
-    # Provider endpoints
-    provider_urls = {
-        "openai": "https://api.openai.com/v1/chat/completions",
-        "anthropic": "https://api.anthropic.com/v1/messages",
-        "minimax": "https://api.minimaxi.com/v1/chat/completions",
-        "xiaomi": "https://api.xiaomi.com/v1/chat/completions",
+    # Provider-specific completion endpoints (different APIs).
+    # Anthropic uses /v1/messages; OpenAI-compat uses /v1/chat/completions.
+    completion_paths = {
+        "anthropic": "/v1/messages",
+        "openai": "/v1/chat/completions",
+        "minimax": "/v1/chat/completions",
+        "xiaomi": "/v1/chat/completions",
     }
-    default_base = {
-        "openai": "https://api.openai.com/v1",
-        "anthropic": "https://api.anthropic.com/v1",
-        "minimax": "https://api.minimaxi.com/v1",
-        "xiaomi": "https://api.xiaomi.com/v1",
-    }
-
-    base_url = llm.get("base_url") or default_base.get(provider, default_base["openai"])
-    url = provider_urls.get(provider, f"{base_url.rstrip('/')}/chat/completions")
+    base_url_normalized = base_url.rstrip("/")
+    if base_url_normalized.endswith("/v1"):
+        path = completion_paths.get(provider, "/v1/chat/completions")
+    else:
+        path = completion_paths.get(provider, "/v1/chat/completions")
+    url = f"{base_url_normalized}{path}"
 
     body = {
         "model": model,

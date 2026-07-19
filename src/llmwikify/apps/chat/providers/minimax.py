@@ -1,5 +1,8 @@
 """MiniMax LLM Provider.
 
+v0.41: Provider 元数据（base_url、default_model、supported_models）
+从 ``foundation/llm/providers.yaml`` 读取，代码中不再硬编码。
+
 LAL (PR 4): provider id renamed from ``minimax`` to
 ``minimax`` (lowercased to match the host domain
 ``api.minimaxi.com`` and to break the visual confusion with
@@ -21,31 +24,32 @@ if TYPE_CHECKING:
 class MiniMaxProvider(BaseLLMProvider):
     """MiniMax provider using OpenAI-compatible API.
 
+    v0.41: All defaults (base_url, default_model, supported_models) are
+    loaded from ``providers.yaml`` via ``get_provider_metadata()``.
+
     LAL: ``from_config`` delegates to the single resolver when
     ``LLM_USE_RESOLVER`` is enabled, ensuring provider-internal
     defaults stay aligned with the rest of the LAL surface.
     """
 
+    _PROVIDER_ID = "minimax"
+
     def provider_name(self) -> str:
-        return "minimax"
+        return self._PROVIDER_ID
+
+    def _metadata(self) -> dict:
+        from llmwikify.foundation.llm.resolver import get_provider_metadata
+
+        return get_provider_metadata(self._PROVIDER_ID)
 
     def default_base_url(self) -> str:
-        return "https://api.minimaxi.com/v1"
+        return self._metadata().get("base_url", "")
 
     def default_model(self) -> str:
-        return "minimax-M3"
+        return self._metadata().get("default_model", "")
 
     def supported_models(self) -> list[str]:
-        return [
-            "minimax-M3",
-            "minimax-M2.7",
-            "minimax-M2.7-highspeed",
-            "minimax-M2.5",
-            "minimax-M2.5-highspeed",
-            "minimax-M2.1",
-            "minimax-M2.1-highspeed",
-            "minimax-M2",
-        ]
+        return list(self._metadata().get("supported_models", []))
 
     def from_config(self, config: dict) -> StreamableLLMClient:
         from llmwikify.foundation.llm.resolver import resolve_chat_llm, resolver_enabled

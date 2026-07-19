@@ -17,9 +17,9 @@ def _maybe_prompt_llm_setup() -> int:
         0 on skip, 1 on error.
     """
     from .init_llm_cmd import (
-        _DEFAULT_MODELS,
         _PROVIDER_ENV_KEY,
         CONFIG_PATH,
+        _get_default_model,
         auto_detect_provider,
         create_llm_config,
     )
@@ -73,13 +73,13 @@ def _maybe_prompt_llm_setup() -> int:
                 # Use create_llm_config with explicit key
                 return create_llm_config(
                     provider=default,
-                    model=_DEFAULT_MODELS.get(default, "gpt-4o"),
+model=_get_default_model(default),
                     api_key=api_key,
                 )
 
     return create_llm_config(
         provider=default,
-        model=_DEFAULT_MODELS.get(default, "gpt-4o"),
+        model=_get_default_model(default),
     )
 
 

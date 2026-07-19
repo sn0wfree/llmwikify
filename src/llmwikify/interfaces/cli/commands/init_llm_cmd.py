@@ -21,14 +21,6 @@ _ENV_PROVIDER_MAP = {
     "OPENAI_BASE_URL": "openai",  # custom endpoint
 }
 
-# Default models per provider
-_DEFAULT_MODELS = {
-    "openai": "gpt-4o",
-    "anthropic": "claude-sonnet-4-20250514",
-    "minimax": "minimax-M3",
-    "xiaomi": "MiMo-7B-RL",
-}
-
 # Env var for API key per provider
 _PROVIDER_ENV_KEY = {
     "openai": "OPENAI_API_KEY",
@@ -36,6 +28,24 @@ _PROVIDER_ENV_KEY = {
     "minimax": "MINIMAX_API_KEY",
     "xiaomi": None,
 }
+
+
+def _get_default_model(provider: str) -> str:
+    """Get default model for provider from providers.yaml (v0.41+).
+
+    Falls back to empty string if provider not found.
+    """
+    try:
+        from llmwikify.foundation.llm.resolver import (
+            apply_provider_alias,
+            get_provider_metadata,
+        )
+
+        canonical = apply_provider_alias(provider)
+        meta = get_provider_metadata(canonical)
+        return meta.get("default_model", "")
+    except Exception:
+        return ""
 
 CONFIG_DIR = Path.home() / ".llmwikify"
 CONFIG_PATH = CONFIG_DIR / "llmwikify.json"
@@ -100,7 +110,7 @@ def create_llm_config(
         return 1
 
     if not model:
-        model = _DEFAULT_MODELS.get(provider, "gpt-4o")
+        model = _get_default_model(provider)
 
     config: dict[str, Any] = {
         "llm": {
