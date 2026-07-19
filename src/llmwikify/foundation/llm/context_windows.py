@@ -1,24 +1,26 @@
 """Model context window database + multi-level fallback resolver.
 
-Data source: LiteLLM model_prices_and_context_window.json
+Data source: providers.yaml (v0.41+) + LiteLLM model_prices_and_context_window.json
 """
 
 from __future__ import annotations
 
 import logging
 import re
+from functools import lru_cache
 from typing import Any
 
 logger = logging.getLogger(__name__)
 
-# Built-in mapping table
-CONTEXT_WINDOWS: dict[str, int] = {
-    # OpenAI
-    "gpt-4o": 128_000,
-    "gpt-4o-mini": 128_000,
-    "gpt-4-turbo": 128_000,
+
+# ─── Context window 查找表（v0.41 从 providers.yaml 读取）─────────
+
+# 一些 providers.yaml 未列出的模型（如 Anthropic Claude 系列、Llama 等）
+# 仍然保留在这里。providers.yaml 中的 context_windows 是主源。
+
+_EXTRA_CONTEXT_WINDOWS: dict[str, int] = {
+    # OpenAI (未在 providers.yaml 中列出的)
     "gpt-4": 8_192,
-    "gpt-3.5-turbo": 16_385,
     "o1": 200_000,
     "o1-mini": 128_000,
     # Anthropic
@@ -33,13 +35,34 @@ CONTEXT_WINDOWS: dict[str, int] = {
     "deepseek-coder": 16_384,
     "mistral": 32_768,
     "phi3": 131_072,
-    # MiniMax
-    "MiniMax-M3": 1_000_000,
-    "MiniMax-M2.7": 1_000_000,
-    "MiniMax-M2.5": 1_000_000,
     # Fallback
     "default": 32_768,
 }
+
+
+@lru_cache(maxsize=1)
+def _load_all_context_windows() -> dict[str, int]:
+    """合并 providers.yaml 中的 context_windows 和额外的映射。
+
+    providers.yaml 中的 context_windows 优先（覆盖）。
+    """
+    from llmwikify.foundation.llm.resolver import _load_providers
+
+    data = _load_providers()
+    merged: dict[str, int] = dict(_EXTRA_CONTEXT_WINDOWS)
+    for provider_meta in data.get("providers", {}).values():
+        for model, ctx in provider_meta.get("context_windows", {}).items():
+            try:
+                merged[model] = int(ctx)
+            except (TypeError, ValueError):
+                pass
+    return merged
+
+
+# 向后兼容：保留 CONTEXT_WINDOWS 名称，但作为动态查找的快照
+def _get_context_windows() -> dict[str, int]:
+    """Get all context windows (providers.yaml + extras)."""
+    return _load_all_context_windows()
 
 # Regex to extract context window from model name (e.g. "llama3-8k" -> 8192)
 _MODEL_CTX_RE = re.compile(r"[-_](\d+)[kK]$")
@@ -146,8 +169,8 @@ def resolve_context_window(
         logger.info("Context window from model name: %d", inferred)
         return inferred
 
-    # Level 4: Built-in lookup table
-    mapped = CONTEXT_WINDOWS.get(model)
+    # Level 4: Built-in lookup table (v0.41: from providers.yaml + extras)
+    mapped = _load_all_context_windows().get(model)
     if mapped is not None:
         logger.info("Context window from lookup table: %d", mapped)
         return mapped
@@ -162,6 +185,11 @@ def resolve_context_window(
             return asked
 
     # Level 6: Conservative default
-    default = CONTEXT_WINDOWS["default"]
+    default = _load_all_context_windows().get("default", 32_768)
     logger.info("Context window using default: %d", default)
     return default
+
+
+# 向后兼容：CONTEXT_WINDOWS 名称保留，但内容来自 _load_all_context_windows()
+# 注意：这是快照，可能不会反映 providers.yaml 的运行时修改。
+CONTEXT_WINDOWS: dict[str, int] = _load_all_context_windows()

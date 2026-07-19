@@ -13,7 +13,7 @@ Configuration priority (highest wins):
     P0  environment variables  (``LLM_API_KEY``, ``LLM_BASE_URL``,
         ``LLM_MODEL``, ``LLM_PROVIDER``)
     P1  wiki config  (``config["llm"]`` dict)
-    P2  provider-internal defaults  (e.g. ``minimax`` base URL)
+    P2  provider-internal defaults  (from ``providers.yaml``)
     P3  legacy id alias  (e.g. ``minimax`` → ``minimax``)
 
 Behavioural rules:
@@ -30,28 +30,77 @@ Behavioural rules:
   integration. When set to ``"false"`` (case-insensitive), the public
   ``from_config`` entry points fall back to their original inline
   implementation. Default is ``"true"`` (use the resolver).
-"""
 
+v0.41: Provider 元数据 (base_url, auth_scheme, default_model,
+supported_models, context_windows, reasoning_split) 全部从
+``providers.yaml`` 读取，代码中不再硬编码。
+"""
 from __future__ import annotations
 
 import logging
 import os
+from functools import lru_cache
+from pathlib import Path
 from typing import Any
+
+import yaml
 
 from .spec import LLMSpec
 
 logger = logging.getLogger(__name__)
 
 
-# ─── Alias table ──────────────────────────────────────────────────────
-# Old provider id → canonical provider id. Applied in the resolver
-# before any field-level resolution so downstream code (and
-# ``provider.supported_models`` checks in PR 3) sees canonical ids
-# only.
+# ─── Provider 元数据加载（v0.41 唯一来源）──────────────────────
 
-PROVIDER_ALIASES: dict[str, str] = {
-    "minimax": "minimax",
-}
+_PROVIDERS_FILE = Path(__file__).parent / "providers.yaml"
+
+
+@lru_cache(maxsize=1)
+def _load_providers() -> dict[str, Any]:
+    """加载 providers.yaml（惰性加载，缓存结果）。
+
+    Returns:
+        dict with two keys:
+        - ``providers``: provider_name → metadata dict
+        - ``aliases``: legacy_id → canonical_id
+    """
+    if not _PROVIDERS_FILE.exists():
+        logger.error("providers.yaml not found at %s", _PROVIDERS_FILE)
+        return {"providers": {}, "aliases": {}}
+    try:
+        data = yaml.safe_load(_PROVIDERS_FILE.read_text(encoding="utf-8"))
+        if not isinstance(data, dict):
+            logger.error("providers.yaml is not a dict, got %s", type(data))
+            return {"providers": {}, "aliases": {}}
+        return {
+            "providers": data.get("providers", {}),
+            "aliases": data.get("aliases", {}),
+        }
+    except yaml.YAMLError as exc:
+        logger.error("Failed to parse providers.yaml: %s", exc)
+        return {"providers": {}, "aliases": {}}
+
+
+def get_provider_metadata(provider: str) -> dict[str, Any]:
+    """获取单个 provider 的元数据。
+
+    Args:
+        provider: canonical provider id (alias resolved)
+
+    Returns:
+        metadata dict with keys: base_url, auth_scheme, default_model,
+        reasoning_split, supported_models, context_windows.
+        Returns empty dict if provider unknown.
+    """
+    data = _load_providers()
+    return data["providers"].get(provider, {})
+
+
+# ─── Alias table（从 YAML 加载）─────────────────────────────
+
+
+def _get_aliases() -> dict[str, str]:
+    return _load_providers().get("aliases", {})
 
 
 def apply_provider_alias(provider: str) -> str:
@@ -60,7 +109,8 @@ def apply_provider_alias(provider: str) -> str:
     Unknown ids are returned unchanged. Logs at INFO when an alias is
     applied so operators can find old configs that need migration.
     """
-    aliased = PROVIDER_ALIASES.get(provider, provider)
+    aliases = _get_aliases()
+    aliased = aliases.get(provider, provider)
     if aliased != provider:
         logger.info(
             "provider alias applied: %r -> %r (consider updating config)",
@@ -69,60 +119,35 @@ def apply_provider_alias(provider: str) -> str:
     return aliased
 
 
-# ─── Provider-internal defaults (P2) ──────────────────────────────────
-# Used only when both env and config are silent for a given field.
-# The keys here intentionally do NOT include ``model`` — model is left
-# as an empty string in that case so the resolver's source-tracking is
-# accurate ("config did not specify a model"), and downstream callers
-# can decide what to do (raise, ask user, etc.). For PR 1 we keep the
-# old behaviour of defaulting ``model`` to ``"gpt-4o"`` so that
-# ``LLMClient.from_config`` does not change behaviour.
+# 向后兼容：保留 PROVIDER_ALIASES 作为模块级属性（仍可被外部引用）
+# 通过 __getattr__ 拦截，惰性加载 YAML。
+def __getattr__(name: str):
+    if name == "PROVIDER_ALIASES":
+        return _get_aliases()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
-_PROVIDER_BASE_URL_DEFAULTS: dict[str, str] = {
-    "openai": "https://api.openai.com",
-    "ollama": "http://localhost:11434/v1",
-    "lmstudio": "http://localhost:1234/v1",
-    "minimax": "https://api.minimaxi.com/v1",
-    "xiaomi": "https://token-plan-cn.xiaomimimo.com",
-}
 
-_PROVIDER_DEFAULT_MODEL: dict[str, str] = {
-    "openai": "gpt-4o",
-    "minimax": "minimax-M3",
-    "xiaomi": "mimo-v2.5-pro",
-    # ollama / lmstudio intentionally absent — no meaningful default
-}
-
-_PROVIDER_AUTH_SCHEME: dict[str, str] = {
-    "openai": "bearer",
-    "ollama": "bearer",
-    "lmstudio": "bearer",
-    "minimax": "bearer",
-    "xiaomi": "api-key",
-}
-
-_PROVIDER_REASONING_SPLIT: dict[str, bool] = {
-    "minimax": True,
-    "xiaomi": True,
-}
+# ─── Provider-internal defaults（从 YAML 加载）───────────────
 
 
 def _provider_default_base_url(provider: str) -> str:
-    return _PROVIDER_BASE_URL_DEFAULTS.get(
-        provider, "https://api.openai.com"
-    )
+    meta = get_provider_metadata(provider)
+    return meta.get("base_url", "")
 
 
 def _provider_default_model(provider: str) -> str:
-    return _PROVIDER_DEFAULT_MODEL.get(provider, "gpt-4o")
+    meta = get_provider_metadata(provider)
+    return meta.get("default_model", "")
 
 
 def _provider_auth_scheme(provider: str) -> str:
-    return _PROVIDER_AUTH_SCHEME.get(provider, "bearer")
+    meta = get_provider_metadata(provider)
+    return meta.get("auth_scheme", "bearer")
 
 
 def _provider_reasoning_split(provider: str) -> bool:
-    return _PROVIDER_REASONING_SPLIT.get(provider, False)
+    meta = get_provider_metadata(provider)
+    return bool(meta.get("reasoning_split", False))
 
 
 # ─── Env-var resolution helpers ───────────────────────────────────────
@@ -205,10 +230,7 @@ def resolve_chat_llm(config: dict[str, Any] | None = None) -> LLMSpec:
     config_api_key = _expand_env_var(config_api_key) if config_api_key else ""
     api_key = os.environ.get("LLM_API_KEY", config_api_key)
 
-    # Resolve model. Env > config > provider default. For PR 1 we
-    # keep the historical default of "gpt-4o" so that callers that
-    # don't set a model still get a usable spec. PR 4 will require
-    # the model to come from config or env, not from defaults.
+    # Resolve model. Env > config > provider default.
     model = (
         os.environ.get("LLM_MODEL")
         or llm_cfg.get("model")
@@ -283,4 +305,5 @@ __all__ = [
     "apply_provider_alias",
     "resolve_chat_llm",
     "resolver_enabled",
+    "get_provider_metadata",
 ]

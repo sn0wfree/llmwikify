@@ -1109,7 +1109,7 @@ class StreamableLLMClient(LLMClient):
             model = model or "gpt-4o"
         self.provider = provider
         raw_base = base_url if base_url else self._default_base_url(provider)
-        self.base_url = raw_base.rstrip("/").removesuffix("/v1")
+        self.base_url = raw_base.rstrip("/").removesuffix("/v1") if raw_base else ""
         self.api_key = api_key
         self.model = model
         self.reasoning_split = reasoning_split
@@ -1128,14 +1128,15 @@ class StreamableLLMClient(LLMClient):
 
     @staticmethod
     def _default_base_url(provider: str) -> str:
-        defaults = {
-            "openai": "https://api.openai.com",
-            "ollama": "http://localhost:11434/v1",
-            "lmstudio": "http://localhost:1234/v1",
-            "minimax": "https://api.minimaxi.com/v1",
-            "xiaomi": "https://token-plan-cn.xiaomimimo.com",
-        }
-        return defaults.get(provider, "https://api.openai.com")
+        """Get default base_url from providers.yaml (v0.41+).
+
+        Delegates to resolver.get_provider_metadata() so all provider
+        metadata has a single source of truth.
+        """
+        from llmwikify.foundation.llm.resolver import get_provider_metadata
+
+        meta = get_provider_metadata(provider)
+        return meta.get("base_url", "")
 
     @classmethod
     def from_config(cls, config: dict[str, Any]) -> StreamableLLMClient:

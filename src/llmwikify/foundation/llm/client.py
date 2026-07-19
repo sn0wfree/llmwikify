@@ -4,7 +4,12 @@
 (G+Y commit 4)。build_llm_client 是 LLM 基础设施的一部分, 应该在 foundation
 层, 而不是 kernel 层。
 
+v0.41: Provider 元数据 (base_url, auth_scheme) 改从 providers.yaml 读取，
+删除硬编码的 _PROVIDER_INFO。build_llm_client 改为薄包装，调用 resolver
+解析配置。
+
 依赖: foundation/llm/streamable.py (StreamableLLMClient)
+foundation/llm/resolver.py (resolve_chat_llm)
 
 Canonical imports:
     from llmwikify.foundation.llm.client import build_llm_client, load_llm_config
@@ -23,22 +28,6 @@ logger = logging.getLogger(__name__)
 # ─── Config location ─────────────────────────────────────────────────
 
 CONFIG_PATH: Path = Path.home() / ".llmwikify" / "llmwikify.json"
-
-
-# ─── Provider info table (C2: replaces hardcoded "minimax" / "bearer") ─
-#
-# Maps provider name → (default_base_url, auth_header).
-# Used by build_llm_client to fill in config gaps. Adding a new provider?
-# Add a row here. (Full provider metadata lives in apps/chat/providers/
-# for the chat agent; for simple client construction this is enough.)
-
-_PROVIDER_INFO: dict[str, tuple[str, str]] = {
-    # provider_name → (default_base_url, auth_header)
-    "minimax": ("https://api.minimaxi.com/v1", "bearer"),
-    "xiaomi": ("https://api.xiaomi.com/v1", "bearer"),
-    "openai": ("https://api.openai.com/v1", "bearer"),
-    "anthropic": ("https://api.anthropic.com/v1", "x-api-key"),
-}
 
 
 # ─── Config loading ──────────────────────────────────────────────────
@@ -70,36 +59,16 @@ def load_llm_config(config_path: Path | None = None) -> dict[str, Any]:
 # ─── Client construction ─────────────────────────────────────────────
 
 
-def _resolve_provider_info(provider: str) -> tuple[str, str]:
-    """Look up (default_base_url, auth_header) for a provider.
-
-    C2: replaces the old hardcoded `auth_header = "bearer" if ... else "bearer"`
-    no-op with a real lookup.
-
-    Args:
-        provider: Provider name from config (e.g., "minimax", "xiaomi").
-
-    Returns:
-        (default_base_url, auth_header) tuple. Falls back to
-        (generic OpenAI URL, "bearer") if the provider is unknown.
-        Logs a warning for unknown providers (don't silently default).
-    """
-    if provider in _PROVIDER_INFO:
-        return _PROVIDER_INFO[provider]
-    logger.warning(
-        "[llm_client] unknown provider %r; falling back to OpenAI defaults. "
-        "Add an entry to _PROVIDER_INFO if you want custom base_url/auth_header.",
-        provider,
-    )
-    return _PROVIDER_INFO["openai"]
-
-
 def build_llm_client(
     config: dict[str, Any] | None = None,
     model: str | None = None,
     config_path: Path | None = None,
 ) -> Any:
     """Build a ``StreamableLLMClient`` from user config.
+
+    v0.41: This is now a thin wrapper around ``resolve_chat_llm()``.
+    All provider metadata (base_url, auth_scheme, default_model) is
+    loaded from ``providers.yaml``; no hardcoded defaults remain.
 
     Args:
         config: Pre-loaded config dict. If None, loads from
@@ -114,6 +83,7 @@ def build_llm_client(
         RuntimeError: If LLM is disabled in config, provider is missing,
             or api_key is not configured.
     """
+    from llmwikify.foundation.llm.resolver import resolve_chat_llm
     from llmwikify.foundation.llm.streamable import StreamableLLMClient
 
     if config is None:
@@ -125,44 +95,26 @@ def build_llm_client(
             "Set llm.enabled=true to enable."
         )
 
-    # C2: provider is REQUIRED (was hardcoded to "minimax" in pre-C2).
-    # If the config has no provider, fail loudly rather than silently
-    # fall back to minimax.
-    provider = config.get("provider")
-    if not provider:
-        raise RuntimeError(
-            f"Missing 'provider' in {config_path or CONFIG_PATH}. "
-            f"Set llm.provider to one of: {', '.join(_PROVIDER_INFO.keys())}"
-        )
+    # Wrap config dict to match resolve_chat_llm expected format
+    wrapped_config: dict[str, Any] = {"llm": dict(config)}
+    if model is not None:
+        wrapped_config["llm"]["model"] = model
 
-    # C2: auth_header from provider-info table (was no-op hardcoded "bearer").
-    default_base_url, auth_header = _resolve_provider_info(provider)
-    base_url = config.get("base_url") or default_base_url
-    chosen_model = model or config.get("model") or "MiniMax-M2.7"
-    api_key = config.get("api_key", "")
-    timeout = config.get("timeout", 600)
+    spec = resolve_chat_llm(wrapped_config)
 
-    if not api_key:
+    if not spec.api_key:
         raise RuntimeError(
             f"Missing api_key in {config_path or CONFIG_PATH}. Set llm.api_key first."
         )
 
     logger.info(
         "[llm_client] provider=%s model=%s base_url=%s timeout=%s",
-        provider,
-        chosen_model,
-        base_url,
-        timeout,
+        spec.provider,
+        spec.model,
+        spec.base_url,
+        spec.timeout,
     )
-    return StreamableLLMClient(
-        provider=provider,
-        base_url=base_url,
-        api_key=api_key,
-        model=chosen_model,
-        auth_header=auth_header,
-        reasoning_split=True,
-        request_timeout_seconds=float(timeout),
-    )
+    return StreamableLLMClient.from_spec(spec)
 
 
-__all__ = ["CONFIG_PATH", "load_llm_config", "build_llm_client", "_PROVIDER_INFO"]
+__all__ = ["CONFIG_PATH", "load_llm_config", "build_llm_client"]
