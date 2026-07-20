@@ -17,16 +17,14 @@ def _extract_pdf(path: Path) -> ExtractedContent:
             metadata={"error": "pymupdf not installed. Install with: pip install pymupdf"}
         )
 
-    doc = pymupdf.open(path)
-    pages = []
-    page_count = len(doc)
+    with pymupdf.open(path) as doc:
+        pages = []
+        page_count = len(doc)
 
-    for page_num in range(page_count):
-        page = doc[page_num]
-        text = page.get_text()
-        pages.append(f"--- Page {page_num + 1} ---\n{text}")
-
-    doc.close()
+        for page_num in range(page_count):
+            page = doc[page_num]
+            text = page.get_text()
+            pages.append(f"--- Page {page_num + 1} ---\n{text}")
 
     full_text = "\n\n".join(pages)
 
