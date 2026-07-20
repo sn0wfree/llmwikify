@@ -29,6 +29,55 @@ from .._base import Command
 logger = logging.getLogger(__name__)
 
 
+def _run_startup_migration(wiki: Any) -> None:
+    """Run auto-migration on all known wiki roots at startup.
+
+    v0.41: Migrate deprecated sections in .wiki-config.yaml to the
+    global llmwikify.json before serving any requests. Failures are
+    logged but do not block startup (best-effort migration).
+    """
+    try:
+        from llmwikify.foundation.migration import (
+            auto_migrate_wiki_config,
+            discover_wikis,
+        )
+    except ImportError:
+        return
+
+    # 1. Current wiki_root (passed in by WikiCLI)
+    wiki_roots: list[Path] = []
+    if hasattr(wiki, "root") and wiki.root:
+        wiki_roots.append(Path(wiki.root))
+
+    # 2. Discovered wikis (env / cwd)
+    try:
+        for root in discover_wikis():
+            if root not in wiki_roots:
+                wiki_roots.append(root)
+    except Exception:
+        pass
+
+    for root in wiki_roots:
+        try:
+            result = auto_migrate_wiki_config(root, auto_resolve="interactive")
+            if result.migrated:
+                logger.warning(
+                    "[migrate] Auto-migrated .wiki-config.yaml in %s "
+                    "(backup: %s, %d fields changed)",
+                    root, result.backup_path, len(result.changes),
+                )
+            elif result.conflicts and not result.dry_run:
+                logger.warning(
+                    "[migrate] Conflicts detected in %s but skipped "
+                    "(%d conflicts). Run `llmwikify migrate-config` manually.",
+                    root, len(result.conflicts),
+                )
+        except Exception as exc:
+            logger.warning(
+                "[migrate] Auto-migration failed for %s: %s", root, exc,
+            )
+
+
 def run_serve(wiki: Any, config: dict, args: Any) -> int:
     """Start the MCP server (and optionally the Web UI).
 
@@ -44,6 +93,10 @@ def run_serve(wiki: Any, config: dict, args: Any) -> int:
     """
     from llmwikify.foundation.config import get_wikis_config
     from llmwikify.interfaces.server import WikiServer
+
+    # v0.41: auto-migrate .wiki-config.yaml before starting server.
+    if not getattr(args, "no_migrate", False):
+        _run_startup_migration(wiki)
 
     # Phase 7+ (2026-07-08): wire the default LLM provider into WikiServer
     # so Phase 6 DreamScheduler + Phase 9 AutoCompact can actually start.
@@ -364,6 +417,14 @@ def setup_serve_parser(subparsers: Any) -> None:
             "with dream_scheduler + auto_compact disabled. Default: exit "
             "with error and a fix-it hint. Has no effect when llm.enabled=false "
             "or the config is missing (those already return None silently)."
+        ),
+    )
+    p.add_argument(
+        "--no-migrate",
+        action="store_true",
+        help=(
+            "Skip auto-migration of .wiki-config.yaml at startup. "
+            "Default: auto-migrate if version < 0.41."
         ),
     )
 

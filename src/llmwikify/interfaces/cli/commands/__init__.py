@@ -44,6 +44,7 @@ from .init_llm_cmd import InitLlmCommand, run_init_llm
 from .knowledge_gaps import KnowledgeGapsCommand, run_knowledge_gaps
 from .lint import LintCommand, run_lint
 from .log_cmd import LogCommand, run_log
+from .migrate_config_cmd import MigrateConfigCommand, run_migrate_config
 from .qmd import QmdCommand, run_qmd
 from .read_page import ReadPageCommand, run_read_page
 from .references import ReferencesCommand, run_references
@@ -93,6 +94,7 @@ register_command(DictCommand())
 register_command(DoctorCommand())
 register_command(HelpCommand())
 register_command(AuthCommand())
+register_command(MigrateConfigCommand())
 
 # C3 backward-compat re-exports — when ``commands.py`` was
 # renamed to ``_app.py`` (Phase 1 #2 / C2-C3) to make room
