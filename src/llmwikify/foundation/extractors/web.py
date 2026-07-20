@@ -1,10 +1,14 @@
 """Web URL extractor."""
 
 import concurrent.futures
+import logging
 
 import requests
 
+from ..utils import is_safe_url
 from .base import ExtractedContent
+
+logger = logging.getLogger(__name__)
 
 # Default timeout for URL fetching (connect, read)
 FETCH_TIMEOUT = (10, 30)  # (connect_timeout, read_timeout)
@@ -15,6 +19,9 @@ _executor = concurrent.futures.ThreadPoolExecutor(max_workers=4)
 
 def _fetch_with_timeout(url: str, timeout: tuple[int, int] = FETCH_TIMEOUT) -> str | None:
     """Fetch URL content with explicit timeout using requests."""
+    if not is_safe_url(url):
+        logger.warning("SSRF blocked: %s", url)
+        return None
     try:
         resp = requests.get(url, timeout=timeout, headers={
             "User-Agent": "Mozilla/5.0 (compatible; ResearchBot/1.0)",
@@ -35,6 +42,14 @@ def _extract_url(url: str, timeout: tuple[int, int] = FETCH_TIMEOUT) -> Extracte
             source_type="error",
             title=url,
             metadata={"error": "trafilatura not installed. Install with: pip install trafilatura"}
+        )
+
+    if not is_safe_url(url):
+        return ExtractedContent(
+            text="",
+            source_type="error",
+            title=url,
+            metadata={"error": f"URL blocked by SSRF protection: {url}"}
         )
 
     try:

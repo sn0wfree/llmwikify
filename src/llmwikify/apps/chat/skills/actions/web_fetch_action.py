@@ -45,6 +45,7 @@ from llmwikify.apps.chat.skills.base import (
     SkillContext,
     SkillResult,
 )
+from llmwikify.foundation.utils import is_safe_url
 
 logger = logging.getLogger(__name__)
 
@@ -133,6 +134,10 @@ async def fetch_url(
 
     if not url or not isinstance(url, str):
         return {"error": "url is required", "url": url}
+
+    # SSRF protection: block internal/private IPs
+    if not is_safe_url(url):
+        return {"error": f"URL blocked by SSRF protection: {url}", "url": url}
 
     cap = min(max_chars, MAX_HARD_CAP)
     try:
