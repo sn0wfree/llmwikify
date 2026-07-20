@@ -64,6 +64,13 @@ class ToolCallRepository(ChatDBBase):
                     )
                 except sqlite3.OperationalError:
                     pass
+            # Index for session_id + created_at (covers get_tool_calls and DELETE)
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_tool_calls_session_created
+                ON tool_calls(session_id, created_at)
+                """
+            )
             conn.commit()
 
     def log_tool_call(

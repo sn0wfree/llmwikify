@@ -211,6 +211,14 @@ class ResearchDatabase(BaseDatabase):
         """
             )
 
+            # Index for wiki_id filtering (admin/CLI queries)
+            conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_autoresearch_sessions_wiki_id
+        ON autoresearch_sessions(wiki_id)
+        """
+            )
+
             conn.commit()
 
     # ─── Research methods (moved from ChatDatabase) ─────────────

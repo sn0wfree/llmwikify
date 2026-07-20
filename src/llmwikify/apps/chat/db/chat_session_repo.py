@@ -66,6 +66,20 @@ class ChatSessionRepository(ChatDBBase):
                 )
             except sqlite3.OperationalError:
                 pass  # column already exists
+            # Index for ORDER BY created_at DESC (list_chat_sessions)
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_chat_sessions_created_at
+                ON chat_sessions(created_at)
+                """
+            )
+            # Index for wiki_id filtering (admin/CLI queries)
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_chat_sessions_wiki_id
+                ON chat_sessions(wiki_id)
+                """
+            )
 
     def create_chat_session(
         self,
