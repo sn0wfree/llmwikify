@@ -40,7 +40,7 @@ class ChatSessionRepository(ChatDBBase):
     """Repository for the ``chat_sessions`` table."""
 
     def _init_schema(self) -> None:
-        with sqlite3.connect(self.db_path) as conn:
+        with self._mgr.transaction() as conn:
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS chat_sessions (
@@ -66,7 +66,6 @@ class ChatSessionRepository(ChatDBBase):
                 )
             except sqlite3.OperationalError:
                 pass  # column already exists
-            conn.commit()
 
     def create_chat_session(
         self,
@@ -75,70 +74,58 @@ class ChatSessionRepository(ChatDBBase):
     ) -> str:
         """Insert a new chat session and return its id."""
         session_id = uuid.uuid4().hex
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute(
-                """INSERT INTO chat_sessions (id, wiki_id, jwt_token)
-                   VALUES (?, ?, ?)""",
-                (session_id, wiki_id, jwt_token),
-            )
-            conn.commit()
+        self._mgr.execute_write(
+            """INSERT INTO chat_sessions (id, wiki_id, jwt_token)
+               VALUES (?, ?, ?)""",
+            (session_id, wiki_id, jwt_token),
+        )
         return session_id
 
     def get_chat_session(self, session_id: str) -> dict[str, Any] | None:
         """Fetch one session by id, or None if not found."""
-        with self._connect() as conn:
-            row = conn.execute(
-                "SELECT * FROM chat_sessions WHERE id = ?",
-                (session_id,),
-            ).fetchone()
-            return dict(row) if row else None
+        return self._mgr.select_one(
+            "SELECT * FROM chat_sessions WHERE id = ?",
+            (session_id,),
+        )
 
     def update_chat_session_wiki(
         self, session_id: str, wiki_id: str
     ) -> None:
         """Update a session's wiki binding."""
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute(
-                """UPDATE chat_sessions
-                   SET wiki_id = ?, updated_at = datetime('now')
-                   WHERE id = ?""",
-                (wiki_id, session_id),
-            )
-            conn.commit()
+        self._mgr.execute_write(
+            """UPDATE chat_sessions
+               SET wiki_id = ?, updated_at = datetime('now')
+               WHERE id = ?""",
+            (wiki_id, session_id),
+        )
 
     def update_chat_session_title(
         self, session_id: str, title: str
     ) -> None:
         """Update a session's auto-derived title (v0.40)."""
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute(
-                """UPDATE chat_sessions
-                   SET title = ?, updated_at = datetime('now')
-                   WHERE id = ?""",
-                (title, session_id),
-            )
-            conn.commit()
+        self._mgr.execute_write(
+            """UPDATE chat_sessions
+               SET title = ?, updated_at = datetime('now')
+               WHERE id = ?""",
+            (title, session_id),
+        )
 
     def update_chat_session_jwt(
         self, session_id: str, jwt_token: str
     ) -> None:
         """Update a session's JWT token."""
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute(
-                """UPDATE chat_sessions
-                   SET jwt_token = ?, updated_at = datetime('now')
-                   WHERE id = ?""",
-                (jwt_token, session_id),
-            )
-            conn.commit()
+        self._mgr.execute_write(
+            """UPDATE chat_sessions
+               SET jwt_token = ?, updated_at = datetime('now')
+               WHERE id = ?""",
+            (jwt_token, session_id),
+        )
 
     def list_chat_sessions(self) -> list[dict[str, Any]]:
         """List all sessions, newest first."""
-        with self._connect() as conn:
-            rows = conn.execute(
-                "SELECT * FROM chat_sessions ORDER BY created_at DESC"
-            ).fetchall()
-            return [dict(r) for r in rows]
+        return self._mgr.select_all(
+            "SELECT * FROM chat_sessions ORDER BY created_at DESC"
+        )
 
     def delete_chat_session(self, session_id: str) -> bool:
         """Delete one session row. Returns True if a row was removed.
@@ -148,13 +135,11 @@ class ChatSessionRepository(ChatDBBase):
         deleting related rows in event_log, chat_permissions,
         chat_messages, tool_calls, context_entries.
         """
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.execute(
-                "DELETE FROM chat_sessions WHERE id = ?",
-                (session_id,),
-            )
-            conn.commit()
-            return cursor.rowcount > 0
+        cursor = self._mgr.execute_write(
+            "DELETE FROM chat_sessions WHERE id = ?",
+            (session_id,),
+        )
+        return cursor.rowcount > 0
 
     def get_chat_session_title(self, session_id: str) -> str:
         """Return the stored title, or fall back to first user message.
@@ -216,7 +201,7 @@ class ChatSessionRepository(ChatDBBase):
         so metadata writes never fail on a missing row.
         """
         blob = json.dumps(metadata) if metadata else None
-        with sqlite3.connect(self.db_path) as conn:
+        with self._mgr.transaction() as conn:
             conn.execute(
                 """INSERT OR IGNORE INTO chat_sessions
                    (id, wiki_id, jwt_token, title, metadata, created_at, updated_at)
@@ -229,7 +214,6 @@ class ChatSessionRepository(ChatDBBase):
                    WHERE id = ?""",
                 (blob, session_id),
             )
-            conn.commit()
 
     def update_session_metadata(
         self, session_id: str, **patch: Any,
