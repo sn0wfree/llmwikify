@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Any
 
 from llmwikify.apps.chat.memory.tables import ALL_PHASE6_DDL
+from llmwikify.foundation.db import get_connection
 
 logger = logging.getLogger(__name__)
 
@@ -63,15 +64,15 @@ class MemoryConsolidationStore:
     Step 2) to persist summaries.
     """
 
-    def __init__(self, db_path: str | Path):
+    def __init__(self, db_path: str | Path, *, _mgr=None):
         self.db_path = str(db_path)
+        self._mgr = _mgr or get_connection(self.db_path)
 
     def init_schema(self) -> None:
         """Create table + indexes (idempotent)."""
-        with sqlite3.connect(self.db_path) as conn:
+        with self._mgr.transaction() as conn:
             for ddl in ALL_PHASE6_DDL:
                 conn.execute(ddl)
-            conn.commit()
 
     def add(
         self,
@@ -86,56 +87,50 @@ class MemoryConsolidationStore:
     ) -> str:
         """Insert a consolidation record. Returns the new id."""
         cid = consolidation_id or str(uuid.uuid4())
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute(
-                """INSERT INTO memory_consolidations
-                   (id, session_id, start_msg_idx, end_msg_idx,
-                    summary, md_file_path, tokens_before, tokens_after, created_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (
-                    cid,
-                    session_id,
-                    start_msg_idx,
-                    end_msg_idx,
-                    summary,
-                    md_file_path,
-                    tokens_before,
-                    tokens_after,
-                    time.time(),
-                ),
-            )
-            conn.commit()
+        self._mgr.execute_write(
+            """INSERT INTO memory_consolidations
+               (id, session_id, start_msg_idx, end_msg_idx,
+                summary, md_file_path, tokens_before, tokens_after, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                cid,
+                session_id,
+                start_msg_idx,
+                end_msg_idx,
+                summary,
+                md_file_path,
+                tokens_before,
+                tokens_after,
+                time.time(),
+            ),
+        )
         return cid
 
     def get(self, consolidation_id: str) -> ConsolidationRecord | None:
         """Fetch one record by id. Returns None if not found."""
-        with sqlite3.connect(self.db_path) as conn:
-            conn.row_factory = sqlite3.Row
-            row = conn.execute(
-                "SELECT * FROM memory_consolidations WHERE id = ?",
-                (consolidation_id,),
-            ).fetchone()
-            if row is None:
-                return None
-            return self._row_to_record(row)
+        row = self._mgr.conn.execute(
+            "SELECT * FROM memory_consolidations WHERE id = ?",
+            (consolidation_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        return self._row_to_record(row)
 
     def list_by_session(
         self, session_id: str, limit: int | None = None
     ) -> list[ConsolidationRecord]:
         """List consolidations for one session, newest first."""
-        with sqlite3.connect(self.db_path) as conn:
-            conn.row_factory = sqlite3.Row
-            sql = (
-                "SELECT * FROM memory_consolidations "
-                "WHERE session_id = ? "
-                "ORDER BY created_at DESC"
-            )
-            params: tuple = (session_id,)
-            if limit is not None:
-                sql += " LIMIT ?"
-                params = (session_id, limit)
-            rows = conn.execute(sql, params).fetchall()
-            return [self._row_to_record(r) for r in rows]
+        sql = (
+            "SELECT * FROM memory_consolidations "
+            "WHERE session_id = ? "
+            "ORDER BY created_at DESC"
+        )
+        params: tuple = (session_id,)
+        if limit is not None:
+            sql += " LIMIT ?"
+            params = (session_id, limit)
+        rows = self._mgr.conn.execute(sql, params).fetchall()
+        return [self._row_to_record(r) for r in rows]
 
     def list_since(
         self,
@@ -147,19 +142,17 @@ class MemoryConsolidationStore:
         Used by Dream to scan for new unconsolidated history
         (since-last-run cursor pattern, borrowed from nanobot).
         """
-        with sqlite3.connect(self.db_path) as conn:
-            conn.row_factory = sqlite3.Row
-            sql = (
-                "SELECT * FROM memory_consolidations "
-                "WHERE created_at > ? "
-                "ORDER BY created_at ASC"
-            )
-            params: tuple = (since_timestamp,)
-            if limit is not None:
-                sql += " LIMIT ?"
-                params = (since_timestamp, limit)
-            rows = conn.execute(sql, params).fetchall()
-            return [self._row_to_record(r) for r in rows]
+        sql = (
+            "SELECT * FROM memory_consolidations "
+            "WHERE created_at > ? "
+            "ORDER BY created_at ASC"
+        )
+        params: tuple = (since_timestamp,)
+        if limit is not None:
+            sql += " LIMIT ?"
+            params = (since_timestamp, limit)
+        rows = self._mgr.conn.execute(sql, params).fetchall()
+        return [self._row_to_record(r) for r in rows]
 
     def latest_for_session(self, session_id: str) -> ConsolidationRecord | None:
         """Return the most recent consolidation for a session (or None)."""
@@ -168,22 +161,19 @@ class MemoryConsolidationStore:
 
     def delete(self, consolidation_id: str) -> bool:
         """Delete a consolidation record by id. Returns True if deleted."""
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.execute(
-                "DELETE FROM memory_consolidations WHERE id = ?",
-                (consolidation_id,),
-            )
-            conn.commit()
-            return cursor.rowcount > 0
+        cursor = self._mgr.execute_write(
+            "DELETE FROM memory_consolidations WHERE id = ?",
+            (consolidation_id,),
+        )
+        return cursor.rowcount > 0
 
     def count_by_session(self, session_id: str) -> int:
         """Count consolidation records for one session."""
-        with sqlite3.connect(self.db_path) as conn:
-            row = conn.execute(
-                "SELECT COUNT(*) FROM memory_consolidations WHERE session_id = ?",
-                (session_id,),
-            ).fetchone()
-            return int(row[0]) if row else 0
+        row = self._mgr.select_one(
+            "SELECT COUNT(*) as cnt FROM memory_consolidations WHERE session_id = ?",
+            (session_id,),
+        )
+        return row["cnt"] if row else 0
 
     @staticmethod
     def _row_to_record(row: sqlite3.Row) -> ConsolidationRecord:
