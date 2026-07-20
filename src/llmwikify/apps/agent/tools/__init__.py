@@ -589,12 +589,10 @@ class WikiToolRegistry:
         self.wiki.write_page(synthesis_page, synthesis_md)
 
         # 7. Update session wiki_page_name
-        with sqlite3.connect(self.db.db_path) as conn:
-            conn.execute(
-                "UPDATE autoresearch_sessions SET wiki_page_name = ? WHERE id = ?",
-                (page_name, session_id),
-            )
-            conn.commit()
+        self.db._mgr.execute_write(
+            "UPDATE autoresearch_sessions SET wiki_page_name = ? WHERE id = ?",
+            (page_name, session_id),
+        )
 
         return json.dumps({
             "page_name": page_name,

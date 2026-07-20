@@ -149,7 +149,7 @@ class ChatDatabase(BaseDatabase):
         # WikiDatabase which create their own tables lazily on first use.
         # The remaining tables (context_entries, event_log) are
         # still ChatDatabase's responsibility for historical reasons.
-        with sqlite3.connect(self.db_path) as conn:
+        with self._mgr.transaction() as conn:
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS context_entries (
@@ -196,7 +196,6 @@ class ChatDatabase(BaseDatabase):
             from llmwikify.apps.chat.memory.tables import ALL_PHASE6_DDL
             for ddl in ALL_PHASE6_DDL:
                 conn.execute(ddl)
-            conn.commit()
 
     # ─── Chat sessions (8 → ChatSessionRepository) ──────────────
 
@@ -235,39 +234,33 @@ class ChatDatabase(BaseDatabase):
         chat_messages, tool_calls, context_entries, then chat_sessions.
         All deletes succeed or all roll back.
         """
-        with sqlite3.connect(self.db_path) as conn:
+        with self._mgr.transaction() as conn:
             conn.execute("PRAGMA foreign_keys = ON")
-            try:
-                conn.execute("BEGIN IMMEDIATE")
-                conn.execute(
-                    "DELETE FROM event_log WHERE session_id = ?",
-                    (session_id,),
-                )
-                conn.execute(
-                    "DELETE FROM chat_permissions WHERE session_id = ?",
-                    (session_id,),
-                )
-                conn.execute(
-                    "DELETE FROM chat_messages WHERE session_id = ?",
-                    (session_id,),
-                )
-                conn.execute(
-                    "DELETE FROM tool_calls WHERE session_id = ?",
-                    (session_id,),
-                )
-                conn.execute(
-                    "DELETE FROM context_entries WHERE session_id = ?",
-                    (session_id,),
-                )
-                cursor = conn.execute(
-                    "DELETE FROM chat_sessions WHERE id = ?",
-                    (session_id,),
-                )
-                conn.execute("COMMIT")
-                return cursor.rowcount > 0
-            except Exception:
-                conn.execute("ROLLBACK")
-                raise
+            conn.execute(
+                "DELETE FROM event_log WHERE session_id = ?",
+                (session_id,),
+            )
+            conn.execute(
+                "DELETE FROM chat_permissions WHERE session_id = ?",
+                (session_id,),
+            )
+            conn.execute(
+                "DELETE FROM chat_messages WHERE session_id = ?",
+                (session_id,),
+            )
+            conn.execute(
+                "DELETE FROM tool_calls WHERE session_id = ?",
+                (session_id,),
+            )
+            conn.execute(
+                "DELETE FROM context_entries WHERE session_id = ?",
+                (session_id,),
+            )
+            cursor = conn.execute(
+                "DELETE FROM chat_sessions WHERE id = ?",
+                (session_id,),
+            )
+            return cursor.rowcount > 0
 
     def get_chat_session_title(self, session_id: str) -> str:
         """Stored title OR fallback to first user message (max 100 chars)."""

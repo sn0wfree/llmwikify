@@ -41,7 +41,7 @@ class ToolCallRepository(ChatDBBase):
     """Repository for the ``tool_calls`` table."""
 
     def _init_schema(self) -> None:
-        with sqlite3.connect(self.db_path) as conn:
+        with self._mgr.transaction() as conn:
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS tool_calls (
@@ -71,7 +71,6 @@ class ToolCallRepository(ChatDBBase):
                 ON tool_calls(session_id, created_at)
                 """
             )
-            conn.commit()
 
     def log_tool_call(
         self,
@@ -83,15 +82,13 @@ class ToolCallRepository(ChatDBBase):
     ) -> str:
         """Insert a new tool call and return its id."""
         call_id = uuid.uuid4().hex
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute(
-                """INSERT INTO tool_calls
-                   (id, session_id, tool_name, arguments, status, started_at)
-                   VALUES (?, ?, ?, ?, ?, ?)""",
-                (call_id, session_id, tool_name,
-                 json.dumps(arguments, ensure_ascii=False), status, started_at),
-            )
-            conn.commit()
+        self._mgr.execute_write(
+            """INSERT INTO tool_calls
+               (id, session_id, tool_name, arguments, status, started_at)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (call_id, session_id, tool_name,
+             json.dumps(arguments, ensure_ascii=False), status, started_at),
+        )
         return call_id
 
     def update_tool_call(
@@ -102,16 +99,14 @@ class ToolCallRepository(ChatDBBase):
         finished_at: str | None = None,
     ) -> None:
         """Update a tool call's result, status, and finished_at."""
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute(
-                """UPDATE tool_calls
-                   SET result = ?, status = ?, finished_at = ?
-                   WHERE id = ?""",
-                (json.dumps(result, ensure_ascii=False)
-                 if not isinstance(result, str) else result,
-                 status, finished_at, call_id),
-            )
-            conn.commit()
+        self._mgr.execute_write(
+            """UPDATE tool_calls
+               SET result = ?, status = ?, finished_at = ?
+               WHERE id = ?""",
+            (json.dumps(result, ensure_ascii=False)
+             if not isinstance(result, str) else result,
+             status, finished_at, call_id),
+        )
 
     def get_tool_calls(self, session_id: str) -> list[dict[str, Any]]:
         """Fetch all tool calls for a session, oldest first."""

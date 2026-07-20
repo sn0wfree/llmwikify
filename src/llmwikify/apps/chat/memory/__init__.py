@@ -189,20 +189,18 @@ class ContextStore:
         """Add a context entry."""
         import uuid
         entry_id = str(uuid.uuid4())
-        with sqlite3.connect(self.db.db_path) as conn:
-            conn.execute(
-                """INSERT INTO context_entries
-                   (id, session_id, entry_type, content, metadata)
-                   VALUES (?, ?, ?, ?, ?)""",
-                (
-                    entry_id,
-                    session_id,
-                    entry_type,
-                    content,
-                    json.dumps(metadata) if metadata else None,
-                ),
-            )
-            conn.commit()
+        self.db._mgr.execute_write(
+            """INSERT INTO context_entries
+               (id, session_id, entry_type, content, metadata)
+               VALUES (?, ?, ?, ?, ?)""",
+            (
+                entry_id,
+                session_id,
+                entry_type,
+                content,
+                json.dumps(metadata) if metadata else None,
+            ),
+        )
         return entry_id
 
     def list(
@@ -212,35 +210,31 @@ class ContextStore:
         limit: int = 50,
     ) -> list[dict]:
         """List context entries for a session."""
-        with sqlite3.connect(self.db.db_path) as conn:
-            conn.row_factory = sqlite3.Row
-            if entry_type:
-                rows = conn.execute(
-                    """SELECT * FROM context_entries
-                       WHERE session_id = ? AND entry_type = ?
-                       ORDER BY created_at DESC
-                       LIMIT ?""",
-                    (session_id, entry_type, limit),
-                ).fetchall()
-            else:
-                rows = conn.execute(
-                    """SELECT * FROM context_entries
-                       WHERE session_id = ?
-                       ORDER BY created_at DESC
-                       LIMIT ?""",
-                    (session_id, limit),
-                ).fetchall()
-            return [dict(r) for r in rows]
+        if entry_type:
+            rows = self.db._mgr.select_all(
+                """SELECT * FROM context_entries
+                   WHERE session_id = ? AND entry_type = ?
+                   ORDER BY created_at DESC
+                   LIMIT ?""",
+                (session_id, entry_type, limit),
+            )
+        else:
+            rows = self.db._mgr.select_all(
+                """SELECT * FROM context_entries
+                   WHERE session_id = ?
+                   ORDER BY created_at DESC
+                   LIMIT ?""",
+                (session_id, limit),
+            )
+        return rows
 
     def clear(self, session_id: str) -> int:
         """Delete all context entries for a session. Returns count."""
-        with sqlite3.connect(self.db.db_path) as conn:
-            cursor = conn.execute(
-                "DELETE FROM context_entries WHERE session_id = ?",
-                (session_id,),
-            )
-            conn.commit()
-            return cursor.rowcount
+        cursor = self.db._mgr.execute_write(
+            "DELETE FROM context_entries WHERE session_id = ?",
+            (session_id,),
+        )
+        return cursor.rowcount
 
     # ── async wrappers (Phase 3.5 / v0.36) ───────────────────
 

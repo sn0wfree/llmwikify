@@ -29,7 +29,7 @@ class PermissionRepository(ChatDBBase):
     """Repository for the ``chat_permissions`` table."""
 
     def _init_schema(self) -> None:
-        with sqlite3.connect(self.db_path) as conn:
+        with self._mgr.transaction() as conn:
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS chat_permissions (
@@ -48,7 +48,6 @@ class PermissionRepository(ChatDBBase):
                 ON chat_permissions(tool_name, response)
                 """
             )
-            conn.commit()
 
     def save_permission(
         self,
@@ -59,14 +58,12 @@ class PermissionRepository(ChatDBBase):
     ) -> str:
         """Save a permission grant. Returns the permission id."""
         perm_id = uuid.uuid4().hex
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute(
-                """INSERT INTO chat_permissions
-                   (id, session_id, tool_name, pattern, response)
-                   VALUES (?, ?, ?, ?, ?)""",
-                (perm_id, session_id, tool_name, pattern, response),
-            )
-            conn.commit()
+        self._mgr.execute_write(
+            """INSERT INTO chat_permissions
+               (id, session_id, tool_name, pattern, response)
+               VALUES (?, ?, ?, ?, ?)""",
+            (perm_id, session_id, tool_name, pattern, response),
+        )
         return perm_id
 
     def has_always_permission(

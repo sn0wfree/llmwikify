@@ -85,7 +85,7 @@ class AdminStatsRepository(ChatDBBase):
     def delete_wiki_data(self, wiki_id: str) -> dict[str, Any]:
         """Delete all rows belonging to a wiki_id. Returns deletion counts."""
         deleted: dict[str, int] = {}
-        with sqlite3.connect(self.db_path) as conn:
+        with self._mgr.transaction() as conn:
             for table, col in [
                 ("chat_sessions", "wiki_id"),
                 ("dream_proposals", "wiki_id"),
@@ -104,7 +104,6 @@ class AdminStatsRepository(ChatDBBase):
                 (wiki_id,),
             )
             deleted["autoresearch_sessions"] = cursor.rowcount
-            conn.commit()
         return {"wiki_id": wiki_id, "deleted": deleted}
 
     def export_wiki_data(self, wiki_id: str) -> dict[str, Any]:
