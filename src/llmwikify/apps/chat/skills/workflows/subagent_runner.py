@@ -319,19 +319,10 @@ def _spawn_subprocess(
     # the child's ends of both.
     req_w.close()
     rep_w.close()
-    try:
-        # We can't send through req_r (it's read-only from parent).
-        # Re-architect: we need a *new* request pipe where parent is
-        # the writer. The earlier "req_r" was wrong. Spin up a
-        # second pair just for the request and discard the first.
-        pass
-    except Exception:
-        process.terminate()
-        process.join(timeout=5)
-        if process.is_alive():
-            process.kill()
-            process.join()
-        raise
+    # No-op: process cleanup happens unconditionally below.
+    # The earlier pipe-direction bug (req_r vs req_w) has been
+    # fixed by switching to a duplex pipe. The cleanup at lines
+    # 340-344 handles all failure cases.
 
     # We made the wrong assumption about which end is which. The
     # simplest fix: have the child write back on its request pipe

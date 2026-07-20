@@ -31,6 +31,7 @@ Design notes
 """
 from __future__ import annotations
 
+import concurrent.futures
 import json
 import logging
 import re
@@ -381,6 +382,10 @@ class WorkflowExecutor:
                     phase_id = inflight.pop(fut)
                     try:
                         result = fut.result()
+                    except concurrent.futures.CancelledError:
+                        logger.warning("phase %s was cancelled", phase_id)
+                        self._mark_failed(phase_id, "phase cancelled")
+                        continue
                     except Exception as e:  # pragma: no cover
                         logger.error("phase %s raised: %s", phase_id, e, exc_info=True)
                         self._mark_failed(phase_id, str(e))
@@ -424,13 +429,22 @@ class WorkflowExecutor:
                 inputs=self.inputs,
                 outputs=self._outputs,
             )
-        except Exception as e:
+        except (KeyError, TypeError, ValueError, _UnresolvableRef) as e:
             return SubagentResult(
                 status="error",
                 output={},
                 tokens_used=0,
                 duration_seconds=0.0,
                 error=f"failed to resolve $refs: {e}",
+            )
+        except Exception as e:
+            logger.exception("unexpected error resolving $refs for phase %s", phase.id)
+            return SubagentResult(
+                status="error",
+                output={},
+                tokens_used=0,
+                duration_seconds=0.0,
+                error=f"failed to resolve $refs: {type(e).__name__}: {e}",
             )
         # Build per-phase budget
         per_phase_budget = {

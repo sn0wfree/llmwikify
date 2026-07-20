@@ -7,6 +7,7 @@ Design principle: "LLM does grunt work, human makes decisions"
 """
 
 import logging
+import sqlite3
 
 from llmwikify.kernel.storage.backend import is_path_excluded
 
@@ -66,8 +67,11 @@ class GraphAnalyzer:
                 include_wikilinks=True,
                 include_relations=True,
             )
+        except (sqlite3.OperationalError, KeyError, TypeError) as e:
+            logger.warning("Graph build failed with data error: %s", e)
+            return {"nodes": [], "edges": []}
         except Exception as e:
-            logger.warning("Graph build failed: %s", e)
+            logger.exception("Graph build failed with unexpected error: %s", e)
             return {"nodes": [], "edges": []}
 
     def _build_graph(self, graph_data: dict):

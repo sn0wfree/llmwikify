@@ -49,6 +49,8 @@ from llmwikify.apps.chat.skills.base import (
     SkillContext,
     SkillResult,
 )
+from llmwikify.foundation.llm.errors import LLMError
+from llmwikify.foundation.llm.streamable import LLMRequestError
 from llmwikify.foundation.utils import maybe_await as _maybe_await
 
 logger = logging.getLogger(__name__)
@@ -240,8 +242,12 @@ class ReactLoop:
                         decision = await _maybe_await(
                             reason_fn(self._state, ctx, lambda e: None)
                         )
-            except Exception as e:
+            except (LLMError, TypeError, ValueError, KeyError, AttributeError) as e:
                 logger.exception("reason failed")
+                yield {"type": EVENT_ACTION_ERROR, "action": "<reason>", "error": str(e)}
+                return
+            except Exception as e:
+                logger.exception("reason failed with unexpected error")
                 yield {"type": EVENT_ACTION_ERROR, "action": "<reason>", "error": str(e)}
                 return
 
@@ -304,8 +310,16 @@ class ReactLoop:
                     result = await _maybe_await(action.handler(self._state, ctx))
                 else:
                     result = await _maybe_await(action(self._state, ctx))
-            except Exception as e:
+            except (LLMError, LLMRequestError, OSError, ValueError, TypeError) as e:
                 logger.warning("Action %s raised: %s", action_name, e, exc_info=True)
+                yield {
+                    "type": EVENT_ACTION_ERROR,
+                    "action": action_name,
+                    "error": str(e),
+                }
+                continue
+            except Exception as e:
+                logger.exception("Action %s raised unexpected error: %s", action_name, e)
                 yield {
                     "type": EVENT_ACTION_ERROR,
                     "action": action_name,
@@ -399,7 +413,11 @@ class ReactLoop:
     def _check_done(self) -> bool:
         try:
             return bool(self._config.done_condition(self._state))
+        except (KeyError, TypeError, ValueError, AttributeError) as e:
+            logger.warning("done_condition raised %s: %s", type(e).__name__, e)
+            return False
         except Exception:
+            logger.exception("done_condition raised unexpected error")
             return False
 
 

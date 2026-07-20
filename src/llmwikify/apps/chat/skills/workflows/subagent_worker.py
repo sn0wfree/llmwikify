@@ -47,6 +47,8 @@ from llmwikify.apps.chat.skills.workflows.subagent_runner import (
     SubagentRequest,
     SubagentResult,
 )
+from llmwikify.foundation.llm.errors import LLMError
+from llmwikify.foundation.llm.streamable import LLMRequestError
 
 logger = logging.getLogger(__name__)
 
@@ -103,7 +105,16 @@ def run_subagent(request: SubagentRequest) -> SubagentResult:
                 messages=messages,
                 model=request.actor_model,
             )
+        except (LLMError, LLMRequestError) as e:
+            return SubagentResult(
+                status="error",
+                output={},
+                tokens_used=0,
+                duration_seconds=time.monotonic() - start,
+                error=f"driver.complete failed: {type(e).__name__}: {e}",
+            )
         except Exception as e:
+            logger.exception("unexpected error in driver.complete")
             return SubagentResult(
                 status="error",
                 output={},
@@ -308,6 +319,16 @@ class LlmClientDriver(AgentDriver):
         for _ in range(_MAX_TOOL_ITER):
             try:
                 result = client.chat_with_tools(messages, tools=tools_def)
+            except LLMRequestError as e:
+                logger.error("subagent tool loop: chat_with_tools failed: %s", e)
+                # Only fall back to plain chat for non-fatal errors
+                # (e.g., tool-not-supported). For API/auth/rate-limit
+                # errors, propagate immediately.
+                if getattr(e, 'status_code', 0) in (401, 403, 429, 500, 502, 503):
+                    raise
+                result = client.chat(messages=messages)
+                content, total_tokens = _normalize_chat_result(result)
+                return content, total_tokens
             except Exception as e:
                 logger.error("subagent tool loop: chat_with_tools failed: %s", e)
                 # Fall back to plain chat to recover.
