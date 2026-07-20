@@ -111,6 +111,11 @@ def _register_wiki_routes(
 ) -> None:
     """Register unified wiki routes with WikiRegistry."""
 
+    # 加载远程 wiki 白名单配置
+    wiki_config = load_wiki_config()
+    allowed_remote_hosts = wiki_config.get("allowed_remote_hosts", ["*"])
+    check_remote_wiki_config(allowed_remote_hosts)
+
     def _get_default_or_first_wiki_id() -> str:
         """Get default wiki_id or first registered wiki if only one exists."""
         default_id = registry.get_default_wiki_id()
@@ -237,6 +242,7 @@ def _register_wiki_routes(
             url = body.get("url")
             if not url:
                 raise HTTPException(status_code=400, detail="url required for remote wiki")
+            validate_remote_url(url, allowed_remote_hosts)  # SSRF 校验
             instance = registry.register_remote(
                 wiki_id=wiki_id,
                 name=name,
@@ -294,10 +300,13 @@ def _register_wiki_routes(
     @wikis_router.post("/{wiki_id}/reload")
     async def reload_wiki(wiki_id: str):
         """Reload/re-index a wiki."""
-        result = registry.reload_wiki(wiki_id)
-        if result.get("status") == "error":
-            raise HTTPException(status_code=500, detail=result.get("message"))
-        return result
+        try:
+            result = registry.reload_wiki(wiki_id)
+            if result.get("status") == "error":
+                raise HTTPException(status_code=500, detail=result.get("message"))
+            return result
+        except KeyError:
+            raise HTTPException(status_code=404, detail=f"Wiki not found: {wiki_id}") from None
 
     @wikis_router.get("/{wiki_id}/health")
     async def wiki_health(wiki_id: str):
@@ -443,21 +452,6 @@ def _register_wiki_routes(
             return _serve_wiki_file(wiki.root, path)
         except KeyError:
             raise HTTPException(status_code=404, detail=f"Wiki not found: {wiki_id}") from None
-
-    # Legacy fallback routes (backward compatible - use default wiki)
-    @wiki_router.get("/status")
-    async def wiki_status_legacy():
-        """Get wiki status (legacy - uses default wiki)."""
-        if not registry.get_default_wiki_id():
-            raise HTTPException(status_code=400, detail="No default wiki configured")
-        return await wiki_status_by_id(registry.get_default_wiki_id())
-
-    @wiki_router.get("/search")
-    async def wiki_search_legacy(q: str, limit: int = 10, backend: str = "fts5"):
-        """Search wiki (legacy - uses default wiki)."""
-        if not registry.get_default_wiki_id():
-            raise HTTPException(status_code=400, detail="No default wiki configured")
-        return await wiki_search_by_id(registry.get_default_wiki_id(), q, limit, backend)
 
     app.include_router(wiki_router)
 
@@ -744,9 +738,6 @@ def _register_agent_routes(
         logger.debug("Could not resolve default provider model, using fallback %r", model_name)
     app.include_router(create_openai_router(model=model_name))
 
-    _mount_agent_spa(app)
-
-
 def _register_skills_routes(app: FastAPI) -> None:
     """Phase 11-F2: expose registered skills + plugin metadata.
 
@@ -807,12 +798,3 @@ def _register_skills_routes(app: FastAPI) -> None:
         return entry
 
     app.include_router(skills_router)
-
-
-def _mount_agent_spa(app: FastAPI) -> None:
-    """Unified SPA handles /agent routes via client-side routing.
-
-    The SPA at ui/webui/dist/ handles both / and /agent routes.
-    No separate mount is needed — the SPA's BrowserRouter handles routing.
-    """
-    pass

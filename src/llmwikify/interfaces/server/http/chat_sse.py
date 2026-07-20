@@ -29,6 +29,8 @@ from llmwikify.interfaces.server.http._models import (
     BatchApproveRequest,
     ChatRequest,
     CreateSessionRequest,
+    EditMessageRequest,
+    RevertRequest,
     SaveConfigRequest,
 )
 
@@ -224,24 +226,18 @@ async def delete_session(session_id: str):
 @router.post("/sessions/{session_id}/revert")
 async def revert_session(session_id: str, request: Request):
     """Revert session to a specific message. All messages after it are marked reverted."""
-    body = await request.json()
-    message_id = body.get("message_id", "")
-    if not message_id:
-        return {"error": "message_id is required"}
+    req = await JsonBodyHelper.execute(request, RevertRequest)
     service = get_agent_service()
-    count = service.revert_session(session_id, message_id)
+    count = service.revert_session(session_id, req.message_id)
     return {"reverted": count, "session_id": session_id}
 
 
 @router.put("/sessions/{session_id}/messages/{message_id}")
 async def edit_message(session_id: str, message_id: str, request: Request):
     """Edit a user message's content in-place."""
-    body = await request.json()
-    new_content = body.get("content", "")
-    if not new_content:
-        return {"error": "content is required"}
+    req = await JsonBodyHelper.execute(request, EditMessageRequest)
     service = get_agent_service()
-    ok = service.edit_message(message_id, new_content)
+    ok = service.edit_message(message_id, req.content)
     if not ok:
         return {"error": "message not found"}
     # Evict context so next chat() reloads from DB

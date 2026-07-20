@@ -130,13 +130,9 @@ class TestReloadWiki:
         assert "wiki-a" in data["message"].lower()
 
     def test_reload_not_found(self, client: TestClient) -> None:
-        """Reloading an unknown wiki currently surfaces 500 (KeyError uncaught).
-
-        Documented as known gap (see Phase C plan Q3). The endpoint does not
-        translate KeyError to 404 like its siblings (update_wiki / unregister).
-        """
+        """Reloading an unknown wiki returns 404 (KeyError caught)."""
         response = client.post("/api/wikis/nonexistent/reload")
-        assert response.status_code == 500
+        assert response.status_code == 404
 
 
 class TestWikiHealth:

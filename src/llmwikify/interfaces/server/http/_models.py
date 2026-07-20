@@ -55,3 +55,13 @@ class SaveConfigRequest(BaseModel):
     temperature: float | None = None
     max_tokens: int | None = None
     system_prompt: str | None = None  # v0.40: custom system prompt
+
+
+class RevertRequest(BaseModel):
+    """POST /api/agent/sessions/{id}/revert"""
+    message_id: str
+
+
+class EditMessageRequest(BaseModel):
+    """PUT /api/agent/sessions/{id}/messages/{msg_id}"""
+    content: str
