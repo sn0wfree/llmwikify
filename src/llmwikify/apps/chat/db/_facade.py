@@ -16,7 +16,7 @@ The 7 repositories live in ``apps.chat.db``:
 Schema
 ------
 
-  - ``chat_sessions`` (id, wiki_id, jwt_token, title, created_at, updated_at)
+  - ``chat_sessions`` (id, wiki_id, title, created_at, updated_at)
   - ``chat_messages`` (id, session_id, role, content, tool_calls, token/cost
     columns, research_run_id, reverted, created_at)
   - ``tool_calls`` (id, session_id, tool_name, arguments, result, status,
@@ -202,9 +202,8 @@ class ChatDatabase(BaseDatabase):
     def create_chat_session(
         self,
         wiki_id: str | None = None,
-        jwt_token: str | None = None,
     ) -> str:
-        return self._sessions.create_chat_session(wiki_id, jwt_token)
+        return self._sessions.create_chat_session(wiki_id)
 
     def get_chat_session(self, session_id: str) -> dict | None:
         return self._sessions.get_chat_session(session_id)
@@ -218,11 +217,6 @@ class ChatDatabase(BaseDatabase):
         self, session_id: str, title: str
     ) -> None:
         return self._sessions.update_chat_session_title(session_id, title)
-
-    def update_chat_session_jwt(
-        self, session_id: str, jwt_token: str
-    ) -> None:
-        return self._sessions.update_chat_session_jwt(session_id, jwt_token)
 
     def list_chat_sessions(self) -> list[dict]:
         return self._sessions.list_chat_sessions()

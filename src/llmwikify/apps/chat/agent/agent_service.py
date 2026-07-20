@@ -144,10 +144,9 @@ class AgentService:
         message: str,
         session_id: str | None = None,
         wiki_id: str | None = None,
-        jwt_token: str | None = None,
     ) -> AsyncIterator[dict]:
         async for event in self.chat_service.chat(
-            message, session_id, wiki_id, jwt_token,
+            message, session_id, wiki_id,
         ):
             yield event
 

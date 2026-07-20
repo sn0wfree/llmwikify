@@ -4,19 +4,17 @@ Schema:
     chat_sessions (
         id TEXT PRIMARY KEY,
         wiki_id TEXT,
-        jwt_token TEXT,
         title TEXT,                 -- v0.40: auto-naming
         metadata TEXT,              -- Phase 8: JSON blob (goal_state, ...)
         created_at TEXT DEFAULT (datetime('now')),
         updated_at TEXT DEFAULT (datetime('now'))
     )
 
-Methods (10):
+Methods (9):
     create_chat_session        — INSERT new session, return id
     get_chat_session           — SELECT one by id
     update_chat_session_wiki   — UPDATE wiki_id + updated_at
     update_chat_session_title  — UPDATE title + updated_at (v0.40)
-    update_chat_session_jwt    — UPDATE jwt_token + updated_at
     list_chat_sessions         — SELECT all, ORDER BY created_at DESC
     delete_chat_session        — DELETE one session (cascade via app code)
     get_chat_session_title     — get stored title OR derive from first user msg
@@ -46,7 +44,6 @@ class ChatSessionRepository(ChatDBBase):
                 CREATE TABLE IF NOT EXISTS chat_sessions (
                     id TEXT PRIMARY KEY,
                     wiki_id TEXT,
-                    jwt_token TEXT,
                     created_at TEXT DEFAULT (datetime('now')),
                     updated_at TEXT DEFAULT (datetime('now'))
                 )
@@ -66,6 +63,11 @@ class ChatSessionRepository(ChatDBBase):
                 )
             except sqlite3.OperationalError:
                 pass  # column already exists
+            # Remove jwt_token column if it exists (security fix)
+            try:
+                conn.execute("ALTER TABLE chat_sessions DROP COLUMN jwt_token")
+            except sqlite3.OperationalError:
+                pass  # column doesn't exist or can't be dropped
             # Index for ORDER BY created_at DESC (list_chat_sessions)
             conn.execute(
                 """
@@ -84,14 +86,13 @@ class ChatSessionRepository(ChatDBBase):
     def create_chat_session(
         self,
         wiki_id: str | None = None,
-        jwt_token: str | None = None,
     ) -> str:
         """Insert a new chat session and return its id."""
         session_id = uuid.uuid4().hex
         self._mgr.execute_write(
-            """INSERT INTO chat_sessions (id, wiki_id, jwt_token)
-               VALUES (?, ?, ?)""",
-            (session_id, wiki_id, jwt_token),
+            """INSERT INTO chat_sessions (id, wiki_id)
+               VALUES (?, ?)""",
+            (session_id, wiki_id),
         )
         return session_id
 
@@ -122,17 +123,6 @@ class ChatSessionRepository(ChatDBBase):
                SET title = ?, updated_at = datetime('now')
                WHERE id = ?""",
             (title, session_id),
-        )
-
-    def update_chat_session_jwt(
-        self, session_id: str, jwt_token: str
-    ) -> None:
-        """Update a session's JWT token."""
-        self._mgr.execute_write(
-            """UPDATE chat_sessions
-               SET jwt_token = ?, updated_at = datetime('now')
-               WHERE id = ?""",
-            (jwt_token, session_id),
         )
 
     def list_chat_sessions(self) -> list[dict[str, Any]]:

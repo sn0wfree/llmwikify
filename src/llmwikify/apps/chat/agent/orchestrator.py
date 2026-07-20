@@ -327,7 +327,6 @@ class ChatOrchestrator:
         message: str,
         session_id: str | None = None,
         wiki_id: str | None = None,
-        jwt_token: str | None = None,
     ) -> AsyncIterator[dict]:
         """Stream a chat response as SSE events."""
         self._session_status[session_id or "new"] = "busy"
@@ -338,7 +337,7 @@ class ChatOrchestrator:
         try:
             if session_id is None:
                 session_id = await asyncio.to_thread(
-                    self.db.create_chat_session, wiki_id, jwt_token
+                    self.db.create_chat_session, wiki_id
                 )
                 yield {"type": events.SESSION_CREATED, "session_id": session_id}
             else:
@@ -347,7 +346,7 @@ class ChatOrchestrator:
                 )
                 if session is None:
                     session_id = await asyncio.to_thread(
-                        self.db.create_chat_session, wiki_id, jwt_token
+                        self.db.create_chat_session, wiki_id
                     )
                     yield {"type": events.SESSION_CREATED, "session_id": session_id}
 
@@ -372,11 +371,6 @@ class ChatOrchestrator:
                 ctx.set_recent_wiki(wiki_id)
                 await asyncio.to_thread(
                     self.db.update_chat_session_wiki, session_id, wiki_id
-                )
-
-            if jwt_token:
-                await asyncio.to_thread(
-                    self.db.update_chat_session_jwt, session_id, jwt_token
                 )
 
             # P1-2 (vendored from nanobot command/router.py): intercept

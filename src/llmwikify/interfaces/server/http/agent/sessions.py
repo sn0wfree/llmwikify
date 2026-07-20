@@ -5,7 +5,6 @@ from __future__ import annotations
 from fastapi import Request
 from sse_starlette import EventSourceResponse
 
-from llmwikify.interfaces.server.http._helpers import get_jwt_from_request
 from llmwikify.interfaces.server.http._models import (
     ChatRequest,
     CreateSessionRequest,
@@ -30,7 +29,6 @@ from llmwikify.interfaces.server.http.agent._sse import (
 @router.post("/chat")
 async def chat(request: Request):
     req = await JsonBodyHelper.execute(request, ChatRequest)
-    jwt_token = get_jwt_from_request(request)
     service = get_agent_service()
 
     # Issue#14: detect /study research triggers and use a longer
@@ -45,7 +43,6 @@ async def chat(request: Request):
         message=req.message,
         session_id=req.session_id,
         wiki_id=req.wiki_id,
-        jwt_token=jwt_token,
     )
 
     return EventSourceResponse(
@@ -66,9 +63,8 @@ async def list_sessions():
 @router.post("/sessions")
 async def create_session(request: Request):
     req = await JsonBodyHelper.execute(request, CreateSessionRequest)
-    jwt_token = get_jwt_from_request(request)
     service = get_agent_service()
-    session_id = service.db.create_chat_session(req.wiki_id, jwt_token)
+    session_id = service.db.create_chat_session(req.wiki_id)
     return {"session_id": session_id}
 
 
