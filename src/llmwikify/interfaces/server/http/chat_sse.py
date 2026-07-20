@@ -12,6 +12,12 @@ from sse_starlette import EventSourceResponse
 
 from llmwikify.apps.chat.agent.agent_service import AgentService
 from llmwikify.apps.chat.bus.adapter import BusAdapter
+from llmwikify.interfaces.server.http._handlers import (
+    ParseJsonHandler,
+    ReadBodyHandler,
+    ValidateModelHandler,
+)
+from llmwikify.interfaces.server.http._helpers import Helper
 from llmwikify.interfaces.server.http._models import (
     ApplyProposalsRequest,
     ApprovalRequest,
@@ -23,6 +29,14 @@ from llmwikify.interfaces.server.http._models import (
 )
 
 logger = logging.getLogger(__name__)
+
+# ─── JsonBodyHelper: JSON body 解析链 ────────────────────────────
+JsonBodyHelper = (
+    Helper()
+    .add_handler(ReadBodyHandler())
+    .add_handler(ParseJsonHandler())
+    .add_handler(ValidateModelHandler())
+)
 
 # Phase 4.4 (v0.36): SSE heartbeat and timeout configuration.
 # HEARTBEAT_INTERVAL: seconds between keepalive pings (15s).
@@ -115,8 +129,7 @@ def get_wiki_id(request: Request) -> str | None:
 
 @router.post("/chat")
 async def chat(request: Request):
-    body = await request.json()
-    req = ChatRequest(**body)
+    req = await JsonBodyHelper.execute(request, ChatRequest)
     jwt_token = get_jwt_from_request(request)
     service = get_agent_service()
 
@@ -150,8 +163,7 @@ async def list_sessions():
 
 @router.post("/sessions")
 async def create_session(request: Request):
-    body = await request.json()
-    req = CreateSessionRequest(**body)
+    req = await JsonBodyHelper.execute(request, CreateSessionRequest)
     jwt_token = get_jwt_from_request(request)
     service = get_agent_service()
     session_id = service.db.create_chat_session(req.wiki_id, jwt_token)
@@ -294,16 +306,14 @@ async def reject_proposal(proposal_id: str):
 
 @router.post("/wiki-dream/proposals/batch-approve")
 async def batch_approve_proposals(request: Request):
-    body = await request.json()
-    req = BatchApproveProposalsRequest(**body)
+    req = await JsonBodyHelper.execute(request, BatchApproveProposalsRequest)
     service = get_agent_service()
     return service.batch_approve_wiki_dream_proposals(req.ids)
 
 
 @router.post("/wiki-dream/proposals/apply")
 async def apply_proposals(request: Request):
-    body = await request.json()
-    req = ApplyProposalsRequest(**body)
+    req = await JsonBodyHelper.execute(request, ApplyProposalsRequest)
     service = get_agent_service()
     return await service.apply_wiki_dream_proposals(req.wiki_id, req.ids)
 
@@ -424,8 +434,7 @@ async def approve_confirmation(confirmation_id: str, request: Request):
 @router.post("/confirmations/{confirmation_id}/approve-and-continue")
 async def approve_and_continue(confirmation_id: str, request: Request):
     """Approve confirmation, execute tool, and stream LLM follow-up."""
-    body = await request.json()
-    req = ApprovalRequest(**body)
+    req = await JsonBodyHelper.execute(request, ApprovalRequest)
     service = get_agent_service()
 
     source = service.approve_confirmation_and_continue(
@@ -450,8 +459,7 @@ async def reject_confirmation(confirmation_id: str, request: Request):
 
 @router.post("/confirmations/batch")
 async def batch_approve(request: Request):
-    body = await request.json()
-    req = BatchApproveRequest(**body)
+    req = await JsonBodyHelper.execute(request, BatchApproveRequest)
     wiki_id = get_wiki_id(request)
     service = get_agent_service()
     return await service.batch_approve_confirmations(req.ids, wiki_id)
@@ -508,8 +516,7 @@ async def save_llm_config(request: Request):
     v0.41: 只接受 mutable 字段。immutable 字段（如果客户端发送）会被忽略。
     """
     from llmwikify.apps.chat.config_manager import get_global_config_manager
-    body = await request.json()
-    req = SaveConfigRequest(**body)
+    req = await JsonBodyHelper.execute(request, SaveConfigRequest)
     manager = get_global_config_manager()
     # Preserve real api_key: if the incoming key is masked (contains ***),
     # keep the original value from the existing config.
