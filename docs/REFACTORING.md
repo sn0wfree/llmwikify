@@ -430,35 +430,39 @@ These are tracked in `plan/v0.40-release-notes-draft.md` (not in git, kept local
 
 | # | Item | Severity | Status |
 |---|------|----------|--------|
-| 1 | 57 failing tests need triage | High | Open — must fix or accept as known-issues |
+| 1 | 57 failing tests need triage | High | ✅ **Resolved** (commit `927447a`): 0 failed / 4568 passed |
 | 2 | F821 `ResearchEngine` undefined in `apps/chat/research_agent.py:51` | Medium | Open — works at runtime (PEP 563), but is a real type-annotation bug |
 | 3 | `v0.40.0` tag not yet created | Required | Pending — `__version__` still `0.40.0-dev` |
 
-### 7.1 The 19 files with failing tests (57 failures total)
+### 7.1 Test failures — RESOLVED (commit `927447a`)
 
-| File | Fails | Likely cause |
-|------|-------|--------------|
-| `tests/v023_graph.py` | 9 | `ImportError` / `ModuleNotFoundError` (likely refocus regression) |
-| `tests/scenarios/test_04_chat_react.py` | 5 | Chat SSE / auth fixture |
-| `tests/api_multi_wiki.py` | 4 | Multi-wiki API |
-| `tests/api_routes.py` | 4 | API write_page |
-| `tests/p1_3_graph_analyzer.py` | 4 | Graph analyzer |
-| `tests/prompt_refactor_integration.py` | 4 | Prompt registry |
-| `tests/chat_e2e.py` | 4 | `assert 403 == 200` — auth |
-| `tests/relation_engine.py` | 3 | Relation engine path |
-| `tests/engine_observer_resume.py` | 3 | Observer resume snapshot |
-| `tests/apps_chat_providers_borrow.py` | 3 | is_arrearage detection |
-| `tests/test_autoresearch.py` | 2 | AutoResearch integration |
-| `tests/test_autoresearch_uses_new_llm_home.py` | 2 | LLM home refactor |
-| `tests/cli_comprehensive.py` | 2 | community_detect, report |
-| `tests/yaml_content_sync.py` | 2 | YAML content sync |
-| `tests/engine_reasoner_no_plan_loop.py` | 1 | Anti-spin loop |
-| `tests/interfaces_server_skills_routes.py` | 1 | Skills route registration |
-| `tests/v019_principle_checker.py` | 1 | Principle checker (likely pre-existing) |
-| `tests/v022_relations.py` | 1 | Path query (likely pre-existing) |
-| `tests/wiki_server.py` | 1 | MCP mounting (likely pre-existing) |
+**Baseline** (pre-`927447a`): 57 failed / 4184 passed.
 
-### 7.2 F821 fix recipe (for later)
+**Post-fix** (`927447a`): **0 failed / 4568 passed** (+384 tests newly passing).
+
+The 57 failures were caused by 5 root issues + ~12 test-side problems (FK setup, JWT removal, import paths):
+
+| Root issue | Files affected | Fix location |
+|------------|---------------|--------------|
+| `ChatDatabase._mgr` not set (covered `BaseDatabase.__init__` but skipped `self._mgr = ...`) | All 7 chat repos + their tests | `apps/chat/db/_facade.py:108` |
+| `delete_wiki_data` doesn't cascade child rows before deleting `chat_sessions` (FK blocks delete) | `admin_stats_repo` + downstream tests | `apps/chat/db/admin_stats_repo.py:85-127` |
+| `update_session_metadata` still inserts `jwt_token` column (removed in `226f83d`) | `chat_session_repo` | `apps/chat/db/chat_session_repo.py:209-217` |
+| `load_wiki_config` reads module-level `config` snapshot (not Config() singleton) | wiki ops tests | `interfaces/server/http/wiki/_wiki_ops.py:27-36` |
+| `_default_base_url` returns `""` for unknown providers (no fallback) | streamable tests | `foundation/llm/streamable.py:1148-1168` |
+
+**Test-side fixes (12 files)**: missing `chat_sessions` pre-insert in 4 fixtures, missing `autoresearch_sub_queries` in `test_research_save`, `chat_session_repo` JWT parameter removal, `create_chat_session` second-arg removal, `_serve_wiki_file` import path, `Config._instance = None` + `LLMWIKIFY_HOME` env var for wiki config tests, mock fixture for `count_inbound_for_pages`, allowed-imports for `runner_v2`, etc.
+
+### 7.2 Known pre-existing test hangs (NOT v0.40 regressions)
+
+These tests hang during jieba dict initialization on the test environment. Confirmed pre-existing (reproduced with `git stash` on commit `e2d5eed`):
+
+- `tests/scenarios/test_01_wiki_core.py` (and 8 other scenario tests)
+- `tests/test_v020_markitdown_extractor.py`
+- `tests/test_wiki_uses_backend.py`
+
+Documented as known issues, not blocking release.
+
+### 7.3 F821 fix recipe (for later)
 
 ```python
 # src/llmwikify/apps/chat/research_agent.py
