@@ -12,6 +12,7 @@ via a mocked keyring backend).
 from __future__ import annotations
 
 import os
+import sys
 import tempfile
 import time
 from pathlib import Path
@@ -373,3 +374,212 @@ class TestApiKeyRepository:
         ak_repo.touch_last_used(ak.id)
         updated = ak_repo.get_by_id(ak.id)
         assert updated.last_used_at is not None
+
+
+# ─── JWT secret file permissions (security) ──────────────────────────
+
+
+class TestJWTSecretFilePermissions:
+    """Verify that the file-fallback JWT secret is protected.
+
+    Covers:
+      - 0o600 / 0o400 → safe (no warning, no error)
+      - 0o644 / 0o640 / 0o604 → unsafe (warning, optional refusal)
+      - Strict mode (LLMWIKIFY_SECRET_STRICT=1) refuses to load
+      - _write_file_secret applies 0o600 + parent 0o700
+    """
+
+    @staticmethod
+    def _create_file(tmp_path, mode: int, content: bytes = b"abcd") -> Path:
+        p = tmp_path / "jwt_secret"
+        p.write_bytes(content)
+        os.chmod(p, mode)
+        return p
+
+    # ── non-Windows-only tests ──────────────────────────────────
+
+    @pytest.mark.skipif(
+        sys.platform.startswith("win"),
+        reason="POSIX mode bits don't apply on Windows",
+    )
+    def test_safe_permissions_0600_returns_true(self, tmp_path):
+        from llmwikify.foundation.auth._keyring import (
+            _check_secret_file_permissions,
+        )
+        p = self._create_file(tmp_path, 0o600)
+        assert _check_secret_file_permissions(p) is True
+
+    @pytest.mark.skipif(
+        sys.platform.startswith("win"),
+        reason="POSIX mode bits don't apply on Windows",
+    )
+    def test_safe_permissions_0400_returns_true(self, tmp_path):
+        from llmwikify.foundation.auth._keyring import (
+            _check_secret_file_permissions,
+        )
+        p = self._create_file(tmp_path, 0o400)
+        assert _check_secret_file_permissions(p) is True
+
+    @pytest.mark.skipif(
+        sys.platform.startswith("win"),
+        reason="POSIX mode bits don't apply on Windows",
+    )
+    def test_unsafe_0644_warns_returns_false(self, tmp_path, monkeypatch):
+        from llmwikify.foundation.auth._keyring import (
+            _check_secret_file_permissions,
+        )
+        monkeypatch.delenv("LLMWIKIFY_SECRET_STRICT", raising=False)
+        p = self._create_file(tmp_path, 0o644)
+        assert _check_secret_file_permissions(p) is False
+
+    @pytest.mark.skipif(
+        sys.platform.startswith("win"),
+        reason="POSIX mode bits don't apply on Windows",
+    )
+    def test_unsafe_0640_warns_returns_false(self, tmp_path, monkeypatch):
+        from llmwikify.foundation.auth._keyring import (
+            _check_secret_file_permissions,
+        )
+        monkeypatch.delenv("LLMWIKIFY_SECRET_STRICT", raising=False)
+        p = self._create_file(tmp_path, 0o640)
+        assert _check_secret_file_permissions(p) is False
+
+    @pytest.mark.skipif(
+        sys.platform.startswith("win"),
+        reason="POSIX mode bits don't apply on Windows",
+    )
+    def test_unsafe_group_write_warns(self, tmp_path, monkeypatch):
+        from llmwikify.foundation.auth._keyring import (
+            _check_secret_file_permissions,
+        )
+        monkeypatch.delenv("LLMWIKIFY_SECRET_STRICT", raising=False)
+        p = self._create_file(tmp_path, 0o660)
+        assert _check_secret_file_permissions(p) is False
+
+    @pytest.mark.skipif(
+        sys.platform.startswith("win"),
+        reason="POSIX mode bits don't apply on Windows",
+    )
+    def test_strict_mode_raises_on_unsafe(self, tmp_path, monkeypatch):
+        from llmwikify.foundation.auth._errors import AuthError
+        from llmwikify.foundation.auth._keyring import (
+            _check_secret_file_permissions,
+        )
+        monkeypatch.setenv("LLMWIKIFY_SECRET_STRICT", "1")
+        p = self._create_file(tmp_path, 0o644)
+        with pytest.raises(AuthError) as exc_info:
+            _check_secret_file_permissions(p)
+        assert exc_info.value.code == "keyring_secret_insecure_permissions"
+
+    @pytest.mark.skipif(
+        sys.platform.startswith("win"),
+        reason="POSIX mode bits don't apply on Windows",
+    )
+    def test_strict_mode_passes_on_safe(self, tmp_path, monkeypatch):
+        from llmwikify.foundation.auth._keyring import (
+            _check_secret_file_permissions,
+        )
+        monkeypatch.setenv("LLMWIKIFY_SECRET_STRICT", "1")
+        p = self._create_file(tmp_path, 0o600)
+        assert _check_secret_file_permissions(p) is True
+
+    # ── env var parsing ─────────────────────────────────────────
+
+    @pytest.mark.parametrize(
+        "val,expected",
+        [
+            ("1", True),
+            ("true", True),
+            ("True", True),
+            ("yes", True),
+            ("YES", True),
+            ("on", True),
+            ("0", False),
+            ("false", False),
+            ("no", False),
+            ("off", False),
+            ("", False),
+            ("garbage", False),
+        ],
+    )
+    def test_strict_mode_env_parsing(self, monkeypatch, val, expected):
+        from llmwikify.foundation.auth._keyring import _strict_mode_enabled
+        if val == "":
+            monkeypatch.delenv("LLMWIKIFY_SECRET_STRICT", raising=False)
+        else:
+            monkeypatch.setenv("LLMWIKIFY_SECRET_STRICT", val)
+        assert _strict_mode_enabled() is expected
+
+    # ── _write_file_secret applies 0o600 + parent 0o700 ─────────
+
+    @pytest.mark.skipif(
+        sys.platform.startswith("win"),
+        reason="POSIX mode bits don't apply on Windows",
+    )
+    def test_write_file_applies_strict_perms(self, tmp_path, monkeypatch):
+        import llmwikify.foundation.auth._keyring as _keyring
+        secret_file = tmp_path / "jwt_secret"
+        original = _keyring._SECRET_FILE
+        try:
+            _keyring._SECRET_FILE = secret_file
+            _keyring._write_file_secret(b"\x00" * 32)
+            assert oct(secret_file.stat().st_mode & 0o777) == "0o600"
+            assert oct(secret_file.parent.stat().st_mode & 0o777) == "0o700"
+        finally:
+            _keyring._SECRET_FILE = original
+
+    # ── _read_file_secret triggers warning on unsafe file ───────
+
+    @pytest.mark.skipif(
+        sys.platform.startswith("win"),
+        reason="POSIX mode bits don't apply on Windows",
+    )
+    def test_read_unsafe_file_logs_warning(
+        self,
+        tmp_path,
+        monkeypatch,
+        caplog,
+    ):
+        import logging
+
+        import llmwikify.foundation.auth._keyring as _keyring
+        secret_file = tmp_path / "jwt_secret"
+        # write valid hex content matching a 32-byte secret
+        secret_file.write_text((b"\xaa" * 32).hex(), encoding="utf-8")
+        os.chmod(secret_file, 0o644)
+        monkeypatch.delenv("LLMWIKIFY_SECRET_STRICT", raising=False)
+        original = _keyring._SECRET_FILE
+        try:
+            _keyring._SECRET_FILE = secret_file
+            with caplog.at_level(logging.WARNING, logger="llmwikify.foundation.auth._keyring"):
+                secret = _keyring._read_file_secret()
+            assert secret == b"\xaa" * 32
+            assert any(
+                "unsafe permissions" in rec.message for rec in caplog.records
+            ), "expected unsafe-permissions warning"
+        finally:
+            _keyring._SECRET_FILE = original
+
+    @pytest.mark.skipif(
+        sys.platform.startswith("win"),
+        reason="POSIX mode bits don't apply on Windows",
+    )
+    def test_read_unsafe_file_strict_raises(
+        self,
+        tmp_path,
+        monkeypatch,
+    ):
+        import llmwikify.foundation.auth._keyring as _keyring
+        from llmwikify.foundation.auth._errors import AuthError
+        secret_file = tmp_path / "jwt_secret"
+        secret_file.write_text((b"\xaa" * 32).hex(), encoding="utf-8")
+        os.chmod(secret_file, 0o644)
+        monkeypatch.setenv("LLMWIKIFY_SECRET_STRICT", "1")
+        original = _keyring._SECRET_FILE
+        try:
+            _keyring._SECRET_FILE = secret_file
+            with pytest.raises(AuthError) as exc_info:
+                _keyring._read_file_secret()
+            assert exc_info.value.code == "keyring_secret_insecure_permissions"
+        finally:
+            _keyring._SECRET_FILE = original
