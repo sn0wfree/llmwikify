@@ -506,3 +506,46 @@ class WikiRegistry:
             return {"status": "success", "message": f"Wiki {wiki_id} re-indexed"}
         except Exception as e:
             return {"status": "error", "message": str(e)}
+
+
+class WikiRegistryDiscovery:
+    """WikiDiscoveryProvider implementation using WikiRegistry.
+
+    Scans configured directories and returns wiki roots.
+    Compatible with foundation.migration.WikiDiscoveryProvider protocol.
+
+    Example::
+
+        registry = WikiRegistry(config)
+        registry.initialize()
+        provider = WikiRegistryDiscovery(registry)
+        roots = provider.discover_wiki_roots(["/path/to/scan"], depth=2)
+    """
+
+    def __init__(self, registry: WikiRegistry):
+        """Initialize with a WikiRegistry instance.
+
+        Args:
+            registry: The WikiRegistry to use for discovery.
+        """
+        self._registry = registry
+
+    def discover_wiki_roots(
+        self,
+        scan_paths: list[str],
+        depth: int = 2,
+    ) -> list[Path]:
+        """Discover wiki roots by scanning directories.
+
+        Uses WikiRegistry.scan_directories() to find wikis and returns
+        their root paths.
+
+        Args:
+            scan_paths: Directories to scan
+            depth: Maximum recursion depth
+
+        Returns:
+            List of wiki root paths (each containing .wiki-config.yaml).
+        """
+        instances = self._registry.scan_directories(scan_paths, depth)
+        return [inst.root for inst in instances if inst.root is not None]

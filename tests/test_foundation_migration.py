@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
+from unittest.mock import MagicMock
 
 import pytest
 import yaml
@@ -12,8 +14,10 @@ from llmwikify.foundation.migration import (
     MIGRATABLE_SECTIONS,
     MigrationConflict,
     MigrationResult,
+    WikiDiscoveryProvider,
     auto_migrate_wiki_config,
     detect_config_version,
+    discover_wikis,
     needs_migration,
 )
 
@@ -351,3 +355,192 @@ class TestChangesTracking:
             c for c in result.changes if c.key == "provider"
         )
         assert provider_change.conflict is True
+
+
+# ─── TestWikiDiscoveryProvider ─────────────────────────────────────
+
+
+class TestWikiDiscoveryProvider:
+    """Tests for WikiDiscoveryProvider protocol."""
+
+    def test_protocol_is_runtime_checkable(self) -> None:
+        """WikiDiscoveryProvider should be runtime_checkable."""
+
+        class ValidProvider:
+            def discover_wiki_roots(
+                self, scan_paths: list[str], depth: int = 2
+            ) -> list[Path]:
+                return []
+
+        provider = ValidProvider()
+        assert isinstance(provider, WikiDiscoveryProvider)
+
+    def test_protocol_rejects_invalid(self) -> None:
+        """Objects without discover_wiki_roots should not satisfy protocol."""
+
+        class InvalidProvider:
+            pass
+
+        assert not isinstance(InvalidProvider(), WikiDiscoveryProvider)
+
+    def test_protocol_rejects_wrong_signature(self) -> None:
+        """Objects with wrong signature should not satisfy protocol."""
+
+        class WrongSignature:
+            def discover_wiki_roots(self) -> list[Path]:
+                return []
+
+        # runtime_checkable only checks method existence, not signature
+        # But this is still useful for type checking
+        provider = WrongSignature()
+        assert isinstance(provider, WikiDiscoveryProvider)
+
+
+# ─── TestDiscoverWikis ─────────────────────────────────────────────
+
+
+class TestDiscoverWikis:
+    """Tests for discover_wikis function."""
+
+    def test_no_config_no_provider(self, tmp_path: Path) -> None:
+        """Without config or provider, returns empty list."""
+        result = discover_wikis(root=tmp_path)
+        assert result == []
+
+    def test_cwd_with_config(self, tmp_path: Path) -> None:
+        """Finds wiki in CWD when .wiki-config.yaml exists."""
+        (tmp_path / ".wiki-config.yaml").write_text("version: '0.41'")
+        result = discover_wikis(root=tmp_path)
+        assert tmp_path in result
+
+    def test_env_var_with_config(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Finds wiki via WIKI_ROOT env var."""
+        wiki_dir = tmp_path / "env_wiki"
+        wiki_dir.mkdir()
+        (wiki_dir / ".wiki-config.yaml").write_text("version: '0.41'")
+        monkeypatch.setenv("WIKI_ROOT", str(wiki_dir))
+        result = discover_wikis(root=tmp_path)
+        assert wiki_dir in result
+
+    def test_provider_called_with_scan_paths(self, tmp_path: Path) -> None:
+        """Provider is called with scan_paths and depth."""
+        mock_provider = MagicMock(spec=WikiDiscoveryProvider)
+        mock_provider.discover_wiki_roots.return_value = []
+
+        discover_wikis(root=tmp_path, provider=mock_provider, scan_paths=["/scan"], depth=3)
+        mock_provider.discover_wiki_roots.assert_called_once_with(["/scan"], 3)
+
+    def test_provider_defaults_scan_paths_to_root(self, tmp_path: Path) -> None:
+        """When scan_paths is None, provider receives [str(root)]."""
+        mock_provider = MagicMock(spec=WikiDiscoveryProvider)
+        mock_provider.discover_wiki_roots.return_value = []
+
+        discover_wikis(root=tmp_path, provider=mock_provider)
+        mock_provider.discover_wiki_roots.assert_called_once_with([str(tmp_path)], 2)
+
+    def test_provider_results_merged(self, tmp_path: Path) -> None:
+        """Provider results are merged with CWD and env results."""
+        wiki_dir = tmp_path / "provider_wiki"
+        wiki_dir.mkdir()
+        (wiki_dir / ".wiki-config.yaml").write_text("version: '0.41'")
+
+        mock_provider = MagicMock(spec=WikiDiscoveryProvider)
+        mock_provider.discover_wiki_roots.return_value = [wiki_dir]
+
+        result = discover_wikis(root=tmp_path, provider=mock_provider)
+        assert wiki_dir in result
+
+    def test_provider_exception_caught(self, tmp_path: Path) -> None:
+        """Provider exceptions are caught and ignored."""
+        mock_provider = MagicMock(spec=WikiDiscoveryProvider)
+        mock_provider.discover_wiki_roots.side_effect = RuntimeError("fail")
+
+        # Should not raise
+        result = discover_wikis(root=tmp_path, provider=mock_provider)
+        assert isinstance(result, list)
+
+    def test_no_duplicates(self, tmp_path: Path) -> None:
+        """Duplicate paths from provider are not added."""
+        (tmp_path / ".wiki-config.yaml").write_text("version: '0.41'")
+
+        mock_provider = MagicMock(spec=WikiDiscoveryProvider)
+        mock_provider.discover_wiki_roots.return_value = [tmp_path]
+
+        result = discover_wikis(root=tmp_path, provider=mock_provider)
+        assert result.count(tmp_path) == 1
+
+    def test_provider_none_not_called(self, tmp_path: Path) -> None:
+        """When provider is None, no provider is called."""
+        # This should not raise any error
+        result = discover_wikis(root=tmp_path, provider=None)
+        assert isinstance(result, list)
+
+
+# ─── TestWikiRegistryDiscovery ─────────────────────────────────────
+
+
+class TestWikiRegistryDiscovery:
+    """Tests for WikiRegistryDiscovery class."""
+
+    def test_satisfies_protocol(self) -> None:
+        """WikiRegistryDiscovery should satisfy WikiDiscoveryProvider protocol."""
+        from llmwikify.kernel.multi_wiki.registry import WikiRegistryDiscovery
+
+        mock_registry = MagicMock()
+        discovery = WikiRegistryDiscovery(mock_registry)
+        assert isinstance(discovery, WikiDiscoveryProvider)
+
+    def test_returns_roots_from_instances(self, tmp_path: Path) -> None:
+        """Returns root paths from registry instances."""
+        from llmwikify.kernel.multi_wiki.instance import WikiInstance, WikiType
+        from llmwikify.kernel.multi_wiki.registry import WikiRegistryDiscovery
+
+        wiki_root = tmp_path / "wiki1"
+        wiki_root.mkdir()
+
+        mock_instance = MagicMock(spec=WikiInstance)
+        mock_instance.root = wiki_root
+
+        mock_registry = MagicMock()
+        mock_registry.scan_directories.return_value = [mock_instance]
+
+        discovery = WikiRegistryDiscovery(mock_registry)
+        result = discovery.discover_wiki_roots([str(tmp_path)], depth=2)
+
+        assert result == [wiki_root]
+        mock_registry.scan_directories.assert_called_once_with([str(tmp_path)], 2)
+
+    def test_filters_none_roots(self, tmp_path: Path) -> None:
+        """Filters out instances with None root (remote wikis)."""
+        from llmwikify.kernel.multi_wiki.instance import WikiInstance
+        from llmwikify.kernel.multi_wiki.registry import WikiRegistryDiscovery
+
+        mock_instance_remote = MagicMock(spec=WikiInstance)
+        mock_instance_remote.root = None
+
+        mock_instance_local = MagicMock(spec=WikiInstance)
+        mock_instance_local.root = tmp_path / "local"
+
+        mock_registry = MagicMock()
+        mock_registry.scan_directories.return_value = [
+            mock_instance_remote,
+            mock_instance_local,
+        ]
+
+        discovery = WikiRegistryDiscovery(mock_registry)
+        result = discovery.discover_wiki_roots([str(tmp_path)])
+
+        assert len(result) == 1
+        assert result[0] == tmp_path / "local"
+
+    def test_empty_registry(self, tmp_path: Path) -> None:
+        """Empty registry returns empty list."""
+        from llmwikify.kernel.multi_wiki.registry import WikiRegistryDiscovery
+
+        mock_registry = MagicMock()
+        mock_registry.scan_directories.return_value = []
+
+        discovery = WikiRegistryDiscovery(mock_registry)
+        result = discovery.discover_wiki_roots([str(tmp_path)])
+
+        assert result == []

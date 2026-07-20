@@ -33,7 +33,7 @@ import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol, runtime_checkable
 
 logger = logging.getLogger(__name__)
 
@@ -471,8 +471,45 @@ def auto_migrate_wiki_config(
     return result
 
 
-def discover_wikis(root: Path | None = None) -> list[Path]:
+@runtime_checkable
+class WikiDiscoveryProvider(Protocol):
+    """Protocol for wiki root discovery.
+
+    Implementations scan directories or query registries to find
+    wiki roots (directories containing .wiki-config.yaml).
+    """
+
+    def discover_wiki_roots(
+        self,
+        scan_paths: list[str],
+        depth: int = 2,
+    ) -> list[Path]:
+        """Discover wiki roots by scanning directories.
+
+        Args:
+            scan_paths: Directories to scan
+            depth: Maximum recursion depth
+
+        Returns:
+            List of wiki root paths (each containing .wiki-config.yaml).
+        """
+        ...
+
+
+def discover_wikis(
+    root: Path | None = None,
+    provider: WikiDiscoveryProvider | None = None,
+    scan_paths: list[str] | None = None,
+    depth: int = 2,
+) -> list[Path]:
     """Discover wiki roots that may have ``.wiki-config.yaml``.
+
+    Args:
+        root: Starting directory for discovery (default: CWD)
+        provider: Optional wiki discovery provider (e.g., WikiRegistry).
+            Injected by higher layers to avoid foundation→kernel dependency.
+        scan_paths: Directories to scan via provider (default: [root])
+        depth: Maximum recursion depth for provider scan (default: 2)
 
     Returns:
         List of wiki_root paths (each containing ``.wiki-config.yaml``).
@@ -484,12 +521,15 @@ def discover_wikis(root: Path | None = None) -> list[Path]:
     if (root / ".wiki-config.yaml").exists():
         candidates.append(root)
 
-    # 2. Wiki registry (if available)
-    try:
-        from llmwikify.kernel.multi_wiki.registry import WikiRegistry
-        # Wiki registry doesn't expose iteration; skip for now.
-    except ImportError:
-        pass
+    # 2. Wiki registry (if provider given)
+    if provider is not None:
+        try:
+            effective_paths = scan_paths or [str(root)]
+            for path in provider.discover_wiki_roots(effective_paths, depth):
+                if path not in candidates:
+                    candidates.append(path)
+        except Exception:
+            pass  # Registry is optional
 
     # 3. WIKI_ROOT env var
     env_root = os.environ.get("WIKI_ROOT")
@@ -508,6 +548,7 @@ __all__ = [
     "MigrationChange",
     "MigrationConflict",
     "MigrationResult",
+    "WikiDiscoveryProvider",
     "needs_migration",
     "auto_migrate_wiki_config",
     "detect_config_version",
