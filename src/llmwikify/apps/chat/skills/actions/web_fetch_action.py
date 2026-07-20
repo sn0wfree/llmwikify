@@ -178,8 +178,28 @@ def fetch_url_sync(
     max_chars: int = DEFAULT_MAX_CHARS,
     timeout: float = DEFAULT_TIMEOUT,
 ) -> dict:
-    """Sync wrapper for use in sync tool loops (subagent_worker)."""
-    return asyncio.run(fetch_url(url, max_chars, timeout))
+    """Sync wrapper for use in sync tool loops (subagent_worker).
+
+    Handles the case where an event loop is already running (e.g.,
+    when called from within an async context via asyncio.to_thread).
+    In that case, we create a new thread to run the async code.
+    """
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            # We're inside an already-running event loop.
+            # Run the async code in a new thread to avoid conflicts.
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(
+                    asyncio.run, fetch_url(url, max_chars, timeout)
+                )
+                return future.result(timeout=timeout + 30)
+        else:
+            return loop.run_until_complete(fetch_url(url, max_chars, timeout))
+    except RuntimeError:
+        # No event loop running, use asyncio.run()
+        return asyncio.run(fetch_url(url, max_chars, timeout))
 
 
 # ─── Skill handler ───────────────────────────────────────────────
