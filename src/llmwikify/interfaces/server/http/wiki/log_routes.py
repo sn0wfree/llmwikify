@@ -6,6 +6,8 @@ import logging
 
 from fastapi import APIRouter, Request
 
+from llmwikify.interfaces.server.http.middleware import get_client_ip
+
 
 def register_log_routes(app) -> None:
     """注册客户端错误日志路由。"""
@@ -33,7 +35,7 @@ def register_log_routes(app) -> None:
         content_type = body.get("contentType", "")
         body_snippet = body.get("bodySnippet", "")
         endpoint = body.get("endpoint", "")
-        client_ip = request.client.host if request.client else "unknown"
+        client_ip = get_client_ip(request)
 
         if err_type == "api-error":
             parts = [f"[api-error] {method} {url} → {status}"]

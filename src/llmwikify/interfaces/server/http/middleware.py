@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ipaddress
 import logging
 import os
 import time
@@ -46,6 +47,112 @@ RATE_LIMIT_PER_MIN = _parse_rate_limit()
 
 # Maximum number of IP buckets to keep in memory (prevents DoS)
 MAX_BUCKETS = 10000
+
+# ─── Trusted proxy / real client IP helpers ────────────────────────
+
+
+def _load_trusted_proxies() -> list[str]:
+    """Load trusted proxy networks from config.
+
+    Returns:
+        List of IP networks/addresses (e.g. ['127.0.0.1', '10.0.0.0/8']).
+        Empty list = no trusted proxies = fall back to direct TCP peer.
+    """
+    try:
+        from llmwikify.foundation.config import get_config
+        cfg = get_config()
+        server_cfg = cfg.get("server", {})
+        proxies = server_cfg.get("trusted_proxies", None)
+        if proxies is None:
+            return []
+        if isinstance(proxies, list):
+            return [str(p).strip() for p in proxies]
+        return []
+    except Exception:
+        logger.debug("Failed to load trusted_proxies config", exc_info=True)
+        return []
+
+
+_TRUSTED_PROXY_CACHE: list[str] | None = None
+
+
+def _get_trusted_proxies() -> list[str]:
+    """Cached access to trusted proxy networks."""
+    global _TRUSTED_PROXY_CACHE
+    if _TRUSTED_PROXY_CACHE is None:
+        _TRUSTED_PROXY_CACHE = _load_trusted_proxies()
+    return _TRUSTED_PROXY_CACHE
+
+
+def _ip_is_trusted(
+    ip_str: str,
+    trusted_networks: list[str],
+) -> bool:
+    """Check if an IP address belongs to any trusted network."""
+    try:
+        addr = ipaddress.ip_address(ip_str.strip())
+    except ValueError:
+        return False
+    for entry in trusted_networks:
+        try:
+            net = ipaddress.ip_network(entry, strict=False)
+            if addr in net:
+                return True
+        except ValueError:
+            pass
+    return False
+
+
+def get_client_ip(request: Request) -> str:
+    """Extract the real client IP from a request.
+
+    When trusted proxies are configured in ``server.trusted_proxies``
+    AND the direct TCP peer is one of them, the ``X-Forwarded-For``
+    header is parsed (rightmost untrusted IP is the real client).
+
+    Without trusted proxies (default), returns ``request.client.host``
+    — the direct TCP peer — which is correct for direct deployments
+    but will see only the proxy IP behind a reverse proxy.
+
+    Configuration example (in llmwikify.json)::
+
+        {
+            "server": {
+                "trusted_proxies": [
+                    "127.0.0.1",
+                    "10.0.0.0/8",
+                    "172.16.0.0/12",
+                    "192.168.0.0/16"
+                ]
+            }
+        }
+    """
+    peer_ip = request.client.host if request.client else "unknown"
+
+    trusted = _get_trusted_proxies()
+    if not trusted:
+        return peer_ip
+
+    # Only parse X-Forwarded-For when the DIRECT peer is trusted
+    if not _ip_is_trusted(peer_ip, trusted):
+        return peer_ip
+
+    forwarded = request.headers.get("X-Forwarded-For", "")
+    if not forwarded:
+        return peer_ip
+
+    # X-Forwarded-For format: client, proxy1, proxy2
+    # Walk from right to left; first non-trusted IP is the real client.
+    ips = [ip.strip() for ip in forwarded.split(",") if ip.strip()]
+    if not ips:
+        return peer_ip
+
+    for ip in reversed(ips):
+        if not _ip_is_trusted(ip, trusted):
+            return ip
+
+    # All IPs are trusted — use the leftmost (original client)
+    return ips[0]
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
@@ -98,7 +205,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if self.limit_per_min <= 0:
             return await call_next(request)
 
-        client_ip = request.client.host if request.client else "unknown"
+        client_ip = get_client_ip(request)
         now = time.monotonic()
 
         tokens, last_refill = self._get_or_create_bucket(client_ip)

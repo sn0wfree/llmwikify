@@ -307,6 +307,7 @@ class WikiServer:
         # 60 req/min; set RATE_LIMIT_PER_MIN=0 to disable.
         from llmwikify.interfaces.server.http.middleware import (
             RateLimitMiddleware,
+            get_client_ip,
         )
         app.add_middleware(RateLimitMiddleware)
 
@@ -315,7 +316,7 @@ class WikiServer:
         async def log_requests(request: Request, call_next):
             response = await call_next(request)
             if response.status_code >= 400:
-                client = request.client.host if request.client else "?"
+                client = get_client_ip(request)
                 logger.info(f"[req] {request.method} {request.url.path} → {response.status_code} | client={client}")
             return response
 
