@@ -933,7 +933,8 @@ def _post_with_retry_sync(
             attempts_used = attempt + 1
             try:
                 resp = client.post(url, headers=headers, json=payload)
-            except Exception as e:
+            except (httpx.ReadTimeout, httpx.ConnectError, httpx.ConnectTimeout,
+                    httpx.NetworkError) as e:
                 if _is_retryable_request_exception(e) and attempt < config.max_retries:
                     wait = _compute_backoff(attempt, config)
                     logger.warning(
@@ -945,6 +946,13 @@ def _post_with_retry_sync(
                     last_exc = e
                     time.sleep(wait)
                     continue
+                _record_retry_outcome(
+                    success=False, status_code=None, exc=e,
+                    attempts_used=attempts_used,
+                )
+                raise
+            except Exception as e:
+                logger.warning("LLM POST %s unexpected error: %s", url, e)
                 _record_retry_outcome(
                     success=False, status_code=None, exc=e,
                     attempts_used=attempts_used,
@@ -998,6 +1006,8 @@ async def _post_with_retry_async(
 
     Records outcome to the process-wide ``RetryMetrics`` instance.
     """
+    import httpx
+
     if config is None:
         config = RetryConfig.from_env()
 
@@ -1006,7 +1016,8 @@ async def _post_with_retry_async(
         attempts_used = attempt + 1
         try:
             resp = await client.request(method, url, headers=headers, json=payload)
-        except Exception as e:
+        except (httpx.ReadTimeout, httpx.ConnectError, httpx.ConnectTimeout,
+                httpx.NetworkError) as e:
             if _is_retryable_request_exception(e) and attempt < config.max_retries:
                 wait = _compute_backoff(attempt, config)
                 logger.warning(
@@ -1018,6 +1029,13 @@ async def _post_with_retry_async(
                 last_exc = e
                 await asyncio.sleep(wait)
                 continue
+            _record_retry_outcome(
+                success=False, status_code=None, exc=e,
+                attempts_used=attempts_used,
+            )
+            raise
+        except Exception as e:
+            logger.warning("LLM %s %s unexpected error: %s", method, url, e)
             _record_retry_outcome(
                 success=False, status_code=None, exc=e,
                 attempts_used=attempts_used,
@@ -1369,7 +1387,8 @@ class StreamableLLMClient(LLMClient):
                 try:
                     stream_ctx = client.stream("POST", url, headers=headers, json=payload)
                     resp = stream_ctx.__enter__()
-                except Exception as e:
+                except (httpx.ReadTimeout, httpx.ConnectError, httpx.ConnectTimeout,
+                        httpx.NetworkError) as e:
                     if _is_retryable_request_exception(e) and attempt < config.max_retries:
                         wait = _compute_backoff(attempt, config)
                         logger.warning(
@@ -1381,6 +1400,13 @@ class StreamableLLMClient(LLMClient):
                         last_exc = e
                         time.sleep(wait)
                         continue
+                    _record_retry_outcome(
+                        success=False, status_code=None, exc=e,
+                        attempts_used=attempts_used,
+                    )
+                    raise
+                except Exception as e:
+                    logger.warning("LLM stream %s unexpected error: %s", url, e)
                     _record_retry_outcome(
                         success=False, status_code=None, exc=e,
                         attempts_used=attempts_used,
@@ -1473,7 +1499,8 @@ class StreamableLLMClient(LLMClient):
                 try:
                     stream_ctx = client.stream("POST", url, headers=headers, json=payload)
                     resp = await stream_ctx.__aenter__()
-                except Exception as e:
+                except (httpx.ReadTimeout, httpx.ConnectError, httpx.ConnectTimeout,
+                        httpx.NetworkError) as e:
                     if _is_retryable_request_exception(e) and attempt < config.max_retries:
                         wait = _compute_backoff(attempt, config)
                         logger.warning(
@@ -1485,6 +1512,13 @@ class StreamableLLMClient(LLMClient):
                         last_exc = e
                         await asyncio.sleep(wait)
                         continue
+                    _record_retry_outcome(
+                        success=False, status_code=None, exc=e,
+                        attempts_used=attempts_used,
+                    )
+                    raise
+                except Exception as e:
+                    logger.warning("LLM astream %s unexpected error: %s", url, e)
                     _record_retry_outcome(
                         success=False, status_code=None, exc=e,
                         attempts_used=attempts_used,

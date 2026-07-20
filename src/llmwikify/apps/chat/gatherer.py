@@ -417,13 +417,32 @@ class SourceGatherer:
                 else:
                     raise ValueError(f"All fetches failed for: {query}")
 
-        except Exception as e:
-            logger.warning("Gather failed for sub_query %s (%s): %s", sq_id, source_type, e)
+        except ValueError as e:
+            # 预期的业务失败（无结果、超时等）
+            logger.info("Sub-query %s: %s", sq_id, e)
             self.session_manager.fail_sub_query(sq_id, str(e))
             events.append({
                 "type": "sub_query_failed",
                 "sub_query_id": sq_id,
                 "error": str(e),
+            })
+        except (OSError, ConnectionError) as e:
+            # 网络/IO 错误
+            logger.warning("Gather network error for %s: %s", sq_id, e)
+            self.session_manager.fail_sub_query(sq_id, str(e))
+            events.append({
+                "type": "sub_query_failed",
+                "sub_query_id": sq_id,
+                "error": str(e),
+            })
+        except Exception:
+            # 真正意外的错误——记录完整 traceback
+            logger.exception("Unexpected error in gather for %s", sq_id)
+            self.session_manager.fail_sub_query(sq_id, "internal error")
+            events.append({
+                "type": "sub_query_failed",
+                "sub_query_id": sq_id,
+                "error": "internal error",
             })
 
         return events
