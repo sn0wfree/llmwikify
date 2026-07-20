@@ -375,7 +375,8 @@ def _enforce_role_alternation(
 
     - Merges consecutive same-role user/assistant messages by
       concatenating their string content.
-    - Drops trailing assistant messages (no prefill support).
+    - Drops trailing assistant messages without tool_calls (no prefill support).
+    - Preserves trailing assistant messages with tool_calls (needed for tool dispatch).
     - Recovers by promoting the last dropped assistant to ``user``
       so the LLM still sees its content.
     - Inserts a synthetic user message if the first non-system

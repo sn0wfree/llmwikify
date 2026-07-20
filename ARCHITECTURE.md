@@ -1,16 +1,13 @@
 # llmwikify Architecture
 
 > Technical architecture for developers.
-> **Version:** 0.38.0 | **Last updated:** 2026-07-02 | **Tests:** 6100+ Python collected
+> **Version:** 0.40.0 | **Last updated:** 2026-07-17 | **Tests:** 4454+ Python collected
 
 ---
 
 ## Overview
 
-**llmwikify** combines a persistent, LLM-maintained knowledge base with a
-quant-research **paper → factor → backtest** pipeline. The codebase is
-organised into four cooperating layers plus a standalone `reproduction/`
-module:
+**llmwikify** is a persistent, LLM-maintained knowledge base with chat, research, and agent capabilities. The codebase is organised into four cooperating layers:
 
 | Layer | Responsibility |
 |-------|----------------|
@@ -18,7 +15,6 @@ module:
 | **`foundation/`** | LLM client, prompt registry, extractors, configuration, IO |
 | **`apps/`** | Application services — wiki, chat (ReAct + Skills), research, agent runtime |
 | **`interfaces/`** | CLI, MCP, FastAPI server (REST + MCP + Web UI), Web bundle |
-| **`reproduction/`** | Paper → 6-layer Factor → DuckDB → Backtest → L5 reflection |
 
 ### Design Principles
 
@@ -29,7 +25,6 @@ module:
 5. **Knowledge compounding** — query answers are saved back to the wiki
 6. **User control** — watch defaults to notify-only, analysis is opt-in
 7. **Stay involved** — LLM suggests, human decides (Karpathy principle)
-8. **Quant separation** — `quant/` is independent of `wiki/`
 
 ---
 
@@ -141,19 +136,6 @@ src/llmwikify/
 │       ├── scheduler/            # croniter-based task scheduler
 │       └── tools/
 │
-├── reproduction/                 # Quant reproduction pipeline (20-phase refactor complete)
-│   ├── common/                   # 基础设施 (config, paths, errors, utils, llm_factory, run_id, telemetry)
-│   ├── data_source/              # 数据源 (router, universe, quantnodes_adapter, akshare, clickhouse, ifind)
-│   ├── codegen/                  # 代码生成 (llm_code, react_engine, compiler, repair, semantic, metadata)
-│   │   └── ast/                  # AST 处理 (compiler, nodes, complexity, extractor)
-│   ├── prompts/                  # Prompt 系统 (group, registry, loader, renderer, store)
-│   │   └── builtin/              # 内置模板 (code_gen, react_feedback, metadata_extract, track_a/b, hypothesis_test, risk_analyze)
-│   ├── backtest_pkg/             # 回测 (factor_backtest, run_backtest, metrics, strategies, l5_validation, l5_orchestrator, factor_value_store, quantnodes_repro)
-│   ├── persist/                  # 持久化 (factor_library, sessions, run)
-│   ├── paper_understanding/      # 论文理解 (extract_paper, extract_factors, extract_strategy, quant_wiki, schemas, contracts)
-│   │   └── llm_extraction/       # LLM 提取 (orchestrator, planner, track_a, track_b, validator, ...)
-│   └── pipeline/                 # 流水线框架 (config, runner, workspace, react, stages/)
-│
 └── interfaces/
     ├── cli/
     │   ├── _app.py / _base.py / _config.py / _output.py
@@ -168,10 +150,6 @@ src/llmwikify/
     │   ├── http/
     │   │   ├── routes.py         # /api/wiki, /api/wikis, /api/search/cross
     │   │   ├── chat_sse.py       # /api/agent/* (chat, sessions, dream, ingest, confirmations)
-    │   │   ├── paper.py          # /api/paper/*
-    │   │   ├── factor.py         # /api/factor/*
-    │   │   ├── strategy.py       # /api/strategy/*
-    │   │   ├── reproduction.py   # /api/reproduction/*
     │   │   ├── middleware.py
     │   │   └── _models.py
     │   └── utils/
@@ -195,8 +173,7 @@ src/llmwikify/
 │  CLI (30 commands)  │  MCP (26 tools)  │  FastAPI (REST + MCP + UI)  │
 │                                                                      │
 │  HTTP routers: /api/wiki  /api/wikis  /api/search/cross              │
-│                /api/agent /api/paper  /api/factor                    │
-│                /api/strategy /api/reproduction /api/log/error        │
+│                /api/agent /api/log/error                              │
 └──────────────────────────────┬───────────────────────────────────────┘
                                │
 ┌──────────────────────────────┴───────────────────────────────────────┐
@@ -204,22 +181,18 @@ src/llmwikify/
 │  wiki.service  │  chat (ChatService → ReActEngine + Skills)          │
 │                │  research (web search + structured reasoning)       │
 │                │  agent (DreamEditor, Scheduler, Hooks, Notif.)      │
-└──────┬─────────────────────────────────────────────────┬─────────────┘
-       │                                                 │
-┌──────┴─────────────┐                       ┌───────────┴─────────────┐
-│      kernel/       │                       │     reproduction/       │
-│  wiki + mixins     │                       │  Paper → Factor →       │
-│  multi_wiki        │                       │  Backtest → L5          │
-│  search (QMD)      │                       │  factor_library         │
-│  graph             │                       │  factor_value_store     │
-│  storage (FTS5,    │                       │  factor_backtest        │
-│   index, watcher)  │                       │  l5_orchestrator        │
-└──────┬─────────────┘                       └───────────┬─────────────┘
-       │                                                 │
-┌──────┴─────────────────────────────────────────────────┴─────────────┐
+└──────────────────────────────┬───────────────────────────────────────┘
+                               │
+┌──────────────────────────────┴───────────────────────────────────────┐
+│                              kernel/                                 │
+│  wiki + mixins  │  multi_wiki  │  search (QMD)  │  graph             │
+│  storage (FTS5, index, watcher)                                      │
+└──────────────────────────────┬───────────────────────────────────────┘
+                               │
+┌──────────────────────────────┴───────────────────────────────────────┐
 │                          foundation/                                 │
 │  llm_client + LAL (spec / resolver / streamable / token budget)      │
-│  prompt_registry + _defaults/ (incl. repro_*.yaml)                   │
+│  prompt_registry + _defaults/                                        │
 │  extractors (text/pdf/web/youtube/markitdown) │ config │ io          │
 └──────────────────────────────────────────────────────────────────────┘
 ```
@@ -335,85 +308,6 @@ flow routes every chat request through `ChatReActBridge → ReActEngine`:
 
 ---
 
-## Reproduction Pipeline (`reproduction/`)
-
-> **20-phase refactor complete** (2026-06-24): 8 subpackages, 0 top-level files.
-
-The reproduction module is intentionally separate from the wiki engine.
-Its canonical storage is the project-level `quant/` directory:
-
-```
-quant/
-├── factors/{asset_type}/{category}/{slug}.yaml   # 6-layer Factor YAML
-├── factors/index.yaml                            # Library index
-├── papers/{paper_id}/                            # Paper artefacts
-├── factorbacktest/*.md                           # Backtest reports
-├── strategies/                                   # Strategy markdown
-├── datacache/                                    # Cached input data
-└── factor.duckdb                                 # Long-table factor values
-```
-
-### 6-Layer Factor Model
-
-| Layer | Name | Question | Output |
-|-------|------|----------|--------|
-| **L1** | Logic | What is this factor? Formula? | Definition + maths |
-| **L2** | Computation | How is it computed in code? | Steps + parameters |
-| **L3** | Financial intuition | What does it describe in finance? | Theory + intuition |
-| **L4** | Hypotheses | What do we hypothesise? | Hypothesis list + final meaning |
-| **L5** | Validation | Backtest + hypothesis testing | IC, RankIC, groups, long-short, stability |
-| **L6** | Risk | When does it fail? | Failure conditions + risk exposure |
-
-Reference: [docs/designs/factor_library_framework.md](docs/designs/factor_library_framework.md).
-
-### Pipeline Stages
-
-```
-POST /api/paper/start
-  → kernel.ingest_source()                    # PDF/DOCX/URL/MD via MarkItDown
-  → paper_understanding.extract_paper.extract_paper_structure()    (repro_extract.yaml)
-  → paper_understanding.extract_factors.extract_factors()          (repro_factor.yaml)
-        OR repro_factor_full.yaml (single-call 6-layer)
-  → interfaces.server.http.paper._extract_factor_from_page()
-        → 6-layer dict (L5/L6 left empty by default)
-  → persist.factor_library.write_factor_yaml()
-        → quant/factors/.../*.yaml
-        → rebuild quant/factors/index.yaml
-  → (optional) backtest_pkg.factor_backtest.run_factor_backtest()
-        → quant/factorbacktest/*.md + DuckDB
-  → (optional) backtest_pkg.l5_orchestrator (stability + OOS K-fold)
-        → fill L5 / suggest L6
-```
-
-### Key APIs
-
-| Module | Function | Purpose |
-|--------|----------|---------|
-| `persist/factor_library.py` | `read_factor_yaml`, `write_factor_yaml`, `list_factors`, `list_factors_by_category`, `update_index` | 6-layer YAML CRUD |
-| `backtest_pkg/factor_value_store.py` | `compute_and_store_factor`, `query_factor_values`, `list_stored_factors`, `store_factor_values` | DuckDB long-table |
-| `backtest_pkg/factor_backtest.py` | `run_factor_backtest`, `run_factor_backtest_universe`, `_compute_factor_values` | Single-stock + cross-sectional |
-| `backtest_pkg/l5_orchestrator.py` / `l5_validation.py` | Reflection + stability + OOS K-fold | Drive L5 |
-| `paper_understanding/quant_wiki.py` | Directory layout helpers | `quant/` scaffolding |
-| `paper_understanding/extract_paper.py` / `extract_factors.py` | LLM extraction stages | Paper → JSON → factors |
-| `paper_understanding/llm_extraction/` | Helpers for 6-layer JSON extraction | Multi-call merge |
-| `data_source/ifind.py` / `quantnodes_adapter.py` | External data adapters | iFinD + QuantNodes |
-
-### Supported factor families (`_compute_factor_values`)
-
-`momentum`, `volatility`, `ma_cross`, `rsi`, `value`, `quality`, `size`,
-`growth`, `signal_composite`, plus LLM-generated formula code (Parquet
-ingestion → factor formula).
-
-### REST surface
-- `POST /api/paper/start`, `GET /api/paper/list`, `POST /api/paper/upload`,
-  `GET /api/paper/{paper_id}/artifacts`
-- `GET /api/factor/list`, `GET/PUT /api/factor/library/{name:path}`,
-  `POST /api/factor/{slug}/backtest`, `GET /api/factor/{slug}/backtest`
-- `GET /api/strategy/list`, `POST /api/strategy/{slug}/backtest`
-- `GET /api/reproduction/list`, `POST /api/reproduction/start`
-
----
-
 ## Foundation Layer (`foundation/`)
 
 ### LLM Access Layer (`foundation/llm/`)
@@ -439,8 +333,7 @@ plus optional user dirs. Provider-specific overrides (OpenAI vs Ollama),
 context injection from wiki state, and post-process validation with
 configurable retry attempts.
 
-Built-in prompts include `repro_extract.yaml`, `repro_factor.yaml`,
-`repro_factor_full.yaml`, plus the wiki, lint, synthesis and skill prompts.
+Built-in prompts include wiki, lint, synthesis and skill prompts.
 
 ### Extractors (`foundation/extractors/`)
 - `markitdown_extractor.py` — Unified MarkItDown extractor
@@ -471,10 +364,6 @@ Built-in prompts include `repro_extract.yaml`, `repro_factor.yaml`,
 | `constants.py` | Default host / port |
 | `http/routes.py` | `/api/wiki/*` (single-wiki), `/api/wikis/*` (multi-wiki registry), `/api/search/cross`, `/api/log/error` |
 | `http/chat_sse.py` | `/api/agent/*` — chat (SSE), sessions, dream, ingest log, confirmations, config, tools |
-| `http/paper.py` | `/api/paper/*` — extraction pipeline (start, status, list, upload, artifacts) |
-| `http/factor.py` | `/api/factor/*` — factor library CRUD + backtest |
-| `http/strategy.py` | `/api/strategy/*` |
-| `http/reproduction.py` | `/api/reproduction/*` — long-running sessions |
 | `http/middleware.py` | CORS + API key auth |
 | `utils/webui.py` | React SPA static mount |
 
@@ -524,15 +413,6 @@ HTTP POST /api/agent/chat (SSE)
                               save_warning / timeout / done)
 ```
 
-### Paper → Factor → Backtest (reproduction)
-
-```
-POST /api/paper/start
-  → BackgroundTask: extract → build pages → write quant/factors/<...>.yaml
-                  → optional auto-backtest → quant/factorbacktest/*.md
-                  → optional L5 reflection → fill L5 / suggest L6
-```
-
 ---
 
 ## Performance
@@ -558,16 +438,14 @@ applies to the initial connection only.
 
 ## Testing
 
-- **6100+ Python tests** collected (`pytest --collect-only -q`)
-- Frontend: Vitest + React Testing Library (`src/llmwikify/web/webui`)
+- **4454+ Python tests** collected (`pytest --collect-only -q`)
+- Frontend: Vitest + React Testing Library (`ui/webui`)
 - pytest with coverage target ≥ 85%
 - Test isolation via temp directories
 - Optional dependency tests skipped gracefully (markitdown, graph, agent)
-- Quant reproduction lives under `tests/reproduction/`
 
 ```bash
 pytest                                           # all tests
-pytest tests/reproduction/                       # quant pipeline
 pytest tests/test_apps_chat_agent_react_engine.py  # ReAct
 pytest tests/test_v022_relations.py              # graph relations
 ```
@@ -595,11 +473,13 @@ pytest tests/test_v022_relations.py              # graph relations
 | v0.36 | Hardening: 32-char message IDs, rate limiting, `confirmation_required` / `save_warning` / `timeout` SSE events |
 | v0.37 | ReAct loop unification — `ChatService` defaults to `ChatReActBridge` |
 | v0.38 | Nanobot v0.2.1 borrowings — `MessageBus` in-process pub/sub; `WebSocketManager` + `/api/ws/agent`; `AgentRunner[SpecT, ResultT]` ABC; `LLMProvider` ABC + `ProviderConfig` + `RetryMode` + `ThinkingStyle`. Additive — no breaking changes. |
+| v0.40 | **Quant separation** — `reproduction/` module migrated to [quantnodes](https://github.com/sn0wfree/quantnodes); `quant/` data moved to `QuantNodes/old_quant/`; project refocused on **Knowledge + Chat + Research Assistant**. Breaking: `/api/paper/*`, `/api/factor/*`, `/api/strategy/*`, `/api/reproduction/*` removed. |
 
 See [docs/MIGRATION_v0.36.md](docs/MIGRATION_v0.36.md),
-[docs/MIGRATION_v0.38.md](docs/MIGRATION_v0.38.md), and the top-level
+[docs/MIGRATION_v0.38.md](docs/MIGRATION_v0.38.md),
+[docs/migration/from-v0.39.md](docs/migration/from-v0.39.md), and the top-level
 [MIGRATION.md](MIGRATION.md).
 
 ---
 
-*Last updated: 2026-06-30 · Version: 0.38.0*
+*Last updated: 2026-07-17 · Version: 0.40.0*

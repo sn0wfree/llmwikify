@@ -29,8 +29,7 @@ web = [ "fastapi>=0.104.0", "starlette>=0.27.0", "uvicorn>=0.23.0", "httpx>=0.24
 agent = [ "croniter>=2.0.0", "filelock>=3.13.0", "duckduckgo-search>=4.0", "tavily-python>=0.3.0", "apscheduler>=3.10.0,<4",]
 llm = [ "tiktoken>=0.7.0",]
 extractors = [ "markitdown[all]>=0.1.0", "pymupdf>=1.23.0", "trafilatura>=1.7.0", "youtube-transcript-api>=0.6.0",]
-quantnodes = [ "quantnodes>=2.7.0",]
-all = [ "llmwikify[extractors,mcp,config,watch,graph,web,agent,quantnodes]",]
+all = [ "llmwikify[extractors,mcp,config,watch,graph,web,agent]",]
 # ─── 临时 jaraco 生态 pin (2026-07) ──────────────────────────────
 # 原因: PyPI 上 jaraco.context 6.x / keyring 24+ / twine 5+ 反向要求
 #       jaraco.functools 1.x,而 1.x 有 metadata-version 错配 bug
@@ -104,7 +103,6 @@ llmwikify = [ "py.typed",]
 "llmwikify.foundation.llm" = [ "providers.yaml",]  # v0.41: Provider 元数据唯一来源
 "llmwikify.apps.chat" = [ "config_defaults.yaml",]  # v0.41: Chat 业务默认值
 "llmwikify.apps.research" = [ "config_defaults.yaml",]  # v0.41: Research 业务默认值
-"llmwikify.reproduction.prompts" = [ "builtin/**/*.yaml",]  # v0.40: deprecated, kept for back-compat (no files)
 "llmwikify.apps.chat.skills.workflows.builtins" = [ "*.yaml", "actor_prompts/*.md",]
 
 [tool.ruff.lint]

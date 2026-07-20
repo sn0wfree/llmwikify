@@ -170,12 +170,11 @@ class TestEnforceRoleAlternation:
     def test_empty_messages_unchanged(self):
         assert _enforce_role_alternation([]) == []
 
-    def test_tool_call_message_dropped_if_no_tool_response(self):
-        """Trailing assistant with tool_calls is dropped (nanobot behavior).
+    def test_tool_call_message_preserved_for_tool_dispatch(self):
+        """Trailing assistant with tool_calls is preserved for tool dispatch.
 
-        This is potentially lossy: the LLM loses its own tool-call
-        request. We match nanobot here for behavioral parity; revisit
-        if llmwikify's wiki tool dispatch needs different semantics.
+        llmwikify needs tool_calls to remain so the tool dispatcher can
+        execute wiki tools. Dropping them would break tool execution.
         """
         msgs = [
             {"role": "user", "content": "hi"},
@@ -186,7 +185,7 @@ class TestEnforceRoleAlternation:
             },
         ]
         result = _enforce_role_alternation(msgs)
-        assert [m["role"] for m in result] == ["user"]
+        assert [m["role"] for m in result] == ["user", "assistant"]
 
 
 class TestNormalizeErrorToken:

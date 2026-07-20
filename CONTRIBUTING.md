@@ -27,7 +27,7 @@ pytest --cov=src/llmwikify --cov-report=html
 open htmlcov/index.html
 ```
 
-**Target**: 6100+ Python tests + 38 frontend tests passing, >85% code coverage.
+**Target**: 4454+ Python tests + 38 frontend tests passing, >85% code coverage.
 
 ## Code Quality
 
@@ -48,29 +48,44 @@ All three must pass before submitting a PR. CI will enforce this automatically.
 
 ```
 src/llmwikify/
-├── core/              # Business logic
-│   ├── wiki.py              # Wiki class (135 lines, inherits 12 mixins)
-│   ├── wiki_mixin_*.py      # 12 mixin files (2603 lines total)
-│   ├── wiki_analyzer.py     # Standalone lint/recommend engine
-│   ├── index.py             # WikiIndex (FTS5 + references)
-│   ├── relation_engine.py   # Knowledge graph
-│   ├── graph_analyzer.py    # PageRank, communities
-│   ├── synthesis_engine.py  # Cross-source analysis
-│   └── query_sink.py        # Sink buffer management
-├── extractors/        # Content extractors (PDF, web, YouTube, MarkItDown)
-├── cli/               # CLI commands (22 total)
-├── mcp/               # MCP protocol adapter
-├── server/            # Unified FastAPI server (MCP + REST + WebUI)
-│   ├── core.py              # WikiServer orchestrator
-│   ├── http/routes.py       # REST API endpoints
-│   └── http/middleware.py   # Auth + CORS middleware
-├── prompts/           # YAML+Jinja2 prompt templates
-├── web/               # Web UI (optional, React SPA)
-├── config.py          # Configuration system
-└── llm_client.py      # LLM API client
-tests/                 # Test suite (1008+ Python tests + 38 frontend tests)
-docs/                  # Documentation
-examples/              # Example configurations
+├── kernel/                    # Core engines
+│   ├── wiki/                  # Wiki domain model (13 mixins)
+│   │   ├── wiki.py            # Wiki orchestrator
+│   │   ├── mixins/            # Core, IO, Analysis mixins
+│   │   ├── engines/           # Analyzer, relation, synthesis
+│   │   └── lint/              # Rule-based lint engine
+│   ├── multi_wiki/            # Multi-wiki registry
+│   ├── search/                # QMD hybrid search
+│   ├── graph/                 # Knowledge graph (PageRank, communities)
+│   └── storage/               # Persistence (FTS5, index, watcher)
+│
+├── foundation/                # Cross-cutting primitives
+│   ├── llm/                   # LLM client, streaming, token budget
+│   ├── prompts/               # YAML+Jinja2 prompt templates
+│   ├── extractors/            # Content extractors (PDF, web, YouTube)
+│   └── templates/             # JSON templates
+│
+├── apps/                      # Application services
+│   ├── wiki/                  # Wiki application service
+│   ├── chat/                  # Chat + ReAct + Skills
+│   │   ├── agent/             # Agent runtime, ReAct engine
+│   │   ├── skills/            # Skill system (actions, pipelines, workflows)
+│   │   └── harness/           # Quality gate, review
+│   ├── research/              # Web research engine
+│   └── agent/                 # Dream editor, scheduler, hooks
+│
+└── interfaces/                # Entry points
+    ├── cli/                   # CLI commands (30 subcommands)
+    │   └── commands/          # Command modules
+    ├── mcp/                   # MCP protocol adapter (26 tools)
+    ├── server/                # Unified FastAPI server
+    │   ├── core.py            # WikiServer orchestrator
+    │   └── http/              # REST API routes
+    └── web/                   # Web bundle entry
+
+tests/                         # Test suite (4454+ Python tests)
+docs/                          # Documentation
+ui/webui/                      # React SPA (WebUI)
 ```
 
 ## Adding a New Feature
@@ -84,21 +99,21 @@ examples/              # Example configurations
 
 ## Adding a New CLI Command
 
-1. Add the command method to `src/llmwikify/cli/commands.py` in the `WikiCLI` class
-2. Register the subcommand in the `_build_parser()` method
+1. Add the command method to `src/llmwikify/interfaces/cli/commands/<command>.py`
+2. Register the subcommand in the `_build_parser()` method in `src/llmwikify/interfaces/cli/_app.py`
 3. Write tests in `tests/test_cli.py` or a new test file
 4. Update the CLI commands table in README.md
 
 ## Adding a New MCP Tool
 
-1. Add the tool definition to the `list_tools()` function in `src/llmwikify/mcp/server.py`
+1. Add the tool definition to `src/llmwikify/interfaces/mcp/tools.py`
 2. Add the handler in the `call_tool()` function
 3. Update the MCP tools table in README.md
 4. Write tests (integration test with mock MCP)
 
 ## Prompt Template Changes
 
-When modifying prompts in `src/llmwikify/prompts/_defaults/`:
+When modifying prompts in `src/llmwikify/foundation/prompts/_defaults/`:
 
 1. Run principle compliance: `python scripts/check_prompt_principles.py`
 2. Run offline evaluation: `python scripts/eval_prompts.py`

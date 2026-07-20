@@ -1,6 +1,32 @@
 # Migration Guide
 
-> **Current version**: 0.38.0
+> **Current version**: 0.40.0
+
+---
+
+## v0.39 → v0.40 (summary)
+
+### Quant Separation
+
+v0.40 migrates the entire `reproduction/` module to [quantnodes](https://github.com/sn0wfree/quantnodes), refocusing llmwikify on **Knowledge + Chat + Research Assistant**.
+
+**Breaking changes:**
+- `/api/paper/*`, `/api/factor/*`, `/api/strategy/*`, `/api/reproduction/*` endpoints removed
+- `reproduction/` module deleted from source tree
+- `quant/` data moved to `QuantNodes/old_quant/`
+- `quantnodes` optional dependency removed from `pyproject.toml`
+
+**Migration steps:**
+1. If you need quant functionality, install [quantnodes](https://github.com/sn0wfree/quantnodes) separately
+2. Update any code that imports from `llmwikify.reproduction` to use `quantnodes` equivalents
+3. Remove references to `/api/paper/*`, `/api/factor/*`, `/api/strategy/*`, `/api/reproduction/*` in client code
+
+**Non-breaking changes:**
+- 4454+ Python tests passing
+- WebUI components updated for multi-wiki support
+- Research engine improvements (max_rounds, stale gather guard, replan-after-synthesis)
+
+See [docs/migration/from-v0.39.md](docs/migration/from-v0.39.md) for detailed migration guide.
 
 ---
 
@@ -42,7 +68,7 @@ The web server has been refactored from Starlette-based `web/server.py` into a n
 llmwikify serve --web
 
 # New (explicit - optional)
-from llmwikify.server import WikiServer
+from llmwikify.interfaces.server import WikiServer
 server = WikiServer(wiki, api_key="secret")
 server.run(host="127.0.0.1", port=8765)
 ```
@@ -64,7 +90,8 @@ src/llmwikify/server/
 
 | Old Import | New Import |
 |------------|------------|
-| `from llmwikify.web.server import create_server` | `from llmwikify.server import WikiServer` |
+| `from llmwikify.web.server import create_server` | `from llmwikify.interfaces.server import WikiServer` |
+| `from llmwikify.server import WikiServer` | `from llmwikify.interfaces.server import WikiServer` |
 
 ---
 
@@ -598,4 +625,4 @@ from llmwikify.mcp import MCPServer
 
 ---
 
-*Last updated: 2026-06-30 | Current version: 0.38.0*
+*Last updated: 2026-07-17 | Current version: 0.40.0*
