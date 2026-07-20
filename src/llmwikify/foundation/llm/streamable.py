@@ -927,55 +927,54 @@ def _post_with_retry_sync(
     if config is None:
         config = RetryConfig.from_env()
 
-    last_exc: BaseException | None = None
-    for attempt in range(config.max_retries + 1):
-        attempts_used = attempt + 1
-        try:
-            resp = httpx.Client(timeout=timeout_seconds).post(
-                url, headers=headers, json=payload,
-            )
-        except Exception as e:
-            if _is_retryable_request_exception(e) and attempt < config.max_retries:
-                wait = _compute_backoff(attempt, config)
-                logger.warning(
-                    "LLM POST %s failed with %s (attempt %d/%d), "
-                    "retrying in %.1fs: %s",
-                    url, type(e).__name__, attempt + 1,
-                    config.max_retries + 1, wait, e,
+    with httpx.Client(timeout=timeout_seconds) as client:
+        last_exc: BaseException | None = None
+        for attempt in range(config.max_retries + 1):
+            attempts_used = attempt + 1
+            try:
+                resp = client.post(url, headers=headers, json=payload)
+            except Exception as e:
+                if _is_retryable_request_exception(e) and attempt < config.max_retries:
+                    wait = _compute_backoff(attempt, config)
+                    logger.warning(
+                        "LLM POST %s failed with %s (attempt %d/%d), "
+                        "retrying in %.1fs: %s",
+                        url, type(e).__name__, attempt + 1,
+                        config.max_retries + 1, wait, e,
+                    )
+                    last_exc = e
+                    time.sleep(wait)
+                    continue
+                _record_retry_outcome(
+                    success=False, status_code=None, exc=e,
+                    attempts_used=attempts_used,
                 )
-                last_exc = e
+                raise
+
+            if _is_retryable_status(resp.status_code) and attempt < config.max_retries:
+                retry_after = _extract_retry_after(resp, config.retry_after_max_seconds)
+                wait = retry_after if retry_after is not None else _compute_backoff(attempt, config)
+                reason = "Retry-After" if retry_after is not None else "backoff"
+                logger.warning(
+                    "LLM POST %s returned %d (attempt %d/%d), "
+                    "retrying in %.1fs (%s)",
+                    url, resp.status_code, attempt + 1,
+                    config.max_retries + 1, wait, reason,
+                )
+                resp.close()
                 time.sleep(wait)
                 continue
+
             _record_retry_outcome(
-                success=False, status_code=None, exc=e,
+                success=200 <= resp.status_code < 300,
+                status_code=resp.status_code, exc=None,
                 attempts_used=attempts_used,
             )
-            raise
+            return resp
 
-        if _is_retryable_status(resp.status_code) and attempt < config.max_retries:
-            retry_after = _extract_retry_after(resp, config.retry_after_max_seconds)
-            wait = retry_after if retry_after is not None else _compute_backoff(attempt, config)
-            reason = "Retry-After" if retry_after is not None else "backoff"
-            logger.warning(
-                "LLM POST %s returned %d (attempt %d/%d), "
-                "retrying in %.1fs (%s)",
-                url, resp.status_code, attempt + 1,
-                config.max_retries + 1, wait, reason,
-            )
-            resp.close()
-            time.sleep(wait)
-            continue
-
-        _record_retry_outcome(
-            success=200 <= resp.status_code < 300,
-            status_code=resp.status_code, exc=None,
-            attempts_used=attempts_used,
-        )
-        return resp
-
-    if last_exc is not None:
-        raise last_exc
-    raise RuntimeError("retry loop exited without returning a response")
+        if last_exc is not None:
+            raise last_exc
+        raise RuntimeError("retry loop exited without returning a response")
 
 
 async def _post_with_retry_async(
@@ -1361,84 +1360,83 @@ class StreamableLLMClient(LLMClient):
         payload = self._build_payload(messages, tools=tools, stream=True, **generation_params)
 
         config = RetryConfig.from_env()
-        last_exc: BaseException | None = None
-        client = httpx.Client(timeout=httpx.Timeout(connect=30, read=300, write=30, pool=30))
 
-        for attempt in range(config.max_retries + 1):
-            attempts_used = attempt + 1
-            try:
-                stream_ctx = client.stream("POST", url, headers=headers, json=payload)
-                resp = stream_ctx.__enter__()
-            except Exception as e:
-                if _is_retryable_request_exception(e) and attempt < config.max_retries:
-                    wait = _compute_backoff(attempt, config)
-                    logger.warning(
-                        "LLM stream %s failed with %s (attempt %d/%d), "
-                        "retrying in %.1fs: %s",
-                        url, type(e).__name__, attempt + 1,
-                        config.max_retries + 1, wait, e,
+        with httpx.Client(timeout=httpx.Timeout(connect=30, read=300, write=30, pool=30)) as client:
+            last_exc: BaseException | None = None
+
+            for attempt in range(config.max_retries + 1):
+                attempts_used = attempt + 1
+                try:
+                    stream_ctx = client.stream("POST", url, headers=headers, json=payload)
+                    resp = stream_ctx.__enter__()
+                except Exception as e:
+                    if _is_retryable_request_exception(e) and attempt < config.max_retries:
+                        wait = _compute_backoff(attempt, config)
+                        logger.warning(
+                            "LLM stream %s failed with %s (attempt %d/%d), "
+                            "retrying in %.1fs: %s",
+                            url, type(e).__name__, attempt + 1,
+                            config.max_retries + 1, wait, e,
+                        )
+                        last_exc = e
+                        time.sleep(wait)
+                        continue
+                    _record_retry_outcome(
+                        success=False, status_code=None, exc=e,
+                        attempts_used=attempts_used,
                     )
-                    last_exc = e
+                    raise
+
+                if _is_retryable_status(resp.status_code) and attempt < config.max_retries:
+                    retry_after = _extract_retry_after(resp, config.retry_after_max_seconds)
+                    wait = retry_after if retry_after is not None else _compute_backoff(attempt, config)
+                    reason = "Retry-After" if retry_after is not None else "backoff"
+                    logger.warning(
+                        "LLM stream %s returned %d (attempt %d/%d), "
+                        "retrying in %.1fs (%s)",
+                        url, resp.status_code, attempt + 1,
+                        config.max_retries + 1, wait, reason,
+                    )
+                    stream_ctx.__exit__(None, None, None)
                     time.sleep(wait)
                     continue
+
                 _record_retry_outcome(
-                    success=False, status_code=None, exc=e,
+                    success=200 <= resp.status_code < 300,
+                    status_code=resp.status_code, exc=None,
                     attempts_used=attempts_used,
                 )
-                client.close()
-                raise
+                break
+            else:
+                if last_exc is not None:
+                    raise last_exc
+                raise RuntimeError("stream retry loop exited unexpectedly")
 
-            if _is_retryable_status(resp.status_code) and attempt < config.max_retries:
-                retry_after = _extract_retry_after(resp, config.retry_after_max_seconds)
-                wait = retry_after if retry_after is not None else _compute_backoff(attempt, config)
-                reason = "Retry-After" if retry_after is not None else "backoff"
-                logger.warning(
-                    "LLM stream %s returned %d (attempt %d/%d), "
-                    "retrying in %.1fs (%s)",
-                    url, resp.status_code, attempt + 1,
-                    config.max_retries + 1, wait, reason,
-                )
+            try:
+                if resp.status_code >= 400:
+                    body = resp.read()
+                    raise _format_http_error(resp.status_code, url, body)
+                accumulated = ""
+                tool_call_buffer: dict[int, dict] = {}
+                for line in resp.iter_lines():
+                    result = _parse_sse_line(line, accumulated, tool_call_buffer)
+                    if result is None:
+                        continue
+                    events, accumulated, chunk = result
+                    yield from events
+                    # Some providers return full content in first chunk via
+                    # message.content (not streaming despite stream=True).
+                    # This is sync-only; async variant does not need it.
+                    if chunk is not None:
+                        msg = chunk.get("choices", [{}])[0].get("message", {})
+                        msg_content = msg.get("content", "") or msg.get("reasoning_content", "")
+                        if msg_content:
+                            accumulated += msg_content
+                            yield {"type": "content", "text": msg_content}
+                    if events and events[-1].get("type") == "done":
+                        return
+            finally:
                 stream_ctx.__exit__(None, None, None)
-                time.sleep(wait)
-                continue
-
-            _record_retry_outcome(
-                success=200 <= resp.status_code < 300,
-                status_code=resp.status_code, exc=None,
-                attempts_used=attempts_used,
-            )
-            break
-        else:
-            if last_exc is not None:
-                raise last_exc
-            raise RuntimeError("stream retry loop exited unexpectedly")
-
-        try:
-            if resp.status_code >= 400:
-                body = resp.read()
-                raise _format_http_error(resp.status_code, url, body)
-            accumulated = ""
-            tool_call_buffer: dict[int, dict] = {}
-            for line in resp.iter_lines():
-                result = _parse_sse_line(line, accumulated, tool_call_buffer)
-                if result is None:
-                    continue
-                events, accumulated, chunk = result
-                yield from events
-                # Some providers return full content in first chunk via
-                # message.content (not streaming despite stream=True).
-                # This is sync-only; async variant does not need it.
-                if chunk is not None:
-                    msg = chunk.get("choices", [{}])[0].get("message", {})
-                    msg_content = msg.get("content", "") or msg.get("reasoning_content", "")
-                    if msg_content:
-                        accumulated += msg_content
-                        yield {"type": "content", "text": msg_content}
-                if events and events[-1].get("type") == "done":
-                    return
-        finally:
-            stream_ctx.__exit__(None, None, None)
-            client.close()
 
     @check_token_budget(lambda self: self._budget_checker)
     async def astream_chat(
