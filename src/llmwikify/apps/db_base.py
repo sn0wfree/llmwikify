@@ -18,9 +18,11 @@ from __future__ import annotations
 
 import logging
 import sqlite3
+from contextlib import contextmanager
 from pathlib import Path
+from typing import Iterator
 
-from llmwikify.foundation.db import connect as _db_connect
+from llmwikify.foundation.db import get_connection
 
 logger = logging.getLogger(__name__)
 
@@ -73,6 +75,7 @@ class BaseDatabase:
     - ``__init__(data_dir)``: resolves db_path, runs subclass
       ``_init_db``, checks db size
     - ``_connect()``: opens a sqlite3 connection
+    - ``_transaction()``: transaction context manager
     - ``_check_db_size()``: warns if db > 100 MB
     """
 
@@ -80,12 +83,19 @@ class BaseDatabase:
         self.data_dir = Path(data_dir)
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.db_path = get_app_db_path(self.data_dir)
+        self._mgr = get_connection(self.db_path)
         self._init_db()
         self._check_db_size()
 
     def _connect(self) -> sqlite3.Connection:
         """Open a connection with row_factory + foreign_keys."""
-        return _db_connect(self.db_path)
+        return self._mgr.conn
+
+    @contextmanager
+    def _transaction(self) -> Iterator[sqlite3.Connection]:
+        """Transaction context manager (auto-commit/rollback)."""
+        with self._mgr.transaction() as conn:
+            yield conn
 
     def _init_db(self) -> None:
         """Create the database schema. Subclasses must implement.
@@ -130,7 +140,7 @@ class BaseDatabase:
             raise FileNotFoundError(
                 f"DB file does not exist: {self.db_path}"
             )
-        return _db_connect(self.db_path)
+        return self._mgr.conn
 
 
 __all__ = [
