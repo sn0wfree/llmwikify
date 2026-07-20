@@ -4,9 +4,12 @@ from __future__ import annotations
 import copy
 import inspect
 import ipaddress
+import logging
 import re
 from typing import Any
 from urllib.parse import urlparse
+
+logger = logging.getLogger(__name__)
 
 
 async def maybe_await(fn_or_value: Any, *args: Any, **kwargs: Any) -> Any:
@@ -67,35 +70,69 @@ def mask_api_key(config: dict[str, Any]) -> dict[str, Any]:
 
 # ─── SSRF protection ────────────────────────────────────────────
 
-# Hostnames that should be blocked (internal/loopback)
-_BLOCKED_HOSTNAMES = frozenset({
-    "localhost",
-    "0.0.0.0",
-    "metadata.google.internal",
-    "instance-data",
-})
+# Default blocked networks (empty by default - user must configure)
+_DEFAULT_BLOCKED_NETWORKS: list[str] = []
 
-# IP networks that should be blocked (private/link-local)
-_BLOCKED_NETWORKS = [
-    ipaddress.ip_network("127.0.0.0/8"),      # Loopback
-    ipaddress.ip_network("10.0.0.0/8"),       # Private Class A
-    ipaddress.ip_network("172.16.0.0/12"),    # Private Class B
-    ipaddress.ip_network("192.168.0.0/16"),   # Private Class C
-    ipaddress.ip_network("169.254.0.0/16"),   # Link-local
-    ipaddress.ip_network("::1/128"),          # IPv6 loopback
-    ipaddress.ip_network("fc00::/7"),         # IPv6 private
-    ipaddress.ip_network("fe80::/10"),        # IPv6 link-local
-]
+# Default blocked hostnames (empty by default - user must configure)
+_DEFAULT_BLOCKED_HOSTNAMES: list[str] = []
+
+
+def _load_ssrf_config() -> dict[str, Any]:
+    """Load SSRF protection configuration.
+
+    Returns:
+        Dict with 'blocked_networks' and 'blocked_hostnames' keys.
+    """
+    try:
+        from .config import get_config
+        config = get_config()
+        ssrf_config = config.get("ssrf_protection", {})
+        return {
+            "blocked_networks": ssrf_config.get("blocked_networks", _DEFAULT_BLOCKED_NETWORKS),
+            "blocked_hostnames": ssrf_config.get("blocked_hostnames", _DEFAULT_BLOCKED_HOSTNAMES),
+            "enabled": ssrf_config.get("enabled", False),
+        }
+    except Exception as e:
+        logger.debug("Failed to load SSRF config: %s", e)
+        return {
+            "blocked_networks": _DEFAULT_BLOCKED_NETWORKS,
+            "blocked_hostnames": _DEFAULT_BLOCKED_HOSTNAMES,
+            "enabled": False,
+        }
+
+
+def _parse_network(network_str: str) -> ipaddress.IPv4Network | ipaddress.IPv6Network | None:
+    """Parse a network string (e.g., '10.0.0.0/8') into an IP network object."""
+    try:
+        return ipaddress.ip_network(network_str, strict=False)
+    except ValueError:
+        return None
 
 
 def is_safe_url(url: str) -> bool:
     """Check if a URL is safe to fetch (not targeting internal services).
 
-    Blocks:
-    - localhost and internal hostnames
-    - Private IP ranges (10.x, 172.16-31.x, 192.168.x)
-    - Link-local addresses (169.254.x)
-    - IPv6 loopback and private ranges
+    SSRF protection is configurable via the config file. By default,
+    no URLs are blocked. Users must explicitly configure which networks
+    and hostnames to block.
+
+    Configuration example (in llmwikify.json):
+    {
+        "ssrf_protection": {
+            "enabled": true,
+            "blocked_networks": [
+                "127.0.0.0/8",
+                "10.0.0.0/8",
+                "172.16.0.0/12",
+                "192.168.0.0/16",
+                "169.254.0.0/16"
+            ],
+            "blocked_hostnames": [
+                "localhost",
+                "metadata.google.internal"
+            ]
+        }
+    }
 
     Args:
         url: The URL to validate.
@@ -103,6 +140,12 @@ def is_safe_url(url: str) -> bool:
     Returns:
         True if the URL is safe to fetch, False otherwise.
     """
+    config = _load_ssrf_config()
+
+    # If SSRF protection is disabled, allow all URLs
+    if not config.get("enabled", False):
+        return True
+
     try:
         parsed = urlparse(url)
     except Exception:
@@ -117,14 +160,17 @@ def is_safe_url(url: str) -> bool:
         return False
 
     # Check blocked hostnames
-    if hostname.lower() in _BLOCKED_HOSTNAMES:
+    blocked_hostnames = set(config.get("blocked_hostnames", []))
+    if hostname.lower() in blocked_hostnames:
         return False
 
     # Check if hostname is an IP address
     try:
         ip = ipaddress.ip_address(hostname)
-        for network in _BLOCKED_NETWORKS:
-            if ip in network:
+        blocked_networks = config.get("blocked_networks", [])
+        for network_str in blocked_networks:
+            network = _parse_network(network_str)
+            if network and ip in network:
                 return False
     except ValueError:
         # Not an IP address, check for suspicious patterns
@@ -147,7 +193,7 @@ def validate_url_or_raise(url: str) -> None:
     if not is_safe_url(url):
         raise ValueError(
             f"URL blocked by SSRF protection: {url}. "
-            "Only public HTTP/HTTPS URLs are allowed."
+            "See config 'ssrf_protection' for details."
         )
 
 
