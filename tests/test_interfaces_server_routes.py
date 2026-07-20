@@ -200,6 +200,190 @@ class TestArchitectureContracts:
 # ─── Phase 4.3 — Rate limit middleware (v0.36) ─────────────────────
 
 
+class TestGetClientIP:
+    """Unit tests for get_client_ip() — Phase 4.3 enhancement.
+
+    Covers:
+      - Default (no trusted proxies) → direct TCP peer
+      - Trusted proxy with X-Forwarded-For chain
+      - Peer not trusted → X-Forwarded-For is ignored (anti-spoof)
+      - CIDR network matching
+      - No client → "unknown"
+    """
+
+    # ── helpers ─────────────────────────────────────────────────
+
+    @staticmethod
+    def _make_request(
+        peer_ip: str,
+        forwarded_for: str | None = None,
+    ):
+        from unittest.mock import MagicMock
+
+        req = MagicMock()
+        req.client.host = peer_ip
+        req.client.port = 54321
+        headers = {}
+        if forwarded_for is not None:
+            headers["X-Forwarded-For"] = forwarded_for
+        req.headers = headers
+        return req
+
+    # ── no trusted proxies ──────────────────────────────────────
+
+    def test_no_trusted_proxies_returns_peer(self):
+        from unittest.mock import patch
+
+        from llmwikify.interfaces.server.http.middleware import get_client_ip
+
+        with patch("llmwikify.interfaces.server.http.middleware._get_trusted_proxies", return_value=[]):
+            req = self._make_request("203.0.113.5")
+            assert get_client_ip(req) == "203.0.113.5"
+
+            req2 = self._make_request("203.0.113.5", "10.0.0.1")
+            assert get_client_ip(req2) == "203.0.113.5"
+
+    # ── peer not trusted ────────────────────────────────────────
+
+    def test_peer_not_trusted_ignores_xff(self):
+        from llmwikify.interfaces.server.http.middleware import (
+            _ip_is_trusted,
+            get_client_ip,
+        )
+        trusted = ["127.0.0.1"]
+        req = self._make_request("203.0.113.5", "10.0.0.1")
+
+        assert _ip_is_trusted("203.0.113.5", trusted) is False
+        assert get_client_ip(req) == "203.0.113.5"
+
+    def test_malicious_xff_from_untrusted_peer(self):
+        from unittest.mock import patch
+
+        from llmwikify.interfaces.server.http.middleware import get_client_ip
+
+        with patch("llmwikify.interfaces.server.http.middleware._get_trusted_proxies", return_value=["127.0.0.1"]):
+            req = self._make_request("203.0.113.5", "10.0.0.1")
+            assert get_client_ip(req) == "203.0.113.5"
+
+    # ── trusted peer ────────────────────────────────────────────
+
+    def test_trusted_peer_no_xff_returns_peer(self):
+        from unittest.mock import patch
+
+        from llmwikify.interfaces.server.http.middleware import get_client_ip
+
+        with patch("llmwikify.interfaces.server.http.middleware._get_trusted_proxies", return_value=["127.0.0.1"]):
+            req = self._make_request("127.0.0.1")
+            assert get_client_ip(req) == "127.0.0.1"
+
+    def test_trusted_peer_single_forwarded_ip(self):
+        from unittest.mock import patch
+
+        from llmwikify.interfaces.server.http.middleware import get_client_ip
+
+        with patch("llmwikify.interfaces.server.http.middleware._get_trusted_proxies", return_value=["127.0.0.1"]):
+            req = self._make_request("127.0.0.1", "198.51.100.10")
+            assert get_client_ip(req) == "198.51.100.10"
+
+    def test_trusted_peer_xff_chain_rightmost_untrusted(self):
+        from unittest.mock import patch
+
+        from llmwikify.interfaces.server.http.middleware import get_client_ip
+
+        with patch("llmwikify.interfaces.server.http.middleware._get_trusted_proxies", return_value=["10.0.0.0/8", "192.168.0.0/16"]):
+            req = self._make_request("10.0.0.1", "198.51.100.1, 192.168.1.1, 10.0.0.5")
+            assert get_client_ip(req) == "198.51.100.1"
+
+    def test_all_ips_trusted_returns_leftmost(self):
+        from unittest.mock import patch
+
+        from llmwikify.interfaces.server.http.middleware import get_client_ip
+
+        with patch("llmwikify.interfaces.server.http.middleware._get_trusted_proxies", return_value=["10.0.0.0/8", "192.168.0.0/16"]):
+            req = self._make_request("10.0.0.1", "192.168.1.1, 10.0.0.2")
+            result = get_client_ip(req)
+            assert result == "192.168.1.1"
+
+    # ── CIDR matching ───────────────────────────────────────────
+
+    def test_cidr_network_matching(self):
+        from llmwikify.interfaces.server.http.middleware import (
+            _ip_is_trusted,
+            get_client_ip,
+        )
+        trusted = ["10.0.0.0/8"]
+        assert _ip_is_trusted("10.1.2.3", trusted) is True
+        assert _ip_is_trusted("10.255.255.255", trusted) is True
+        assert _ip_is_trusted("11.0.0.1", trusted) is False
+
+        from unittest.mock import patch
+        with patch("llmwikify.interfaces.server.http.middleware._get_trusted_proxies", return_value=["10.0.0.0/8"]):
+            req = self._make_request("10.1.2.3", "198.51.100.10")
+            assert get_client_ip(req) == "198.51.100.10"
+
+    def test_invalid_ip_in_xff_skipped(self):
+        from unittest.mock import patch
+
+        from llmwikify.interfaces.server.http.middleware import get_client_ip
+
+        with patch("llmwikify.interfaces.server.http.middleware._get_trusted_proxies", return_value=["10.0.0.0/8"]):
+            req = self._make_request("10.0.0.1", "not-an-ip, 198.51.100.10, 10.0.0.2")
+            result = get_client_ip(req)
+            assert result == "198.51.100.10"
+
+    # ── edge cases ──────────────────────────────────────────────
+
+    def test_no_client_returns_unknown(self):
+        from unittest.mock import MagicMock
+
+        from llmwikify.interfaces.server.http.middleware import get_client_ip
+
+        req = MagicMock()
+        req.client = None
+        req.headers = {}
+        assert get_client_ip(req) == "unknown"
+
+    def test_xff_empty_string_returns_peer(self):
+        from unittest.mock import patch
+
+        from llmwikify.interfaces.server.http.middleware import get_client_ip
+
+        with patch("llmwikify.interfaces.server.http.middleware._get_trusted_proxies", return_value=["127.0.0.1"]):
+            req = self._make_request("127.0.0.1", "")
+            assert get_client_ip(req) == "127.0.0.1"
+
+    # ── _ip_is_trusted ──────────────────────────────────────────
+
+    def test_ip_is_trusted_invalid_ip_returns_false(self):
+        from llmwikify.interfaces.server.http.middleware import _ip_is_trusted
+        assert _ip_is_trusted("not-an-ip", ["127.0.0.1"]) is False
+        assert _ip_is_trusted("", ["127.0.0.1"]) is False
+
+    def test_ip_is_trusted_invalid_network_skipped(self):
+        from llmwikify.interfaces.server.http.middleware import _ip_is_trusted
+        trusted = ["not-a-network", "127.0.0.1"]
+        assert _ip_is_trusted("127.0.0.1", trusted) is True
+        assert _ip_is_trusted("10.0.0.1", trusted) is False
+
+    # ── ipv6 ────────────────────────────────────────────────────
+
+    def test_ipv6_trusted_proxy(self):
+        from unittest.mock import patch
+
+        from llmwikify.interfaces.server.http.middleware import get_client_ip
+
+        with patch("llmwikify.interfaces.server.http.middleware._get_trusted_proxies", return_value=["::1"]):
+            req = self._make_request("::1", "2001:db8::1")
+            assert get_client_ip(req) == "2001:db8::1"
+
+    def test_ipv6_cidr_matching(self):
+        from llmwikify.interfaces.server.http.middleware import _ip_is_trusted
+        trusted = ["2001:db8::/32"]
+        assert _ip_is_trusted("2001:db8::1", trusted) is True
+        assert _ip_is_trusted("2001:db8:ffff::1", trusted) is True
+        assert _ip_is_trusted("2001:db9::1", trusted) is False
+
+
 class TestRateLimitMiddleware:
     """Phase 4.3 (v0.36): verify RateLimitMiddleware import
     and basic construction."""
@@ -224,3 +408,142 @@ class TestRateLimitMiddleware:
         )
         mw = RateLimitMiddleware(app=lambda: None, limit_per_min=0)
         assert mw.limit_per_min == 0
+
+    @staticmethod
+    def _make_mw(limit_per_min: int = 60):
+        from llmwikify.interfaces.server.http.middleware import (
+            RateLimitMiddleware,
+        )
+        return RateLimitMiddleware(app=lambda: None, limit_per_min=limit_per_min)
+
+    def test_bucket_creation(self) -> None:
+        mw = self._make_mw()
+        tokens, last_refill = mw._get_or_create_bucket("203.0.113.5")
+        assert tokens == 60.0
+        assert last_refill > 0
+
+    def test_bucket_reuses_existing(self) -> None:
+        mw = self._make_mw()
+        b1 = mw._get_or_create_bucket("203.0.113.5")
+        b2 = mw._get_or_create_bucket("203.0.113.5")
+        assert b1 is b2
+
+    def test_lru_eviction(self) -> None:
+        mw = self._make_mw()
+        mw._max_buckets = 3
+        mw._get_or_create_bucket("10.0.0.1")
+        mw._get_or_create_bucket("10.0.0.2")
+        mw._get_or_create_bucket("10.0.0.3")
+        assert len(mw._buckets) == 3
+        mw._get_or_create_bucket("10.0.0.1")
+        mw._get_or_create_bucket("10.0.0.4")
+        assert len(mw._buckets) == 3
+        assert "10.0.0.1" in mw._buckets
+        assert "10.0.0.2" not in mw._buckets
+        assert "10.0.0.3" in mw._buckets
+        assert "10.0.0.4" in mw._buckets
+
+    @staticmethod
+    def _async_ok_response():
+        """Return an async call_next that returns a 200 response."""
+        from unittest.mock import MagicMock
+        async def _inner(req):
+            return MagicMock(status_code=200)
+        return _inner
+
+    def test_token_refill(self) -> None:
+        import time
+        mw = self._make_mw()
+        now = time.monotonic()
+        mw._buckets["203.0.113.5"] = (0.0, now - 60.0)
+
+        from unittest.mock import MagicMock
+        req = MagicMock()
+        req.client.host = "203.0.113.5"
+        req.url.path = "/api/agent/chat"
+        req.headers = {}
+
+        import asyncio
+        resp = asyncio.run(mw.dispatch(req, self._async_ok_response()))
+        assert resp.status_code != 429, "should have been refilled"
+        tokens = mw._buckets["203.0.113.5"][0]
+        assert tokens >= 58.0, f"expected refilled tokens >= 58, got {tokens}"
+
+    def test_rate_limit_exceeded(self) -> None:
+        import time
+        mw = self._make_mw(1)
+        now = time.monotonic()
+        mw._buckets["203.0.113.5"] = (0.0, now)
+
+        from unittest.mock import MagicMock
+        req = MagicMock()
+        req.client.host = "203.0.113.5"
+        req.url.path = "/api/agent/chat"
+        req.headers = {}
+
+        import asyncio
+        resp = asyncio.run(mw.dispatch(req, self._async_ok_response()))
+        assert resp.status_code == 429
+        body = resp.body.decode()
+        assert "Rate limit exceeded" in body
+
+    def test_non_agent_route_not_limited(self) -> None:
+        mw = self._make_mw(1)
+
+        from unittest.mock import MagicMock
+        req = MagicMock()
+        req.client.host = "203.0.113.5"
+        req.url.path = "/api/health"
+        req.headers = {}
+
+        import asyncio
+        resp = asyncio.run(mw.dispatch(req, self._async_ok_response()))
+        assert resp.status_code == 200
+        assert "203.0.113.5" not in mw._buckets
+
+    def test_disabled_passes_through(self) -> None:
+        mw = self._make_mw(0)
+
+        from unittest.mock import MagicMock
+        req = MagicMock()
+        req.client.host = "203.0.113.5"
+        req.url.path = "/api/agent/chat"
+
+        import asyncio
+        resp = asyncio.run(mw.dispatch(req, self._async_ok_response()))
+        assert resp.status_code == 200
+
+    def test_tokens_consumed_on_success(self) -> None:
+        import time
+        mw = self._make_mw()
+        now = time.monotonic()
+        mw._buckets["203.0.113.5"] = (60.0, now)
+
+        from unittest.mock import MagicMock
+        req = MagicMock()
+        req.client.host = "203.0.113.5"
+        req.url.path = "/api/agent/chat"
+        req.headers = {}
+
+        import asyncio
+        resp = asyncio.run(mw.dispatch(req, self._async_ok_response()))
+        assert resp.status_code != 429
+        remaining = mw._buckets["203.0.113.5"][0]
+        assert remaining == 59.0, f"expected 59.0 remaining, got {remaining}"
+
+    def test_retry_after_header_present(self) -> None:
+        import time
+        mw = self._make_mw(1)
+        now = time.monotonic()
+        mw._buckets["203.0.113.5"] = (0.0, now)
+
+        from unittest.mock import MagicMock
+        req = MagicMock()
+        req.client.host = "203.0.113.5"
+        req.url.path = "/api/agent/chat"
+        req.headers = {}
+
+        import asyncio
+        resp = asyncio.run(mw.dispatch(req, self._async_ok_response()))
+        assert resp.status_code == 429
+        assert "Retry-After" in resp.headers
