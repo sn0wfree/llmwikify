@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import os
 import time
-from collections import defaultdict
+from collections import OrderedDict
 
 import jwt as _pyjwt
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -44,12 +44,19 @@ def _parse_rate_limit() -> int:
 
 RATE_LIMIT_PER_MIN = _parse_rate_limit()
 
+# Maximum number of IP buckets to keep in memory (prevents DoS)
+MAX_BUCKETS = 10000
+
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
     """Token-bucket rate limiter per IP address.
 
     Applied only to /api/agent/* routes. Returns 429 with a
     Retry-After header when the bucket is empty.
+
+    Uses an LRU-style eviction: when the number of tracked IPs
+    exceeds MAX_BUCKETS, the oldest entries are evicted to prevent
+    memory exhaustion from spoofed/rotated IPs.
 
     Usage::
 
@@ -62,9 +69,25 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
         self.limit_per_min = limit_per_min
         # Buckets: ip -> (tokens: float, last_refill: float)
-        self._buckets: dict[str, tuple[float, float]] = defaultdict(
-            lambda: (float(limit_per_min), time.monotonic())
-        )
+        # Using OrderedDict for LRU-style eviction
+        self._buckets: OrderedDict[str, tuple[float, float]] = OrderedDict()
+        self._max_buckets = MAX_BUCKETS
+
+    def _get_or_create_bucket(self, client_ip: str) -> tuple[float, float]:
+        """Get existing bucket or create new one with LRU eviction."""
+        if client_ip in self._buckets:
+            # Move to end (most recently used)
+            self._buckets.move_to_end(client_ip)
+            return self._buckets[client_ip]
+
+        # Evict oldest entries if at capacity
+        while len(self._buckets) >= self._max_buckets:
+            self._buckets.popitem(last=False)
+
+        # Create new bucket
+        bucket = (float(self.limit_per_min), time.monotonic())
+        self._buckets[client_ip] = bucket
+        return bucket
 
     async def dispatch(self, request: Request, call_next) -> Response:
         # Only rate-limit agent API routes.
@@ -77,7 +100,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
         client_ip = request.client.host if request.client else "unknown"
         now = time.monotonic()
-        tokens, last_refill = self._buckets[client_ip]
+
+        tokens, last_refill = self._get_or_create_bucket(client_ip)
 
         # Refill tokens based on elapsed time.
         elapsed = now - last_refill
