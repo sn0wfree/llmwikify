@@ -22,7 +22,7 @@ import pytest
 
 from llmwikify.apps.chat.bus.adapter import BusAdapter
 from llmwikify.apps.chat.bus.queue import MessageBus, reset_default_bus
-from llmwikify.interfaces.server.http.chat_sse import (
+from llmwikify.interfaces.server.http.agent._sse import (
     HEARTBEAT_INTERVAL,
     STREAM_TIMEOUT,
     STUDY_STREAM_TIMEOUT,
@@ -158,7 +158,7 @@ class TestTimeout:
             return values[i] if i < len(values) else values[-1]
 
         monkeypatch.setattr(
-            "llmwikify.interfaces.server.http.chat_sse.time.monotonic",
+            "llmwikify.interfaces.server.http.agent._sse.time.monotonic",
             fake_monotonic,
         )
 
@@ -209,7 +209,7 @@ class TestEndOfStreamHeartbeat:
             return values[i] if i < len(values) else values[-1]
 
         monkeypatch.setattr(
-            "llmwikify.interfaces.server.http.chat_sse.time.monotonic",
+            "llmwikify.interfaces.server.http.agent._sse.time.monotonic",
             fake_monotonic,
         )
 
@@ -289,17 +289,17 @@ class TestBackwardCompat:
 
     def test_sse_stream_is_importable_from_chat_sse(self) -> None:
         """`_sse_stream` is the new factory; must be importable for testing."""
-        from llmwikify.interfaces.server.http.chat_sse import _sse_stream
+        from llmwikify.interfaces.server.http.agent._sse import _sse_stream
         assert callable(_sse_stream)
 
     def test_router_prefix_unchanged(self) -> None:
         """The agent router's URL prefix must still be ``/api/agent``."""
-        from llmwikify.interfaces.server.http.chat_sse import router
+        from llmwikify.interfaces.server.http.agent._common import router
         assert router.prefix == "/api/agent"
 
     def test_get_set_agent_service_still_works(self) -> None:
         """Module-level singleton API must be intact."""
-        from llmwikify.interfaces.server.http.chat_sse import (
+        from llmwikify.interfaces.server.http.agent._common import (
             get_agent_service,
             set_agent_service,
         )

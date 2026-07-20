@@ -151,7 +151,7 @@ class WikiServer:
             )
             # Capture the AgentService created by _register_agent_routes
             # so the lifespan handler can access it for DreamScheduler.
-            from llmwikify.interfaces.server.http.chat_sse import (
+            from llmwikify.interfaces.server.http.agent._common import (
                 get_agent_service,
             )
             self._agent_service = get_agent_service()

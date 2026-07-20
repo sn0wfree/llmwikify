@@ -92,7 +92,7 @@ def register_routes(
     # resolve via the global set by ``_register_agent_routes`` →
     # ``chat_sse.set_agent_service`` to avoid refactoring its
     # private signature.
-    from llmwikify.interfaces.server.http.chat_sse import get_agent_service
+    from llmwikify.interfaces.server.http.agent._common import get_agent_service
     agent_svc = None
     try:
         agent_svc = get_agent_service()
@@ -668,7 +668,7 @@ def _register_agent_routes(
     to the production database (which ``Path.home()`` ignores on Linux).
     """
     from llmwikify.apps.chat.agent.agent_service import AgentService
-    from llmwikify.interfaces.server.http.chat_sse import set_agent_service
+    from llmwikify.interfaces.server.http.agent._common import set_agent_service
 
     # Phase 19-D: prefer explicit LLMWIKIFY_DATA_DIR; fall back to
     # the previous ``~/.llmwikify/agent`` default. Without this,
@@ -711,7 +711,7 @@ def _register_agent_routes(
     )
     app.include_router(autoresearch_router)
 
-    from llmwikify.interfaces.server.http.chat_sse import router as agent_router
+    from llmwikify.interfaces.server.http.agent._common import router as agent_router
 
     app.include_router(agent_router)
 

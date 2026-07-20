@@ -36,7 +36,7 @@ class TestNewHomeImports:
     """
 
     def test_chat_sse_imports(self) -> None:
-        from llmwikify.interfaces.server.http.chat_sse import (
+        from llmwikify.interfaces.server.http.agent._common import (
             get_agent_service,
             router,
             set_agent_service,
@@ -72,13 +72,13 @@ class TestRouterAttributes:
     """The chat_sse router has the expected APIRouter prefix and tags."""
 
     def test_chat_sse_router_prefix(self) -> None:
-        from llmwikify.interfaces.server.http.chat_sse import router
+        from llmwikify.interfaces.server.http.agent._common import router
         assert router.prefix == "/api/agent"
         assert "agent" in router.tags
 
     def test_routers_have_routes(self) -> None:
         """The chat_sse router should have at least 1 registered route."""
-        from llmwikify.interfaces.server.http.chat_sse import router as c
+        from llmwikify.interfaces.server.http.agent._common import router as c
         assert len(c.routes) > 0
 
 
@@ -102,7 +102,7 @@ class TestL4RoutesPy:
         src = Path(
             "src/llmwikify/interfaces/server/http/routes.py"
         ).read_text()
-        assert "from llmwikify.interfaces.server.http.chat_sse import" in src
+        assert "from llmwikify.interfaces.server.http.agent._common import" in src
 
     def test_routes_py_imports_research_from_new_home(self) -> None:
         """routes.py should import research from the new location.
@@ -117,7 +117,7 @@ class TestL4RoutesPy:
         ).read_text()
         # Research routes are now handled by the SPA; no explicit
         # import is required. Verify agent_router is imported.
-        assert "from llmwikify.interfaces.server.http.chat_sse import" in src
+        assert "from llmwikify.interfaces.server.http.agent._common import" in src
 
 
 # ─── L3 chat routes ─────────────────────────────────────────────
