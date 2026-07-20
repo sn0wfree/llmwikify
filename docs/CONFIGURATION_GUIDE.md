@@ -709,4 +709,117 @@ Server (http://localhost:8765):
 
 ---
 
-*Last updated: 2026-07-02 | Version: 0.38.0*
+## 🆕 v0.41: 配置分层 + 自动迁移
+
+### 三层配置架构
+
+v0.41 引入三层配置架构：
+
+| 层级 | 文件 | 作用域 | 可修改 |
+|------|------|--------|--------|
+| **全局** | `~/.llmwikify/llmwikify.json` | 所有 wiki | ✅ LLM / Research / MCP / Chat mutable |
+| **Wiki** | `<wiki_root>/.wiki-config.yaml` | 单个 wiki | ✅ directories / database / wikis / orphan_detection |
+| **默认** | `foundation/templates/llmwikify.default.json` | 兜底 | ❌ 只读 |
+
+### 迁移段映射
+
+`.wiki-config.yaml` 中以下段会自动迁移到全局配置：
+
+| Wiki 段 | 迁移到 | 说明 |
+|---------|--------|------|
+| `llm` | `llmwikify.json:llm` | LLM provider / model / api_key |
+| `research_mutable` | `llmwikify.json:research_mutable` | Research 可修改参数 |
+| `chat_mutable` | `llmwikify.json:chat_mutable` | Chat 可修改参数 |
+| `mcp` | `llmwikify.json:mcp` | MCP 服务器配置 |
+| `prompts` | `llmwikify.json:prompts` | Prompt 模板目录 |
+
+`.wiki-config.yaml` 中保留的段（不迁移）：
+
+| Wiki 段 | 说明 |
+|---------|------|
+| `directories` | 目录结构（raw / wiki） |
+| `database` | 数据库文件名 |
+| `wikis` | 多 wiki 注册 |
+| `orphan_detection` | 孤立页面检测 |
+| `performance` | 性能参数 |
+| `reference_index` | 引用索引 |
+
+### 自动迁移机制
+
+启动时 (`llmwikify serve` / `llmwikify chat`)，系统会自动检测旧版配置：
+
+1. **检测版本**：读取 `.wiki-config.yaml` 的 `version` 字段
+   - 缺失或 `< 0.41` → 需要迁移
+   - `>= 0.41` → 跳过
+
+2. **备份原文件**：`.wiki-config.yaml.bak.<timestamp>`（永久保留）
+
+3. **合并到全局**：将 llm/research_mutable/chat_mutable/mcp/prompts 段合并到 `~/.llmwikify/llmwikify.json`
+
+4. **冲突处理**（如果全局已有相同 key）：
+   - **交互式（TTY）**：询问用户 `[g]lobal / [w]iki / [s]kip`，默认 `g`
+   - **非交互式**：使用 `--auto-global`（默认）/ `--auto-wiki` / `--strict`
+
+5. **更新 wiki 配置**：删除已迁移段，添加 `version: "0.41"`
+
+### 手动迁移
+
+```bash
+# 默认行为：自动迁移（启动时 + 手动）
+llmwikify migrate-config
+
+# 只显示迁移计划，不写文件
+llmwikify migrate-config --dry-run
+
+# 冲突时严格失败（要求手动处理）
+llmwikify migrate-config --strict
+
+# 自动处理冲突（默认全局优先）
+llmwikify migrate-config --auto-global
+llmwikify migrate-config --auto-wiki
+
+# 指定 wiki 目录
+llmwikify migrate-config --wiki-root /path/to/wiki
+
+# 跳过自动迁移（紧急情况）
+llmwikify serve --no-migrate
+```
+
+### 备份管理
+
+迁移会创建 `.wiki-config.yaml.bak.<timestamp>` 文件，**永久保留**：
+
+- 文件名格式：`.wiki-config.yaml.bak.1721245678`
+- 时间戳是 Unix epoch（秒）
+- 多次迁移会创建多个备份
+- 用户可手动删除不再需要的备份
+
+### 手动编辑示例
+
+如果你想手动迁移（跳过自动机制）：
+
+```bash
+# 1. 备份原文件
+cp .wiki-config.yaml .wiki-config.yaml.bak.manual
+
+# 2. 编辑全局配置
+vim ~/.llmwikify/llmwikify.json
+
+# 3. 从 .wiki-config.yaml 删除 llm/research_mutable/chat_mutable/mcp/prompts 段
+
+# 4. 添加 version 字段
+echo "version: \"0.41\"" >> .wiki-config.yaml
+```
+
+### 故障排查
+
+| 症状 | 原因 | 解决 |
+|------|------|------|
+| 启动时 WARNING | 检测到旧配置 | 等待自动迁移完成，或运行 `migrate-config` |
+| 迁移后启动失败 | YAML 解析错误 | 手动修复 `.wiki-config.yaml` 或恢复 `.bak.<ts>` |
+| 冲突未解决 | 非 TTY 环境 | 用 `--auto-global` / `--auto-wiki` / `--strict` |
+| 备份太多 | 多次迁移 | 手动清理 `.bak.<timestamp>` 文件 |
+
+---
+
+*Last updated: 2026-07-20 | Version: 0.41.0*
