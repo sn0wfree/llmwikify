@@ -38,6 +38,8 @@ from llmwikify.apps.chat.agent.microcompact import build_microcompact_fn
 from llmwikify.apps.chat.agent.spec import ChatRunResult, ChatRunSpec
 from llmwikify.apps.chat.agent.text_mode_tool import TextModeParser
 from llmwikify.foundation.callback import AgentHook, AgentHookContext, NoOpHook
+from llmwikify.foundation.llm.errors import LLMError
+from llmwikify.foundation.llm.streamable import LLMRequestError
 from llmwikify.foundation.utils import maybe_await as _maybe_await
 from llmwikify.foundation.utils_timing import measure_latency
 
@@ -220,9 +222,16 @@ class ChatRunnerV2(AgentRunner["ChatRunSpec", "ChatRunResult"]):
 
         try:
             system_prompt = await self._build_system_prompt(spec)
-        except Exception as exc:
+        except (LLMError, ValueError, KeyError, OSError) as exc:
             logger.exception("system_prompt build failed")
             ctx.error = f"{type(exc).__name__}: {exc}"
+            ctx.stop_reason = "error"
+            async for ev in self._emit_done(ctx):
+                yield ev
+            return
+        except Exception as exc:
+            logger.exception("system_prompt build UNEXPECTED failure")
+            ctx.error = f"InternalError: {type(exc).__name__}: {exc}"
             ctx.stop_reason = "error"
             async for ev in self._emit_done(ctx):
                 yield ev
@@ -286,9 +295,15 @@ class ChatRunnerV2(AgentRunner["ChatRunSpec", "ChatRunResult"]):
                         )
                         if result is not None:
                             ctx.compacted_count += 1
+                except (LLMError, OSError, ValueError) as exc:
+                    logger.warning(
+                        "memory consolidation failed in run_stream: %s", exc,
+                        exc_info=True,
+                    )
                 except Exception:
                     logger.warning(
-                        "memory consolidation failed in run_stream", exc_info=True,
+                        "memory consolidation UNEXPECTED failure in run_stream",
+                        exc_info=True,
                     )
 
         with _StateTrace(ctx, "FINALIZE"):
@@ -332,9 +347,13 @@ class ChatRunnerV2(AgentRunner["ChatRunSpec", "ChatRunResult"]):
                         stop_reason = new_phase
                 elif kind == events.CONFIRMATION_REQUIRED:
                     stop_reason = "confirmation_required"
-        except Exception as exc:
+        except (LLMError, LLMRequestError, RuntimeError, ValueError) as exc:
             logger.exception("ChatRunnerV2.run_to_completion failed")
             error = f"{type(exc).__name__}: {exc}"
+            stop_reason = "error"
+        except Exception as exc:
+            logger.exception("ChatRunnerV2.run_to_completion UNEXPECTED failure")
+            error = f"InternalError: {type(exc).__name__}: {exc}"
             stop_reason = "error"
 
         # Pull the state trace from the live context if it was kept
@@ -499,9 +518,21 @@ class ChatRunnerV2(AgentRunner["ChatRunSpec", "ChatRunResult"]):
                         ctx.hook_ctx(iteration), chunk,
                     ))
                     yield {"type": events.MESSAGE_DELTA, "content": chunk}
-        except Exception as exc:
+        except (LLMError, LLMRequestError, json.JSONDecodeError,
+                ValueError, TimeoutError) as exc:
             logger.exception("LLM stream failed")
             ctx.error = f"{type(exc).__name__}: {exc}"
+            ctx.reason_failed = True
+            for flushed in parser.flush():
+                kind = flushed.get("type")
+                if kind == "content":
+                    chunk = flushed.get("text", "")
+                    accumulated += chunk
+                    yield {"type": events.MESSAGE_DELTA, "content": chunk}
+            return
+        except Exception as exc:
+            logger.exception("LLM stream failed with UNEXPECTED error")
+            ctx.error = f"InternalError: {type(exc).__name__}: {exc}"
             ctx.reason_failed = True
             for flushed in parser.flush():
                 kind = flushed.get("type")
@@ -616,7 +647,8 @@ class ChatRunnerV2(AgentRunner["ChatRunSpec", "ChatRunResult"]):
                         tool_name, args, ctx.spec.tool_registry,
                         ctx.spec.session_id, ctx,
                     )
-                except Exception as exc:
+                except (RuntimeError, ValueError, FileNotFoundError,
+                        PermissionError, OSError, TimeoutError) as exc:
                     logger.warning("Tool %s failed", tool_name, exc_info=True)
                     await _maybe_await(self._hook.on_tool_error(
                         ctx.hook_ctx(iteration), tc, exc,
@@ -625,6 +657,19 @@ class ChatRunnerV2(AgentRunner["ChatRunSpec", "ChatRunResult"]):
                         "type": events.TOOL_CALL_ERROR,
                         "tool": tool_name,
                         "error": str(exc),
+                        "call_id": call_id,
+                        "duration_ms": get_ms(),
+                    }
+                    continue
+                except Exception as exc:
+                    logger.warning("Tool %s UNEXPECTED failure", tool_name, exc_info=True)
+                    await _maybe_await(self._hook.on_tool_error(
+                        ctx.hook_ctx(iteration), tc, exc,
+                    ))
+                    yield {
+                        "type": events.TOOL_CALL_ERROR,
+                        "tool": tool_name,
+                        "error": f"InternalError: {type(exc).__name__}: {exc}",
                         "call_id": call_id,
                         "duration_ms": get_ms(),
                     }
@@ -766,9 +811,14 @@ class ChatRunnerV2(AgentRunner["ChatRunSpec", "ChatRunResult"]):
             if inspect.iscoroutine(result):
                 return default
             return result
+        except (AttributeError, TypeError, KeyError, ValueError) as exc:
+            logger.warning(
+                "%s failed: %s", log_label or attr_name, exc, exc_info=True,
+            )
+            return default
         except Exception:
             logger.warning(
-                "%s failed", log_label or attr_name, exc_info=True,
+                "%s UNEXPECTED failure", log_label or attr_name, exc_info=True,
             )
             return default
 

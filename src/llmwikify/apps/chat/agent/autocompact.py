@@ -25,6 +25,7 @@ keep this an opt-in TTL trigger instead of an aggressive default.
 from __future__ import annotations
 
 import logging
+import sqlite3
 from collections.abc import Awaitable, Callable, Collection, Iterable
 from datetime import datetime, timedelta
 from typing import Any
@@ -128,8 +129,11 @@ class AutoCompact:
         out: list[dict[str, Any]] = []
         try:
             sessions = self.chat_db.list_chat_sessions()
+        except (OSError, sqlite3.Error) as exc:
+            logger.warning("AutoCompact: list_chat_sessions failed: %s", exc, exc_info=True)
+            return out
         except Exception:
-            logger.warning("AutoCompact: list_chat_sessions failed", exc_info=True)
+            logger.warning("AutoCompact: list_chat_sessions UNEXPECTED failure", exc_info=True)
             return out
         for row in sessions:
             sid = row.get("id")

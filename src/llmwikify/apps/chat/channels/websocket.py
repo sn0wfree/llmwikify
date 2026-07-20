@@ -420,6 +420,8 @@ def _register_websocket_routes(
                 )
         except WebSocketDisconnect:
             pass
+        except asyncio.CancelledError:
+            raise
         except Exception:
             logger.exception("WebSocket error for peer %s", peer)
         finally:
