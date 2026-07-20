@@ -23,10 +23,10 @@ import json
 import logging
 import sqlite3
 import uuid
+from pathlib import Path
 from typing import Any
 
-from llmwikify.apps.db_base import BaseDatabase
-from llmwikify.foundation.db import connect as _db_connect
+from llmwikify.apps.db_base import BaseDatabase, get_app_db_path
 
 logger = logging.getLogger(__name__)
 
@@ -41,19 +41,37 @@ class ResearchDatabase(BaseDatabase):
     accessed via the other facades.
     """
 
-    def _connect(self) -> sqlite3.Connection:
-        """Open a connection with the project's standard pragmas.
+    def __init__(self, data_dir: Path | str):
+        """Initialize with foreign_keys=False for research tables.
 
-        - ``journal_mode=WAL`` lets readers proceed while a writer
-          holds the lock, eliminating most ``database is locked``
-          errors.
-        - ``busy_timeout=5000`` makes SQLite block for up to 5s
-          waiting for the lock instead of failing immediately.
-        - ``row_factory=sqlite3.Row`` so callers can use ``row["col"]``
-          syntax (the v0.34.0 CHANGELOG entry notes a tuple-index
-          bug from missing row_factory in some methods).
-        - ``synchronous=NORMAL`` is the safe-for-WAL mode that gives
-          the durability of FULL with the throughput of OFF.
+        The research schema has FK constraints but test fixtures
+        may violate them, so we disable FK enforcement at the
+        connection level.
+        """
+        from llmwikify.foundation.db import get_connection
+
+        self.data_dir = Path(data_dir)
+        self.data_dir.mkdir(parents=True, exist_ok=True)
+        self.db_path = get_app_db_path(self.data_dir)
+        # Research tables need foreign_keys=False
+        self._mgr = get_connection(
+            self.db_path,
+            foreign_keys=False,
+            wal=True,
+            busy_timeout=5000,
+            synchronous="NORMAL",
+        )
+        self._init_db()
+        self._check_db_size()
+
+    def _connect(self) -> sqlite3.Connection:
+        """Return the thread-local ManagedConnection.
+
+        This replaces the previous implementation that opened a new
+        ``sqlite3.connect()`` on every call. Using ManagedConnection:
+        - Reuses connections within the same thread (reduces overhead).
+        - WAL + busy_timeout are set once per connection (consistent).
+        - Atexit cleanup is handled by ManagedConnection.
 
         Note: ``foreign_keys`` is intentionally NOT enabled. The
         pre-existing schema has 3 FK constraints and the test
@@ -63,17 +81,8 @@ class ResearchDatabase(BaseDatabase):
         that need to be fixed separately. Use raw ``sqlite3``
         connections and ``PRAGMA foreign_keys = ON`` explicitly
         in tests that need it.
-
-        All call sites that open ``sqlite3.connect(self.db_path)``
-        should go through this helper.
         """
-        return _db_connect(
-            self.db_path,
-            foreign_keys=False,
-            wal=True,
-            busy_timeout=5000,
-            synchronous="NORMAL",
-        )
+        return self._mgr.conn
 
     def _init_db(self) -> None:
         """Idempotently create the 4 research tables.
