@@ -31,9 +31,9 @@ def load_wiki_config() -> dict:
         wiki 配置字典，包含 allowed_remote_hosts 等字段。
         文件不存在或读取失败时返回默认值。
     """
-    from llmwikify.foundation.config import config
+    from llmwikify.foundation.config import Config
 
-    return config.get("wiki", {"allowed_remote_hosts": ["*"]})
+    return Config().get("wiki", {"allowed_remote_hosts": ["*"]})
 
 
 def check_remote_wiki_config(allowed_hosts: list[str]) -> None:

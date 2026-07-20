@@ -5,12 +5,20 @@ from pathlib import Path
 
 import pytest
 
-from llmwikify.apps.chat.db import ChatMessageRepository
+from llmwikify.apps.chat.db import ChatMessageRepository, ChatSessionRepository
 
 
 @pytest.fixture
 def repo(tmp_path: Path) -> ChatMessageRepository:
-    r = ChatMessageRepository(tmp_path / "test.db")
+    db_path = tmp_path / "test.db"
+    session_repo = ChatSessionRepository(db_path)
+    session_repo._init_schema()
+    # Pre-insert a session row matching the test's hardcoded "s1".
+    session_repo._mgr.execute_write(
+        "INSERT INTO chat_sessions (id, wiki_id) VALUES (?, ?)",
+        ("s1", "wiki-1"),
+    )
+    r = ChatMessageRepository(db_path)
     r._init_schema()
     return r
 

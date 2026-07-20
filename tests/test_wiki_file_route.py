@@ -7,7 +7,7 @@ reject any request whose resolved path escapes the wiki root.
 import pytest
 from fastapi import HTTPException
 
-from llmwikify.interfaces.server.http.routes import _serve_wiki_file
+from llmwikify.interfaces.server.http.wiki._common import _serve_wiki_file
 
 
 class TestServeWikiFile:

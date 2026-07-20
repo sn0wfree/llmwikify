@@ -5,12 +5,20 @@ from pathlib import Path
 
 import pytest
 
-from llmwikify.apps.chat.db import ToolCallRepository
+from llmwikify.apps.chat.db import ChatSessionRepository, ToolCallRepository
 
 
 @pytest.fixture
 def repo(tmp_path: Path) -> ToolCallRepository:
-    r = ToolCallRepository(tmp_path / "test.db")
+    db_path = tmp_path / "test.db"
+    session_repo = ChatSessionRepository(db_path)
+    session_repo._init_schema()
+    for sid in ("s1", "s2"):
+        session_repo._mgr.execute_write(
+            "INSERT INTO chat_sessions (id, wiki_id) VALUES (?, ?)",
+            (sid, "wiki-1"),
+        )
+    r = ToolCallRepository(db_path)
     r._init_schema()
     return r
 

@@ -133,38 +133,38 @@ class TestValidateRemoteUrl:
 
 class TestLoadWikiConfig:
     def test_default_config(self, monkeypatch, tmp_path):
-        monkeypatch.setattr(
-            "llmwikify.interfaces.server.http.wiki._wiki_ops.Path.home",
-            lambda: tmp_path,
-        )
+        from llmwikify.foundation.config import Config
+        Config._instance = None
+        monkeypatch.setenv("LLMWIKIFY_HOME", str(tmp_path))
         result = load_wiki_config()
         assert result == {"allowed_remote_hosts": ["*"]}
+        Config._instance = None
 
     def test_custom_config(self, monkeypatch, tmp_path):
+        from llmwikify.foundation.config import Config
         import json
         config_file = tmp_path / ".llmwikify" / "llmwikify.json"
-        config_file.parent.mkdir(parents=True)
+        config_file.parent.mkdir(parents=True, exist_ok=True)
         config_file.write_text(json.dumps({
             "wiki": {"allowed_remote_hosts": ["*.example.com"]}
         }))
-        monkeypatch.setattr(
-            "llmwikify.interfaces.server.http.wiki._wiki_ops.Path.home",
-            lambda: tmp_path,
-        )
+        Config._instance = None
+        monkeypatch.setenv("LLMWIKIFY_HOME", str(tmp_path))
         result = load_wiki_config()
         assert result == {"allowed_remote_hosts": ["*.example.com"]}
+        Config._instance = None
 
     def test_missing_wiki_section(self, monkeypatch, tmp_path):
+        from llmwikify.foundation.config import Config
         import json
         config_file = tmp_path / ".llmwikify" / "llmwikify.json"
-        config_file.parent.mkdir(parents=True)
+        config_file.parent.mkdir(parents=True, exist_ok=True)
         config_file.write_text(json.dumps({"llm": {}}))
-        monkeypatch.setattr(
-            "llmwikify.interfaces.server.http.wiki._wiki_ops.Path.home",
-            lambda: tmp_path,
-        )
+        Config._instance = None
+        monkeypatch.setenv("LLMWIKIFY_HOME", str(tmp_path))
         result = load_wiki_config()
         assert result == {"allowed_remote_hosts": ["*"]}
+        Config._instance = None
 
 
 # ─── check_remote_wiki_config ─────────────────────────────────

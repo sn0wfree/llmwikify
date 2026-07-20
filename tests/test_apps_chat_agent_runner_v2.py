@@ -255,6 +255,8 @@ def test_runner_dependencies_are_minimal() -> None:
         "from llmwikify.apps.chat.agent.microcompact import",
         "from llmwikify.apps.chat.agent.text_mode_tool import",
         "from llmwikify.foundation.callback import",
+        "from llmwikify.foundation.llm.errors import",
+        "from llmwikify.foundation.llm.streamable import",
         "from llmwikify.foundation.utils import",
         "from llmwikify.foundation.utils_timing import",
     }

@@ -12,7 +12,7 @@ from llmwikify.apps.chat.db import ChatDatabase
 def _make_db() -> tuple[ChatDatabase, str]:
     tmpdir = tempfile.mkdtemp()
     db = ChatDatabase(tmpdir)
-    sid = db.create_chat_session("test", None)
+    sid = db.create_chat_session("test")
     return db, sid, tmpdir
 
 

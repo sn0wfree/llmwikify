@@ -146,9 +146,9 @@ class TestWikiHealth:
         assert isinstance(data, dict)
 
     def test_health_unknown_wiki(self, client: TestClient) -> None:
-        """Health endpoint returns 500 when wiki_id is missing."""
+        """Health endpoint returns 404 when wiki_id is unknown."""
         response = client.get("/api/wikis/nonexistent/health")
-        assert response.status_code == 500
+        assert response.status_code == 404
         assert "detail" in response.json()
 
 

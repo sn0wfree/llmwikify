@@ -24,6 +24,7 @@ def mock_wiki(tmp_path):
     wiki.wiki_md_file.write_text("# Wiki Schema\n")
     wiki.index = MagicMock()
     wiki.index.get_inbound_links.return_value = []
+    wiki.index.count_inbound_for_pages.return_value = {}
     wiki.query_sink = MagicMock()
     wiki.query_sink.status.return_value = {"sinks": []}
     wiki._wiki_pages.return_value = []

@@ -102,9 +102,11 @@ class ChatDatabase(BaseDatabase):
         repos to create their tables).
         """
         from llmwikify.apps.db_base import get_app_db_path
+        from llmwikify.foundation.db import get_connection
         self.data_dir = Path(data_dir)
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.db_path = get_app_db_path(self.data_dir)
+        self._mgr = get_connection(self.db_path)
         self._init_repos()
         self._init_db()
         self._check_db_size()

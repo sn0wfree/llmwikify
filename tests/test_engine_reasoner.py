@@ -215,7 +215,50 @@ def test_rule_based_does_not_replan_after_report():
 
 
 def test_rule_based_replans_before_report():
-    """When no report exists yet, gaps+round+budget → 'plan' (replan)."""
+    """When no synthesis AND no report exist, gaps+round+budget → 'plan'.
+
+    Anti-spin design: once synthesis exists, the reasoner never
+    replans (gaps should be addressed in the report, not by an
+    infinite gather→analyze→synthesize loop). This test verifies
+    the pre-synthesis replan path.
+    """
+    from llmwikify.apps.chat.research_engine.reasoner import ResearchReasoner
+
+    class FakeDB:
+        def get_sources(self, session_id):
+            return []
+
+    class FakeEngine:
+        db = FakeDB()
+        config = {}
+        _action_ctx = None
+        _max_replan = 2
+
+    r = ResearchReasoner(FakeEngine())
+    # pre-synthesize state: no synthesis, no report, gaps detected
+    state = ResearchState(
+        round=0,
+        max_rounds=5,
+        clarification={"q": "x"},
+        sub_queries=[{"id": 1}],
+        sources=[{"sub_query_id": 1, "analysis": {}}],
+        synthesis=None,
+        report_md=None,
+    )
+    state.knowledge_gaps = ["gap1"]
+    state.budget_remaining = 0.9
+    # The reasoner must still synthesize first (no synthesis yet),
+    # not replan. Replan only fires after synthesize completes.
+    assert r.rule_based(state) == "synthesize"
+
+
+def test_rule_based_does_not_replan_after_synthesis():
+    """Once synthesis exists, knowledge_gaps → 'report' (not replan).
+
+    Anti-spin design: replanning after synthesis produces 0 new
+    sub-queries (all deduped) and burns max_rounds on no-op cycles.
+    Gaps are addressed in the report instead.
+    """
     from llmwikify.apps.chat.research_engine.reasoner import ResearchReasoner
 
     class FakeDB:
@@ -236,11 +279,12 @@ def test_rule_based_replans_before_report():
         sub_queries=[{"id": 1}],
         sources=[{"sub_query_id": 1, "analysis": {}}],
         synthesis={"text": "s", "knowledge_gaps": ["gap1"]},
-        report_md=None,  # no report yet → replan is still useful
+        report_md=None,
     )
     state.knowledge_gaps = ["gap1"]
     state.budget_remaining = 0.9
-    assert r.rule_based(state) == "plan"
+    # Must fall through to 'report', not 'plan' (anti-spin).
+    assert r.rule_based(state) == "report"
 
 
 def test_rule_based_does_not_replan_when_budget_low():

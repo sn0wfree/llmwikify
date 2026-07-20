@@ -28,17 +28,20 @@ def memory_env():
 @pytest.fixture
 def memory_manager(memory_env) -> MemoryManager:
     app_db, tmp = memory_env
-    sid = app_db.chat.create_chat_session("wiki-1")
+    chat_sid = app_db.chat.create_chat_session(wiki_id="wiki-1")
+    research_sid = app_db.research.create_research_session("wiki-1", "test query")
     mm = MemoryManager(app_db, wiki=None, data_dir=tmp)
-    return mm, sid
+    # MemoryManager fixtures typically use the chat session id (most stores
+    # are chat-facing). ReActStateStore tests should override.
+    return mm, {"chat": chat_sid, "research": research_sid}
 
 
 class TestConversationStore:
     def test_add_and_list(self, memory_manager):
         mm, sid = memory_manager
-        mm.conversation.add(sid, "user", "hello")
-        mm.conversation.add(sid, "assistant", "hi there")
-        msgs = mm.conversation.list(sid)
+        mm.conversation.add(sid["chat"], "user", "hello")
+        mm.conversation.add(sid["chat"], "assistant", "hi there")
+        msgs = mm.conversation.list(sid["chat"])
         assert len(msgs) == 2
         # Default order is DESC (newest first)
         assert msgs[0]["role"] == "assistant"
@@ -46,57 +49,57 @@ class TestConversationStore:
 
     def test_search(self, memory_manager):
         mm, sid = memory_manager
-        mm.conversation.add(sid, "user", "tell me about python")
-        mm.conversation.add(sid, "assistant", "python is a snake")
-        results = mm.conversation.search(sid, "python")
+        mm.conversation.add(sid["chat"], "user", "tell me about python")
+        mm.conversation.add(sid["chat"], "assistant", "python is a snake")
+        results = mm.conversation.search(sid["chat"], "python")
         assert len(results) == 2
 
     def test_search_no_match(self, memory_manager):
         mm, sid = memory_manager
-        mm.conversation.add(sid, "user", "hello")
-        results = mm.conversation.search(sid, "nonexistent")
+        mm.conversation.add(sid["chat"], "user", "hello")
+        results = mm.conversation.search(sid["chat"], "nonexistent")
         assert len(results) == 0
 
 
 class TestContextStore:
     def test_add_and_list(self, memory_manager):
         mm, sid = memory_manager
-        mm.context.add(sid, "rag", "context chunk 1")
-        mm.context.add(sid, "tool_result", "tool output 1")
-        entries = mm.context.list(sid)
+        mm.context.add(sid["chat"], "rag", "context chunk 1")
+        mm.context.add(sid["chat"], "tool_result", "tool output 1")
+        entries = mm.context.list(sid["chat"])
         assert len(entries) == 2
 
     def test_list_by_type(self, memory_manager):
         mm, sid = memory_manager
-        mm.context.add(sid, "rag", "context chunk 1")
-        mm.context.add(sid, "tool_result", "tool output 1")
-        rag_entries = mm.context.list(sid, entry_type="rag")
+        mm.context.add(sid["chat"], "rag", "context chunk 1")
+        mm.context.add(sid["chat"], "tool_result", "tool output 1")
+        rag_entries = mm.context.list(sid["chat"], entry_type="rag")
         assert len(rag_entries) == 1
         assert rag_entries[0]["entry_type"] == "rag"
 
     def test_clear(self, memory_manager):
         mm, sid = memory_manager
-        mm.context.add(sid, "rag", "x")
-        mm.context.add(sid, "rag", "y")
-        deleted = mm.context.clear(sid)
+        mm.context.add(sid["chat"], "rag", "x")
+        mm.context.add(sid["chat"], "rag", "y")
+        deleted = mm.context.clear(sid["chat"])
         assert deleted == 2
-        assert len(mm.context.list(sid)) == 0
+        assert len(mm.context.list(sid["chat"])) == 0
 
 
 class TestReActStateStore:
     def test_save_and_load(self, memory_manager):
         mm, sid = memory_manager
         state = {"phase": "gather", "sub_queries": ["q1", "q2"]}
-        mm.react_state.save(sid, 1, state)
-        loaded = mm.react_state.load(sid, 1)
+        mm.react_state.save(sid["research"], 1, state)
+        loaded = mm.react_state.load(sid["research"], 1)
         assert loaded is not None
         assert loaded["phase"] == "gather"
 
     def test_latest(self, memory_manager):
         mm, sid = memory_manager
-        mm.react_state.save(sid, 1, {"phase": "plan"})
-        mm.react_state.save(sid, 2, {"phase": "gather"})
-        latest = mm.react_state.latest(sid)
+        mm.react_state.save(sid["research"], 1, {"phase": "plan"})
+        mm.react_state.save(sid["research"], 2, {"phase": "gather"})
+        latest = mm.react_state.latest(sid["research"])
         assert latest is not None
         assert latest["phase"] == "gather"
 
@@ -125,14 +128,14 @@ class TestUserPreferenceStore:
 class TestMemoryIndex:
     def test_search_conversation(self, memory_manager):
         mm, sid = memory_manager
-        mm.conversation.add(sid, "user", "python tutorial")
-        results = mm.index.search("python", session_id=sid)
+        mm.conversation.add(sid["chat"], "user", "python tutorial")
+        results = mm.index.search("python", session_id=sid["chat"])
         assert any(r["source"] == "conversation" for r in results)
 
     def test_search_context(self, memory_manager):
         mm, sid = memory_manager
-        mm.context.add(sid, "rag", "python is a programming language")
-        results = mm.index.search("python", session_id=sid)
+        mm.context.add(sid["chat"], "rag", "python is a programming language")
+        results = mm.index.search("python", session_id=sid["chat"])
         assert any(r["source"] == "context" for r in results)
 
 
@@ -195,8 +198,8 @@ class TestAsyncMemory:
     def test_async_conversation_store(self, memory_manager):
         mm, sid = memory_manager
         async def run():
-            await mm.conversation.aadd(sid, "user", "async hello")
-            msgs = await mm.conversation.alist(sid)
+            await mm.conversation.aadd(sid["chat"], "user", "async hello")
+            msgs = await mm.conversation.alist(sid["chat"])
             assert len(msgs) >= 1
             assert msgs[0]["content"] == "async hello"
         asyncio.run(run())
@@ -204,8 +207,8 @@ class TestAsyncMemory:
     def test_async_context_store(self, memory_manager):
         mm, sid = memory_manager
         async def run():
-            await mm.context.aadd(sid, "tool_result", "tool output async")
-            entries = await mm.context.alist(sid)
+            await mm.context.aadd(sid["chat"], "tool_result", "tool output async")
+            entries = await mm.context.alist(sid["chat"])
             assert len(entries) >= 1
         asyncio.run(run())
 
@@ -222,7 +225,7 @@ class TestAsyncMemory:
     def test_async_memory_index(self, memory_manager):
         mm, sid = memory_manager
         async def run():
-            await mm.conversation.aadd(sid, "user", "test query")
-            results = await mm.index.asearch("test", session_id=sid, limit=5)
+            await mm.conversation.aadd(sid["chat"], "user", "test query")
+            results = await mm.index.asearch("test", session_id=sid["chat"], limit=5)
             assert len(results) >= 1
         asyncio.run(run())

@@ -80,9 +80,21 @@ def _make_research_session(
 
     if sources:
         for i, src in enumerate(sources):
+            # Create a sub_query first (sources has FK to
+            # autoresearch_sub_queries.id). Use deterministic id so
+            # the test's "sq-{i}" naming matches the saved sub_query.
+            sq_id = f"sq-{i}"
+            with sqlite3.connect(db.db_path) as conn:
+                conn.execute(
+                    "INSERT OR IGNORE INTO autoresearch_sub_queries "
+                    "(id, session_id, query, source_type) "
+                    "VALUES (?, ?, ?, ?)",
+                    (sq_id, session_id, f"query-{i}", src["source_type"]),
+                )
+                conn.commit()
             db.save_source(
                 session_id=session_id,
-                sub_query_id=f"sq-{i}",
+                sub_query_id=sq_id,
                 source_type=src["source_type"],
                 url=src.get("url", ""),
                 title=src.get("title", ""),

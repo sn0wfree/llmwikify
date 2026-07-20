@@ -37,16 +37,22 @@ class TestCreate:
         session = repo.get_chat_session(sid)
         assert session["wiki_id"] == "wiki-1"
 
-    def test_creates_with_jwt(self, repo: ChatSessionRepository) -> None:
-        sid = repo.create_chat_session(jwt_token="abc.def.ghi")
-        session = repo.get_chat_session(sid)
-        assert session["jwt_token"] == "abc.def.ghi"
-
-    def test_creates_with_all_args(self, repo: ChatSessionRepository) -> None:
-        sid = repo.create_chat_session(wiki_id="w", jwt_token="jwt")
+    def test_creates_with_wiki_id_only(self, repo: ChatSessionRepository) -> None:
+        sid = repo.create_chat_session(wiki_id="w")
         session = repo.get_chat_session(sid)
         assert session["wiki_id"] == "w"
-        assert session["jwt_token"] == "jwt"
+        # JWT token is NOT stored (security: removed in v0.40)
+
+    def test_jwt_token_not_stored(self, repo: ChatSessionRepository) -> None:
+        """JWT tokens are NOT persisted to chat_sessions (security).
+
+        The session is bound to a wiki + client identity, not to
+        a long-lived JWT. Tokens are validated per-request and
+        never stored.
+        """
+        sid = repo.create_chat_session(wiki_id="w")
+        session = repo.get_chat_session(sid)
+        assert "jwt_token" not in session or session.get("jwt_token") is None
 
     def test_two_creates_have_different_ids(self, repo: ChatSessionRepository) -> None:
         a = repo.create_chat_session()
@@ -70,11 +76,6 @@ class TestGetUpdate:
         sid = repo.create_chat_session()
         repo.update_chat_session_title(sid, "My Chat")
         assert repo.get_chat_session(sid)["title"] == "My Chat"
-
-    def test_update_jwt(self, repo: ChatSessionRepository) -> None:
-        sid = repo.create_chat_session()
-        repo.update_chat_session_jwt(sid, "new.jwt.token")
-        assert repo.get_chat_session(sid)["jwt_token"] == "new.jwt.token"
 
     def test_update_bumps_updated_at(self, repo: ChatSessionRepository) -> None:
         sid = repo.create_chat_session()
@@ -119,14 +120,15 @@ class TestDelete:
         """delete_chat_session only deletes from chat_sessions;
         cascade is the facade's responsibility.
 
-        Note: SQLite FK cascade is OFF by default, so even though
-        tool_calls has FOREIGN KEY (session_id) REFERENCES
-        chat_sessions(id), deleting the session row does NOT
-        automatically delete the tool_calls row. The facade's
-        delete_chat_session does manual cascade.
+        Note: by default PRAGMA foreign_keys = ON would block
+        deleting a session that has child tool_calls rows. We
+        disable FKs for this test to verify the repo layer does
+        NOT auto-cascade (the facade does manual cascade).
         """
         from llmwikify.apps.chat.db import ToolCallRepository
-        tools = ToolCallRepository(tmp_path / "test.db")
+        db_path = tmp_path / "test.db"
+        repo._mgr.conn.execute("PRAGMA foreign_keys = OFF")
+        tools = ToolCallRepository(db_path)
         tools._init_schema()
         sid = repo.create_chat_session()
         tools.log_tool_call(sid, "echo", {"x": 1})

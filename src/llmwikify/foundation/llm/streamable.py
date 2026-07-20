@@ -1150,11 +1150,19 @@ class StreamableLLMClient(LLMClient):
 
         Delegates to resolver.get_provider_metadata() so all provider
         metadata has a single source of truth.
+
+        Unknown providers fall back to the OpenAI base URL — most
+        OpenAI-compatible APIs (vLLM, OpenRouter, Together, etc.)
+        can be reached by simply swapping the api_key.
         """
         from llmwikify.foundation.llm.resolver import get_provider_metadata
 
         meta = get_provider_metadata(provider)
-        return meta.get("base_url", "")
+        if meta.get("base_url"):
+            return meta["base_url"]
+        # Fallback for unknown providers
+        openai_meta = get_provider_metadata("openai")
+        return openai_meta.get("base_url", "https://api.openai.com/v1")
 
     @classmethod
     def from_config(cls, config: dict[str, Any]) -> StreamableLLMClient:

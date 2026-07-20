@@ -208,8 +208,8 @@ class ChatSessionRepository(ChatDBBase):
         with self._mgr.transaction() as conn:
             conn.execute(
                 """INSERT OR IGNORE INTO chat_sessions
-                   (id, wiki_id, jwt_token, title, metadata, created_at, updated_at)
-                   VALUES (?, '', '', NULL, ?, datetime('now'), datetime('now'))""",
+                   (id, wiki_id, title, metadata, created_at, updated_at)
+                   VALUES (?, '', NULL, ?, datetime('now'), datetime('now'))""",
                 (session_id, blob),
             )
             conn.execute(
