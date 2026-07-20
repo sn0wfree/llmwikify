@@ -337,15 +337,23 @@ class ChatOrchestrator:
 
         try:
             if session_id is None:
-                session_id = self.db.create_chat_session(wiki_id, jwt_token)
+                session_id = await asyncio.to_thread(
+                    self.db.create_chat_session, wiki_id, jwt_token
+                )
                 yield {"type": events.SESSION_CREATED, "session_id": session_id}
             else:
-                session = self.db.get_chat_session(session_id)
+                session = await asyncio.to_thread(
+                    self.db.get_chat_session, session_id
+                )
                 if session is None:
-                    session_id = self.db.create_chat_session(wiki_id, jwt_token)
+                    session_id = await asyncio.to_thread(
+                        self.db.create_chat_session, wiki_id, jwt_token
+                    )
                     yield {"type": events.SESSION_CREATED, "session_id": session_id}
 
-            self.event_log.log(session_id, {"type": events.USER_MESSAGE, "content": message[:200]})
+            await asyncio.to_thread(
+                self.event_log.log, session_id, {"type": events.USER_MESSAGE, "content": message[:200]}
+            )
 
             ctx = await self.context_manager.get_or_create(
                 session_id, wiki_id,
@@ -356,14 +364,20 @@ class ChatOrchestrator:
             wiki_id_from_prefix, message = self.prompt_builder.parse_wiki_prefix(message)
             if wiki_id_from_prefix:
                 ctx.set_recent_wiki(wiki_id_from_prefix)
-                self.db.update_chat_session_wiki(session_id, wiki_id_from_prefix)
+                await asyncio.to_thread(
+                    self.db.update_chat_session_wiki, session_id, wiki_id_from_prefix
+                )
 
             if wiki_id and not wiki_id_from_prefix:
                 ctx.set_recent_wiki(wiki_id)
-                self.db.update_chat_session_wiki(session_id, wiki_id)
+                await asyncio.to_thread(
+                    self.db.update_chat_session_wiki, session_id, wiki_id
+                )
 
             if jwt_token:
-                self.db.update_chat_session_jwt(session_id, jwt_token)
+                await asyncio.to_thread(
+                    self.db.update_chat_session_jwt, session_id, jwt_token
+                )
 
             # P1-2 (vendored from nanobot command/router.py): intercept
             # slash commands before the LLM loop runs. Priority commands
@@ -383,14 +397,20 @@ class ChatOrchestrator:
                     return
 
             ctx.add_user_message(message)
-            self.tool_executor.save_message(session_id, "user", message)
+            await asyncio.to_thread(
+                self.tool_executor.save_message, session_id, "user", message
+            )
 
             # Auto-set session title from first user message
-            session = self.db.get_chat_session(session_id)
+            session = await asyncio.to_thread(
+                self.db.get_chat_session, session_id
+            )
             if session and not session.get("title"):
                 title = message[:100].strip()
                 if title:
-                    self.db.update_chat_session_title(session_id, title)
+                    await asyncio.to_thread(
+                        self.db.update_chat_session_title, session_id, title
+                    )
 
             wiki = self._get_wiki_for_context(ctx)
             if wiki is None:
@@ -418,8 +438,12 @@ class ChatOrchestrator:
         except Exception as e:
             logger.exception("Chat error")
             err_event = ChatEvent.error(str(e))
-            self.event_log.log(session_id, err_event)
-            self.tool_executor.save_message(session_id, "assistant", f"Error: {e}")
+            await asyncio.to_thread(
+                self.event_log.log, session_id, err_event
+            )
+            await asyncio.to_thread(
+                self.tool_executor.save_message, session_id, "assistant", f"Error: {e}"
+            )
             yield err_event
         finally:
             self._session_status[session_id] = "idle"
@@ -455,7 +479,9 @@ class ChatOrchestrator:
 
         if result.get("status") == "error":
             message = result.get("error", "Confirmation failed")
-            self.tool_executor.save_message(session_id, "assistant", f"Error: {message}")
+            await asyncio.to_thread(
+                self.tool_executor.save_message, session_id, "assistant", f"Error: {message}"
+            )
             yield ChatEvent.error(message)
             return
 
