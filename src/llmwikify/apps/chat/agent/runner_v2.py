@@ -745,7 +745,7 @@ class ChatRunnerV2(AgentRunner["ChatRunSpec", "ChatRunResult"]):
             return json.dumps(result, ensure_ascii=False, default=str), False, 0
         return self._microcompact_fn(result, tool_name, call_id)
 
-    async def _emit_done(self, ctx: _RunContext):
+    async def _emit_done(self, ctx: _RunContext) -> None:
         if ctx.error is not None:
             try:
                 await _maybe_await(self._hook.on_error(

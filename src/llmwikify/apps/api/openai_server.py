@@ -344,7 +344,7 @@ async def _stream_chat_completion(
         yield translator.final_sentinel()
 
 
-def _make_chat_handler(model: str, request_timeout: float):
+def _make_chat_handler(model: str, request_timeout: float) -> Any:
     """Build a chat-completions handler bound to ``model`` + ``request_timeout``.
 
     Mirrors nanobot's ``create_app(agent_loop, model_name, request_timeout)``
@@ -445,7 +445,7 @@ def _make_chat_handler(model: str, request_timeout: float):
     return handle_chat_completions
 
 
-def _make_models_handler(model: str):
+def _make_models_handler(model: str) -> Any:
     """Build a /v1/models handler bound to ``model``."""
     async def handle_models(_request: Request) -> JSONResponse:
         """GET /v1/models — return the single configured model."""

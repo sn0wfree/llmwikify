@@ -42,7 +42,7 @@ class SourceFilter:
         "terms of service", "cookie policy",
     ]
 
-    def __init__(self, config: dict[str, Any] | None = None):
+    def __init__(self, config: dict[str, Any] | None = None) -> None:
         config = config or {}
         self.min_content_length = config.get("source_min_content_length", 100)
         self.min_quality_score = config.get("source_min_quality_score", 0.3)

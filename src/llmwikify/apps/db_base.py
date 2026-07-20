@@ -18,9 +18,9 @@ from __future__ import annotations
 
 import logging
 import sqlite3
+from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Iterator
 
 from llmwikify.foundation.db import get_connection
 
@@ -79,7 +79,7 @@ class BaseDatabase:
     - ``_check_db_size()``: warns if db > 100 MB
     """
 
-    def __init__(self, data_dir: Path | str):
+    def __init__(self, data_dir: Path | str) -> None:
         self.data_dir = Path(data_dir)
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.db_path = get_app_db_path(self.data_dir)

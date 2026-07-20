@@ -41,7 +41,7 @@ class ResearchDatabase(BaseDatabase):
     accessed via the other facades.
     """
 
-    def __init__(self, data_dir: Path | str):
+    def __init__(self, data_dir: Path | str) -> None:
         """Initialize with foreign_keys=False for research tables.
 
         The research schema has FK constraints but test fixtures

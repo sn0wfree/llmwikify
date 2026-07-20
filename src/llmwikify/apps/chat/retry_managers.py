@@ -271,7 +271,7 @@ class DBRetryManager:
         "attempt to write a readonly database",
     )
 
-    def __init__(self, max_attempts: int = 5, base_delay: float = 0.1):
+    def __init__(self, max_attempts: int = 5, base_delay: float = 0.1) -> None:
         self.max_attempts = max_attempts
         self.base_delay = base_delay
 

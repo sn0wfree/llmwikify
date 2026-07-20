@@ -19,7 +19,7 @@ class NotificationManager:
     - SQLite persistence when db and wiki_id are provided
     """
 
-    def __init__(self, max_size: int = 100, db: Any = None, wiki_id: str | None = None):
+    def __init__(self, max_size: int = 100, db: Any = None, wiki_id: str | None = None) -> None:
         self._notifications: list[dict[str, Any]] = []
         self._max_size = max_size
         self.db = db

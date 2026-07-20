@@ -10,7 +10,7 @@ from llmwikify.apps.chat.db import AutoResearchDatabase
 class ResearchSessionManager:
     """Manages research session lifecycle and sub-query/source tracking."""
 
-    def __init__(self, db: AutoResearchDatabase):
+    def __init__(self, db: AutoResearchDatabase) -> None:
         self.db = db
         self._session_id: str | None = None
 

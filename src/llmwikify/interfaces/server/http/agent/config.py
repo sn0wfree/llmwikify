@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
+from typing import Any
 
 import yaml
 from fastapi import Request
@@ -57,7 +58,7 @@ async def _get_config_data() -> dict:
 # ─── Config 端点 ───────────────────────────────────────────────
 
 @router.get("/config")
-async def get_llm_config():
+async def get_llm_config() -> Any:
     """GET /config — return mutable LLM config + chat_mutable + research_mutable.
 
     v0.41: API 只暴露 mutable 配置。immutable 配置不出现在返回中。
@@ -67,7 +68,7 @@ async def get_llm_config():
 
 
 @router.put("/config")
-async def save_llm_config(request: Request):
+async def save_llm_config(request: Request) -> dict[str, Any]:
     """PUT /config — save mutable LLM config fields.
 
     v0.41: 只接受 mutable 字段。immutable 字段（如果客户端发送）会被忽略。
@@ -102,7 +103,7 @@ async def save_llm_config(request: Request):
 
 
 @router.get("/config/debug")
-async def get_llm_config_debug():
+async def get_llm_config_debug() -> Any:
     """GET /config/debug — return ALL config (mutable + immutable) for debugging.
 
     v0.41: 新增调试端点，返回完整配置（含 immutable）。
@@ -119,7 +120,7 @@ async def get_llm_config_debug():
 
 
 @router.post("/config/reload")
-async def reload_llm_config():
+async def reload_llm_config() -> dict[str, Any]:
     from llmwikify.apps.chat.config_manager import get_global_config_manager
     manager = get_global_config_manager()
     manager.reload()

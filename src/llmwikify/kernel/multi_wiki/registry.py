@@ -26,7 +26,7 @@ class WikiRegistry:
     - Cross-wiki search capabilities
     """
 
-    def __init__(self, config: dict[str, Any]):
+    def __init__(self, config: dict[str, Any]) -> None:
         """Initialize WikiRegistry.
 
         Args:
@@ -522,7 +522,7 @@ class WikiRegistryDiscovery:
         roots = provider.discover_wiki_roots(["/path/to/scan"], depth=2)
     """
 
-    def __init__(self, registry: WikiRegistry):
+    def __init__(self, registry: WikiRegistry) -> None:
         """Initialize with a WikiRegistry instance.
 
         Args:

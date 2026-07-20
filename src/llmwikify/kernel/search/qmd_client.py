@@ -29,7 +29,7 @@ class QmdClient:
         results = client.search("knowledge architecture", limit=10)
     """
 
-    def __init__(self, host: str = "127.0.0.1", port: int = 8181, timeout: int = 30):
+    def __init__(self, host: str = "127.0.0.1", port: int = 8181, timeout: int = 30) -> None:
         self.host = host
         self.port = port
         self.timeout = timeout

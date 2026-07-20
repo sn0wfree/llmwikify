@@ -81,22 +81,22 @@ class FileSystemWatcher:
         self._running = True
 
         class _Handler(FileSystemEventHandler):
-            def __init__(self, watcher):
+            def __init__(self, watcher) -> None:
                 self.watcher = watcher
 
-            def on_created(self, event):
+            def on_created(self, event) -> None:
                 if not event.is_directory:
                     self.watcher._handle_event("created", event.src_path)
 
-            def on_modified(self, event):
+            def on_modified(self, event) -> None:
                 if not event.is_directory:
                     self.watcher._handle_event("modified", event.src_path)
 
-            def on_deleted(self, event):
+            def on_deleted(self, event) -> None:
                 if not event.is_directory:
                     self.watcher._handle_event("deleted", event.src_path)
 
-            def on_moved(self, event):
+            def on_moved(self, event) -> None:
                 if not event.is_directory:
                     self.watcher._handle_event("moved", event.dest_path)
 

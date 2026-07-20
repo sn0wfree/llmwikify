@@ -31,7 +31,7 @@ class WikiAnalyzer:
         recommendations = analyzer.recommend()
     """
 
-    def __init__(self, wiki: "Wiki"):
+    def __init__(self, wiki: "Wiki") -> None:
         self.wiki = wiki
         # Phase 1 #3 — the 8 detection rules are now in
         # core.lint.rules. LintEngine runs all of them in one

@@ -381,7 +381,7 @@ class Dream:
     # ─── helpers ───────────────────────────────────────────────
 
     @staticmethod
-    def _batched(items: list, size: int):
+    def _batched(items: list, size: int) -> None:
         """Yield successive ``size``-sized chunks from ``items``."""
         for i in range(0, len(items), size):
             yield items[i : i + size]

@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 # ─── Metrics tracking decorator ─────────────────────────────────────────
 
 
-def tracked(action_name: str):
+def tracked(action_name: str) -> Any:
     """Decorator: wraps an async-generator action in metrics.record().
 
     Usage::
@@ -47,8 +47,8 @@ def tracked(action_name: str):
         async def action_clarify(ctx, state):
             ...  # body unchanged, no indentation bump
     """
-    def decorator(fn):
-        async def wrapper(ctx: ActionContext, state: ResearchState):
+    def decorator(fn) -> Any:
+        async def wrapper(ctx: ActionContext, state: ResearchState) -> None:
             with ctx.metrics.record(action_name):
                 async for event in fn(ctx, state):
                     yield event

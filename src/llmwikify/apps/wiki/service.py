@@ -117,7 +117,7 @@ class WikiService:
         """Clear cached LLM so it reloads on next request."""
         self._llm = None
 
-    def get_llm_spec(self):
+    def get_llm_spec(self) -> Any:
         """Return the resolved LLMSpec (frozen LAL config contract)."""
         from llmwikify.foundation.llm.resolver import resolve_chat_llm
 

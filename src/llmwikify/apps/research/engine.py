@@ -264,8 +264,8 @@ class ResearchEngine:
         engine_ref = self  # capture for closures
 
         # Build SkillAction wrappers for each action in the dispatch table
-        def _make_action_handler(action_name: str):
-            async def handler(args, ctx):
+        def _make_action_handler(action_name: str) -> Any:
+            async def handler(args, ctx) -> Any:
                 dispatch = engine_ref._action_dispatch.get(action_name)
                 if dispatch is None:
                     return SkillResult.fail(f"Unknown action: {action_name}")
@@ -361,7 +361,7 @@ class ResearchEngine:
             return {"action": action, "thought": thought}
 
         # Observe callback: delegates to ResearchObserver + quality gate
-        async def observe(state, ctx):
+        async def observe(state, ctx) -> dict[str, Any]:
             engine_ref._observe(state)
             # Quality gate check
             if engine_ref.config.get("gate_enabled", True):
@@ -377,7 +377,7 @@ class ResearchEngine:
             return {"observations": state.observations}
 
         # Done condition: check phase + special states
-        def done_condition(s):
+        def done_condition(s) -> Any:
             phase = getattr(s, "phase", "") if hasattr(s, "phase") else s.get("phase", "")
             return (
                 phase == "done"
@@ -387,7 +387,7 @@ class ResearchEngine:
             )
 
         # on_after_act: metrics tracking + gate intervention
-        def on_after_act(state, action_name, result):
+        def on_after_act(state, action_name, result) -> None:
             if engine_ref._metrics:
                 engine_ref._metrics.finish()
 
@@ -434,7 +434,7 @@ class ResearchEngine:
         """Return True if the engine has budget for one more action."""
         return self.gates.can_replan(state)
 
-    def _evaluate_gate(self, state: ResearchState):
+    def _evaluate_gate(self, state: ResearchState) -> Any:
         """Evaluate quality gate based on current phase."""
         return self.gates.evaluate_gate(state)
 

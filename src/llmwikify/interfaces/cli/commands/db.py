@@ -56,7 +56,7 @@ def _get_wiki_stats(app_db: Any, wiki_id: str) -> dict:
            "dream_proposals": 0, "notifications": 0,
            "confirmations": 0}
     with sqlite3.connect(db_path) as conn:
-        def count(sql):
+        def count(sql) -> Any:
             r = conn.execute(sql, (wiki_id,)).fetchone()
             return r[0] if r else 0
         try:

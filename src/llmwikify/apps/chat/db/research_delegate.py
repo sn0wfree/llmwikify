@@ -42,11 +42,11 @@ class ResearchDelegate:
     1-line forwarders.
     """
 
-    def __init__(self, data_dir):
+    def __init__(self, data_dir) -> None:
         self._data_dir = data_dir
 
     @property
-    def _research(self):
+    def _research(self) -> Any:
         """Lazy ResearchDatabase instance."""
         if not hasattr(self, "_research_db"):
             from llmwikify.apps.research.db import ResearchDatabase

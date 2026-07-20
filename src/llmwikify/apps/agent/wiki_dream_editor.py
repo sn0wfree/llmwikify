@@ -27,7 +27,7 @@ class WikiDreamProposalManager:
 
     AUTO_APPROVE_THRESHOLD = 100
 
-    def __init__(self, max_size: int = 200, db: Any = None, wiki_id: str | None = None):
+    def __init__(self, max_size: int = 200, db: Any = None, wiki_id: str | None = None) -> None:
         self._proposals: list[dict[str, Any]] = []
         self._max_size = max_size
         self.db = db
@@ -162,7 +162,7 @@ class WikiDreamEditor:
     4. Log all edits for reversibility
     """
 
-    def __init__(self, wiki: Any, data_dir: Path | None = None, db: Any = None, wiki_id: str | None = None):
+    def __init__(self, wiki: Any, data_dir: Path | None = None, db: Any = None, wiki_id: str | None = None) -> None:
         self.wiki = wiki
         self.data_dir = data_dir or wiki.root / ".llmwikify" / "agent"
         self.data_dir.mkdir(parents=True, exist_ok=True)

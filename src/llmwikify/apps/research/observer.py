@@ -40,7 +40,7 @@ class ResearchObserver:
          reasoner can use in the next Thought step.
     """
 
-    def __init__(self, engine: ResearchEngine):
+    def __init__(self, engine: ResearchEngine) -> None:
         self._engine = engine
         # Cached for direct access in hot paths.
         self._db = engine.db

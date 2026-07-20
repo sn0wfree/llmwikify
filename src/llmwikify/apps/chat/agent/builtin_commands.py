@@ -268,7 +268,7 @@ async def goal_handler(ctx: Any) -> dict:
 # ─── Memory dream wrapper (binds memory_manager at registration) ──
 
 
-def make_memory_dream_handler(memory_manager: Any):
+def make_memory_dream_handler(memory_manager: Any) -> Any:
     """Bind ``memory_manager`` once and return a ``CommandContext``-only handler.
 
     Pass4-C fix: prior code did ``getattr(ctx, "memory_manager", None)`` which

@@ -55,7 +55,7 @@ class ChatDBBase:
     db_size check, etc.) — those are owned by ChatDatabase.
     """
 
-    def __init__(self, db_path: Path):
+    def __init__(self, db_path: Path) -> None:
         self.db_path = db_path
         self._mgr = get_connection(db_path)
 

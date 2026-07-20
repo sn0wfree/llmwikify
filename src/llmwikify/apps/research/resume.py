@@ -45,7 +45,7 @@ class ResearchResumeLoader:
     and applies it to the live state object.
     """
 
-    def __init__(self, engine: ResearchEngine):
+    def __init__(self, engine: ResearchEngine) -> None:
         self._engine = engine
         # Cached for direct access.
         self._db = engine.db

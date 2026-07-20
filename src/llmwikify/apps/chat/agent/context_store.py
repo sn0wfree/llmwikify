@@ -23,7 +23,7 @@ class ContextStore:
       - Their TTL has expired (checked on get/set/eviction sweep)
     """
 
-    def __init__(self, max_size: int = 200, ttl_seconds: float = 1800):
+    def __init__(self, max_size: int = 200, ttl_seconds: float = 1800) -> None:
         self._max_size = max_size
         self._ttl_seconds = ttl_seconds
         self._data: OrderedDict[str, tuple[Any, float]] = OrderedDict()

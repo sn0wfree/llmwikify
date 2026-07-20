@@ -58,7 +58,7 @@ class ConversationStore:
     One row per message (role/content/tool_calls).
     """
 
-    def __init__(self, chat_db: Any):
+    def __init__(self, chat_db: Any) -> None:
         self.db = chat_db
 
     def add(
@@ -142,7 +142,7 @@ class KnowledgeStore:
     named entry point in the MemoryManager.
     """
 
-    def __init__(self, wiki: Any):
+    def __init__(self, wiki: Any) -> None:
         self.wiki = wiki
 
     def add(self, page_name: str, content: str) -> None:
@@ -176,7 +176,7 @@ class ContextStore:
     (e.g., RAG chunks, tool results, intermediate reasoning).
     """
 
-    def __init__(self, chat_db: Any):
+    def __init__(self, chat_db: Any) -> None:
         self.db = chat_db
 
     def add(
@@ -273,7 +273,7 @@ class ReActStateStore:
     Each row is a snapshot of ResearchState at a given step.
     """
 
-    def __init__(self, research_db: Any):
+    def __init__(self, research_db: Any) -> None:
         self.db = research_db
 
     def save(
@@ -305,7 +305,7 @@ class UserPreferenceStore:
     (identified by user_id) has its own JSON file.
     """
 
-    def __init__(self, data_dir: Path):
+    def __init__(self, data_dir: Path) -> None:
         self.data_dir = Path(data_dir)
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self._prefs_file = self.data_dir / "user_preferences.json"

@@ -8,6 +8,7 @@ Design principle: "LLM does grunt work, human makes decisions"
 
 import logging
 import sqlite3
+from typing import Any
 
 from llmwikify.kernel.storage.backend import is_path_excluded
 
@@ -25,7 +26,7 @@ class GraphAnalyzer:
         # Returns: centrality, communities, suggestions, stats
     """
 
-    def __init__(self, wiki):
+    def __init__(self, wiki) -> None:
         self.wiki = wiki
 
     def analyze(self) -> dict:
@@ -74,7 +75,7 @@ class GraphAnalyzer:
             logger.exception("Graph build failed with unexpected error: %s", e)
             return {"nodes": [], "edges": []}
 
-    def _build_graph(self, graph_data: dict):
+    def _build_graph(self, graph_data: dict) -> Any:
         """Build NetworkX graph from graph data."""
         try:
             import networkx as nx  # noqa: F401  (used by _build_networkx / G.degree)

@@ -28,7 +28,7 @@ class SynthesisEngine:
         # knowledge_gaps, suggested_updates
     """
 
-    def __init__(self, wiki):
+    def __init__(self, wiki) -> None:
         self.wiki = wiki
 
     def analyze_new_source(

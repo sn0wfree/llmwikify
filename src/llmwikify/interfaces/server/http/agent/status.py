@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from fastapi import Request
 
 from llmwikify.interfaces.server.http._helpers import get_wiki_id
@@ -12,7 +14,7 @@ from llmwikify.interfaces.server.http.agent._common import (
 
 
 @router.get("/status")
-async def agent_status(request: Request):
+async def agent_status(request: Request) -> Any:
     wiki_id = get_wiki_id(request)
     service = get_agent_service()
     try:
@@ -28,11 +30,10 @@ async def agent_status(request: Request):
             "unread_notifications": 0,
         }
 
-
 # --- LLM metrics endpoint (Pass7, Phase 8, 2026-06-22) ---
 
 @router.get("/llm-metrics")
-async def llm_metrics():
+async def llm_metrics() -> Any:
     """Return aggregate LLM-call metrics from the process-wide collector.
 
     Backed by ``LLMMetricsCollector`` (apps/chat/agent/llm_metrics.py)
@@ -54,7 +55,7 @@ async def llm_metrics():
 # --- Research run endpoints ---
 
 @router.get("/research-runs/{run_id}")
-async def get_research_run(run_id: str):
+async def get_research_run(run_id: str) -> Any:
     service = get_agent_service()
     return service.get_research_run_status(run_id)
 
@@ -62,7 +63,7 @@ async def get_research_run(run_id: str):
 # --- Tools endpoint ---
 
 @router.get("/tools")
-async def list_tools(request: Request):
+async def list_tools(request: Request) -> dict[str, Any]:
     wiki_id = get_wiki_id(request)
     service = get_agent_service()
     if wiki_id:

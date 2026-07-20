@@ -12,7 +12,7 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 
-def main():
+def main() -> None:
     """CLI entry point for standalone unified server."""
     parser = argparse.ArgumentParser(description="llmwikify Unified Server (MCP + REST API + WebUI)")
     parser.add_argument(

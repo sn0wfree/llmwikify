@@ -71,7 +71,7 @@ class WikiCLI:
     pass ``self.wiki`` rather than re-creating it).
     """
 
-    def __init__(self, wiki_root: Path, config: dict[str, Any] | None = None):
+    def __init__(self, wiki_root: Path, config: dict[str, Any] | None = None) -> None:
         self.wiki_root = wiki_root
         self.config = config or {}
         self.wiki = Wiki(wiki_root, config=self.config)
@@ -201,7 +201,7 @@ class WikiCLI:
         """Database management. → ``cli.commands.db.run_db``."""
         return run_db(self.wiki, args)
 
-def _build_parser():
+def _build_parser() -> Any:
     """Build the llmwikify top-level ArgumentParser.
 
     Phase 3 #6 — extracted from ``main()`` so tests can build

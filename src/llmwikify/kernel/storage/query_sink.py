@@ -4,6 +4,7 @@ import hashlib
 import re
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 
 class QuerySink:
@@ -525,7 +526,7 @@ class QuerySink:
         entry_count = len(entry_log)
         now_str = self._now()
 
-        def update_fm(m):
+        def update_fm(m) -> Any:
             fm = m.group(1)
             lines = fm.split('\n')
             new_lines = []

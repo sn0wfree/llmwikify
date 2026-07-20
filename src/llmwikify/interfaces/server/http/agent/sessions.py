@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+# ─── /chat（SSE）───────────────────────────────────────────────
+from typing import Any
+
 from fastapi import Request
 from sse_starlette import EventSourceResponse
 
@@ -24,10 +27,9 @@ from llmwikify.interfaces.server.http.agent._sse import (
     _sse_stream,
 )
 
-# ─── /chat（SSE）───────────────────────────────────────────────
 
 @router.post("/chat")
-async def chat(request: Request):
+async def chat(request: Request) -> Any:
     req = await JsonBodyHelper.execute(request, ChatRequest)
     service = get_agent_service()
 
@@ -54,14 +56,14 @@ async def chat(request: Request):
 # ─── Sessions CRUD ─────────────────────────────────────────────
 
 @router.get("/sessions")
-async def list_sessions():
+async def list_sessions() -> dict[str, Any]:
     service = get_agent_service()
     sessions = service.db.list_chat_sessions()
     return {"sessions": sessions}
 
 
 @router.post("/sessions")
-async def create_session(request: Request):
+async def create_session(request: Request) -> dict[str, Any]:
     req = await JsonBodyHelper.execute(request, CreateSessionRequest)
     service = get_agent_service()
     session_id = service.db.create_chat_session(req.wiki_id)
@@ -69,14 +71,14 @@ async def create_session(request: Request):
 
 
 @router.get("/sessions/status")
-async def get_all_session_status():
+async def get_all_session_status() -> dict[str, Any]:
     """Get status for all active sessions."""
     service = get_agent_service()
     return {"sessions": service.get_all_session_status()}
 
 
 @router.get("/sessions/recent")
-async def get_recent_wiki(session_id: str | None = None):
+async def get_recent_wiki(session_id: str | None = None) -> dict[str, Any]:
     service = get_agent_service()
     if session_id:
         session = service.db.get_chat_session(session_id)
@@ -86,14 +88,14 @@ async def get_recent_wiki(session_id: str | None = None):
 
 
 @router.post("/sessions/recent")
-async def set_recent_wiki(session_id: str, wiki_id: str):
+async def set_recent_wiki(session_id: str, wiki_id: str) -> dict[str, Any]:
     service = get_agent_service()
     service.db.update_chat_session_wiki(session_id, wiki_id)
     return {"updated": True}
 
 
 @router.get("/sessions/{session_id}")
-async def get_session(session_id: str):
+async def get_session(session_id: str) -> Any:
     service = get_agent_service()
     session = service.db.get_chat_session(session_id)
     if session is None:
@@ -102,14 +104,14 @@ async def get_session(session_id: str):
 
 
 @router.get("/sessions/{session_id}/messages")
-async def get_session_messages(session_id: str, limit: int = 50, before: str | None = None):
+async def get_session_messages(session_id: str, limit: int = 50, before: str | None = None) -> dict[str, Any]:
     service = get_agent_service()
     messages = service.db.get_chat_messages(session_id, limit=limit, before=before)
     return {"messages": messages, "session_id": session_id}
 
 
 @router.get("/sessions/{session_id}/events")
-async def get_session_events(session_id: str):
+async def get_session_events(session_id: str) -> dict[str, Any]:
     """Get event log for a session (for debugging/replay)."""
     service = get_agent_service()
     events = service.chat_service.event_log.get_events(session_id)
@@ -117,14 +119,14 @@ async def get_session_events(session_id: str):
 
 
 @router.delete("/sessions/{session_id}")
-async def delete_session(session_id: str):
+async def delete_session(session_id: str) -> dict[str, Any]:
     service = get_agent_service()
     deleted = service.delete_session(session_id)
     return {"deleted": deleted}
 
 
 @router.post("/sessions/{session_id}/revert")
-async def revert_session(session_id: str, request: Request):
+async def revert_session(session_id: str, request: Request) -> dict[str, Any]:
     """Revert session to a specific message. All messages after it are marked reverted."""
     req = await JsonBodyHelper.execute(request, RevertRequest)
     service = get_agent_service()
@@ -133,7 +135,7 @@ async def revert_session(session_id: str, request: Request):
 
 
 @router.put("/sessions/{session_id}/messages/{message_id}")
-async def edit_message(session_id: str, message_id: str, request: Request):
+async def edit_message(session_id: str, message_id: str, request: Request) -> dict[str, Any]:
     """Edit a user message's content in-place."""
     req = await JsonBodyHelper.execute(request, EditMessageRequest)
     service = get_agent_service()
@@ -146,7 +148,7 @@ async def edit_message(session_id: str, message_id: str, request: Request):
 
 
 @router.post("/sessions/{session_id}/abort")
-async def abort_session(session_id: str):
+async def abort_session(session_id: str) -> dict[str, Any]:
     """Abort a running session's LLM stream."""
     service = get_agent_service()
     aborted = service.abort_session(session_id)
@@ -154,7 +156,7 @@ async def abort_session(session_id: str):
 
 
 @router.get("/sessions/{session_id}/status")
-async def get_session_status(session_id: str):
+async def get_session_status(session_id: str) -> dict[str, Any]:
     """Get session status: idle or busy."""
     service = get_agent_service()
     status = service.get_session_status(session_id)

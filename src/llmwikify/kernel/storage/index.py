@@ -38,7 +38,7 @@ _STOP_WORDS_PATH = _DICT_DIR / "jieba_stopwords.txt"
 class WikiIndex:
     """Unified index manager for full-text search and reference tracking."""
 
-    def __init__(self, db_path: Path):
+    def __init__(self, db_path: Path) -> None:
         self.db_path = db_path
         self._conn: sqlite3.Connection | None = None
         self._lock = threading.Lock()

@@ -64,7 +64,7 @@ class ResearchReasoner:
     ``rule_based()`` for parity with the legacy code path.
     """
 
-    def __init__(self, engine: ResearchEngine):
+    def __init__(self, engine: ResearchEngine) -> None:
         self._engine = engine
         # Cached for direct access in hot paths.
         self._db = engine.db

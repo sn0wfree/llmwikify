@@ -786,7 +786,7 @@ class LLMRequestError(RuntimeError):
     is empty (2013)"}}`` instead of a bare ``400 Bad Request``.
     """
 
-    def __init__(self, status_code: int, url: str, body: str):
+    def __init__(self, status_code: int, url: str, body: str) -> None:
         self.status_code = status_code
         self.url = url
         self.body = body

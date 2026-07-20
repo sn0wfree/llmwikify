@@ -375,7 +375,7 @@ class LlmClientDriver(AgentDriver):
         )
         return content, total_tokens
 
-    def _build_client(self, request: SubagentRequest | None, model: str):
+    def _build_client(self, request: SubagentRequest | None, model: str) -> Any:
         """Build the LLM client honoring LAL contract.
 
         Resolution order:
@@ -402,7 +402,7 @@ class LlmClientDriver(AgentDriver):
             "the executor/ChatOrchestrator before calling run_subagent"
         )
 
-    def _build_from_spec(self, spec, model: str):
+    def _build_from_spec(self, spec, model: str) -> Any:
         """Build a client from a spec, applying the model override."""
         # Treat "inherit" as a no-op alias (back-compat for existing
         # YAMLs; PR 3 will reject it). Empty / None also means

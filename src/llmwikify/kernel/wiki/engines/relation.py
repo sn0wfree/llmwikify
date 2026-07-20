@@ -5,6 +5,7 @@ import logging
 import re
 from difflib import SequenceMatcher
 from pathlib import Path
+from typing import Any
 
 from llmwikify.kernel.storage.backend import is_path_excluded
 
@@ -30,7 +31,7 @@ class RelationEngine:
         relations = engine.get_neighbors("Attention")
     """
 
-    def __init__(self, index: WikiIndex, wiki_root: Path | None = None):
+    def __init__(self, index: WikiIndex, wiki_root: Path | None = None) -> None:
         self.index = index
         self.wiki_root = wiki_root
         self._relation_types = self._load_relation_types()
@@ -593,7 +594,7 @@ class RelationEngine:
         )
         return [row["concept"] for row in cursor.fetchall()]
 
-    def _build_networkx_graph(self):
+    def _build_networkx_graph(self) -> Any:
         """Build a NetworkX graph from relations."""
         try:
             import networkx as nx

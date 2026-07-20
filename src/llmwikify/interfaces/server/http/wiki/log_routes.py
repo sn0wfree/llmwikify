@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from fastapi import APIRouter, Request
 
@@ -16,7 +17,7 @@ def register_log_routes(app) -> None:
     _log_logger = logging.getLogger("client.errors")
 
     @log_router.post("/api/log/error")
-    async def log_client_error(request: Request):
+    async def log_client_error(request: Request) -> dict[str, Any]:
         """Receive frontend error reports and write to server log."""
         try:
             body = await request.json()

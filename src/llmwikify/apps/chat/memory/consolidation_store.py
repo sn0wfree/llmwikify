@@ -64,7 +64,7 @@ class MemoryConsolidationStore:
     Step 2) to persist summaries.
     """
 
-    def __init__(self, db_path: str | Path, *, _mgr=None):
+    def __init__(self, db_path: str | Path, *, _mgr=None) -> None:
         self.db_path = str(db_path)
         self._mgr = _mgr or get_connection(self.db_path)
 

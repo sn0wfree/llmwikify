@@ -172,7 +172,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     Disable by setting env var RATE_LIMIT_PER_MIN=0.
     """
 
-    def __init__(self, app, limit_per_min: int = RATE_LIMIT_PER_MIN):
+    def __init__(self, app, limit_per_min: int = RATE_LIMIT_PER_MIN) -> None:
         super().__init__(app)
         self.limit_per_min = limit_per_min
         # Buckets: ip -> (tokens: float, last_refill: float)

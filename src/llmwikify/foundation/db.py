@@ -28,7 +28,6 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
-
 # ─── 工厂函数 (保持向后兼容) ─────────────────────────────────
 
 def connect(
@@ -144,7 +143,7 @@ class ManagedConnection:
         return c
 
     @contextmanager
-    def transaction(self):
+    def transaction(self) -> None:
         """Transaction context manager (auto-commit/rollback).
 
         Usage::

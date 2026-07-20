@@ -93,7 +93,7 @@ class ContextManager:
     token-aware message preparation (compaction + truncation).
     """
 
-    def __init__(self, config: dict | None = None, llm_client: Any = None):
+    def __init__(self, config: dict | None = None, llm_client: Any = None) -> None:
         from llmwikify.apps.chat.config import merge_six_step_config
         self.config = config or merge_six_step_config()
         self._llm_client = llm_client

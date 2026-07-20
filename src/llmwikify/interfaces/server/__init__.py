@@ -1,9 +1,11 @@
 """llmwikify unified server module."""
 
+from typing import Any
+
 from .core import WikiServer
 
 
-def create_unified_server(wiki, agent=None, api_key=None, mcp_name=None):
+def create_unified_server(wiki, agent=None, api_key=None, mcp_name=None) -> Any:
     """Backward compatible wrapper for WikiServer.
 
     DEPRECATED: Use WikiServer class directly instead.

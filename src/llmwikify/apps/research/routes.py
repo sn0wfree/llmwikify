@@ -115,7 +115,7 @@ def _get_engine(wiki_id: str | None = None) -> ResearchEngine:
 
 
 @router.get("/{session_id}/stream")
-async def stream_autoresearch(session_id: str):
+async def stream_autoresearch(session_id: str) -> Any:
     """SSE stream of autoresearch events for a session.
 
     Events include 6-step framework events: clarification_complete,
@@ -127,7 +127,7 @@ async def stream_autoresearch(session_id: str):
     if not session:
         return {"error": f"Session {session_id} not found"}
 
-    async def event_gen():
+    async def event_gen() -> None:
         tm = get_task_manager()
         try:
             async for event in tm.get_event_stream(session_id):
@@ -143,7 +143,7 @@ async def stream_autoresearch(session_id: str):
 
 
 @router.post("/start")
-async def start_autoresearch(request: Request):
+async def start_autoresearch(request: Request) -> dict[str, Any]:
     """Start a new 6-step autoresearch session as a background task."""
     body = await request.json()
     query = body.get("query", "").strip()
@@ -190,7 +190,7 @@ async def start_autoresearch(request: Request):
 
 
 @router.post("/{session_id}/resume")
-async def resume_autoresearch(session_id: str):
+async def resume_autoresearch(session_id: str) -> dict[str, Any]:
     """Resume a paused or interrupted session."""
     db = _get_db()
     session = db.get_research_session(session_id)
@@ -209,7 +209,7 @@ async def resume_autoresearch(session_id: str):
 
 
 @router.get("/list")
-async def list_autoresearch(wiki_id: str | None = None, limit: int = 50):
+async def list_autoresearch(wiki_id: str | None = None, limit: int = 50) -> dict[str, Any]:
     """List autoresearch sessions (most recent first, capped by `limit`)."""
     db = _get_db()
     sessions = db.list_research_sessions(wiki_id, limit=limit)
@@ -217,7 +217,7 @@ async def list_autoresearch(wiki_id: str | None = None, limit: int = 50):
 
 
 @router.get("/{session_id}")
-async def get_autoresearch(session_id: str):
+async def get_autoresearch(session_id: str) -> Any:
     """Get full session details, including 6-step fields."""
     db = _get_db()
     session = db.get_research_session(session_id)
@@ -232,7 +232,7 @@ async def get_autoresearch(session_id: str):
 
 
 @router.get("/{session_id}/clarification")
-async def get_clarification(session_id: str):
+async def get_clarification(session_id: str) -> dict[str, Any]:
     """Get the concept-clarification result for a session."""
     db = _get_db()
     session = db.get_research_session(session_id)
@@ -279,7 +279,7 @@ async def get_events(
 
 
 @router.post("/{session_id}/pause")
-async def pause_autoresearch(session_id: str):
+async def pause_autoresearch(session_id: str) -> dict[str, Any]:
     """Pause a running session."""
     db = _get_db()
     session = db.get_research_session(session_id)
@@ -294,7 +294,7 @@ async def pause_autoresearch(session_id: str):
 
 
 @router.delete("/{session_id}")
-async def cancel_autoresearch(session_id: str):
+async def cancel_autoresearch(session_id: str) -> dict[str, Any]:
     """Cancel or delete a session."""
     db = _get_db()
     session = db.get_research_session(session_id)
@@ -316,7 +316,7 @@ async def cancel_autoresearch(session_id: str):
 
 
 @router.post("/{session_id}/save-to-wiki")
-async def save_to_wiki(session_id: str, request: Request):
+async def save_to_wiki(session_id: str, request: Request) -> Any:
     """Save research results to wiki via confirmation flow."""
     from fastapi.responses import JSONResponse
 
@@ -351,7 +351,7 @@ async def save_to_wiki(session_id: str, request: Request):
 
 
 @router.post("/{session_id}/rate")
-async def rate_research(session_id: str, request: Request):
+async def rate_research(session_id: str, request: Request) -> dict[str, Any]:
     """Rate sources from a research session."""
     body = await request.json()
     rating = body.get("rating", 0)

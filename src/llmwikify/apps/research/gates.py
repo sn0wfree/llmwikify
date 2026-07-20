@@ -27,7 +27,7 @@ that may call them via ``engine._check_*()`` etc.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from . import actions
 
@@ -56,7 +56,7 @@ class ResearchGates:
     after gathering, structure quality before report).
     """
 
-    def __init__(self, engine: ResearchEngine):
+    def __init__(self, engine: ResearchEngine) -> None:
         self._engine = engine
         # Cached for direct access in hot paths.
         self._db = engine.db
@@ -190,7 +190,7 @@ class ResearchGates:
             return False
         return True
 
-    def evaluate_gate(self, state: ResearchState):
+    def evaluate_gate(self, state: ResearchState) -> Any:
         """Evaluate quality gate based on current phase.
 
         Each phase invokes its base gate plus the 6-step framework gate.

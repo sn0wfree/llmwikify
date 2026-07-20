@@ -182,7 +182,7 @@ class WikiServer:
         """
 
         @asynccontextmanager
-        async def lifespan(app: FastAPI):
+        async def lifespan(app: FastAPI) -> None:
             """Phase 7+9 lifespan: start DreamScheduler + AutoCompact on
             startup, stop on shutdown. Always closes the registry on
             shutdown."""
@@ -313,7 +313,7 @@ class WikiServer:
 
         # Request logging middleware - logs every request for debugging
         @app.middleware("http")
-        async def log_requests(request: Request, call_next):
+        async def log_requests(request: Request, call_next) -> Any:
             response = await call_next(request)
             if response.status_code >= 400:
                 client = get_client_ip(request)
@@ -326,7 +326,7 @@ class WikiServer:
 
         # Health check endpoint
         @app.get("/api/health", tags=["system"])
-        async def health_check():
+        async def health_check() -> dict[str, Any]:
             """Get server health status."""
             wikis = self.registry.list_wikis()
             wiki_count = len(wikis)

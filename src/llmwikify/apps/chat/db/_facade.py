@@ -93,7 +93,7 @@ class ChatDatabase(BaseDatabase):
     Public API matches the pre-split class exactly.
     """
 
-    def __init__(self, data_dir: Path | str):
+    def __init__(self, data_dir: Path | str) -> None:
         """Initialize the chat facade.
 
         Sets up ``data_dir`` + ``db_path`` manually (rather than
@@ -633,7 +633,7 @@ class AutoResearchDatabase(ChatDatabase):
     instantiated so all tables exist in the shared DB file.
     """
 
-    def __init__(self, data_dir):
+    def __init__(self, data_dir) -> None:
         super().__init__(data_dir)
         from llmwikify.apps.research.db import ResearchDatabase
         from llmwikify.apps.wiki.db import WikiDatabase

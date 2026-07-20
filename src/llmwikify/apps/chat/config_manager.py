@@ -44,7 +44,7 @@ class ConfigManager:
         llm_cfg = manager.load_effective_llm_config(wiki_root)
     """
 
-    def __init__(self, agent_service_ref: Any = None):
+    def __init__(self, agent_service_ref: Any = None) -> None:
         self._config = Config()
         self._agent_service_ref = agent_service_ref
 

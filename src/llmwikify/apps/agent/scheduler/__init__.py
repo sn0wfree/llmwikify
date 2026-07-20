@@ -94,7 +94,7 @@ class ScheduledTask:
 class WikiScheduler:
     """Cron scheduler for wiki system tasks."""
 
-    def __init__(self, data_dir: Path | None = None):
+    def __init__(self, data_dir: Path | None = None) -> None:
         self._tasks: dict[str, ScheduledTask] = {}
         self.data_dir = data_dir
         self._state_file = data_dir / "scheduler.json" if data_dir else None
@@ -193,7 +193,7 @@ class WikiScheduler:
         - Manual tasks (is_write=True): write operations, generate proposals
         """
 
-        def wiki_dream_task():
+        def wiki_dream_task() -> Any:
             if wiki_dream_editor:
                 result = wiki_dream_editor.run_wiki_dream()
                 if notification_manager and result.get("pending_review", 0) > 0:
@@ -205,16 +205,16 @@ class WikiScheduler:
                 return result
             return {"status": "skipped", "reason": "no wiki dream editor"}
 
-        def check_raw_task():
+        def check_raw_task() -> dict[str, Any]:
             if hasattr(wiki, "raw_dir") and wiki.raw_dir.exists():
                 files = list(wiki.raw_dir.rglob("*"))
                 return {"status": "ok", "file_count": len(files)}
             return {"status": "ok", "file_count": 0}
 
-        def daily_lint():
+        def daily_lint() -> Any:
             return wiki.lint(mode="check", limit=10)
 
-        def weekly_gaps():
+        def weekly_gaps() -> Any:
             return wiki.lint(generate_investigations=True, limit=20)
 
         # Auto tasks (read-only, safe to execute automatically)

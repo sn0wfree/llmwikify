@@ -38,7 +38,7 @@ class SearchProvider(Protocol):
 class SearXNGProvider:
     """SearXNG self-hosted meta search engine."""
 
-    def __init__(self, base_url: str):
+    def __init__(self, base_url: str) -> None:
         self.base_url = base_url.rstrip("/")
 
     async def search(self, query: str, num_results: int) -> list[SearchResult]:
@@ -69,7 +69,7 @@ class SearXNGProvider:
 class TavilyProvider:
     """Tavily AI-optimized search API."""
 
-    def __init__(self, api_key: str):
+    def __init__(self, api_key: str) -> None:
         self.api_key = api_key
 
     async def search(self, query: str, num_results: int) -> list[SearchResult]:
@@ -79,7 +79,7 @@ class TavilyProvider:
 
         client = TavilyClient(api_key=self.api_key)
 
-        def _search():
+        def _search() -> Any:
             return client.search(query, max_results=num_results, include_raw_content=False)
 
         response = await asyncio.to_thread(_search)
@@ -109,7 +109,7 @@ class DuckDuckGoProvider:
         except ImportError:
             from duckduckgo_search import DDGS
 
-        def _search():
+        def _search() -> Any:
             with DDGS() as ddgs:
                 results = ddgs.text(query, max_results=num_results)
                 return list(results) if results else []
@@ -136,7 +136,7 @@ class MiniMaxSearchProvider:
         POST {api_host}/v1/coding_plan/search
     """
 
-    def __init__(self, api_key: str, api_host: str = "https://api.minimaxi.com"):
+    def __init__(self, api_key: str, api_host: str = "https://api.minimaxi.com") -> None:
         self.api_key = api_key
         self.api_host = api_host.rstrip("/")
 
@@ -198,7 +198,7 @@ class MiniMaxSearchProvider:
 class FallbackSearchProvider:
     """Tries providers in order, returns first successful results."""
 
-    def __init__(self, providers: list[SearchProvider]):
+    def __init__(self, providers: list[SearchProvider]) -> None:
         self.providers = providers
         # Phase 4 diagnostic: log the resolved chain once at construction
         # so operators can verify provider ordering without grepping code.
@@ -300,7 +300,7 @@ def create_search_provider(config: dict[str, Any]) -> FallbackSearchProvider:
 class WebSearch:
     """Web search wrapper — delegates to configured provider chain."""
 
-    def __init__(self, config: dict[str, Any]):
+    def __init__(self, config: dict[str, Any]) -> None:
         self.config = config
         self._provider: FallbackSearchProvider | None = None
 

@@ -30,7 +30,7 @@ class WikiToolRegistry:
     - requires_confirmation="pre": create confirmation, return confirmation_id
     """
 
-    def __init__(self, wiki: Any, db: Any = None, wiki_id: str | None = None):
+    def __init__(self, wiki: Any, db: Any = None, wiki_id: str | None = None) -> None:
         self.wiki = wiki
         self.db = db
         self.wiki_id = wiki_id

@@ -3,6 +3,7 @@
 import json
 import logging
 from pathlib import Path
+from typing import Any
 
 from ..storage.index import WikiIndex
 
@@ -458,7 +459,7 @@ def generate_report(index: WikiIndex, communities: dict | None = None, top_n: in
     return "\n".join(lines)
 
 
-def _build_networkx(graph: dict):
+def _build_networkx(graph: dict) -> Any:
     """Build a NetworkX MultiDiGraph from graph dict."""
     import networkx as nx  # noqa: F401  (used by _build_networkx)
 
@@ -473,7 +474,7 @@ def _build_networkx(graph: dict):
     return G
 
 
-def _greedy_modularity_communities(G):
+def _greedy_modularity_communities(G) -> Any:
     """Simple greedy modularity communities using networkx."""
     from networkx.algorithms.community import greedy_modularity_communities
 
@@ -481,7 +482,7 @@ def _greedy_modularity_communities(G):
     return {node: cid for cid, comm in enumerate(communities) for node in comm}
 
 
-def _compute_modularity(G, partition):
+def _compute_modularity(G, partition) -> Any:
     """Compute modularity of a partition."""
     try:
         import community as community_louvain

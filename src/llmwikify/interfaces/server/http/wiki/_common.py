@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import mimetypes
 from pathlib import Path
+from typing import Any
 from urllib.parse import quote, unquote
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -46,7 +47,7 @@ def _serve_wiki_file(wiki_root: Path, path: str) -> FileResponse:
     )
 
 
-def create_wiki_dependency(registry: WikiRegistry):
+def create_wiki_dependency(registry: WikiRegistry) -> Any:
     """创建 FastAPI 依赖注入函数，用于获取默认 wiki。"""
 
     def _get_default_or_first_wiki_id() -> str:

@@ -258,7 +258,7 @@ class SkillToolAdapter:
 
 
 class CompositeToolRegistry:
-    def __init__(self, *registries: Any):
+    def __init__(self, *registries: Any) -> None:
         self.registries = [r for r in registries if r is not None]
         self._tools: dict[str, dict[str, Any]] = {}
         self._owners: dict[str, Any] = {}

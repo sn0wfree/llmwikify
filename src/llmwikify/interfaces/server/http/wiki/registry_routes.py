@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
 
@@ -26,7 +27,7 @@ def register_registry_routes(app, registry: WikiRegistry) -> None:
     wikis_router = APIRouter(prefix="/api/wikis", tags=["wikis"])
 
     @wikis_router.get("")
-    async def list_wikis():
+    async def list_wikis() -> dict[str, Any]:
         """List all registered wikis."""
         wikis = registry.list_wikis()
         return {
@@ -35,7 +36,7 @@ def register_registry_routes(app, registry: WikiRegistry) -> None:
         }
 
     @wikis_router.post("")
-    async def register_wiki(request: Request):
+    async def register_wiki(request: Request) -> Any:
         """Register a new wiki."""
         body = await request.json()
         wiki_id = body.get("wiki_id")
@@ -71,14 +72,14 @@ def register_registry_routes(app, registry: WikiRegistry) -> None:
         return instance.to_dict()
 
     @wikis_router.get("/{wiki_id}")
-    async def get_wiki_info(wiki_id: str):
+    async def get_wiki_info(wiki_id: str) -> Any:
         """Get wiki details."""
         with wiki_or_404(registry, wiki_id):
             instance = registry.get_wiki_instance(wiki_id)
             return instance.to_dict()
 
     @wikis_router.put("/{wiki_id}")
-    async def update_wiki(wiki_id: str, request: Request):
+    async def update_wiki(wiki_id: str, request: Request) -> Any:
         """Update wiki configuration."""
         body = await request.json()
         with wiki_or_404(registry, wiki_id):
@@ -91,14 +92,14 @@ def register_registry_routes(app, registry: WikiRegistry) -> None:
             return instance.to_dict()
 
     @wikis_router.delete("/{wiki_id}")
-    async def unregister_wiki(wiki_id: str):
+    async def unregister_wiki(wiki_id: str) -> dict[str, Any]:
         """Unregister a wiki."""
         with wiki_or_404(registry, wiki_id):
             registry.unregister_wiki(wiki_id)
             return {"message": f"Wiki {wiki_id} unregistered"}
 
     @wikis_router.post("/{wiki_id}/reload")
-    async def reload_wiki(wiki_id: str):
+    async def reload_wiki(wiki_id: str) -> Any:
         """Reload/re-index a wiki."""
         with wiki_or_404(registry, wiki_id):
             result = registry.reload_wiki(wiki_id)
@@ -107,14 +108,14 @@ def register_registry_routes(app, registry: WikiRegistry) -> None:
             return result
 
     @wikis_router.get("/{wiki_id}/health")
-    async def wiki_health(wiki_id: str):
+    async def wiki_health(wiki_id: str) -> Any:
         """Check wiki health."""
         with wiki_or_404(registry, wiki_id):
             status = registry.get_wiki_status(wiki_id)
             return status
 
     @wikis_router.post("/scan")
-    async def scan_wikis(request: Request):
+    async def scan_wikis(request: Request) -> dict[str, Any]:
         """Trigger directory scan for wikis.
 
         Only paths under the user's home directory are accepted to

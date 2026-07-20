@@ -92,7 +92,7 @@ PRINCIPLE_DEFINITIONS: dict[str, dict[str, Any]] = {
 class PrincipleChecker:
     """Checks prompt templates against LLM Wiki Principles."""
 
-    def __init__(self, defaults_dir: Path | None = None):
+    def __init__(self, defaults_dir: Path | None = None) -> None:
         if defaults_dir is None:
             defaults_dir = Path(__file__).parent.parent / "foundation" / "prompts" / "_defaults"
         self.defaults_dir = defaults_dir

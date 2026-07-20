@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 class SourceAnalyzer:
     """Analyzes gathered sources using Wiki.analyze_source()."""
 
-    def __init__(self, wiki: Any, session_manager: ResearchSessionManager, config: dict[str, Any]):
+    def __init__(self, wiki: Any, session_manager: ResearchSessionManager, config: dict[str, Any]) -> None:
         self.wiki = wiki
         self.session_manager = session_manager
         self.config = config

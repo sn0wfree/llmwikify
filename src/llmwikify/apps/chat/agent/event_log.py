@@ -23,7 +23,7 @@ class EventLog:
     for debugging or replay.
     """
 
-    def __init__(self, db_path: str | Any, *, _mgr=None):
+    def __init__(self, db_path: str | Any, *, _mgr=None) -> None:
         """Initialize with a DB path or ChatDatabase instance."""
         if hasattr(db_path, "db_path"):
             self._db_path = str(db_path.db_path)

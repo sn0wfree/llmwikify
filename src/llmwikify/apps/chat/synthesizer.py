@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 class ResearchSynthesizer:
     """Generates cross-source synthesis with rating-weighted prioritization."""
 
-    def __init__(self, wiki: Any, config: dict[str, Any]):
+    def __init__(self, wiki: Any, config: dict[str, Any]) -> None:
         self.wiki = wiki
         self.config = config
 

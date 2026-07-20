@@ -162,7 +162,7 @@ class BaseQualityGate:
     ``check_framework_compliance``).
     """
 
-    def __init__(self, config: dict[str, Any] | None = None):
+    def __init__(self, config: dict[str, Any] | None = None) -> None:
         config = config or {}
         self.min_sources = config.get("gate_min_sources", 3)
         self.min_type_diversity = config.get("gate_min_type_diversity", 2)

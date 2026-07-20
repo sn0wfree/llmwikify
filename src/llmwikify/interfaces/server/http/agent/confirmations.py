@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import json
 
 from fastapi import Request
@@ -24,14 +26,14 @@ from llmwikify.interfaces.server.http.agent._sse import (
 
 
 @router.get("/confirmations")
-async def list_confirmations(request: Request):
+async def list_confirmations(request: Request) -> Any:
     wiki_id = get_wiki_id(request)
     service = get_agent_service()
     return service.list_confirmations(wiki_id)
 
 
 @router.post("/confirmations/{confirmation_id}")
-async def approve_confirmation(confirmation_id: str, request: Request):
+async def approve_confirmation(confirmation_id: str, request: Request) -> Any:
     wiki_id = get_wiki_id(request)
     service = get_agent_service()
     body = {}
@@ -50,7 +52,7 @@ async def approve_confirmation(confirmation_id: str, request: Request):
 
 
 @router.post("/confirmations/{confirmation_id}/approve-and-continue")
-async def approve_and_continue(confirmation_id: str, request: Request):
+async def approve_and_continue(confirmation_id: str, request: Request) -> Any:
     """Approve confirmation, execute tool, and stream LLM follow-up."""
     req = await JsonBodyHelper.execute(request, ApprovalRequest)
     service = get_agent_service()
@@ -69,14 +71,14 @@ async def approve_and_continue(confirmation_id: str, request: Request):
 
 
 @router.delete("/confirmations/{confirmation_id}")
-async def reject_confirmation(confirmation_id: str, request: Request):
+async def reject_confirmation(confirmation_id: str, request: Request) -> Any:
     wiki_id = get_wiki_id(request)
     service = get_agent_service()
     return await service.reject_confirmation(confirmation_id, wiki_id)
 
 
 @router.post("/confirmations/batch")
-async def batch_approve(request: Request):
+async def batch_approve(request: Request) -> Any:
     req = await JsonBodyHelper.execute(request, BatchApproveRequest)
     wiki_id = get_wiki_id(request)
     service = get_agent_service()

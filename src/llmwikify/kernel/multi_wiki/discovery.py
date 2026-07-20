@@ -21,7 +21,7 @@ class WikiDiscovery:
     Subdirectories of a wiki root are NOT scanned for additional wikis.
     """
 
-    def __init__(self, exclude_patterns: list[str] | None = None):
+    def __init__(self, exclude_patterns: list[str] | None = None) -> None:
         """Initialize WikiDiscovery.
 
         Args:

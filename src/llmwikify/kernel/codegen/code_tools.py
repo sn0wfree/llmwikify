@@ -153,7 +153,7 @@ def execute_code(
     result_box = [None]
     error_box = [None]
 
-    def _run():
+    def _run() -> None:
         try:
             result_box[0] = sandbox.validate_and_execute(wrapped, namespace)
         except Exception as exc:
