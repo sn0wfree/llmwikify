@@ -13,6 +13,14 @@ from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse
 
 from llmwikify.apps.chat.channels.websocket import _register_websocket_routes
+from llmwikify.interfaces.server.http.wiki._wiki_ops import (
+    check_remote_wiki_config,
+    enrich_status,
+    load_wiki_config,
+    read_page_with_sink,
+    validate_remote_url,
+    write_page,
+)
 from llmwikify.kernel import Wiki
 from llmwikify.kernel.multi_wiki.instance import WikiType
 from llmwikify.kernel.multi_wiki.registry import WikiRegistry
@@ -131,10 +139,7 @@ def _register_wiki_routes(
     @wiki_router.get("/status")
     async def wiki_status(wiki: Wiki = Depends(get_wiki)):  # noqa: B008
         """Get wiki status summary."""
-        status = wiki.status()
-        if "pages_by_type" in status:
-            status["all_types"] = list(status["pages_by_type"].keys())
-        return status
+        return enrich_status(wiki.status())
 
     @wiki_router.get("/search")
     async def wiki_search(q: str, limit: int = 10, backend: str = "fts5", wiki: Wiki = Depends(get_wiki)):  # noqa: B008
@@ -144,27 +149,13 @@ def _register_wiki_routes(
     @wiki_router.get("/page/{page_name:path}")
     async def wiki_read_page(page_name: str, wiki: Wiki = Depends(get_wiki)):  # noqa: B008
         """Read a wiki page."""
-        try:
-            page_data = wiki.read_page(page_name)
-            if isinstance(page_data, dict) and "error" in page_data:
-                raise HTTPException(status_code=404, detail=page_data["error"])
-            sink_info = wiki.query_sink.get_info_for_page(page_name)
-            if isinstance(page_data, dict):
-                return {**page_data, **sink_info}
-            return page_data
-        except Exception as e:
-            raise HTTPException(status_code=404, detail=str(e)) from e
+        return read_page_with_sink(wiki, page_name)
 
     @wiki_router.post("/page")
     async def wiki_write_page(request: Request, wiki: Wiki = Depends(get_wiki)):  # noqa: B008
         """Write a wiki page."""
         body = await request.json()
-        page_name = body.get("page_name", "")
-        content = body.get("content", "")
-        if not page_name:
-            raise HTTPException(status_code=400, detail="page_name required")
-        result = wiki.write_page(page_name, content)
-        return {"message": result, "page_name": page_name}
+        return write_page(wiki, body.get("page_name", ""), body.get("content", ""))
 
     @wiki_router.get("/sink/status")
     async def wiki_sink_status(wiki: Wiki = Depends(get_wiki)):  # noqa: B008
@@ -356,10 +347,7 @@ def _register_wiki_routes(
     async def wiki_status_by_id(wiki_id: str):
         """Get wiki status by ID."""
         try:
-            status = registry.get_wiki_status(wiki_id)
-            if "pages_by_type" in status:
-                status["all_types"] = list(status["pages_by_type"].keys())
-            return status
+            return enrich_status(registry.get_wiki_status(wiki_id))
         except KeyError:
             raise HTTPException(status_code=404, detail=f"Wiki not found: {wiki_id}") from None
 
@@ -387,17 +375,9 @@ def _register_wiki_routes(
         """Read a page from a specific wiki."""
         try:
             wiki = get_wiki_by_id(wiki_id)
-            page_data = wiki.read_page(page_name)
-            if isinstance(page_data, dict) and "error" in page_data:
-                raise HTTPException(status_code=404, detail=page_data["error"])
-            sink_info = wiki.query_sink.get_info_for_page(page_name)
-            if isinstance(page_data, dict):
-                return {**page_data, **sink_info}
-            return page_data
+            return read_page_with_sink(wiki, page_name)
         except KeyError:
             raise HTTPException(status_code=404, detail=f"Wiki not found: {wiki_id}") from None
-        except Exception as e:
-            raise HTTPException(status_code=404, detail=str(e)) from e
 
     @wiki_router.post("/{wiki_id}/page")
     async def wiki_write_page_by_id(wiki_id: str, request: Request):
@@ -405,12 +385,7 @@ def _register_wiki_routes(
         try:
             wiki = get_wiki_by_id(wiki_id)
             body = await request.json()
-            page_name = body.get("page_name", "")
-            content = body.get("content", "")
-            if not page_name:
-                raise HTTPException(status_code=400, detail="page_name required")
-            result = wiki.write_page(page_name, content)
-            return {"message": result, "page_name": page_name}
+            return write_page(wiki, body.get("page_name", ""), body.get("content", ""))
         except KeyError:
             raise HTTPException(status_code=404, detail=f"Wiki not found: {wiki_id}") from None
 

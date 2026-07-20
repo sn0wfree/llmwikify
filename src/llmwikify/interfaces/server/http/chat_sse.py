@@ -17,7 +17,11 @@ from llmwikify.interfaces.server.http._handlers import (
     ReadBodyHandler,
     ValidateModelHandler,
 )
-from llmwikify.interfaces.server.http._helpers import Helper
+from llmwikify.interfaces.server.http._helpers import (
+    Helper,
+    get_jwt_from_request,
+    get_wiki_id,
+)
 from llmwikify.interfaces.server.http._models import (
     ApplyProposalsRequest,
     ApprovalRequest,
@@ -117,14 +121,6 @@ def get_agent_service() -> AgentService:
     if AGENT_SERVICE is None:
         raise RuntimeError("Agent service not initialized")
     return AGENT_SERVICE
-
-
-def get_jwt_from_request(request: Request) -> str | None:
-    return request.query_params.get("jwt")
-
-
-def get_wiki_id(request: Request) -> str | None:
-    return request.query_params.get("wiki_id")
 
 
 @router.post("/chat")

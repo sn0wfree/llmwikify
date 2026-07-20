@@ -113,3 +113,15 @@ class Helper:
                     type(ctx.result).__name__ if ctx.result else "None",
                 )
         return ctx.result  # type: ignore[return-value]
+
+
+# ─── 查询参数 helper ───────────────────────────────────────────
+
+def get_jwt_from_request(request: Request) -> str | None:
+    """从请求中提取 JWT token。"""
+    return request.query_params.get("jwt")
+
+
+def get_wiki_id(request: Request) -> str | None:
+    """从请求中提取 wiki_id。"""
+    return request.query_params.get("wiki_id")
