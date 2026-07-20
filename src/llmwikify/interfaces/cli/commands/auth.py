@@ -25,8 +25,6 @@ import logging
 import sys
 from typing import Any
 
-logger = logging.getLogger(__name__)
-
 from llmwikify.foundation.auth import (
     ApiKeyRepository,
     chmod_600,
@@ -36,6 +34,8 @@ from llmwikify.foundation.auth import (
 )
 
 from .._base import Command
+
+logger = logging.getLogger(__name__)
 
 _local_token_path = local_token_path
 _chmod_600 = chmod_600

@@ -21,8 +21,6 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
-
-logger = logging.getLogger(__name__)
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -34,6 +32,8 @@ from llmwikify.kernel.agent import (
 )  # noqa: F401
 
 from .spec import ChatSpec
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass

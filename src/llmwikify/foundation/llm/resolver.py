@@ -301,7 +301,6 @@ def resolver_enabled() -> bool:
 
 
 __all__ = [
-    "PROVIDER_ALIASES",
     "apply_provider_alias",
     "resolve_chat_llm",
     "resolver_enabled",

@@ -9,9 +9,9 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-logger = logging.getLogger(__name__)
-
 from llmwikify.apps.chat.skills.base import SkillContext, SkillResult
+
+logger = logging.getLogger(__name__)
 
 
 class SkillToolAdapter:
