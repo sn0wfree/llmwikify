@@ -24,6 +24,7 @@ import sqlite3
 from pathlib import Path
 
 from llmwikify.apps.db_base import DB_SIZE_WARNING_MB  # re-export
+from llmwikify.foundation.db import connect as _db_connect
 
 logger = logging.getLogger(__name__)
 
@@ -59,10 +60,7 @@ class ChatDBBase:
 
     def _connect(self) -> sqlite3.Connection:
         """Open a connection with row_factory + foreign_keys."""
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA foreign_keys = ON")
-        return conn
+        return _db_connect(self.db_path)
 
     def _init_schema(self) -> None:
         """Create this repository's tables.

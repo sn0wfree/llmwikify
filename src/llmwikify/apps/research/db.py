@@ -26,6 +26,7 @@ import uuid
 from typing import Any
 
 from llmwikify.apps.db_base import BaseDatabase
+from llmwikify.foundation.db import connect as _db_connect
 
 logger = logging.getLogger(__name__)
 
@@ -66,16 +67,13 @@ class ResearchDatabase(BaseDatabase):
         All call sites that open ``sqlite3.connect(self.db_path)``
         should go through this helper.
         """
-        conn = sqlite3.connect(
+        return _db_connect(
             self.db_path,
-            timeout=5.0,
-            isolation_level=None,  # autocommit; we manage txns explicitly
+            foreign_keys=False,
+            wal=True,
+            busy_timeout=5000,
+            synchronous="NORMAL",
         )
-        conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA journal_mode = WAL")
-        conn.execute("PRAGMA synchronous = NORMAL")
-        conn.execute("PRAGMA busy_timeout = 5000")
-        return conn
 
     def _init_db(self) -> None:
         """Idempotently create the 4 research tables.

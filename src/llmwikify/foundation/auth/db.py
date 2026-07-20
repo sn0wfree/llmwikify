@@ -100,10 +100,9 @@ class UserRepository:
             pass
 
     def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA foreign_keys = ON")
-        return conn
+        """Open a connection with row_factory + foreign_keys."""
+        from llmwikify.foundation.db import connect as _db_connect
+        return _db_connect(self.db_path)
 
     @contextmanager
     def _atomic_write(self) -> Iterator[sqlite3.Connection]:
@@ -315,10 +314,9 @@ class ApiKeyRepository:
             pass
 
     def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA foreign_keys = ON")
-        return conn
+        """Open a connection with row_factory + foreign_keys."""
+        from llmwikify.foundation.db import connect as _db_connect
+        return _db_connect(self.db_path)
 
     def _init_schema(self) -> None:
         with self._connect() as conn:

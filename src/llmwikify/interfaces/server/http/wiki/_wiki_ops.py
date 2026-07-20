@@ -9,12 +9,15 @@ from __future__ import annotations
 import fnmatch
 import json
 import logging
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from urllib.parse import urlparse
 
 from fastapi import HTTPException
 
 from llmwikify.kernel import Wiki
+from llmwikify.kernel.multi_wiki.registry import WikiRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -28,15 +31,9 @@ def load_wiki_config() -> dict:
         wiki 配置字典，包含 allowed_remote_hosts 等字段。
         文件不存在或读取失败时返回默认值。
     """
-    config_file = Path.home() / ".llmwikify" / "llmwikify.json"
-    default = {"allowed_remote_hosts": ["*"]}
-    try:
-        if config_file.exists():
-            data = json.loads(config_file.read_text(encoding="utf-8"))
-            return data.get("wiki", default)
-    except Exception:
-        pass
-    return default
+    from llmwikify.foundation.config import config
+
+    return config.get("wiki", {"allowed_remote_hosts": ["*"]})
 
 
 def check_remote_wiki_config(allowed_hosts: list[str]) -> None:
@@ -48,6 +45,35 @@ def check_remote_wiki_config(allowed_hosts: list[str]) -> None:
             "Consider restricting to specific hosts for security. "
             "Example: allowed_remote_hosts=['*.company.com', '10.0.0.0/8']"
         )
+
+
+# ─── Wiki 实例获取（上下文管理器）─────────────────────────────
+
+@contextmanager
+def wiki_or_404(registry: WikiRegistry, wiki_id: str) -> Iterator[Wiki]:
+    """Get wiki by ID, raising HTTPException(404) if not found.
+
+    Args:
+        registry: WikiRegistry instance.
+        wiki_id: Wiki ID to look up.
+
+    Yields:
+        Wiki instance.
+
+    Raises:
+        HTTPException: 404 if wiki not found.
+
+    Usage::
+
+        with wiki_or_404(registry, wiki_id) as wiki:
+            return wiki.status()
+    """
+    try:
+        yield registry.get_wiki(wiki_id)
+    except KeyError:
+        raise HTTPException(
+            status_code=404, detail=f"Wiki not found: {wiki_id}"
+        ) from None
 
 
 # ─── Wiki 页面操作（固定流程）──────────────────────────────────

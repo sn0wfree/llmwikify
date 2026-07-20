@@ -71,3 +71,32 @@ def safe_write_text(path: Path, content: str) -> None:
     """
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content, encoding="utf-8")
+
+
+def read_yaml(path: Path, default: Any = None) -> Any:
+    """Read YAML from path, returning default if file doesn't exist.
+
+    Args:
+        path: Path to YAML file.
+        default: Value to return if file doesn't exist or is invalid.
+
+    Returns:
+        Parsed YAML value, or default.
+    """
+    if not path.exists():
+        return default
+    try:
+        import yaml
+
+        return yaml.safe_load(path.read_text(encoding="utf-8")) or default
+    except (ImportError, Exception):
+        return default
+
+
+__all__ = [
+    "read_json",
+    "write_json",
+    "safe_read_text",
+    "safe_write_text",
+    "read_yaml",
+]

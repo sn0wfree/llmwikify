@@ -20,6 +20,8 @@ import logging
 import sqlite3
 from pathlib import Path
 
+from llmwikify.foundation.db import connect as _db_connect
+
 logger = logging.getLogger(__name__)
 
 # DB size warning threshold (MB).
@@ -82,13 +84,8 @@ class BaseDatabase:
         self._check_db_size()
 
     def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
-        # Phase 4.5 (v0.36): enable foreign key enforcement.
-        # SQLite has FK support OFF by default; this pragma
-        # must be set on every new connection.
-        conn.execute("PRAGMA foreign_keys = ON")
-        return conn
+        """Open a connection with row_factory + foreign_keys."""
+        return _db_connect(self.db_path)
 
     def _init_db(self) -> None:
         """Create the database schema. Subclasses must implement.
@@ -133,7 +130,7 @@ class BaseDatabase:
             raise FileNotFoundError(
                 f"DB file does not exist: {self.db_path}"
             )
-        return sqlite3.connect(self.db_path)
+        return _db_connect(self.db_path)
 
 
 __all__ = [

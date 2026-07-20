@@ -10,6 +10,7 @@ from llmwikify.interfaces.server.http.wiki._wiki_ops import (
     check_remote_wiki_config,
     load_wiki_config,
     validate_remote_url,
+    wiki_or_404,
 )
 from llmwikify.kernel.multi_wiki.registry import WikiRegistry
 
@@ -72,17 +73,15 @@ def register_registry_routes(app, registry: WikiRegistry) -> None:
     @wikis_router.get("/{wiki_id}")
     async def get_wiki_info(wiki_id: str):
         """Get wiki details."""
-        try:
+        with wiki_or_404(registry, wiki_id):
             instance = registry.get_wiki_instance(wiki_id)
             return instance.to_dict()
-        except KeyError:
-            raise HTTPException(status_code=404, detail=f"Wiki not found: {wiki_id}") from None
 
     @wikis_router.put("/{wiki_id}")
     async def update_wiki(wiki_id: str, request: Request):
         """Update wiki configuration."""
         body = await request.json()
-        try:
+        with wiki_or_404(registry, wiki_id):
             instance = registry.get_wiki_instance(wiki_id)
             # Update allowed fields
             if "name" in body:
@@ -90,37 +89,29 @@ def register_registry_routes(app, registry: WikiRegistry) -> None:
             if "is_default" in body and body["is_default"]:
                 registry.set_default_wiki(wiki_id)
             return instance.to_dict()
-        except KeyError:
-            raise HTTPException(status_code=404, detail=f"Wiki not found: {wiki_id}") from None
 
     @wikis_router.delete("/{wiki_id}")
     async def unregister_wiki(wiki_id: str):
         """Unregister a wiki."""
-        try:
+        with wiki_or_404(registry, wiki_id):
             registry.unregister_wiki(wiki_id)
             return {"message": f"Wiki {wiki_id} unregistered"}
-        except KeyError:
-            raise HTTPException(status_code=404, detail=f"Wiki not found: {wiki_id}") from None
 
     @wikis_router.post("/{wiki_id}/reload")
     async def reload_wiki(wiki_id: str):
         """Reload/re-index a wiki."""
-        try:
+        with wiki_or_404(registry, wiki_id):
             result = registry.reload_wiki(wiki_id)
             if result.get("status") == "error":
                 raise HTTPException(status_code=500, detail=result.get("message"))
             return result
-        except KeyError:
-            raise HTTPException(status_code=404, detail=f"Wiki not found: {wiki_id}") from None
 
     @wikis_router.get("/{wiki_id}/health")
     async def wiki_health(wiki_id: str):
         """Check wiki health."""
-        try:
+        with wiki_or_404(registry, wiki_id):
             status = registry.get_wiki_status(wiki_id)
             return status
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e)) from e
 
     @wikis_router.post("/scan")
     async def scan_wikis(request: Request):
