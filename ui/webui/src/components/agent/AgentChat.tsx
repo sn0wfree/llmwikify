@@ -9,6 +9,7 @@ import { SessionSidebar } from './SessionSidebar';
 import { ToolsRail } from './ToolsRail';
 import { ConfirmationModal } from './ConfirmationModal';
 import { ResearchRunCard } from './ResearchRunCard';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../ui/dialog';
 import { cn } from '@/lib/utils';
 
 interface Message {
@@ -678,47 +679,41 @@ export function AgentChat() {
       )}
 
       {/* v0.40: Settings dialog for custom system prompt */}
-      {showSettings && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowSettings(false)}>
-          <div className="bg-card border border-border rounded-lg shadow-elevated w-full max-w-2xl max-h-[80vh] flex flex-col m-4" onClick={(e) => e.stopPropagation()}>
-            <div className="p-4 border-b border-border flex items-center justify-between">
-              <h2 className="text-base font-semibold">Custom system prompt</h2>
-              <button
-                onClick={() => setShowSettings(false)}
-                className="p-1 rounded hover:bg-muted transition-colors"
-                aria-label="Close"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            <div className="p-4 flex-1 overflow-y-auto">
-              <p className="text-xs text-muted-foreground mb-2">
-                This prompt is added to every chat turn. Use it to set persona, language, tone, or domain-specific instructions.
-              </p>
-              <textarea
-                value={systemPrompt}
-                onChange={(e) => setSystemPrompt(e.target.value)}
-                placeholder="E.g. Always respond in Chinese. Be concise. Use markdown."
-                className="w-full h-64 px-3 py-2 text-sm font-mono bg-muted/40 border border-border rounded-md outline-none focus:border-primary/50 resize-none text-foreground placeholder:text-muted-foreground"
-              />
-            </div>
-            <div className="p-4 border-t border-border flex gap-3 justify-end">
-              <button
-                onClick={() => setShowSettings(false)}
-                className="px-3 py-1.5 text-sm rounded-md text-muted-foreground hover:text-foreground"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={saveSystemPrompt}
-                className="px-3 py-1.5 text-sm rounded-md bg-primary text-primary-foreground hover:brightness-110"
-              >
-                Save
-              </button>
-            </div>
+      <Dialog open={showSettings} onOpenChange={setShowSettings}>
+        <DialogContent
+          className="max-w-2xl sm:max-w-2xl max-h-[80vh] flex flex-col"
+          showCloseButton={false}
+        >
+          <DialogHeader>
+            <DialogTitle>Custom system prompt</DialogTitle>
+            <DialogDescription>
+              This prompt is added to every chat turn. Use it to set persona, language, tone, or domain-specific instructions.
+            </DialogDescription>
+          </DialogHeader>
+
+          <textarea
+            value={systemPrompt}
+            onChange={(e) => setSystemPrompt(e.target.value)}
+            placeholder="E.g. Always respond in Chinese. Be concise. Use markdown."
+            className="w-full h-64 px-3 py-2 text-sm font-mono bg-muted/40 border border-border rounded-md outline-none focus:border-primary/50 resize-none text-foreground placeholder:text-muted-foreground"
+          />
+
+          <div className="flex gap-3 justify-end">
+            <button
+              onClick={() => setShowSettings(false)}
+              className="px-3 py-1.5 text-sm rounded-md text-muted-foreground hover:text-foreground"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={saveSystemPrompt}
+              className="px-3 py-1.5 text-sm rounded-md bg-primary text-primary-foreground hover:brightness-110"
+            >
+              Save
+            </button>
           </div>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
 
       <div className="flex flex-1 overflow-hidden">
         {showSidebar && (

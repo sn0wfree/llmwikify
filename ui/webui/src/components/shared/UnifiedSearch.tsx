@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Search, Loader2, FileText, Sparkles, X } from 'lucide-react';
 import { api, SearchResult } from '../../api';
 import { useWikiStore } from '../../stores/wikiStore';
+import { Dialog, DialogContent } from '../ui/dialog';
 import { cn } from '@/lib/utils';
 
 interface SinkEntry {
@@ -76,27 +77,13 @@ export function UnifiedSearch({ open, onClose }: { open: boolean; onClose: () =>
     navigate(`/edit?page=${encodeURIComponent(page)}`);
   };
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && open) {
-        e.preventDefault();
-        onClose();
-      }
-    };
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [open, onClose]);
-
-  if (!open) return null;
-
   const hasResults = results.length > 0 || matchingSinks.length > 0;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-start justify-center pt-[15vh]" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-      <div
-        className="relative w-full max-w-xl glass-strong rounded-xl shadow-elevated border border-border/60 overflow-hidden animate-slide-up"
-        onClick={(e) => e.stopPropagation()}
+    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent
+        className="!top-[15vh] !-translate-y-0 left-1/2 -translate-x-1/2 max-w-xl sm:max-w-xl glass-strong border border-border/60 shadow-elevated overflow-hidden p-0 animate-slide-up gap-0"
+        showCloseButton={false}
       >
         <div className="flex items-center gap-3 px-4 py-3 border-b border-border/40">
           <Search className="w-4 h-4 text-muted-foreground shrink-0" />
@@ -186,7 +173,7 @@ export function UnifiedSearch({ open, onClose }: { open: boolean; onClose: () =>
             Type to search pages and sinks
           </div>
         )}
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
