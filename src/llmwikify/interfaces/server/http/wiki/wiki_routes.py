@@ -1,4 +1,4 @@
-"""Wiki 路由 — 默认 wiki + Wiki-ID 路由（21 端点）。"""
+"""Wiki 路由 — 默认 wiki + Wiki-ID 路由（23 端点）。"""
 
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ from llmwikify.interfaces.server.http.wiki._common import (
 )
 from llmwikify.interfaces.server.http.wiki._wiki_ops import (
     enrich_status,
+    get_wiki_guide,
     read_page_with_sink,
     wiki_or_404,
     write_page,
@@ -48,6 +49,11 @@ def register_wiki_routes(app, registry: WikiRegistry) -> None:
         """Write a wiki page."""
         body = await request.json()
         return write_page(wiki, body.get("page_name", ""), body.get("content", ""))
+
+    @wiki_router.get("/guide")
+    async def wiki_guide(wiki: Wiki = Depends(get_wiki)):  # noqa -> Any: B008
+        """Get wiki guide: schema, overview, index, and API usage instructions."""
+        return get_wiki_guide(wiki)
 
     @wiki_router.get("/sink/status")
     async def wiki_sink_status(wiki: Wiki = Depends(get_wiki)):  # noqa -> Any: B008
@@ -131,6 +137,12 @@ def register_wiki_routes(app, registry: WikiRegistry) -> None:
         with wiki_or_404(registry, wiki_id) as wiki:
             body = await request.json()
             return write_page(wiki, body.get("page_name", ""), body.get("content", ""))
+
+    @wiki_id_router.get("/{wiki_id}/guide")
+    async def wiki_guide_by_id(wiki_id: str) -> Any:
+        """Get wiki guide: schema, overview, index, and API usage instructions."""
+        with wiki_or_404(registry, wiki_id) as wiki:
+            return get_wiki_guide(wiki)
 
     @wiki_id_router.get("/{wiki_id}/lint")
     async def wiki_lint_by_id(

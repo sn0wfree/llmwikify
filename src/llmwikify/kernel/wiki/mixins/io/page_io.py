@@ -31,6 +31,9 @@ class WikiPageIOMixin(WikiProtocol):
         if ".." in page_name or page_name.startswith("/"):
             raise ValueError(f"Invalid page name: {page_name!r} — path traversal not allowed")
 
+        if page_name.endswith(".md"):
+            page_name = page_name[:-3]
+
         if page_name.startswith("wiki/"):
             raise ValueError(
                 f"page_name should NOT include 'wiki/' prefix. "
@@ -84,6 +87,9 @@ class WikiPageIOMixin(WikiProtocol):
             page_name: Page name. Can be pure name or path.
             page_type: Page type to resolve directory (same as write_page).
         """
+        if page_name.endswith(".md"):
+            page_name = page_name[:-3]
+
         if page_name.startswith('sink/'):
             page_name = page_name.replace('sink/', '.sink/', 1)
 

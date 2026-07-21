@@ -137,6 +137,58 @@ def enrich_status(status: dict) -> dict:
     return status
 
 
+def get_wiki_guide(wiki: Wiki) -> dict:
+    """获取 wiki 使用指南：schema、overview、index + API 说明。
+
+    Returns:
+        dict with schema, overview, index, api_guide, page_types
+    """
+    schema_data = wiki.read_schema()
+    schema_content = schema_data.get("content", "") if "error" not in schema_data else ""
+
+    overview_data = wiki.read_page("overview")
+    overview_content = overview_data.get("content") if "error" not in overview_data else None
+
+    index_content = wiki._get_index_content()
+
+    page_types = wiki._load_page_type_mapping()
+
+    return {
+        "schema": schema_content,
+        "overview": overview_content,
+        "index": index_content,
+        "api_guide": {
+            "write_page": {
+                "endpoint": "POST /api/wiki/{wiki_id}/page",
+                "body": {
+                    "page_name": "daily/2026-07-21 (NO .md suffix!)",
+                    "content": "# Title\n\nContent...",
+                    "query": "optional query for wikify",
+                },
+                "rules": [
+                    "page_name must NOT end with .md",
+                    "page_name must NOT start with wiki/",
+                    "page_name must NOT contain ..",
+                    "Both content and query are recommended",
+                ],
+            },
+            "read_page": {
+                "endpoint": "GET /api/wiki/{wiki_id}/page/{page_name}",
+                "example": "/api/wiki/mining_news/page/daily/2026-07-21",
+            },
+            "search": {
+                "endpoint": "GET /api/wiki/{wiki_id}/search?q={query}",
+                "example": "/api/wiki/mining_news/search?q=gold+mining",
+            },
+            "guide": {
+                "endpoint": "GET /api/wiki/{wiki_id}/guide",
+                "description": "This endpoint — returns all wiki context for agents",
+            },
+        },
+        "page_types": page_types,
+    }
+
+
 # ─── 远程 Wiki URL 校验（SSRF 防护）────────────────────────────
 
 def validate_remote_url(url: str, allowed_hosts: list[str]) -> None:
