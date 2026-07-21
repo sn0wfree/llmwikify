@@ -371,8 +371,10 @@ export const api = {
     readPage: (pageName: string) =>
       request<WikiPage>(`/wiki/page/${encodeURIComponent(pageName)}`),
     writePage: (pageName: string, content: string, confirmToken?: string) => {
-      // v0.40: confirm_token in POST body (not query string) — avoids
-      // leaking into HTTP access logs.
+      // v0.40: confirm_token sent in POST body (back-compat path).
+      // Server-side PRIMARY mechanism is ?confirm_token=<id> query
+      // string. Body is honored only when query string is absent;
+      // when both are present and disagree, query wins.
       return request<{ ok: boolean }>(`/wiki/page`, {
         method: 'POST',
         body: JSON.stringify({
@@ -403,6 +405,9 @@ export const api = {
       readPage: (wikiId: string, pageName: string) =>
         request<WikiPage>(`/wiki/${wikiId}/page/${encodeURIComponent(pageName)}`),
       writePage: (wikiId: string, pageName: string, content: string, confirmToken?: string) => {
+        // v0.40: confirm_token sent in POST body (back-compat path).
+        // Server-side PRIMARY mechanism is ?confirm_token=<id> query
+        // string. Body is honored only when query string is absent.
         return request<{ ok: boolean }>(`/wiki/${wikiId}/page`, {
           method: 'POST',
           body: JSON.stringify({

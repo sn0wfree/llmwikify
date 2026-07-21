@@ -264,15 +264,21 @@ def get_wiki_guide(wiki: Wiki) -> dict:
             "write": {
                 "POST /api/wiki/{wiki_id}/page": {
                     "description": "Create a new page (returns 201) or confirm update of existing page (returns 409 with confirmation_id)",
+                    "params": {
+                        "confirm_token": "PRIMARY mechanism — confirmation_id from prior 409 response. Highest priority when both query string and body are present. Note: query string transport leaks the token to HTTP access logs.",
+                    },
                     "body": {
                         "page_name": "daily/2026-07-21 (NO .md suffix!)",
                         "content": "# Title\n\nFull markdown content...",
-                        "confirm_token": "OPTIONAL — from 409 response, confirms update (one-shot, TTL 300s)",
+                        "confirm_token": "BACK-COMPAT — confirmation_id from prior 409 response. Honored only when query string is absent. Ignored if ?confirm_token=<id> is also present and disagrees (query wins).",
                     },
                     "behavior": {
                         "new_page": "201 Created",
                         "existing_page_no_token": "409 Conflict + confirmation_id + existing_page preview",
-                        "existing_page_with_valid_token": "200 Updated (token must match wiki_id + page_name + not expired)",
+                        "existing_page_with_query_string_only": "200 Updated (query string wins)",
+                        "existing_page_with_body_only": "200 Updated (body fallback path)",
+                        "existing_page_with_both_matching": "200 Updated",
+                        "existing_page_with_both_disagreeing_query_wins": "200 Updated (query overrides body; INFO log emitted, token values never logged)",
                         "content_missing": "400 Bad Request",
                         "token_invalid_or_expired_or_wiki_mismatch": "400 Bad Request",
                         "wiki_db_unavailable": "503 Service Unavailable",
@@ -372,7 +378,7 @@ def get_wiki_guide(wiki: Wiki) -> dict:
         "error_codes": {
             "400": "Bad request — invalid page_name, missing content, invalid/expired/mismatched confirmation token",
             "404": "Not found — wiki_id or page_name doesn't exist",
-            "409": "Conflict — page exists; retry with ?confirm_token=<confirmation_id> to confirm update (TTL: 300s)",
+            "409": "Conflict — page exists. confirm_token accepted via either ?confirm_token=<id> query string (PRIMARY, highest priority when both present) or body {\"confirm_token\": \"<id>\"} (back-compat shim). One-shot, TTL 300s.",
             "500": "Internal server error — contact admin",
             "503": "Service unavailable — agent service / wiki DB not initialized",
         },

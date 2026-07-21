@@ -71,9 +71,26 @@ def register_wiki_routes(app, registry: WikiRegistry) -> None:
     async def wiki_write_page(request: Request, wiki: Wiki = Depends(get_wiki)):  # noqa -> Any: B008
         """Write a wiki page."""
         body = await request.json()
-        # v0.40: confirm_token lives in POST body (not query string) so
-        # it doesn't leak into HTTP access logs.
-        confirm_token = body.get("confirm_token")
+        # v0.40: confirm_token resolution — query string > POST body.
+        # Query string is the PRIMARY mechanism (highest priority when
+        # both are present); POST body is a back-compat shim for older
+        # v0.40 callers. NOTE: query string transport leaks the token to
+        # HTTP access logs; body remains recommended for new callers.
+        body_token = body.get("confirm_token")
+        query_token = request.query_params.get("confirm_token")
+        if (
+            query_token
+            and body_token
+            and query_token != body_token
+        ):
+            logger.info(
+                "wiki_write_page: confirm_token resolved from query "
+                "string, overriding body "
+                "(query_token_len=%d body_token_len=%d)",
+                len(query_token),
+                len(body_token),
+            )
+        confirm_token = query_token or body_token
         db, wiki_id = _get_wiki_db_and_id(registry)
         return write_page(wiki, body.get("page_name", ""), body.get("content", ""), confirm_token, db, wiki_id)
 
@@ -163,8 +180,23 @@ def register_wiki_routes(app, registry: WikiRegistry) -> None:
         """Write a page to a specific wiki."""
         with wiki_or_404(registry, wiki_id) as wiki:
             body = await request.json()
-            # v0.40: confirm_token in body (not query string) — see default route comment.
-            confirm_token = body.get("confirm_token")
+            # v0.40: confirm_token resolution — query string > POST body
+            # (see default route for full comment).
+            body_token = body.get("confirm_token")
+            query_token = request.query_params.get("confirm_token")
+            if (
+                query_token
+                and body_token
+                and query_token != body_token
+            ):
+                logger.info(
+                    "wiki_write_page_by_id: confirm_token resolved from "
+                    "query string, overriding body "
+                    "(query_token_len=%d body_token_len=%d)",
+                    len(query_token),
+                    len(body_token),
+                )
+            confirm_token = query_token or body_token
             db, _ = _get_wiki_db_and_id(registry, wiki_id)
             return write_page(wiki, body.get("page_name", ""), body.get("content", ""), confirm_token, db, wiki_id)
 
