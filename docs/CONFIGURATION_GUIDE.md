@@ -282,6 +282,51 @@ llm:
 
 ---
 
+### 11. memory_config.json (后台任务调度 — v0.40.2+)
+
+位置: `<data_dir>/memory_config.json` (默认 `~/.llmwikify/`)
+
+控制后台周期性任务的启用 + 间隔。三个 section, 每个都是 `enabled: true|false`
++ 任务特定字段。Lifespan (server) 启动时读取; 文件缺失或字段缺失都使用
+默认值，所以**新用户无需手动写入此文件** — 仅在调优时需要。
+
+```json
+{
+  "consolidation": {
+    "trigger_token_threshold": 4000,
+    "keep_recent_messages": 8,
+    "min_consolidation_interval_sec": 60.0,
+    "summary_max_tokens": 1024,
+    "enable_md_write": true
+  },
+  "dream": {
+    "enabled": true,
+    "cron_expression": "0 3 * * *",
+    "max_batch_size": 20,
+    "timeout_seconds": 300.0
+  },
+  "auto_compact": {
+    "enabled": true,
+    "ttl_minutes": 30,
+    "interval_seconds": 300.0
+  },
+  "confirmations_cleanup": {
+    "enabled": true,
+    "interval_seconds": 300.0
+  }
+}
+```
+
+**`confirmations_cleanup`** (v0.40.2 新增) — 周期性清理 POST `/page` 二次确认 token
+表中的过期行 (`expires_at < now`)。Token 默认 TTL 300s (代码常量
+`CONFIRMATION_TTL_SECONDS`), 多数 wiki 把 `interval_seconds` 与 TTL 同量级即可。
+若希望完全关闭, 设 `"confirmations_cleanup": {"enabled": false}`。
+
+**与 WikiServer flag 的关系**: `WikiServer(enable_confirmations_cleanup=False)`
+是**主开关**, 即使 `memory_config.json` 内 enabled=true 也不启动。
+
+---
+
 ## 🎯 Use Case Examples
 
 ### Example 1: Personal Knowledge Base

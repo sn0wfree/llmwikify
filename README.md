@@ -6,7 +6,7 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Tests](https://img.shields.io/badge/tests-4300%2B%20passed-brightgreen.svg)](https://github.com/sn0wfree/llmwikify)
-[![Version](https://img.shields.io/badge/version-0.40.0-blue.svg)](pyproject.toml)
+[![Version](https://img.shields.io/badge/version-0.40.2-blue.svg)](pyproject.toml)
 [![CI Tests](https://github.com/sn0wfree/llmwikify/actions/workflows/tests.yml/badge.svg)](https://github.com/sn0wfree/llmwikify/actions/workflows/tests.yml)
 [![Lint](https://github.com/sn0wfree/llmwikify/actions/workflows/lint.yml/badge.svg)](https://github.com/sn0wfree/llmwikify/actions/workflows/lint.yml)
 [![codecov](https://codecov.io/gh/sn0wfree/llmwikify/branch/main/graph/badge.svg)](https://codecov.io/gh/sn0wfree/llmwikify/branch/main/graph/badge.svg)
@@ -17,6 +17,13 @@ LLM-maintained knowledge bases** with **chat** and **general research assistant*
 > **v0.40 Refocus** — quant research pipeline (paper → factor → backtest) has moved to
 > [**quantnodes.research**](https://github.com/sn0wfree/quantnodes) (>=4.0). llmwikify
 > now focuses exclusively on wiki + chat + research-assistant use cases.
+>
+> ⚠️ **v0.40.2 BREAKING for HTTP clients**: `POST /page` to an existing page
+> now returns **409 Conflict** with a `confirmation_id` (one-shot, TTL 300s)
+> instead of silently overwriting. Re-POST with the token (query string
+> `?confirm_token=<id>` is the primary path; body `{"confirm_token": "..."}`
+> is the back-compat shim) to confirm. See
+> [docs/releases/v0.40.2.md](docs/releases/v0.40.2.md) for details.
 
 ![Dashboard](docs/screenshots/dashboard.png)
 

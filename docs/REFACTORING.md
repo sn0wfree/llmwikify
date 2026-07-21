@@ -432,7 +432,7 @@ These are tracked in `plan/v0.40-release-notes-draft.md` (not in git, kept local
 |---|------|----------|--------|
 | 1 | 57 failing tests need triage | High | ✅ **Resolved** (commit `927447a`): 0 failed / 4568 passed |
 | 2 | F821 `ResearchEngine` undefined in `apps/chat/research_agent.py:51` | Medium | Open — works at runtime (PEP 563), but is a real type-annotation bug |
-| 3 | `v0.40.0` tag not yet created | Required | Pending — `__version__` still `0.40.0-dev` |
+| 3 | `v0.40.0` tag not yet created | Required | ✅ **Superseded** — v0.40 series released incrementally as `v0.40.1` (CJK search, 2026-07-07, see CHANGELOG) and `v0.40.2` (wiki confirmation + modal unification, 2026-07-21). `v0.40.0` slot reserved for the Refocus release (CHANGELOG `[0.40.0]` 2026-07-06). `__version__` bumped to `0.40.2`. |
 
 ### 7.1 Test failures — RESOLVED (commit `927447a`)
 

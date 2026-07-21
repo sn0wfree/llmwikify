@@ -5,6 +5,77 @@ All notable changes to llmwikify will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.40.2] - 2026-07-21 — Wiki HTTP Confirmation + WebUI Modal Unification
+
+> Wiki write-path confirmation flow lands. Every `POST /page` to an existing
+> page now requires a one-shot 8-char confirmation token (TTL 300s, wiki-bound)
+> instead of silently overwriting. Companion release unifies WebUI dialogs on
+> Radix Dialog primitives and consolidates backend background-task / ID-generation
+> helpers.
+
+### Added
+- **POST `/page` confirmation flow** (`interfaces/server/http/wiki/_wiki_ops.py:write_page`).
+  Returns **409 Conflict** with `confirmation_id` (8 lowercase hex chars,
+  `uuid.uuid4().hex[:8]` via `WikiDatabase.make_confirmation_id`) + `existing_page`
+  word count + 500-char content preview when the target page already exists.
+  Retry with valid `confirm_token` returns **200** and consumes the row.
+  Tokens are **wiki-bound** (cross-wiki replay blocked), **page-bound**, and
+  **one-shot** (`db.delete_confirmation` after success).
+- **Background cleanup of expired confirmation tokens**
+  (`apps/wiki/db.py:delete_expired_confirmations` + `apps/chat/agent/agent_service.py:start_confirmations_cleanup`).
+  `MemoryConfig.confirmations_cleanup` section drives the interval
+  (`enabled: true, interval_seconds: 300.0` defaults). Lifespan-managed on
+  the `WikiServer`. INFO log emitted on non-zero row count.
+- **`WikiDatabase.make_confirmation_id()` static method** — single source of
+  truth for the 8-char hex ID (replaces three near-identical `uuid.uuid4().hex[:8]`
+  / `str(uuid.uuid4())[:8]` call sites across `_wiki_ops.py`, `tools/__init__.py`,
+  and `tools/skill_adapter.py`).
+
+### Changed
+- **WebUI modal unification on Radix Dialog** — 9 modals now share a consistent
+  Radix Dialog primitive (Escape, focus trap, ARIA role="dialog", backdrop
+  click to close). Two modals (`WikiDreamProposals` "Apply All", `WikiManager`
+  panel) gained Escape / backdrop-close they previously lacked — broken
+  behaviour fixed without anyone noticing.
+- **`WikiManager` design-system migration** — `slate-*` colors replaced
+  with design tokens (`bg-card`, `border-border`, `text-foreground`,
+  `bg-muted`, `bg-primary text-primary-foreground`). Inner `<svg>` icons
+  swapped for lucide-react (`X`, `Plus`, `RefreshCw`, `Trash2`).
+- **AgentService refactors** — `start_auto_compact` and `start_confirmations_cleanup`
+  share `_run_periodic_loop(task_name, interval_seconds, tick_fn)` helper
+  (consolidates ~25 lines of asyncio sleep-loop body). `WikiServer._feature_running(enable_attr, holder_attr)`
+  collapses 6 duplicated health-endpoint feature-flag blocks into a single
+  call site. `WikiToolRegistry.confirm_execution` now uses
+  `db.get_confirmation_with_decoded_args` instead of inline `json.loads(arguments)`.
+- **Token transport priority** (v0.40.2 final):
+  - **Primary**: `?confirm_token=<id>` query string (highest priority).
+    Restored for legacy v0.40 callers; takes precedence over body token
+    on disagreement.
+  - **Back-compat shim**: body `{"confirm_token": "..."}`.
+  - **Disagreement**: query wins. INFO log emits `query_token_len=N body_token_len=M`,
+    **never** the token values themselves.
+
+### Security
+- **Token format / storage**: existing `confirmations` table, `arguments` JSON
+  column carries `{page_name, expires_at}` (no schema change). Cross-wiki
+  replay protection via top-level `wiki_id` column.
+- **Query string transport**: still leaks the token to HTTP access logs
+  (preserved as back-compat). New callers should prefer body transport.
+
+### Migration Guide (from v0.40.1 → v0.40.2)
+- **POST `/page` to existing pages now returns 409 instead of silent overwrite**
+  (BREAKING for clients that relied on silent overwrite). Surface the
+  `confirmation_id` to the user and re-POST with `?confirm_token=<id>` or
+  body `{"confirm_token": "..."}` — query wins on disagreement.
+- **`memory_config.json`** auto-merges new `confirmations_cleanup` section
+  with defaults (`enabled: true, interval_seconds: 300.0`). No manual
+  migration required.
+- **WebUI bundle hash changed** — Editor chunk grew ~33 kB for Radix Dialog
+  primitives; hard-refresh once.
+- **No schema migration**, no CLI breaking changes.
+
+---
+
 ## [0.40.1] - 2026-07-07 — Search CJK Recall Fix
 
 ### Changed
