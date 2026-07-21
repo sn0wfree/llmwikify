@@ -266,6 +266,65 @@ class AgentService:
         finally:
             self.dream_scheduler = None
 
+    # ─── Shared periodic-task helper (B2 refactor) ────────────
+
+    def _run_periodic_loop(
+        self,
+        task_name: str,
+        interval_seconds: float,
+        tick_fn,
+        success_log: str | None = None,
+    ) -> Any:
+        """Schedule an asyncio sleep-loop that calls ``tick_fn`` every
+        ``interval_seconds``.
+
+        v0.40 refactor (B2): previously inlined twice (auto_compact +
+        confirmations_cleanup). Centralised here so both callers share
+        the cancel/await/swallow semantics without renaming the
+        public/private attributes that production code and unit tests
+        depend on (``_auto_compact_task`` / ``_confirmations_cleanup_task``).
+
+        Args:
+            task_name: name registered with ``asyncio.create_task``
+                (visible in ``asyncio.all_tasks()``).
+            interval_seconds: how often to wake between ticks.
+            tick_fn: zero-arg callable. May be sync (returns a value)
+                or async (returns a coroutine). Both shapes are awaited
+                / consumed correctly. Exceptions are logged at WARNING
+                and swallowed so one bad tick doesn't kill the loop.
+            success_log: optional format string with one ``%d``-style
+                placeholder for the tick return value when the tick is
+                the "deleted N rows" style; pass ``None`` to skip.
+
+        Returns:
+            The created ``asyncio.Task`` instance (caller is responsible
+            for ``.cancel()`` + ``await`` on shutdown).
+        """
+        import asyncio
+        import inspect
+
+        async def _periodic_loop() -> None:
+            try:
+                while True:
+                    await asyncio.sleep(interval_seconds)
+                    try:
+                        result = tick_fn()
+                        if inspect.iscoroutine(result):
+                            await result
+                            result = None
+                        if success_log is not None and result:
+                            logger.info(success_log, result)
+                    except Exception:
+                        logger.warning(
+                            "AgentService: %s tick failed",
+                            task_name,
+                            exc_info=True,
+                        )
+            except asyncio.CancelledError:
+                raise
+
+        return asyncio.create_task(_periodic_loop(), name=task_name)
+
     # ─── Phase 9 AutoCompact lifecycle (2026-06-20) ────────────
 
     async def start_auto_compact(
@@ -316,26 +375,16 @@ class AgentService:
             ttl_minutes=ttl_minutes,
         )
 
-        async def _periodic_tick() -> None:
-            import asyncio
-            try:
-                while True:
-                    await asyncio.sleep(interval_seconds)
-                    try:
-                        active = self._active_session_keys()
-                        await self.auto_compact.check_expired(
-                            active_session_keys=active,
-                        )
-                    except Exception:
-                        logger.warning(
-                            "AgentService: auto_compact tick failed",
-                            exc_info=True,
-                        )
-            except asyncio.CancelledError:
-                raise
+        def _auto_compact_tick():
+            return self.auto_compact.check_expired(
+                active_session_keys=self._active_session_keys(),
+            )
 
-        import asyncio
-        self._auto_compact_task = asyncio.create_task(_periodic_tick(), name="auto_compact_tick")
+        self._auto_compact_task = self._run_periodic_loop(
+            "auto_compact_tick",
+            interval_seconds,
+            _auto_compact_tick,
+        )
         logger.info(
             "AgentService: auto_compact started (ttl=%dm, interval=%.0fs)",
             ttl_minutes, interval_seconds,
@@ -402,30 +451,13 @@ class AgentService:
             )
             return None
 
-        import asyncio
-
-        async def _periodic_tick() -> None:
-            try:
-                while True:
-                    await asyncio.sleep(interval_seconds)
-                    try:
-                        deleted = wiki_db.delete_expired_confirmations()
-                        if deleted:
-                            logger.info(
-                                "AgentService: confirmations_cleanup "
-                                "deleted %d expired tokens",
-                                deleted,
-                            )
-                    except Exception:
-                        logger.warning(
-                            "AgentService: confirmations_cleanup tick failed",
-                            exc_info=True,
-                        )
-            except asyncio.CancelledError:
-                raise
-
-        self._confirmations_cleanup_task = asyncio.create_task(
-            _periodic_tick(), name="confirmations_cleanup_tick",
+        self._confirmations_cleanup_task = self._run_periodic_loop(
+            "confirmations_cleanup_tick",
+            interval_seconds,
+            wiki_db.delete_expired_confirmations,
+            success_log=(
+                "AgentService: confirmations_cleanup deleted %d expired tokens"
+            ),
         )
         logger.info(
             "AgentService: confirmations_cleanup started (interval=%.0fs)",
@@ -450,6 +482,33 @@ class AgentService:
             )
         finally:
             self._confirmations_cleanup_task = None
+
+    def _load_memory_config_or_default(self) -> Any:
+        """Load ``<data_dir>/memory_config.json`` defensively.
+
+        Convenience wrapper used by callers (and tests) that want a
+        :class:`MemoryConfig` with all default keys populated even when
+        the file is missing or malformed. Falls back to
+        :class:`MemoryConfig()` defaults, matching ``load_memory_config``'s
+        own error-recovery path.
+
+        NOTE: not currently called from :mod:`interfaces.server.core`
+        (lifespan reads the config directly via ``load_memory_config``)
+        — kept here so unit tests / external scripts have a single
+        stable method on the AgentService to call.
+        """
+        try:
+            from llmwikify.apps.chat.memory.memory_config import (
+                load_memory_config,
+            )
+            return load_memory_config(self.data_dir)
+        except Exception:
+            logger.warning(
+                "AgentService: load_memory_config failed, using defaults",
+                exc_info=True,
+            )
+            from llmwikify.apps.chat.memory.memory_config import MemoryConfig
+            return MemoryConfig()
 
     def _active_session_keys(self) -> list[str]:
         """Return ids of sessions currently marked as active.

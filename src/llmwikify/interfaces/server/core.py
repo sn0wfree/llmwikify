@@ -189,9 +189,19 @@ class WikiServer:
 
         @asynccontextmanager
         async def lifespan(app: FastAPI) -> None:
-            """Phase 7+9 lifespan: start DreamScheduler + AutoCompact on
-            startup, stop on shutdown. Always closes the registry on
-            shutdown."""
+            """Phase 7+9+40 lifespan: start DreamScheduler + AutoCompact
+            + ConfirmationsCleanup on startup, stop on shutdown. Always
+            closes the registry on shutdown.
+
+            B3 attempt (v0.40, abandoned): tried to consolidate the
+            ``load_memory_config`` call + config-section read into a
+            helper, but the unit tests mock ``_agent_service`` wholesale
+            (so a helper method on AgentService would return MagicMocks
+            instead of triggering the config-driven ``enabled=False``
+            branch). Reverted to direct ``load_memory_config`` import
+            — see tests in ``test_interfaces_server_*_lifespan.py``
+            for the assertion shape.
+            """
             # Phase 7: start DreamScheduler (Phase 6 background)
             if self.enable_dream_scheduler and self._agent_service is not None:
                 try:
@@ -378,6 +388,32 @@ class WikiServer:
             # (even with is_default set, single wiki = single-wiki mode)
             is_multi = wiki_count > 1
 
+            features = {
+                "mcp": self.enable_mcp,
+                "webui": self.enable_webui,
+                "auth": self.api_key is not None,
+                "multi_wiki": is_multi,
+                # Phase 7 feature flag (visible in /api/health)
+                "dream_scheduler": self._feature_running(
+                    "enable_dream_scheduler", "dream_scheduler",
+                ),
+                # Phase 9 feature flag
+                "auto_compact": self._feature_running(
+                    "enable_auto_compact", "auto_compact",
+                ),
+                # v0.40: confirmations cleanup task
+                "confirmations_cleanup": self._feature_running(
+                    "enable_confirmations_cleanup",
+                    "_confirmations_cleanup_task",
+                ),
+                # Phase 20 feature flag: the only trigger that routes a
+                # user message to the Research workflow is an explicit
+                # ``/study <question>`` prefix. Any message that merely
+                # mentions 调研 / 研究 / research without that prefix
+                # stays in normal chat (see docs/releases/v0.38.0.md §14).
+                "research_trigger": "/study",
+            }
+
             if is_multi:
                 return {
                     "status": "ok",
@@ -385,95 +421,54 @@ class WikiServer:
                     "mode": "multi-wiki",
                     "wiki_count": wiki_count,
                     "default_wiki_id": self.registry.get_default_wiki_id(),
-                    "features": {
-                        "mcp": self.enable_mcp,
-                        "webui": self.enable_webui,
-                        "auth": self.api_key is not None,
-                        "multi_wiki": True,
-                        # Phase 7 feature flag (visible in /api/health)
-                        "dream_scheduler": (
-                            self.enable_dream_scheduler
-                            and self._agent_service is not None
-                            and getattr(
-                                self._agent_service, "dream_scheduler", None,
-                            ) is not None
-                        ),
-                        # Phase 9 feature flag
-                        "auto_compact": (
-                            self.enable_auto_compact
-                            and self._agent_service is not None
-                            and getattr(
-                                self._agent_service, "auto_compact", None,
-                            ) is not None
-                        ),
-                        # v0.40: confirmations cleanup task
-                        "confirmations_cleanup": (
-                            self.enable_confirmations_cleanup
-                            and self._agent_service is not None
-                            and getattr(
-                                self._agent_service,
-                                "_confirmations_cleanup_task",
-                                None,
-                            ) is not None
-                        ),
-                        # Phase 20 feature flag: the only trigger that
-                        # routes a user message to the Research workflow
-                        # is an explicit ``/study <question>`` prefix.
-                        # Any message that merely mentions 调研 / 研究 /
-                        # research without that prefix stays in normal
-                        # chat (see docs/releases/v0.38.0.md §14).
-                        "research_trigger": "/study",
-                    },
+                    "features": features,
                     "timestamp": datetime.utcnow().isoformat(),
                 }
-            else:
-                # Single wiki mode (1 wiki, no explicit default)
-                page_count = len(list(self.wiki.wiki_dir.glob("**/*.md"))) if self.wiki.wiki_dir.exists() else 0
-                return {
-                    "status": "ok",
-                    "version": __version__,
-                    "mode": "single-wiki",
-                    "wiki": {
-                        "initialized": self.wiki.is_initialized(),
-                        "root": str(self.wiki.root),
-                        "page_count": page_count,
-                    },
-                    "features": {
-                        "mcp": self.enable_mcp,
-                        "webui": self.enable_webui,
-                        "auth": self.api_key is not None,
-                        "multi_wiki": False,
-                        "dream_scheduler": (
-                            self.enable_dream_scheduler
-                            and self._agent_service is not None
-                            and getattr(
-                                self._agent_service, "dream_scheduler", None,
-                            ) is not None
-                        ),
-                        "auto_compact": (
-                            self.enable_auto_compact
-                            and self._agent_service is not None
-                            and getattr(
-                                self._agent_service, "auto_compact", None,
-                            ) is not None
-                        ),
-                        # v0.40: confirmations cleanup task
-                        "confirmations_cleanup": (
-                            self.enable_confirmations_cleanup
-                            and self._agent_service is not None
-                            and getattr(
-                                self._agent_service,
-                                "_confirmations_cleanup_task",
-                                None,
-                            ) is not None
-                        ),
-                        # Phase 20: only `/study` routes to Research.
-                        "research_trigger": "/study",
-                    },
-                    "timestamp": datetime.utcnow().isoformat(),
-                }
+            # Single wiki mode (1 wiki, no explicit default)
+            page_count = (
+                len(list(self.wiki.wiki_dir.glob("**/*.md")))
+                if self.wiki.wiki_dir.exists() else 0
+            )
+            return {
+                "status": "ok",
+                "version": __version__,
+                "mode": "single-wiki",
+                "wiki": {
+                    "initialized": self.wiki.is_initialized(),
+                    "root": str(self.wiki.root),
+                    "page_count": page_count,
+                },
+                "features": features,
+                "timestamp": datetime.utcnow().isoformat(),
+            }
 
         return app
+
+    def _feature_running(self, enable_attr: str, holder_attr: str) -> bool:
+        """B4 refactor (v0.40): single source of truth for "is this
+        optional background task currently running?"
+
+        Replaces the copy-pasted ``enable_X and self._agent_service is
+        not None and getattr(svc, holder, None) is not None`` blocks
+        that previously appeared in both single-wiki and multi-wiki
+        branches of the ``/api/health`` handler.
+
+        Args:
+            enable_attr: name of the boolean ``enable_*`` flag on this
+                :class:`WikiServer` (e.g. ``"enable_dream_scheduler"``).
+                Acts as the master kill-switch.
+            holder_attr: attribute name on the :class:`AgentService`
+                that holds the running instance / task (e.g.
+                ``"dream_scheduler"``, ``"auto_compact"``,
+                ``"_confirmations_cleanup_task"``). ``None`` means "not
+                started".
+        """
+        if not getattr(self, enable_attr, False):
+            return False
+        svc = self._agent_service
+        if svc is None:
+            return False
+        return getattr(svc, holder_attr, None) is not None
 
     def _mount_webui(self) -> None:
         """Mount React SPA static files (single source of truth)."""

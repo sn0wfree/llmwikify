@@ -751,7 +751,7 @@ class WikiToolRegistry:
 
     def confirm_execution(self, confirmation_id: str, arguments: dict | None = None) -> Any:
         if self.db:
-            conf = self.db.get_confirmation(confirmation_id)
+            conf = self.db.get_confirmation_with_decoded_args(confirmation_id)
             if conf and conf.get("wiki_id") == self.wiki_id:
                 if conf["status"] != "pending":
                     return {"status": "error", "error": f"Confirmation already {conf['status']}"}
@@ -759,9 +759,7 @@ class WikiToolRegistry:
                 if tool is None:
                     return {"status": "error", "error": f"Tool not found: {conf['tool']}"}
                 try:
-                    args = arguments if arguments is not None else (
-                        json.loads(conf["arguments"]) if isinstance(conf["arguments"], str) else conf["arguments"]
-                    )
+                    args = arguments if arguments is not None else conf["arguments"]
                     if arguments is not None:
                         self.db.update_confirmation_arguments(confirmation_id, arguments)
                     result = tool["handler"](args)
