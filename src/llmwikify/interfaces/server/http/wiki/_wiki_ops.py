@@ -138,34 +138,33 @@ def enrich_status(status: dict) -> dict:
 
 
 def get_wiki_guide(wiki: Wiki) -> dict:
-    """获取 wiki 使用指南：schema、overview、index + 完整 API 说明 + 操作流程。
+    """获取 wiki 使用指南：schema + 完整 API 说明 + 操作流程。
 
     Returns:
-        dict with schema, overview, index, api_guide, workflows,
-        page_naming_rules, page_types, error_codes
+        dict with schema, api_guide, workflows, page_naming_rules,
+        page_types, error_codes
     """
     schema_data = wiki.read_schema()
     schema_content = schema_data.get("content", "") if "error" not in schema_data else ""
-
-    overview_data = wiki.read_page("overview")
-    overview_content = overview_data.get("content") if "error" not in overview_data else None
-
-    index_content = wiki._get_index_content()
 
     page_types = wiki._load_page_type_mapping()
 
     return {
         "schema": schema_content,
-        "overview": overview_content,
-        "index": index_content,
         "api_guide": {
             "bootstrap": {
-                "GET /api/wiki/{wiki_id}/guide": "Start here — returns all context (this endpoint)",
+                "GET /api/wiki/{wiki_id}/guide": "Start here — returns this guide (schema + API reference)",
             },
             "read": {
                 "GET /api/wiki/{wiki_id}/page/{page_name}": {
                     "description": "Read a wiki page (supports .sink/ files)",
                     "example": "/api/wiki/mining_news/page/daily/2026-07-21",
+                },
+                "GET /api/wiki/{wiki_id}/page/overview": {
+                    "description": "Read overview page (high-level wiki narrative)",
+                },
+                "GET /api/wiki/{wiki_id}/page/index": {
+                    "description": "Read index page (full page catalog with summaries)",
                 },
                 "GET /api/wiki/{wiki_id}/pages": {
                     "description": "List all page names in the wiki",
