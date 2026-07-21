@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
 from typing import Any
 
 from llmwikify.apps.chat.db import AutoResearchDatabase
@@ -14,6 +16,276 @@ from llmwikify.foundation.extractors.youtube import extract_youtube
 
 logger = logging.getLogger(__name__)
 
+
+# ---------------------------------------------------------------------------
+# Shared context passed to every strategy
+# ---------------------------------------------------------------------------
+
+@dataclass
+class GatherContext:
+    """Shared state for a single sub-query gather operation."""
+    sq: dict[str, Any]
+    seen_urls: set[str]
+    session_id: str
+    events: list[dict[str, Any]] = field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# Strategy base class + 4 implementations
+# ---------------------------------------------------------------------------
+
+class SourceStrategy(ABC):
+    """Base class for source-type gathering strategies."""
+
+    @abstractmethod
+    def can_handle(self, sq: dict[str, Any], gatherer: SourceGatherer) -> bool:
+        """Return True if this strategy handles the given sub-query."""
+
+    @abstractmethod
+    async def gather(self, ctx: GatherContext, gatherer: SourceGatherer) -> None:
+        """Execute the gathering. Append results to ctx.events."""
+
+
+class WikiStrategy(SourceStrategy):
+    """Gather from local wiki pages."""
+
+    def can_handle(self, sq: dict[str, Any], gatherer: SourceGatherer) -> bool:
+        return sq["source_type"] == "wiki"
+
+    async def gather(self, ctx: GatherContext, gatherer: SourceGatherer) -> None:
+        sq = ctx.sq
+        sq_id = sq["id"]
+        query = sq["query"]
+        num_results = gatherer.config.get("web_search_results_per_query", 5)
+
+        pages = gatherer.wiki.search(query, limit=min(num_results, 5))
+        for page in pages[:num_results]:
+            try:
+                page_name = page.get("name", query)
+                wiki_url = f"wiki://{page_name}"
+                if gatherer._normalize_url(wiki_url) in ctx.seen_urls:
+                    continue
+                page_content = gatherer.wiki.read_page(page_name)
+                content = str(page_content) if page_content else ""
+                if not content:
+                    continue
+                content = content[: gatherer._max_content]
+                gatherer._add_source(ctx, sq_id, "wiki", wiki_url, page_name, content)
+            except Exception as e:
+                logger.warning("Wiki page read failed for %s: %s", page.get("name"), e)
+
+        if ctx.events:
+            gatherer.session_manager.complete_sub_query(sq_id, {"sources_count": len(ctx.events)})
+        else:
+            raise ValueError(f"No wiki pages found for: {query}")
+
+
+class WebSearchStrategy(SourceStrategy):
+    """Gather via web search (web/youtube without URL).
+
+    Optionally runs parallel wiki search when configured.
+    """
+
+    def can_handle(self, sq: dict[str, Any], gatherer: SourceGatherer) -> bool:
+        return sq["source_type"] in ("web", "youtube") and not sq.get("url")
+
+    async def gather(self, ctx: GatherContext, gatherer: SourceGatherer) -> None:
+        sq = ctx.sq
+        sq_id = sq["id"]
+        source_type = sq["source_type"]
+        query = sq["query"]
+        num_results = gatherer.config.get("web_search_results_per_query", 5)
+
+        # Search for URLs
+        urls_to_fetch = await self._search_urls(gatherer, sq_id, source_type, query, num_results, ctx.seen_urls)
+
+        # Parallel wiki search (web only)
+        do_parallel = (
+            source_type == "web"
+            and gatherer.config.get("parallel_wiki_search", True)
+        )
+        wiki_pages: list[dict] = []
+        if do_parallel:
+            try:
+                wiki_pages = gatherer.wiki.search(query, limit=min(3, num_results))
+            except Exception as e:
+                logger.debug("Parallel wiki search failed: %s", e)
+
+        # Fetch web content
+        if urls_to_fetch:
+            await self._fetch_web_content(gatherer, ctx, sq_id, source_type, query, urls_to_fetch)
+
+        # Gather local wiki results (parallel path)
+        if do_parallel and wiki_pages:
+            self._gather_wiki_pages(gatherer, ctx, sq_id, wiki_pages, query)
+
+        if ctx.events:
+            gatherer.session_manager.complete_sub_query(sq_id, {"sources_count": len(ctx.events)})
+        else:
+            raise ValueError(f"No results found for: {query}")
+
+    async def _search_urls(
+        self,
+        gatherer: SourceGatherer,
+        sq_id: str,
+        source_type: str,
+        query: str,
+        num_results: int,
+        seen_urls: set[str],
+    ) -> list[str]:
+        """Search for URLs via WebSearch, returning unseen URLs."""
+        from llmwikify.apps.research.web_search import WebSearch
+
+        searcher = WebSearch(gatherer.config)
+        search_query = f"site:youtube.com {query}" if source_type == "youtube" else query
+        logger.info(
+            "Gather sub_query %s (%s): invoking WebSearch for %r (num_results=%d)",
+            sq_id, source_type, query, num_results,
+        )
+        try:
+            search_results = await asyncio.wait_for(
+                searcher.search(search_query, num_results=num_results),
+                timeout=15,
+            )
+            logger.info("Gather sub_query %s: WebSearch returned %d results", sq_id, len(search_results))
+        except asyncio.TimeoutError:
+            logger.warning("Gather sub_query %s: WebSearch timed out for %r", sq_id, query)
+            raise ValueError(f"Search timed out for: {query}") from None
+
+        urls = []
+        for r in search_results:
+            if r.url and gatherer._normalize_url(r.url) not in seen_urls:
+                urls.append(r.url)
+        if not urls:
+            logger.warning(
+                "Gather sub_query %s: WebSearch returned 0 new URLs for %r",
+                sq_id, query,
+            )
+            raise ValueError(f"No new search results for: {query}")
+        return urls
+
+    async def _fetch_web_content(
+        self,
+        gatherer: SourceGatherer,
+        ctx: GatherContext,
+        sq_id: str,
+        source_type: str,
+        query: str,
+        urls_to_fetch: list[str],
+    ) -> None:
+        """Fetch web content for each URL and add to context."""
+        tasks = [gatherer._fetch_url(source_type, u) for u in urls_to_fetch]
+        contents = await asyncio.gather(*tasks, return_exceptions=True)
+        for fetch_url, content in zip(urls_to_fetch, contents, strict=False):
+            if isinstance(content, Exception):
+                logger.warning("Fetch failed for %s: %s", fetch_url, content)
+                continue
+            if not content:
+                continue
+            if gatherer._normalize_url(fetch_url) in ctx.seen_urls:
+                continue
+            content = str(content)[: gatherer._max_content]
+            # Apply source filter
+            source_candidate = {
+                "url": fetch_url, "content": content,
+                "source_type": source_type, "title": fetch_url,
+            }
+            kept, _ = gatherer._source_filter.filter_sources([source_candidate], query)
+            if not kept:
+                logger.debug("Source filtered out: %s", fetch_url)
+                continue
+            gatherer._add_source(ctx, sq_id, source_type, fetch_url, fetch_url, content)
+
+    def _gather_wiki_pages(
+        self,
+        gatherer: SourceGatherer,
+        ctx: GatherContext,
+        sq_id: str,
+        wiki_pages: list[dict],
+        query: str,
+    ) -> None:
+        """Add wiki pages from parallel search to context."""
+        for page in wiki_pages[:3]:
+            try:
+                page_name = page.get("page_name", query)
+                wiki_url = f"wiki://{page_name}"
+                if gatherer._normalize_url(wiki_url) in ctx.seen_urls:
+                    continue
+                page_content = gatherer.wiki.read_page(page_name)
+                content = str(page_content) if page_content else ""
+                if not content:
+                    continue
+                content = content[: gatherer._max_content]
+                gatherer._add_source(ctx, sq_id, "wiki", wiki_url, page_name, content)
+            except Exception as e:
+                logger.warning("Parallel wiki page read failed for %s: %s", page.get("page_name"), e)
+
+
+class WebFetchStrategy(SourceStrategy):
+    """Gather by directly fetching URLs (web/youtube with URL, or pdf)."""
+
+    def can_handle(self, sq: dict[str, Any], gatherer: SourceGatherer) -> bool:
+        # Matches: web/youtube with URL, or any type with urls_to_fetch
+        source_type = sq["source_type"]
+        url = sq.get("url", "")
+        if source_type == "wiki":
+            return False
+        if source_type in ("web", "youtube") and not url:
+            return False  # handled by WebSearchStrategy
+        return True  # fallback: try fetching URLs
+
+    async def gather(self, ctx: GatherContext, gatherer: SourceGatherer) -> None:
+        sq = ctx.sq
+        sq_id = sq["id"]
+        source_type = sq["source_type"]
+        query = sq["query"]
+        url = sq.get("url", "")
+
+        urls_to_fetch: list[str] = []
+
+        if url:
+            if gatherer._normalize_url(url) in ctx.seen_urls:
+                raise ValueError(f"URL already gathered: {url}")
+            urls_to_fetch = [url]
+
+        for fetch_url in urls_to_fetch:
+            try:
+                content = await gatherer._fetch_url(source_type, fetch_url)
+                if not content:
+                    continue
+                content = content[: gatherer._max_content]
+                if gatherer._normalize_url(fetch_url) in ctx.seen_urls:
+                    continue
+                # Apply source filter
+                source_candidate = {
+                    "url": fetch_url, "content": content,
+                    "source_type": source_type, "title": fetch_url,
+                }
+                kept, _ = gatherer._source_filter.filter_sources([source_candidate], query)
+                if not kept:
+                    logger.debug("Source filtered out: %s", fetch_url)
+                    continue
+                gatherer._add_source(ctx, sq_id, source_type, fetch_url, fetch_url, content)
+            except Exception as e:
+                logger.warning("Fetch failed for %s: %s", fetch_url, e)
+
+        if ctx.events:
+            gatherer.session_manager.complete_sub_query(sq_id, {"sources_count": len(ctx.events)})
+        else:
+            raise ValueError(f"All fetches failed for: {query}")
+
+
+# Strategy registry — order matters: first match wins
+_STRATEGIES: list[SourceStrategy] = [
+    WikiStrategy(),
+    WebSearchStrategy(),
+    WebFetchStrategy(),
+]
+
+
+# ---------------------------------------------------------------------------
+# Main gatherer (orchestrator)
+# ---------------------------------------------------------------------------
 
 class SourceGatherer:
     """Gathers content from multiple sources in parallel."""
@@ -36,23 +308,57 @@ class SourceGatherer:
     def _normalize_url(url: str) -> str:
         """Normalize URL for dedup comparison."""
         url = url.rstrip("/").lower()
-        # Remove common prefixes for consistency
         for prefix in ("http://", "https://", "www."):
             if url.startswith(prefix):
                 url = url[len(prefix):]
         return url
 
+    def _add_source(
+        self,
+        ctx: GatherContext,
+        sq_id: str,
+        source_type: str,
+        url: str,
+        title: str,
+        content: str,
+    ) -> str:
+        """Add a source to the session and emit a source_gathered event."""
+        ctx.seen_urls.add(self._normalize_url(url))
+        source_id = self.session_manager.add_source(
+            session_id=ctx.session_id,
+            sub_query_id=sq_id,
+            source_type=source_type,
+            url=url,
+            title=title,
+            content_length=len(content),
+            content_preview=content[:500],
+            content=content,
+        )
+        event = {
+            "type": "source_gathered",
+            "source_id": source_id,
+            "source_type": source_type,
+            "title": title,
+            "url": url,
+        }
+        ctx.events.append(event)
+        return source_id
+
+    def _select_strategy(self, sq: dict[str, Any]) -> SourceStrategy:
+        """Select the first strategy that can handle this sub-query."""
+        for strategy in _STRATEGIES:
+            if strategy.can_handle(sq, self):
+                return strategy
+        raise ValueError(f"No strategy for source_type={sq.get('source_type')}")
+
     async def gather(self, sub_queries: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Gather content for all sub-queries with early-exit optimization.
 
         Returns list of SSE events to yield. Deduplicates URLs across sub-queries.
-        Early exits when 50%+ sub-queries complete, cancelling remaining tasks.
         """
         max_parallel = self.config.get("max_parallel_gathering", 8)
         per_query_timeout = 45
-        # Early-exit: continue when this fraction of tasks done
         early_exit_threshold = 0.7
-        # Grace period after threshold: wait this long for stragglers
         early_exit_grace = 15
         semaphore = asyncio.Semaphore(max_parallel)
         events: list[dict[str, Any]] = []
@@ -83,10 +389,6 @@ class SourceGatherer:
         done_count = 0
         threshold_reached = False
         grace_deadline = None
-        # Issue#12: last progress-event timestamp for the grace period.
-        # Emit a progress event at most every 5s so the SSE consumer
-        # shows "waiting for X stragglers..." feedback during the
-        # 15s grace window.
         last_grace_progress_ts: float = 0.0
         GRACE_PROGRESS_INTERVAL = 5.0
 
@@ -102,7 +404,7 @@ class SourceGatherer:
                     logger.warning("No tasks completed within timeout, cancelling %d remaining", len(pending))
                     for t in pending:
                         if not t.done():
-                            t.exception()  # retrieve to suppress "never retrieved" warning
+                            t.exception()
                             t.cancel()
                     break
 
@@ -127,8 +429,6 @@ class SourceGatherer:
                         "Gathering threshold reached: %d/%d done (%.0f%%), grace %ds",
                         done_count, total, progress_frac * 100, early_exit_grace,
                     )
-                    # Issue#12: emit a progress event so the SSE consumer
-                    # shows the user we're in the grace period.
                     events.append({
                         "type": "progress",
                         "phase": "gathering",
@@ -143,9 +443,6 @@ class SourceGatherer:
                     })
 
                 if threshold_reached and pending:
-                    # Issue#12: periodically emit progress during grace so
-                    # the UI shows "waiting..." feedback (default 15s grace
-                    # is a long silence without these events).
                     if now - last_grace_progress_ts >= GRACE_PROGRESS_INTERVAL:
                         last_grace_progress_ts = now
                         remaining = max(0.0, grace_deadline - now)
@@ -165,14 +462,13 @@ class SourceGatherer:
                         logger.info("Grace expired, cancelling %d remaining tasks", len(pending))
                         for t in pending:
                             if not t.done():
-                                t.exception()  # retrieve to suppress "never retrieved" warning
+                                t.exception()
                                 t.cancel()
                         break
 
         except asyncio.CancelledError:
             logger.warning("Gathering stage cancelled")
 
-        # Collect any remaining results briefly
         remaining = [t for t in tasks if not t.done()]
         if remaining:
             done, _ = await asyncio.wait(remaining, timeout=5)
@@ -187,273 +483,43 @@ class SourceGatherer:
         return events
 
     async def _gather_one(self, sub_query: dict[str, Any], seen_urls: set[str]) -> list[dict[str, Any]]:
-        """Gather content for a single sub-query. Returns list of SSE events.
-
-        Skips URLs already in seen_urls for deduplication.
-        """
+        """Gather content for a single sub-query using the selected strategy."""
         sq_id = sub_query["id"]
-        source_type = sub_query["source_type"]
-        url = sub_query.get("url", "")
-        query = sub_query["query"]
         session_id = self.session_manager.session_id
-        events: list[dict[str, Any]] = []
-        num_results = self.config.get("web_search_results_per_query", 5)
+        ctx = GatherContext(sq=sub_query, seen_urls=seen_urls, session_id=session_id)
 
         try:
-            urls_to_fetch: list[str] = []
-
-            # For web/youtube without URL, search first
-            if source_type in ("web", "youtube") and not url:
-                from llmwikify.apps.research.web_search import WebSearch
-                searcher = WebSearch(self.config)
-                logger.info(
-                    "Gather sub_query %s (%s): invoking WebSearch for %r "
-                    "(num_results=%d)", sq_id, source_type, query, num_results,
-                )
-                try:
-                    if source_type == "youtube":
-                        search_results = await asyncio.wait_for(
-                            searcher.search(f"site:youtube.com {query}", num_results=num_results),
-                            timeout=15,
-                        )
-                    else:
-                        search_results = await asyncio.wait_for(
-                            searcher.search(query, num_results=num_results),
-                            timeout=15,
-                        )
-                    logger.info(
-                        "Gather sub_query %s: WebSearch returned %d results",
-                        sq_id, len(search_results),
-                    )
-                except asyncio.TimeoutError:
-                    logger.warning(
-                        "Gather sub_query %s: WebSearch timed out for %r",
-                        sq_id, query,
-                    )
-                    raise ValueError(f"Search timed out for: {query}") from None
-                # Filter out already-seen URLs
-                for r in search_results:
-                    if r.url and self._normalize_url(r.url) not in seen_urls:
-                        urls_to_fetch.append(r.url)
-                if not urls_to_fetch:
-                    logger.warning(
-                        "Gather sub_query %s: WebSearch returned 0 new URLs "
-                        "for %r (all results already seen or empty)",
-                        sq_id, query,
-                    )
-                    raise ValueError(f"No new search results for: {query}")
-            elif url:
-                if self._normalize_url(url) in seen_urls:
-                    raise ValueError(f"URL already gathered: {url}")
-                urls_to_fetch = [url]
-
-            if source_type == "wiki":
-                pages = self.wiki.search(query, limit=min(num_results, 5))
-                for page in pages[:num_results]:
-                    try:
-                        page_name = page.get("name", query)
-                        wiki_url = f"wiki://{page_name}"
-                        if self._normalize_url(wiki_url) in seen_urls:
-                            continue
-                        page_content = self.wiki.read_page(page_name)
-                        content = str(page_content) if page_content else ""
-                        if not content:
-                            continue
-                        content = content[: self._max_content]
-                        seen_urls.add(self._normalize_url(wiki_url))
-                        source_id = self.session_manager.add_source(
-                            session_id=session_id,
-                            sub_query_id=sq_id,
-                            source_type=source_type,
-                            url=wiki_url,
-                            title=page_name,
-                            content_length=len(content),
-                            content_preview=content[:500],
-                            content=content,
-                        )
-                        events.append({
-                            "type": "source_gathered",
-                            "source_id": source_id,
-                            "source_type": source_type,
-                            "title": page_name,
-                            "url": wiki_url,
-                        })
-                    except Exception as e:
-                        logger.warning("Wiki page read failed for %s: %s", page.get("name"), e)
-                if events:
-                    self.session_manager.complete_sub_query(sq_id, {"sources_count": len(events)})
-                else:
-                    raise ValueError(f"No wiki pages found for: {query}")
-            elif source_type == "web" and not url and self.config.get("parallel_wiki_search", True):
-                # Parallel: fetch web results AND search local wiki simultaneously
-                web_tasks = [self._fetch_url(source_type, u) for u in urls_to_fetch]
-                wiki_pages = []
-                try:
-                    wiki_pages = self.wiki.search(query, limit=min(3, num_results))
-                except Exception as e:
-                    logger.debug("Parallel wiki search failed: %s", e)
-
-                # Fetch web content in parallel
-                if web_tasks:
-                    web_contents = await asyncio.gather(*web_tasks, return_exceptions=True)
-                    for fetch_url, content in zip(urls_to_fetch, web_contents, strict=False):
-                        if isinstance(content, Exception):
-                            logger.warning("Fetch failed for %s: %s", fetch_url, content)
-                            continue
-                        if not content:
-                            continue
-                        content = str(content)[: self._max_content]
-                        if self._normalize_url(fetch_url) in seen_urls:
-                            continue
-                        seen_urls.add(self._normalize_url(fetch_url))
-                        # Apply source filter
-                        source_candidate = {
-                            "url": fetch_url,
-                            "content": content,
-                            "source_type": source_type,
-                            "title": fetch_url,
-                        }
-                        kept, _ = self._source_filter.filter_sources([source_candidate], query)
-                        if not kept:
-                            logger.debug("Source filtered out: %s", fetch_url)
-                            continue
-                        source_id = self.session_manager.add_source(
-                            session_id=session_id,
-                            sub_query_id=sq_id,
-                            source_type=source_type,
-                            url=fetch_url,
-                            title=fetch_url,
-                            content_length=len(content),
-                            content_preview=content[:500],
-                            content=content,
-                        )
-                        events.append({
-                            "type": "source_gathered",
-                            "source_id": source_id,
-                            "source_type": source_type,
-                            "title": fetch_url,
-                            "url": fetch_url,
-                        })
-
-                # Also gather local wiki results
-                for page in wiki_pages[:3]:
-                    try:
-                        page_name = page.get("page_name", query)
-                        wiki_url = f"wiki://{page_name}"
-                        if self._normalize_url(wiki_url) in seen_urls:
-                            continue
-                        page_content = self.wiki.read_page(page_name)
-                        content = str(page_content) if page_content else ""
-                        if not content:
-                            continue
-                        content = content[: self._max_content]
-                        seen_urls.add(self._normalize_url(wiki_url))
-                        source_id = self.session_manager.add_source(
-                            session_id=session_id,
-                            sub_query_id=sq_id,
-                            source_type="wiki",
-                            url=wiki_url,
-                            title=page_name,
-                            content_length=len(content),
-                            content_preview=content[:500],
-                            content=content,
-                        )
-                        events.append({
-                            "type": "source_gathered",
-                            "source_id": source_id,
-                            "source_type": "wiki",
-                            "title": page_name,
-                            "url": wiki_url,
-                        })
-                    except Exception as e:
-                        logger.warning("Parallel wiki page read failed for %s: %s", page.get("page_name"), e)
-
-                if events:
-                    self.session_manager.complete_sub_query(sq_id, {"sources_count": len(events)})
-                else:
-                    raise ValueError(f"No results found for: {query}")
-            else:
-                # Fetch each URL (already deduped above)
-                for fetch_url in urls_to_fetch:
-                    try:
-                        content = await self._fetch_url(source_type, fetch_url)
-                        if not content:
-                            continue
-                        content = content[: self._max_content]
-                        seen_urls.add(self._normalize_url(fetch_url))
-                        # Apply source filter
-                        source_candidate = {
-                            "url": fetch_url,
-                            "content": content,
-                            "source_type": source_type,
-                            "title": fetch_url,
-                        }
-                        kept, _ = self._source_filter.filter_sources([source_candidate], query)
-                        if not kept:
-                            logger.debug("Source filtered out: %s", fetch_url)
-                            continue
-                        source_id = self.session_manager.add_source(
-                            session_id=session_id,
-                            sub_query_id=sq_id,
-                            source_type=source_type,
-                            url=fetch_url,
-                            title=fetch_url,
-                            content_length=len(content),
-                            content_preview=content[:500],
-                            content=content,
-                        )
-                        events.append({
-                            "type": "source_gathered",
-                            "source_id": source_id,
-                            "source_type": source_type,
-                            "title": fetch_url,
-                            "url": fetch_url,
-                        })
-                    except Exception as e:
-                        logger.warning("Fetch failed for %s: %s", fetch_url, e)
-
-                if events:
-                    self.session_manager.complete_sub_query(sq_id, {"sources_count": len(events)})
-                else:
-                    raise ValueError(f"All fetches failed for: {query}")
-
+            strategy = self._select_strategy(sub_query)
+            await strategy.gather(ctx, self)
         except ValueError as e:
-            # 预期的业务失败（无结果、超时等）
             logger.info("Sub-query %s: %s", sq_id, e)
             self.session_manager.fail_sub_query(sq_id, str(e))
-            events.append({
+            ctx.events.append({
                 "type": "sub_query_failed",
                 "sub_query_id": sq_id,
                 "error": str(e),
             })
         except (OSError, ConnectionError) as e:
-            # 网络/IO 错误
             logger.warning("Gather network error for %s: %s", sq_id, e)
             self.session_manager.fail_sub_query(sq_id, str(e))
-            events.append({
+            ctx.events.append({
                 "type": "sub_query_failed",
                 "sub_query_id": sq_id,
                 "error": str(e),
             })
         except Exception:
-            # 真正意外的错误——记录完整 traceback
             logger.exception("Unexpected error in gather for %s", sq_id)
             self.session_manager.fail_sub_query(sq_id, "internal error")
-            events.append({
+            ctx.events.append({
                 "type": "sub_query_failed",
                 "sub_query_id": sq_id,
                 "error": "internal error",
             })
 
-        return events
+        return ctx.events
 
     async def _fetch_url(self, source_type: str, url: str) -> str:
-        """Fetch content from a URL based on source type, with retry and hard timeout.
-
-        Uses asyncio.to_thread for all blocking I/O so that asyncio.wait_for
-        can actually cancel on timeout (sync calls in a coroutine cannot be
-        cancelled otherwise).
-        """
+        """Fetch content from a URL based on source type, with retry and hard timeout."""
         max_attempts = 2
         hard_timeout = 20
 
