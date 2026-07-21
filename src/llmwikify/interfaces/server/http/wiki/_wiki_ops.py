@@ -9,6 +9,7 @@ from __future__ import annotations
 import fnmatch
 import json
 import logging
+import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
@@ -100,32 +101,81 @@ def read_page_with_sink(wiki: Wiki, page_name: str) -> dict:
     return page_data
 
 
-def write_page(wiki: Wiki, page_name: str, content: str) -> dict:
-    """写页面 + 校验。
+def write_page(
+    wiki: Wiki,
+    page_name: str,
+    content: str,
+    confirm_token: str | None = None,
+    db: object | None = None,
+    wiki_id: str | None = None,
+) -> dict:
+    """写页面 + 校验 + token-based 二次确认。
 
     Args:
         wiki: Wiki 实例
         page_name: 页面名称
         content: 页面内容
+        confirm_token: 可选的确认 token（从 409 响应获取）
+        db: WikiDB 实例（用于 token 存储/验证）
+        wiki_id: Wiki ID（用于 token 存储/验证）
 
     Returns:
         {"message": result, "page_name": page_name}
 
     Raises:
         HTTPException: 页面名为空返回 400，content 为空返回 400，
-                       已有 source 页返回 409
+                       页面已存在且无 token 返回 409，
+                       token 无效返回 400
     """
     if not page_name:
         raise HTTPException(status_code=400, detail="page_name required")
     if not content or not content.strip():
         raise HTTPException(status_code=400, detail="content required and must not be empty")
 
-    if page_name.startswith("sources/"):
-        existing = wiki.read_page(page_name)
-        if "error" not in existing:
+    existing = wiki.read_page(page_name)
+    page_exists = "error" not in existing
+
+    if page_exists:
+        if confirm_token:
+            conf = db.get_confirmation(confirm_token) if db else None
+            if not conf or conf.get("status") != "pending":
+                raise HTTPException(
+                    status_code=400, detail="Invalid or expired confirmation token"
+                )
+            conf_args = conf.get("arguments", {})
+            if isinstance(conf_args, str):
+                import json as _json
+                conf_args = _json.loads(conf_args)
+            if conf_args.get("page_name") != page_name:
+                raise HTTPException(
+                    status_code=400, detail="Token does not match page_name"
+                )
+            if db:
+                db.update_confirmation_status(confirm_token, "approved")
+        else:
+            confirmation_id = uuid.uuid4().hex[:8]
+            if db and wiki_id:
+                db.save_confirmation({
+                    "id": confirmation_id,
+                    "wiki_id": wiki_id,
+                    "tool": "wiki_page_update",
+                    "arguments": {"page_name": page_name},
+                    "action_type": "write",
+                    "status": "pending",
+                })
+            content_preview = existing.get("content", "")[:500] if isinstance(existing, dict) else ""
+            word_count = existing.get("word_count", 0) if isinstance(existing, dict) else 0
             raise HTTPException(
                 status_code=409,
-                detail=f"Source page already exists: {page_name}. Use PUT to update.",
+                detail={
+                    "status": "conflict",
+                    "message": "Page already exists. Confirm update. Please judge whether to keep existing content or merge.",
+                    "confirmation_id": confirmation_id,
+                    "existing_page": {
+                        "word_count": word_count,
+                        "content_preview": content_preview,
+                    },
+                },
             )
 
     try:
@@ -189,11 +239,19 @@ def get_wiki_guide(wiki: Wiki) -> dict:
             },
             "write": {
                 "POST /api/wiki/{wiki_id}/page": {
-                    "description": "Create or update a wiki page (upsert)",
+                    "description": "Create a new page (returns 201) or confirm update of existing page (returns 409 with confirmation_id)",
                     "body": {
                         "page_name": "daily/2026-07-21 (NO .md suffix!)",
                         "content": "# Title\n\nFull markdown content...",
-                        "query": "optional query for wikify processing",
+                    },
+                    "params": {
+                        "confirm_token": "optional confirmation_id from 409 response to confirm update",
+                    },
+                    "behavior": {
+                        "new_page": "201 Created",
+                        "existing_page_no_token": "409 Conflict + confirmation_id + existing_page preview",
+                        "existing_page_with_token": "200 Updated (if token valid)",
+                        "content_missing": "400 Bad Request",
                     },
                 },
             },

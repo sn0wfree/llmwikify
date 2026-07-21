@@ -188,7 +188,36 @@ export function Editor({
       addToast('success', 'Page saved');
       setDirty(false);
       setSavedAt(Date.now());
-    } catch (e) {
+    } catch (e: unknown) {
+      if (e instanceof Error && (e as { status?: number }).status === 409) {
+        const detail = (e as { detail?: { confirmation_id?: string; message?: string; existing_page?: { word_count?: number; content_preview?: string } } }).detail;
+        if (detail?.confirmation_id) {
+          const existingPreview = detail.existing_page?.content_preview || '';
+          const wordCount = detail.existing_page?.word_count || 0;
+          const confirmed = window.confirm(
+            `Page already exists (${wordCount} words).\n\n` +
+            `Preview:\n${existingPreview.slice(0, 300)}${existingPreview.length > 300 ? '...' : ''}\n\n` +
+            `Do you want to update this page?`
+          );
+          if (confirmed) {
+            try {
+              if (isMultiWikiMode && currentWikiId) {
+                await api.wiki.scoped.writePage(currentWikiId, page.page_name, content, detail.confirmation_id);
+              } else {
+                await api.wiki.writePage(page.page_name, content, detail.confirmation_id);
+              }
+              addToast('success', 'Page updated');
+              setDirty(false);
+              setSavedAt(Date.now());
+            } catch (e2) {
+              const msg2 = e2 instanceof Error ? e2.message : 'Unknown error';
+              addToast('error', `Update failed: ${msg2}`);
+            }
+          }
+          setSaving(false);
+          return;
+        }
+      }
       const msg = e instanceof Error ? e.message : 'Unknown error';
       addToast('error', `Save failed: ${msg}`);
     } finally {

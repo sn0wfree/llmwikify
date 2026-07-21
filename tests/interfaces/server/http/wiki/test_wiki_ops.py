@@ -17,7 +17,6 @@ from llmwikify.interfaces.server.http.wiki._wiki_ops import (
     write_page,
 )
 
-
 # ─── read_page_with_sink ──────────────────────────────────────
 
 class TestReadPageWithSink:
@@ -49,6 +48,7 @@ class TestReadPageWithSink:
 class TestWritePage:
     def test_normal_write(self):
         wiki = MagicMock()
+        wiki.read_page.return_value = {"error": "not found"}
         wiki.write_page.return_value = "ok"
         result = write_page(wiki, "test", "content")
         assert result["page_name"] == "test"
@@ -61,13 +61,80 @@ class TestWritePage:
         assert exc_info.value.status_code == 400
         assert "page_name required" in exc_info.value.detail
 
+    def test_empty_content(self):
+        wiki = MagicMock()
+        with pytest.raises(HTTPException) as exc_info:
+            write_page(wiki, "test", "")
+        assert exc_info.value.status_code == 400
+        assert "content required" in exc_info.value.detail
+
     def test_value_error(self):
         wiki = MagicMock()
+        wiki.read_page.return_value = {"error": "not found"}
         wiki.write_page.side_effect = ValueError("Invalid page name: ../etc")
         with pytest.raises(HTTPException) as exc_info:
             write_page(wiki, "../etc", "content")
         assert exc_info.value.status_code == 400
         assert "Invalid page name" in exc_info.value.detail
+
+    def test_conflict_returns_409_with_confirmation_id(self):
+        wiki = MagicMock()
+        wiki.read_page.return_value = {"content": "existing content", "word_count": 100}
+        with pytest.raises(HTTPException) as exc_info:
+            write_page(wiki, "test", "new content")
+        assert exc_info.value.status_code == 409
+        detail = exc_info.value.detail
+        assert detail["status"] == "conflict"
+        assert "confirmation_id" in detail
+        assert len(detail["confirmation_id"]) == 8
+        assert detail["existing_page"]["word_count"] == 100
+
+    def test_confirm_token_updates_page(self):
+        wiki = MagicMock()
+        wiki.read_page.return_value = {"content": "existing", "word_count": 10}
+        wiki.write_page.return_value = "Updated page"
+        db = MagicMock()
+        db.get_confirmation.return_value = {
+            "id": "abc12345",
+            "status": "pending",
+            "arguments": {"page_name": "test"},
+        }
+        result = write_page(wiki, "test", "new content", confirm_token="abc12345", db=db, wiki_id="wiki1")
+        assert result["page_name"] == "test"
+        assert result["message"] == "Updated page"
+        db.update_confirmation_status.assert_called_once_with("abc12345", "approved")
+
+    def test_invalid_token_returns_400(self):
+        wiki = MagicMock()
+        wiki.read_page.return_value = {"content": "existing", "word_count": 10}
+        db = MagicMock()
+        db.get_confirmation.return_value = None
+        with pytest.raises(HTTPException) as exc_info:
+            write_page(wiki, "test", "new content", confirm_token="invalid", db=db)
+        assert exc_info.value.status_code == 400
+        assert "Invalid or expired" in exc_info.value.detail
+
+    def test_token_page_name_mismatch_returns_400(self):
+        wiki = MagicMock()
+        wiki.read_page.return_value = {"content": "existing", "word_count": 10}
+        db = MagicMock()
+        db.get_confirmation.return_value = {
+            "id": "abc12345",
+            "status": "pending",
+            "arguments": {"page_name": "other_page"},
+        }
+        with pytest.raises(HTTPException) as exc_info:
+            write_page(wiki, "test", "new content", confirm_token="abc12345", db=db)
+        assert exc_info.value.status_code == 400
+        assert "does not match" in exc_info.value.detail
+
+    def test_conflict_without_db_still_works(self):
+        wiki = MagicMock()
+        wiki.read_page.return_value = {"content": "existing", "word_count": 10}
+        with pytest.raises(HTTPException) as exc_info:
+            write_page(wiki, "test", "new content")
+        assert exc_info.value.status_code == 409
+        assert "confirmation_id" in exc_info.value.detail
 
 
 # ─── enrich_status ────────────────────────────────────────────
@@ -141,8 +208,9 @@ class TestLoadWikiConfig:
         Config._instance = None
 
     def test_custom_config(self, monkeypatch, tmp_path):
-        from llmwikify.foundation.config import Config
         import json
+
+        from llmwikify.foundation.config import Config
         config_file = tmp_path / ".llmwikify" / "llmwikify.json"
         config_file.parent.mkdir(parents=True, exist_ok=True)
         config_file.write_text(json.dumps({
@@ -155,8 +223,9 @@ class TestLoadWikiConfig:
         Config._instance = None
 
     def test_missing_wiki_section(self, monkeypatch, tmp_path):
-        from llmwikify.foundation.config import Config
         import json
+
+        from llmwikify.foundation.config import Config
         config_file = tmp_path / ".llmwikify" / "llmwikify.json"
         config_file.parent.mkdir(parents=True, exist_ok=True)
         config_file.write_text(json.dumps({"llm": {}}))

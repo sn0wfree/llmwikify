@@ -21,6 +21,18 @@ from llmwikify.kernel import Wiki
 from llmwikify.kernel.multi_wiki.registry import WikiRegistry
 
 
+def _get_wiki_db_and_id(registry: WikiRegistry, wiki_id: str | None = None):
+    """获取 WikiDB 实例和 wiki_id（用于 token 操作）。"""
+    try:
+        from llmwikify.interfaces.server.http.agent._common import get_agent_service
+        service = get_agent_service()
+        db = service.wiki_service._wiki_db
+        resolved_id = wiki_id or service.wiki_service.get_default_wiki_id()
+        return db, resolved_id
+    except Exception:
+        return None, None
+
+
 def register_wiki_routes(app, registry: WikiRegistry) -> None:
     """注册默认 wiki + Wiki-ID 路由。"""
     get_wiki, get_wiki_by_id = create_wiki_dependency(registry)
@@ -48,7 +60,9 @@ def register_wiki_routes(app, registry: WikiRegistry) -> None:
     async def wiki_write_page(request: Request, wiki: Wiki = Depends(get_wiki)):  # noqa -> Any: B008
         """Write a wiki page."""
         body = await request.json()
-        return write_page(wiki, body.get("page_name", ""), body.get("content", ""))
+        confirm_token = request.query_params.get("confirm_token")
+        db, wiki_id = _get_wiki_db_and_id(registry)
+        return write_page(wiki, body.get("page_name", ""), body.get("content", ""), confirm_token, db, wiki_id)
 
     @wiki_router.get("/guide")
     async def wiki_guide(wiki: Wiki = Depends(get_wiki)):  # noqa -> Any: B008
@@ -136,7 +150,9 @@ def register_wiki_routes(app, registry: WikiRegistry) -> None:
         """Write a page to a specific wiki."""
         with wiki_or_404(registry, wiki_id) as wiki:
             body = await request.json()
-            return write_page(wiki, body.get("page_name", ""), body.get("content", ""))
+            confirm_token = request.query_params.get("confirm_token")
+            db, _ = _get_wiki_db_and_id(registry, wiki_id)
+            return write_page(wiki, body.get("page_name", ""), body.get("content", ""), confirm_token, db, wiki_id)
 
     @wiki_id_router.get("/{wiki_id}/guide")
     async def wiki_guide_by_id(wiki_id: str) -> Any:

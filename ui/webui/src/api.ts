@@ -330,13 +330,24 @@ async function request<T>(endpoint: string, options?: RequestInit): Promise<T> {
   }
   if (!res.ok) {
     let errorMessage = `API error: ${res.status}`;
+    let structuredError: Record<string, unknown> | null = null;
     try {
       const body = await res.json();
-      errorMessage = body.error || body.message || body.detail || errorMessage;
+      if (res.status === 409 && body.detail && typeof body.detail === 'object') {
+        structuredError = body.detail;
+        errorMessage = body.detail.message || errorMessage;
+      } else {
+        errorMessage = body.error || body.message || (typeof body.detail === 'string' ? body.detail : null) || errorMessage;
+      }
     } catch {
       // Response body is not JSON, use status message
     }
-    throw new Error(errorMessage);
+    const error = new Error(errorMessage) as Error & { status?: number; detail?: Record<string, unknown> };
+    error.status = res.status;
+    if (structuredError) {
+      error.detail = structuredError;
+    }
+    throw error;
   }
   if (res.status === 204) return undefined as unknown as T;
   return res.json();
@@ -359,11 +370,13 @@ export const api = {
       request<SearchResult[]>(`/wiki/search?q=${encodeURIComponent(query)}&limit=${limit}`),
     readPage: (pageName: string) =>
       request<WikiPage>(`/wiki/page/${encodeURIComponent(pageName)}`),
-    writePage: (pageName: string, content: string) =>
-      request<{ ok: boolean }>(`/wiki/page`, {
+    writePage: (pageName: string, content: string, confirmToken?: string) => {
+      const qs = confirmToken ? `?confirm_token=${encodeURIComponent(confirmToken)}` : '';
+      return request<{ ok: boolean }>(`/wiki/page${qs}`, {
         method: 'POST',
         body: JSON.stringify({ page_name: pageName, content }),
-      }),
+      });
+    },
     sinkStatus: () => request<SinkStatus>('/wiki/sink/status'),
     lint: (wikiId?: string) =>
       request<{ issues: unknown[] }>(wikiId ? `/wiki/${wikiId}/lint` : '/wiki/lint'),
@@ -384,11 +397,13 @@ export const api = {
     scoped: {
       readPage: (wikiId: string, pageName: string) =>
         request<WikiPage>(`/wiki/${wikiId}/page/${encodeURIComponent(pageName)}`),
-      writePage: (wikiId: string, pageName: string, content: string) =>
-        request<{ ok: boolean }>(`/wiki/${wikiId}/page`, {
+      writePage: (wikiId: string, pageName: string, content: string, confirmToken?: string) => {
+        const qs = confirmToken ? `?confirm_token=${encodeURIComponent(confirmToken)}` : '';
+        return request<{ ok: boolean }>(`/wiki/${wikiId}/page${qs}`, {
           method: 'POST',
           body: JSON.stringify({ page_name: pageName, content }),
-        }),
+        });
+      },
       search: (wikiId: string, query: string, limit = 10) =>
         request<SearchResult[]>(`/wiki/${wikiId}/search?q=${encodeURIComponent(query)}&limit=${limit}`),
       status: (wikiId: string) => request<WikiStatus>(`/wiki/${wikiId}/status`),
