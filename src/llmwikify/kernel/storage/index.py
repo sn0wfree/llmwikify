@@ -41,7 +41,13 @@ class WikiIndex:
     def __init__(self, db_path: Path) -> None:
         self.db_path = db_path
         self._conn: sqlite3.Connection | None = None
-        self._lock = threading.Lock()
+        # RLock (not Lock): _execute/_executemany/_commit acquire _lock
+        # then call self.conn (the property), which also acquires _lock
+        # for lazy initialization. A non-reentrant Lock would deadlock
+        # when the same thread tries to acquire it twice (regression
+        # caught by tests/scenarios/test_01_wiki_core.py hanging on
+        # the first upsert_page).
+        self._lock = threading.RLock()
         self._dict_loaded: bool = False
         self._stop_words: set[str] = set()
 
