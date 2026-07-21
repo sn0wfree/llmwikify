@@ -16,6 +16,8 @@ import { PageTree } from './PageTree';
 import { EditHistory } from './EditHistory';
 import { FileTree } from './FileTree';
 import { WikiMarkdown } from './WikiMarkdown';
+import { ConfirmDialog } from './ConfirmDialog';
+import { PageExistsDialog } from './PageExistsDialog';
 import { cn } from '@/lib/utils';
 
 interface EditorProps {
@@ -25,6 +27,14 @@ interface EditorProps {
 }
 
 type ViewMode = 'edit' | 'graph' | 'preview' | 'history' | 'filetree';
+
+interface PendingUpdate {
+  token: string;
+  pageName: string;
+  content: string;
+  wordCount: number;
+  preview: string;
+}
 
 function parseFrontMatter(content: string): { metadata: FrontMatterData; body: string } {
   const match = content.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
@@ -79,15 +89,11 @@ export function Editor({
   const [allTypes, setAllTypes] = useState<string[]>([]);
   const [graphLoading, setGraphLoading] = useState(false);
   const [showLabels, setShowLabels] = useState(true);
+  const [pendingNav, setPendingNav] = useState<string | null>(null);
 
   const selectedPage = urlPage ?? initialPage ?? null;
 
-  const handlePageSelect = useCallback((pageName: string) => {
-    const current = urlPage ?? initialPage;
-    if (dirty && pageName !== current) {
-      const ok = window.confirm('You have unsaved changes. Discard and switch?');
-      if (!ok) return;
-    }
+  const doNavigate = useCallback((pageName: string) => {
     setDirty(false);
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
@@ -95,7 +101,16 @@ export function Editor({
       return next;
     }, { replace: true });
     externalOnSelect?.(pageName);
-  }, [externalOnSelect, dirty, initialPage, urlPage, setSearchParams]);
+  }, [externalOnSelect, setSearchParams]);
+
+  const handlePageSelect = useCallback((pageName: string) => {
+    const current = urlPage ?? initialPage;
+    if (dirty && pageName !== current) {
+      setPendingNav(pageName);
+      return;
+    }
+    doNavigate(pageName);
+  }, [dirty, initialPage, urlPage, doNavigate]);
 
   useEffect(() => { loadTree(currentWikiId || undefined); }, [currentWikiId]);
 
@@ -192,28 +207,13 @@ export function Editor({
       if (e instanceof Error && (e as { status?: number }).status === 409) {
         const detail = (e as { detail?: { confirmation_id?: string; message?: string; existing_page?: { word_count?: number; content_preview?: string } } }).detail;
         if (detail?.confirmation_id) {
-          const existingPreview = detail.existing_page?.content_preview || '';
-          const wordCount = detail.existing_page?.word_count || 0;
-          const confirmed = window.confirm(
-            `Page already exists (${wordCount} words).\n\n` +
-            `Preview:\n${existingPreview.slice(0, 300)}${existingPreview.length > 300 ? '...' : ''}\n\n` +
-            `Do you want to update this page?`
-          );
-          if (confirmed) {
-            try {
-              if (isMultiWikiMode && currentWikiId) {
-                await api.wiki.scoped.writePage(currentWikiId, page.page_name, content, detail.confirmation_id);
-              } else {
-                await api.wiki.writePage(page.page_name, content, detail.confirmation_id);
-              }
-              addToast('success', 'Page updated');
-              setDirty(false);
-              setSavedAt(Date.now());
-            } catch (e2) {
-              const msg2 = e2 instanceof Error ? e2.message : 'Unknown error';
-              addToast('error', `Update failed: ${msg2}`);
-            }
-          }
+          setPendingUpdate({
+            token: detail.confirmation_id,
+            pageName: page.page_name,
+            content,
+            wordCount: detail.existing_page?.word_count ?? 0,
+            preview: detail.existing_page?.content_preview ?? '',
+          });
           return;
         }
       }
@@ -223,6 +223,33 @@ export function Editor({
       setSaving(false);
     }
   }, [page, content, addToast, isMultiWikiMode, currentWikiId]);
+
+  const [pendingUpdate, setPendingUpdate] = useState<PendingUpdate | null>(null);
+
+  const confirmUpdate = useCallback(async () => {
+    if (!pendingUpdate) return;
+    setSaving(true);
+    try {
+      if (isMultiWikiMode && currentWikiId) {
+        await api.wiki.scoped.writePage(
+          currentWikiId, pendingUpdate.pageName, pendingUpdate.content, pendingUpdate.token,
+        );
+      } else {
+        await api.wiki.writePage(
+          pendingUpdate.pageName, pendingUpdate.content, pendingUpdate.token,
+        );
+      }
+      addToast('success', 'Page updated');
+      setDirty(false);
+      setSavedAt(Date.now());
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Unknown error';
+      addToast('error', `Update failed: ${msg}`);
+    } finally {
+      setSaving(false);
+      setPendingUpdate(null);
+    }
+  }, [pendingUpdate, addToast, isMultiWikiMode, currentWikiId]);
 
   // ⌘S / Ctrl+S to save
   useEffect(() => {
@@ -239,7 +266,31 @@ export function Editor({
   const hasMetadata = Object.keys(metadata).length > 0;
 
   return (
-    <div className="flex h-full">
+    <>
+      <ConfirmDialog
+        open={pendingNav !== null}
+        onOpenChange={(open) => { if (!open) setPendingNav(null); }}
+        title="Discard unsaved changes?"
+        description="You have unsaved changes. Switching pages will lose your edits."
+        confirmLabel="Discard"
+        cancelLabel="Stay"
+        destructive
+        onConfirm={() => {
+          const target = pendingNav;
+          setPendingNav(null);
+          if (target) doNavigate(target);
+        }}
+      />
+      <PageExistsDialog
+        open={pendingUpdate !== null}
+        onOpenChange={(open) => { if (!open) setPendingUpdate(null); }}
+        pageName={pendingUpdate?.pageName ?? ''}
+        wordCount={pendingUpdate?.wordCount ?? 0}
+        contentPreview={pendingUpdate?.preview ?? ''}
+        onConfirm={confirmUpdate}
+        onCancel={() => setPendingUpdate(null)}
+      />
+      <div className="flex h-full">
       {/* File Tree Sidebar */}
       <div
         className={cn(
@@ -419,5 +470,6 @@ export function Editor({
         </div>
       </div>
     </div>
+    </>
   );
 }
