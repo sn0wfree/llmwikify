@@ -92,3 +92,64 @@ class TestAppDatabaseIdempotent:
             db2 = AppDatabase(tmp)
             session = db2.chat.get_chat_session(sid)
             assert session is not None
+
+
+class TestWikiDatabaseGetConfirmationDecoded:
+    def test_returns_none_for_missing(self, app_db: AppDatabase) -> None:
+        assert app_db.wiki.get_confirmation_with_decoded_args("nope") is None
+
+    def test_decodes_arguments_from_json_string(self, app_db: AppDatabase) -> None:
+        app_db.wiki.save_confirmation({
+            "id": "abc12345",
+            "wiki_id": "wiki-1",
+            "tool": "wiki_page_update",
+            "arguments": {"page_name": "test", "expires_at": 9999999999.0},
+            "status": "pending",
+        })
+        conf = app_db.wiki.get_confirmation_with_decoded_args("abc12345")
+        assert conf is not None
+        assert conf["arguments"] == {"page_name": "test", "expires_at": 9999999999.0}
+        assert isinstance(conf["arguments"], dict)
+
+    def test_returns_copy_not_mutation(self, app_db: AppDatabase) -> None:
+        app_db.wiki.save_confirmation({
+            "id": "abc12345",
+            "wiki_id": "wiki-1",
+            "tool": "wiki_page_update",
+            "arguments": {"page_name": "test"},
+            "status": "pending",
+        })
+        conf = app_db.wiki.get_confirmation_with_decoded_args("abc12345")
+        assert conf["arguments"]["page_name"] == "test"
+        conf["arguments"]["page_name"] = "mutated"
+        raw = app_db.wiki.get_confirmation("abc12345")
+        assert isinstance(raw["arguments"], str)
+
+    def test_returns_dict_unchanged_when_already_decoded(self, app_db: AppDatabase) -> None:
+        app_db.wiki.save_confirmation({
+            "id": "abc12345",
+            "wiki_id": "wiki-1",
+            "tool": "wiki_page_update",
+            "arguments": {"page_name": "test"},
+            "status": "pending",
+        })
+        conf = app_db.wiki.get_confirmation_with_decoded_args("abc12345")
+        assert isinstance(conf["arguments"], dict)
+        assert conf["arguments"]["page_name"] == "test"
+
+    def test_returns_raw_on_json_decode_failure(self, app_db: AppDatabase) -> None:
+        """Corrupt JSON in arguments → return raw row (arguments stays str)."""
+        import sqlite3
+
+        with sqlite3.connect(app_db.db_path) as conn:
+            conn.execute(
+                """INSERT INTO confirmations
+                   (id, wiki_id, tool, arguments, status)
+                   VALUES (?, ?, ?, ?, ?)""",
+                ("bad12345", "wiki-1", "x", "{not valid json", "pending"),
+            )
+            conn.commit()
+        conf = app_db.wiki.get_confirmation_with_decoded_args("bad12345")
+        assert conf is not None
+        assert conf["arguments"] == "{not valid json"
+        assert isinstance(conf["arguments"], str)

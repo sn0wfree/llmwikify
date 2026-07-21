@@ -310,14 +310,34 @@ class WikiDatabase(BaseDatabase):
             (json.dumps(arguments, ensure_ascii=False),
              confirmation_id),
         )
-
     def get_confirmation(
-        self, confirmation_id: str
+        self,
+        confirmation_id: str
     ) -> dict | None:
         return self._mgr.select_one(
             "SELECT * FROM confirmations WHERE id = ?",
             (confirmation_id,),
         )
+
+    def get_confirmation_with_decoded_args(
+        self, confirmation_id: str
+    ) -> dict | None:
+        """Get confirmation with arguments JSON-decoded.
+
+        Returns a new dict with arguments parsed from JSON. Returns None if
+        the confirmation doesn't exist. On JSON parse failure, returns the
+        raw dict unchanged (arguments remains a string).
+        """
+        conf = self.get_confirmation(confirmation_id)
+        if conf is None:
+            return None
+        args = conf.get("arguments")
+        if isinstance(args, str):
+            try:
+                return {**conf, "arguments": json.loads(args)}
+            except (json.JSONDecodeError, TypeError):
+                return conf
+        return conf
 
     def delete_confirmation(self, confirmation_id: str) -> None:
         self._mgr.execute_write(

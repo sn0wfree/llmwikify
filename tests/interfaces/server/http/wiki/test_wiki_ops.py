@@ -103,7 +103,7 @@ class TestWritePage:
         wiki.read_page.return_value = {"content": "existing", "word_count": 10}
         wiki.write_page.return_value = "Updated page"
         db = MagicMock()
-        db.get_confirmation.return_value = {
+        db.get_confirmation_with_decoded_args.return_value = {
             "id": "abc12345",
             "wiki_id": "wiki1",
             "status": "pending",
@@ -118,7 +118,7 @@ class TestWritePage:
         wiki = MagicMock()
         wiki.read_page.return_value = {"content": "existing", "word_count": 10}
         db = MagicMock()
-        db.get_confirmation.return_value = None
+        db.get_confirmation_with_decoded_args.return_value = None
         with pytest.raises(HTTPException) as exc_info:
             write_page(wiki, "test", "new content", confirm_token="invalid", db=db, wiki_id="wiki1")
         assert exc_info.value.status_code == 400
@@ -128,7 +128,7 @@ class TestWritePage:
         wiki = MagicMock()
         wiki.read_page.return_value = {"content": "existing", "word_count": 10}
         db = MagicMock()
-        db.get_confirmation.return_value = {
+        db.get_confirmation_with_decoded_args.return_value = {
             "id": "abc12345",
             "wiki_id": "wiki1",
             "status": "pending",
@@ -143,7 +143,7 @@ class TestWritePage:
         wiki = MagicMock()
         wiki.read_page.return_value = {"content": "existing", "word_count": 10}
         db = MagicMock()
-        db.get_confirmation.return_value = {
+        db.get_confirmation_with_decoded_args.return_value = {
             "id": "abc12345",
             "wiki_id": "wiki_a",
             "status": "pending",
@@ -158,7 +158,7 @@ class TestWritePage:
         wiki = MagicMock()
         wiki.read_page.return_value = {"content": "existing", "word_count": 10}
         db = MagicMock()
-        db.get_confirmation.return_value = {
+        db.get_confirmation_with_decoded_args.return_value = {
             "id": "abc12345",
             "wiki_id": "wiki1",
             "status": "pending",
@@ -173,7 +173,7 @@ class TestWritePage:
         wiki = MagicMock()
         wiki.read_page.return_value = {"content": "existing", "word_count": 10}
         db = MagicMock()
-        db.get_confirmation.return_value = {
+        db.get_confirmation_with_decoded_args.return_value = {
             "id": "abc12345",
             "wiki_id": "wiki1",
             "status": "approved",
@@ -200,17 +200,17 @@ class TestWritePage:
         assert exc_info.value.status_code == 503
         assert "cannot verify" in exc_info.value.detail
 
-    def test_arguments_stored_as_json_string(self):
-        """db.get_confirmation 返回 arguments 为 JSON 字符串，反序列化需正确处理。"""
+    def test_arguments_decoded_by_helper(self):
+        """db.get_confirmation_with_decoded_args 返回的 arguments 已经是 dict。"""
         wiki = MagicMock()
         wiki.read_page.return_value = {"content": "existing", "word_count": 10}
         wiki.write_page.return_value = "Updated page"
         db = MagicMock()
-        db.get_confirmation.return_value = {
+        db.get_confirmation_with_decoded_args.return_value = {
             "id": "abc12345",
             "wiki_id": "wiki1",
             "status": "pending",
-            "arguments": '{"page_name": "test", "expires_at": ' + str(time.time() + 300) + '}',
+            "arguments": {"page_name": "test", "expires_at": time.time() + 300},
         }
         result = write_page(wiki, "test", "new content", confirm_token="abc12345", db=db, wiki_id="wiki1")
         assert result["message"] == "Updated page"

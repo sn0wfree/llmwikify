@@ -11,7 +11,6 @@
 from __future__ import annotations
 
 import fnmatch
-import json
 import logging
 import time
 import uuid
@@ -150,7 +149,7 @@ def write_page(
                     status_code=503,
                     detail="Wiki database unavailable — cannot verify confirmation token",
                 )
-            conf = db.get_confirmation(confirm_token)
+            conf = db.get_confirmation_with_decoded_args(confirm_token)
             if not conf or conf.get("status") != "pending":
                 raise HTTPException(
                     status_code=400, detail="Invalid or expired confirmation token"
@@ -160,8 +159,6 @@ def write_page(
                     status_code=400, detail="Token does not match wiki_id"
                 )
             conf_args = conf.get("arguments", {})
-            if isinstance(conf_args, str):
-                conf_args = json.loads(conf_args)
             expires_at = conf_args.get("expires_at", 0)
             if expires_at and time.time() > expires_at:
                 raise HTTPException(

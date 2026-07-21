@@ -71,6 +71,8 @@ def register_wiki_routes(app, registry: WikiRegistry) -> None:
     async def wiki_write_page(request: Request, wiki: Wiki = Depends(get_wiki)):  # noqa -> Any: B008
         """Write a wiki page."""
         body = await request.json()
+        # TODO(security): token via query string ends up in HTTP access logs.
+        # Move to POST body (e.g., body.confirm_token) in next minor release.
         confirm_token = request.query_params.get("confirm_token")
         db, wiki_id = _get_wiki_db_and_id(registry)
         return write_page(wiki, body.get("page_name", ""), body.get("content", ""), confirm_token, db, wiki_id)
@@ -161,6 +163,8 @@ def register_wiki_routes(app, registry: WikiRegistry) -> None:
         """Write a page to a specific wiki."""
         with wiki_or_404(registry, wiki_id) as wiki:
             body = await request.json()
+            # TODO(security): token via query string ends up in HTTP access logs.
+            # Move to POST body (e.g., body.confirm_token) in next minor release.
             confirm_token = request.query_params.get("confirm_token")
             db, _ = _get_wiki_db_and_id(registry, wiki_id)
             return write_page(wiki, body.get("page_name", ""), body.get("content", ""), confirm_token, db, wiki_id)

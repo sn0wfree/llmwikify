@@ -214,7 +214,6 @@ export function Editor({
               addToast('error', `Update failed: ${msg2}`);
             }
           }
-          setSaving(false);
           return;
         }
       }
