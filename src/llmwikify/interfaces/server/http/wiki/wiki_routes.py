@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 
 from llmwikify.interfaces.server.http.wiki._common import (
     _serve_wiki_file,
@@ -20,17 +21,27 @@ from llmwikify.interfaces.server.http.wiki._wiki_ops import (
 from llmwikify.kernel import Wiki
 from llmwikify.kernel.multi_wiki.registry import WikiRegistry
 
+logger = logging.getLogger(__name__)
+
 
 def _get_wiki_db_and_id(registry: WikiRegistry, wiki_id: str | None = None):
-    """获取 WikiDB 实例和 wiki_id（用于 token 操作）。"""
+    """获取 WikiDB 实例和 wiki_id（用于 token 操作）。
+
+    Raises:
+        HTTPException: 503 当 agent service 未初始化或 wiki_db 不可用
+    """
     try:
         from llmwikify.interfaces.server.http.agent._common import get_agent_service
         service = get_agent_service()
         db = service.wiki_service._wiki_db
         resolved_id = wiki_id or service.wiki_service.get_default_wiki_id()
         return db, resolved_id
-    except Exception:
-        return None, None
+    except Exception as e:
+        logger.exception("Failed to get wiki_db for write operation: %s", e)
+        raise HTTPException(
+            status_code=503,
+            detail="Wiki database unavailable — write operations require agent service",
+        ) from None
 
 
 def register_wiki_routes(app, registry: WikiRegistry) -> None:

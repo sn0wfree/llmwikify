@@ -1,7 +1,11 @@
 """Wiki 核心业务处理器 —— 固定流程，不对外扩展。
 
-Wiki 操作是稳定的核心功能，不需要可组合的 Handler 框架。
-使用简单的函数式 API，清晰易懂。
+包含 token-based 二次确认流程（POST /page）：
+1. 写新 page → 直接成功（201）
+2. 写已存在 page → 生成 confirmation_id (TTL=300s) → 409
+3. 带 confirm_token 重试 → 校验 token + wiki_id + page_name + 过期 → 200
+
+所有写操作依赖 agent service 提供的 WikiDatabase；服务不可用时返回 503。
 """
 
 from __future__ import annotations
@@ -9,6 +13,7 @@ from __future__ import annotations
 import fnmatch
 import json
 import logging
+import time
 import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -21,6 +26,8 @@ from llmwikify.kernel import Wiki
 from llmwikify.kernel.multi_wiki.registry import WikiRegistry
 
 logger = logging.getLogger(__name__)
+
+CONFIRMATION_TTL_SECONDS = 300
 
 
 # ─── Wiki 配置读取 ────────────────────────────────────────────
@@ -116,16 +123,17 @@ def write_page(
         page_name: 页面名称
         content: 页面内容
         confirm_token: 可选的确认 token（从 409 响应获取）
-        db: WikiDB 实例（用于 token 存储/验证）
-        wiki_id: Wiki ID（用于 token 存储/验证）
+        db: WikiDatabase 实例（用于 token 存储/验证/消费）
+        wiki_id: Wiki ID（用于 token 绑定/校验）
 
     Returns:
         {"message": result, "page_name": page_name}
 
     Raises:
-        HTTPException: 页面名为空返回 400，content 为空返回 400，
-                       页面已存在且无 token 返回 409，
-                       token 无效返回 400
+        HTTPException: 页面名为空返回 400；content 为空返回 400；
+                       页面已存在且无 token 返回 409 + confirmation_id；
+                       token 无效 / wiki_id 不匹配 / 过期 / page_name 不匹配 返回 400；
+                       db 不可用 返回 503
     """
     if not page_name:
         raise HTTPException(status_code=400, detail="page_name required")
@@ -137,32 +145,51 @@ def write_page(
 
     if page_exists:
         if confirm_token:
-            conf = db.get_confirmation(confirm_token) if db else None
+            if not db:
+                raise HTTPException(
+                    status_code=503,
+                    detail="Wiki database unavailable — cannot verify confirmation token",
+                )
+            conf = db.get_confirmation(confirm_token)
             if not conf or conf.get("status") != "pending":
                 raise HTTPException(
                     status_code=400, detail="Invalid or expired confirmation token"
                 )
+            if wiki_id and conf.get("wiki_id") != wiki_id:
+                raise HTTPException(
+                    status_code=400, detail="Token does not match wiki_id"
+                )
             conf_args = conf.get("arguments", {})
             if isinstance(conf_args, str):
-                import json as _json
-                conf_args = _json.loads(conf_args)
+                conf_args = json.loads(conf_args)
+            expires_at = conf_args.get("expires_at", 0)
+            if expires_at and time.time() > expires_at:
+                raise HTTPException(
+                    status_code=400, detail="Confirmation token expired"
+                )
             if conf_args.get("page_name") != page_name:
                 raise HTTPException(
                     status_code=400, detail="Token does not match page_name"
                 )
-            if db:
-                db.update_confirmation_status(confirm_token, "approved")
+            db.delete_confirmation(confirm_token)
         else:
+            if not db or not wiki_id:
+                raise HTTPException(
+                    status_code=503,
+                    detail="Wiki database unavailable — cannot create confirmation token",
+                )
             confirmation_id = uuid.uuid4().hex[:8]
-            if db and wiki_id:
-                db.save_confirmation({
-                    "id": confirmation_id,
-                    "wiki_id": wiki_id,
-                    "tool": "wiki_page_update",
-                    "arguments": {"page_name": page_name},
-                    "action_type": "write",
-                    "status": "pending",
-                })
+            db.save_confirmation({
+                "id": confirmation_id,
+                "wiki_id": wiki_id,
+                "tool": "wiki_page_update",
+                "arguments": {
+                    "page_name": page_name,
+                    "expires_at": time.time() + CONFIRMATION_TTL_SECONDS,
+                },
+                "action_type": "write",
+                "status": "pending",
+            })
             content_preview = existing.get("content", "")[:500] if isinstance(existing, dict) else ""
             word_count = existing.get("word_count", 0) if isinstance(existing, dict) else 0
             raise HTTPException(
@@ -245,13 +272,15 @@ def get_wiki_guide(wiki: Wiki) -> dict:
                         "content": "# Title\n\nFull markdown content...",
                     },
                     "params": {
-                        "confirm_token": "optional confirmation_id from 409 response to confirm update",
+                        "confirm_token": "optional confirmation_id from 409 response to confirm update (TTL: 300s, one-shot)",
                     },
                     "behavior": {
                         "new_page": "201 Created",
                         "existing_page_no_token": "409 Conflict + confirmation_id + existing_page preview",
-                        "existing_page_with_token": "200 Updated (if token valid)",
+                        "existing_page_with_token": "200 Updated (if token valid + wiki_id matches + page_name matches + not expired)",
                         "content_missing": "400 Bad Request",
+                        "token_invalid_or_expired_or_wiki_mismatch": "400 Bad Request",
+                        "wiki_db_unavailable": "503 Service Unavailable",
                     },
                 },
             },
@@ -346,9 +375,11 @@ def get_wiki_guide(wiki: Wiki) -> dict:
         },
         "page_types": page_types,
         "error_codes": {
-            "400": "Bad request — invalid page_name, missing content, or validation error",
+            "400": "Bad request — invalid page_name, missing content, invalid/expired/mismatched confirmation token",
             "404": "Not found — wiki_id or page_name doesn't exist",
+            "409": "Conflict — page exists; retry with ?confirm_token=<confirmation_id> to confirm update (TTL: 300s)",
             "500": "Internal server error — contact admin",
+            "503": "Service unavailable — agent service / wiki DB not initialized",
         },
     }
 

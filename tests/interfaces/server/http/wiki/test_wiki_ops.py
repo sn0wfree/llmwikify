@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import logging
+import time
 from unittest.mock import MagicMock
 
 import pytest
 from fastapi import HTTPException
 
 from llmwikify.interfaces.server.http.wiki._wiki_ops import (
+    CONFIRMATION_TTL_SECONDS,
     check_remote_wiki_config,
     enrich_status,
     load_wiki_config,
@@ -80,14 +82,21 @@ class TestWritePage:
     def test_conflict_returns_409_with_confirmation_id(self):
         wiki = MagicMock()
         wiki.read_page.return_value = {"content": "existing content", "word_count": 100}
+        db = MagicMock()
         with pytest.raises(HTTPException) as exc_info:
-            write_page(wiki, "test", "new content")
+            write_page(wiki, "test", "new content", db=db, wiki_id="wiki1")
         assert exc_info.value.status_code == 409
         detail = exc_info.value.detail
         assert detail["status"] == "conflict"
         assert "confirmation_id" in detail
         assert len(detail["confirmation_id"]) == 8
         assert detail["existing_page"]["word_count"] == 100
+        db.save_confirmation.assert_called_once()
+        kwargs = db.save_confirmation.call_args[0][0]
+        assert kwargs["wiki_id"] == "wiki1"
+        assert kwargs["arguments"]["page_name"] == "test"
+        assert kwargs["arguments"]["expires_at"] > time.time()
+        assert kwargs["arguments"]["expires_at"] <= time.time() + CONFIRMATION_TTL_SECONDS + 1
 
     def test_confirm_token_updates_page(self):
         wiki = MagicMock()
@@ -96,13 +105,14 @@ class TestWritePage:
         db = MagicMock()
         db.get_confirmation.return_value = {
             "id": "abc12345",
+            "wiki_id": "wiki1",
             "status": "pending",
-            "arguments": {"page_name": "test"},
+            "arguments": {"page_name": "test", "expires_at": time.time() + 300},
         }
         result = write_page(wiki, "test", "new content", confirm_token="abc12345", db=db, wiki_id="wiki1")
         assert result["page_name"] == "test"
         assert result["message"] == "Updated page"
-        db.update_confirmation_status.assert_called_once_with("abc12345", "approved")
+        db.delete_confirmation.assert_called_once_with("abc12345")
 
     def test_invalid_token_returns_400(self):
         wiki = MagicMock()
@@ -110,7 +120,7 @@ class TestWritePage:
         db = MagicMock()
         db.get_confirmation.return_value = None
         with pytest.raises(HTTPException) as exc_info:
-            write_page(wiki, "test", "new content", confirm_token="invalid", db=db)
+            write_page(wiki, "test", "new content", confirm_token="invalid", db=db, wiki_id="wiki1")
         assert exc_info.value.status_code == 400
         assert "Invalid or expired" in exc_info.value.detail
 
@@ -120,21 +130,91 @@ class TestWritePage:
         db = MagicMock()
         db.get_confirmation.return_value = {
             "id": "abc12345",
+            "wiki_id": "wiki1",
             "status": "pending",
-            "arguments": {"page_name": "other_page"},
+            "arguments": {"page_name": "other_page", "expires_at": time.time() + 300},
         }
         with pytest.raises(HTTPException) as exc_info:
-            write_page(wiki, "test", "new content", confirm_token="abc12345", db=db)
+            write_page(wiki, "test", "new content", confirm_token="abc12345", db=db, wiki_id="wiki1")
         assert exc_info.value.status_code == 400
-        assert "does not match" in exc_info.value.detail
+        assert "does not match page_name" in exc_info.value.detail
 
-    def test_conflict_without_db_still_works(self):
+    def test_token_wiki_id_mismatch_returns_400(self):
+        wiki = MagicMock()
+        wiki.read_page.return_value = {"content": "existing", "word_count": 10}
+        db = MagicMock()
+        db.get_confirmation.return_value = {
+            "id": "abc12345",
+            "wiki_id": "wiki_a",
+            "status": "pending",
+            "arguments": {"page_name": "test", "expires_at": time.time() + 300},
+        }
+        with pytest.raises(HTTPException) as exc_info:
+            write_page(wiki, "test", "new content", confirm_token="abc12345", db=db, wiki_id="wiki_b")
+        assert exc_info.value.status_code == 400
+        assert "does not match wiki_id" in exc_info.value.detail
+
+    def test_token_expired_returns_400(self):
+        wiki = MagicMock()
+        wiki.read_page.return_value = {"content": "existing", "word_count": 10}
+        db = MagicMock()
+        db.get_confirmation.return_value = {
+            "id": "abc12345",
+            "wiki_id": "wiki1",
+            "status": "pending",
+            "arguments": {"page_name": "test", "expires_at": time.time() - 1},
+        }
+        with pytest.raises(HTTPException) as exc_info:
+            write_page(wiki, "test", "new content", confirm_token="abc12345", db=db, wiki_id="wiki1")
+        assert exc_info.value.status_code == 400
+        assert "expired" in exc_info.value.detail
+
+    def test_reused_approved_token_returns_400(self):
+        wiki = MagicMock()
+        wiki.read_page.return_value = {"content": "existing", "word_count": 10}
+        db = MagicMock()
+        db.get_confirmation.return_value = {
+            "id": "abc12345",
+            "wiki_id": "wiki1",
+            "status": "approved",
+            "arguments": {"page_name": "test", "expires_at": time.time() + 300},
+        }
+        with pytest.raises(HTTPException) as exc_info:
+            write_page(wiki, "test", "new content", confirm_token="abc12345", db=db, wiki_id="wiki1")
+        assert exc_info.value.status_code == 400
+        assert "Invalid or expired" in exc_info.value.detail
+
+    def test_conflict_without_db_returns_503(self):
         wiki = MagicMock()
         wiki.read_page.return_value = {"content": "existing", "word_count": 10}
         with pytest.raises(HTTPException) as exc_info:
-            write_page(wiki, "test", "new content")
-        assert exc_info.value.status_code == 409
-        assert "confirmation_id" in exc_info.value.detail
+            write_page(wiki, "test", "new content", db=None, wiki_id="wiki1")
+        assert exc_info.value.status_code == 503
+        assert "cannot create confirmation" in exc_info.value.detail
+
+    def test_retry_without_db_returns_503(self):
+        wiki = MagicMock()
+        wiki.read_page.return_value = {"content": "existing", "word_count": 10}
+        with pytest.raises(HTTPException) as exc_info:
+            write_page(wiki, "test", "new content", confirm_token="abc12345", db=None, wiki_id="wiki1")
+        assert exc_info.value.status_code == 503
+        assert "cannot verify" in exc_info.value.detail
+
+    def test_arguments_stored_as_json_string(self):
+        """db.get_confirmation 返回 arguments 为 JSON 字符串，反序列化需正确处理。"""
+        wiki = MagicMock()
+        wiki.read_page.return_value = {"content": "existing", "word_count": 10}
+        wiki.write_page.return_value = "Updated page"
+        db = MagicMock()
+        db.get_confirmation.return_value = {
+            "id": "abc12345",
+            "wiki_id": "wiki1",
+            "status": "pending",
+            "arguments": '{"page_name": "test", "expires_at": ' + str(time.time() + 300) + '}',
+        }
+        result = write_page(wiki, "test", "new content", confirm_token="abc12345", db=db, wiki_id="wiki1")
+        assert result["message"] == "Updated page"
+        db.delete_confirmation.assert_called_once_with("abc12345")
 
 
 # ─── enrich_status ────────────────────────────────────────────
