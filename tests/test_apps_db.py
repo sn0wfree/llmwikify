@@ -223,3 +223,52 @@ class TestWikiDatabaseDeleteExpiredConfirmations:
         deleted = app_db.wiki.delete_expired_confirmations()
         assert deleted == 0
         assert app_db.wiki.get_confirmation("bad1") is not None
+
+
+class TestWikiDatabaseMakeConfirmationId:
+    """v0.40 C2 helper: WikiDatabase.make_confirmation_id() — single
+    source of truth for the 8-char hex confirmation token format."""
+
+    def test_returns_8_char_string(self) -> None:
+        from llmwikify.apps.wiki.db import WikiDatabase
+        cid = WikiDatabase.make_confirmation_id()
+        assert isinstance(cid, str)
+        assert len(cid) == 8
+
+    def test_only_lowercase_hex(self) -> None:
+        from llmwikify.apps.wiki.db import WikiDatabase
+        cid = WikiDatabase.make_confirmation_id()
+        assert all(c in "0123456789abcdef" for c in cid), (
+            f"non-hex char in {cid!r}"
+        )
+
+    def test_unique_across_many_calls(self) -> None:
+        """16M id space; sampling 10K should yield zero collisions."""
+        from llmwikify.apps.wiki.db import WikiDatabase
+        seen = {WikiDatabase.make_confirmation_id() for _ in range(10_000)}
+        assert len(seen) == 10_000
+
+    def test_callable_without_instance(self) -> None:
+        """Static method — usable from non-DB code paths."""
+        from llmwikify.apps.wiki.db import WikiDatabase
+        cid = WikiDatabase.make_confirmation_id()
+        assert len(cid) == 8
+
+    def test_round_trips_through_db(self, app_db: AppDatabase) -> None:
+        """Generated IDs are valid primary keys (no chars that break
+        VARCHAR / TEXT). The save_confirmation idempotency check
+        below also verifies the row is inserted."""
+        from llmwikify.apps.wiki.db import WikiDatabase
+        cid = WikiDatabase.make_confirmation_id()
+        app_db.wiki.save_confirmation({
+            "id": cid,
+            "wiki_id": "w1",
+            "tool": "wiki_page_update",
+            "arguments": {"page_name": "p", "expires_at": 9_999_999_999.0},
+            "action_type": "write",
+            "status": "pending",
+        })
+        loaded = app_db.wiki.get_confirmation_with_decoded_args(cid)
+        assert loaded is not None
+        assert loaded["id"] == cid
+        assert loaded["wiki_id"] == "w1"

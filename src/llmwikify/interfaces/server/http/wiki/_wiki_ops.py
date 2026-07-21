@@ -13,7 +13,6 @@ from __future__ import annotations
 import fnmatch
 import logging
 import time
-import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
@@ -21,6 +20,7 @@ from urllib.parse import urlparse
 
 from fastapi import HTTPException
 
+from llmwikify.apps.wiki.db import WikiDatabase
 from llmwikify.kernel import Wiki
 from llmwikify.kernel.multi_wiki.registry import WikiRegistry
 
@@ -175,7 +175,7 @@ def write_page(
                     status_code=503,
                     detail="Wiki database unavailable — cannot create confirmation token",
                 )
-            confirmation_id = uuid.uuid4().hex[:8]
+            confirmation_id = WikiDatabase.make_confirmation_id()
             db.save_confirmation({
                 "id": confirmation_id,
                 "wiki_id": wiki_id,

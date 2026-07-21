@@ -346,6 +346,34 @@ class WikiDatabase(BaseDatabase):
             (confirmation_id,),
         )
 
+    @staticmethod
+    def make_confirmation_id() -> str:
+        """Generate a fresh confirmation token (8 lowercase hex chars).
+
+        v0.40 C2 helper: replaced two near-identical inline generations:
+
+        * ``uuid.uuid4().hex[:8]`` (HTTP wiki write path)
+        * ``str(uuid.uuid4())[:8]`` (agent tool paths)
+
+        Both produce the same 8-hex-char shape — uuid4's first
+        ``str()`` chunk (before the first ``-``) is identical to the
+        leading 8 chars of ``uuid4().hex`` — but they were duplicated
+        in three call sites. This helper is now the single source of
+        truth so the format can change in one place.
+
+        Format chosen to match the existing 8-char contract that has
+        already shipped in production (POST /page 409 responses,
+        ``/agent/confirmations/<id>`` routes, SSE ``confirmation_id``
+        events). 16M id space is sufficient because:
+          - each token has a 300s TTL,
+          - callers retry on 409 and consume the row on success,
+          - the cleanup task (every 5m) reaps expired rows.
+
+        Returns:
+            8-character lowercase hex string, e.g. ``"a3f81c20"``.
+        """
+        return uuid.uuid4().hex[:8]
+
     def delete_expired_confirmations(self, now: float | None = None) -> int:
         """Delete pending confirmations whose ``expires_at`` is in the past.
 

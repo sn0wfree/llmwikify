@@ -5,11 +5,11 @@ from __future__ import annotations
 import inspect
 import json
 import logging
-import uuid
 from datetime import datetime, timezone
 from typing import Any
 
 from llmwikify.apps.chat.skills.base import SkillContext, SkillResult
+from llmwikify.apps.wiki.db import WikiDatabase
 
 logger = logging.getLogger(__name__)
 
@@ -117,7 +117,7 @@ class SkillToolAdapter:
                 name, session_id=self.session_id,
             ):
                 return await self._execute_direct(name, arguments)
-            confirmation_id = str(uuid.uuid4())[:8]
+            confirmation_id = WikiDatabase.make_confirmation_id()  # 8-char hex (single source of truth)
             confirmation = {
                 "id": confirmation_id,
                 "tool": name,

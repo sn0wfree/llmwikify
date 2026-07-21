@@ -10,10 +10,11 @@ import hashlib
 import json
 import logging
 import re
-import uuid
 from collections.abc import Callable
 from datetime import datetime, timezone
 from typing import Any
+
+from llmwikify.apps.wiki.db import WikiDatabase
 
 logger = logging.getLogger(__name__)
 
@@ -711,7 +712,7 @@ class WikiToolRegistry:
         else:
             impact = self._analyze_impact(name, arguments)
             group = self._classify_page_group(arguments)
-            confirmation_id = str(uuid.uuid4())[:8]
+            confirmation_id = WikiDatabase.make_confirmation_id()  # 8-char hex (single source of truth)
 
             confirmation = {
                 "id": confirmation_id,
