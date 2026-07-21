@@ -5,6 +5,7 @@
 
 import { useState } from 'react';
 import { useWikiStore, WikiInfo } from '../../stores/wikiStore';
+import { ConfirmDialog } from './ConfirmDialog';
 
 interface WikiManagerProps {
   onClose: () => void;
@@ -34,6 +35,7 @@ export function WikiManager({ onClose }: WikiManagerProps) {
     api_key: '',
   });
   const [formError, setFormError] = useState<string | null>(null);
+  const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null);
 
   const handleAdd = async () => {
     const wikiId = formData.wiki_id.trim();
@@ -72,8 +74,17 @@ export function WikiManager({ onClose }: WikiManagerProps) {
   };
 
   const handleRemove = async (wikiId: string) => {
-    if (confirm(`Remove wiki "${wikiId}"?`)) {
-      await unregisterWiki(wikiId);
+    setConfirmRemoveId(wikiId);
+  };
+
+  const confirmRemove = async () => {
+    if (!confirmRemoveId) return;
+    const id = confirmRemoveId;
+    setConfirmRemoveId(null);
+    try {
+      await unregisterWiki(id);
+    } catch {
+      /* toast handled by store */
     }
   };
 
@@ -82,8 +93,19 @@ export function WikiManager({ onClose }: WikiManagerProps) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-slate-800 rounded-xl shadow-2xl w-full max-w-2xl max-h-[80vh] overflow-hidden">
+    <>
+      <ConfirmDialog
+        open={confirmRemoveId !== null}
+        onOpenChange={(open) => { if (!open) setConfirmRemoveId(null); }}
+        title={confirmRemoveId ? `Remove wiki "${confirmRemoveId}"?` : ''}
+        description="The wiki will be unregistered from the manager. Files on disk are not deleted and can be re-added later."
+        confirmLabel="Remove"
+        cancelLabel="Cancel"
+        destructive
+        onConfirm={confirmRemove}
+      />
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div className="bg-slate-800 rounded-xl shadow-2xl w-full max-w-2xl max-h-[80vh] overflow-hidden">
         {/* Header */}
         <div className="px-6 py-4 border-b border-slate-700 flex items-center justify-between">
           <h2 className="text-lg font-semibold text-slate-200">Wiki Manager</h2>
@@ -264,6 +286,7 @@ export function WikiManager({ onClose }: WikiManagerProps) {
         </div>
       </div>
     </div>
+    </>
   );
 }
 

@@ -3,6 +3,7 @@ import { api, WikiDreamProposal } from '../../api';
 import { useToast } from './Toast';
 import { useWikiStore } from '../../stores/wikiStore';
 import { EmptyState } from '../agent/StateViews';
+import { ConfirmDialog } from './ConfirmDialog';
 import { Card } from '../ui/legacy-card';
 import { Button } from '../ui/legacy-button';
 import { Badge } from '../ui/legacy-badge';
@@ -109,24 +110,16 @@ export function WikiDreamProposals() {
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
-      {showApplyConfirm && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <Card variant="bordered" className="max-w-sm w-full mx-4">
-            <h3 className="text-lg font-bold mb-2 text-foreground">Apply All Approved?</h3>
-            <p className="text-sm text-muted-foreground mb-4">
-              This will apply all approved proposals to the wiki. This action cannot be undone.
-            </p>
-            <div className="flex gap-2 justify-end">
-              <Button variant="secondary" size="sm" onClick={() => setShowApplyConfirm(false)}>
-                Cancel
-              </Button>
-              <Button variant="primary" size="sm" onClick={handleApply}>
-                Apply
-              </Button>
-            </div>
-          </Card>
-        </div>
-      )}
+      <ConfirmDialog
+        open={showApplyConfirm}
+        onOpenChange={setShowApplyConfirm}
+        title="Apply All Approved?"
+        description="This will apply all approved proposals to the wiki. This action cannot be undone."
+        confirmLabel="Apply"
+        cancelLabel="Cancel"
+        destructive
+        onConfirm={handleApply}
+      />
 
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-xl font-bold text-foreground">Dream Proposals</h2>
