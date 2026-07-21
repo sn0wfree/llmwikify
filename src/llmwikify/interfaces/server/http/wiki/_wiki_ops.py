@@ -112,10 +112,22 @@ def write_page(wiki: Wiki, page_name: str, content: str) -> dict:
         {"message": result, "page_name": page_name}
 
     Raises:
-        HTTPException: 页面名为空返回 400，无效页面名返回 400
+        HTTPException: 页面名为空返回 400，content 为空返回 400，
+                       已有 source 页返回 409
     """
     if not page_name:
         raise HTTPException(status_code=400, detail="page_name required")
+    if not content or not content.strip():
+        raise HTTPException(status_code=400, detail="content required and must not be empty")
+
+    if page_name.startswith("sources/"):
+        existing = wiki.read_page(page_name)
+        if "error" not in existing:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Source page already exists: {page_name}. Use PUT to update.",
+            )
+
     try:
         result = wiki.write_page(page_name, content)
     except ValueError as e:
