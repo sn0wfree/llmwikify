@@ -26,12 +26,11 @@ class QueryPageOverlapRule(Rule):
     """
 
     name = "topic_overlap"
+    max_results = MAX_QUERY_OVERLAP_HINTS
 
     def run(self, wiki: Wiki) -> list[dict[str, Any]]:
-        # TODO(refactor): C901=13 — too complex, consider splitting
-        hints: list[dict[str, Any]] = []
         if not wiki.wiki_dir.exists():
-            return hints
+            return []
 
         query_pages = []
         for page in wiki.wiki_dir.rglob("*.md"):
@@ -56,7 +55,9 @@ class QueryPageOverlapRule(Rule):
                     "file": str(page),
                 })
 
+        results: list[dict[str, Any]] = []
         seen_pairs = set()
+
         for i in range(len(query_pages)):
             for j in range(i + 1, len(query_pages)):
                 p1 = query_pages[i]
@@ -73,7 +74,7 @@ class QueryPageOverlapRule(Rule):
                     pair_key = tuple(sorted([p1["page_name"], p2["page_name"]]))
                     if pair_key not in seen_pairs:
                         seen_pairs.add(pair_key)
-                        hints.append({
+                        results.append({
                             "type": self.name,
                             "page_a": p1["page_name"],
                             "page_b": p2["page_name"],
@@ -85,7 +86,7 @@ class QueryPageOverlapRule(Rule):
                             ),
                         })
 
-            if len(hints) >= MAX_QUERY_OVERLAP_HINTS:
+            if len(results) >= self.max_results:
                 break
 
-        return hints[:MAX_QUERY_OVERLAP_HINTS]
+        return results[: self.max_results]

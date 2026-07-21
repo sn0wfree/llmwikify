@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import TYPE_CHECKING, Any
 
 from llmwikify.kernel.storage.backend import is_path_excluded
@@ -28,14 +29,15 @@ class KnowledgeGapsRule(Rule):
     """
 
     name = "knowledge_gap"
+    max_results = 3
 
     def run(self, wiki: Wiki) -> list[dict[str, Any]]:
+        if not wiki.wiki_dir.exists():
+            return []
+
         gaps: list[dict[str, Any]] = []
 
-        if not wiki.wiki_dir.exists():
-            return gaps
-
-        # 1. Orphan concepts from the relation engine
+        # 1. Orphan concepts from the relation engine (global check)
         try:
             engine = wiki.get_relation_engine()
             orphan_concepts = engine.find_orphan_concepts()
@@ -49,8 +51,7 @@ class KnowledgeGapsRule(Rule):
         except Exception as e:
             logger.warning("Relation engine orphan detection failed: %s", e)
 
-        # 2. Isolated source pages
-        import re
+        # 2. Isolated source pages (per-directory check)
         sources_dir = wiki.wiki_dir / "sources"
         if sources_dir.exists():
             for source_page in sources_dir.rglob("*.md"):
@@ -67,7 +68,7 @@ class KnowledgeGapsRule(Rule):
                         "suggestion": "Consider adding cross-references to related concepts/entities",
                     })
 
-                if len(gaps) >= 3:
+                if len(gaps) >= self.max_results:
                     break
 
-        return gaps[:3]
+        return gaps[: self.max_results]

@@ -6,13 +6,13 @@ import re
 from typing import TYPE_CHECKING, Any
 
 from ...constants import MAX_CONTRADICTIONS
-from .. import Rule
+from .. import CrossPageRule
 
 if TYPE_CHECKING:
     from ...wiki import Wiki
 
 
-class PotentialContradictionsRule(Rule):
+class PotentialContradictionsRule(CrossPageRule):
     """Scan wiki pages for potential contradictions.
 
     Detects three flavors of contradiction:
@@ -26,23 +26,34 @@ class PotentialContradictionsRule(Rule):
     """
 
     name = "contradiction"  # logical name; type field uses concrete subtypes
+    max_results = MAX_CONTRADICTIONS
 
-    def run(self, wiki: Wiki) -> list[dict[str, Any]]:
-        # TODO(refactor): C901=33 — too complex, consider splitting
-        contradictions: list[dict[str, Any]] = []
+    def detect_all(
+        self,
+        pages: dict[str, str],
+        wiki: Wiki,
+        results: list[dict[str, Any]],
+    ) -> None:
         seen_pairs: set = set()
 
-        if not wiki.wiki_dir.exists():
-            return contradictions
+        self._detect_value_conflicts(pages, results, seen_pairs)
+        if len(results) >= self.max_results:
+            return
 
-        pages_content = {}
-        for page in wiki._wiki_pages():
-            page_name = wiki._page_display_name(page)
-            pages_content[page_name] = page.read_text()
+        self._detect_year_conflicts(pages, results)
+        if len(results) >= self.max_results:
+            return
 
-        # 1. Value conflicts (key: value pairs with different values)
+        self._detect_negation_patterns(pages, results)
+
+    def _detect_value_conflicts(
+        self,
+        pages: dict[str, str],
+        results: list[dict[str, Any]],
+        seen_pairs: set,
+    ) -> None:
         entity_facts: dict[str, dict[str, list[tuple]]] = {}
-        for page_name, content in pages_content.items():
+        for page_name, content in pages.items():
             for line in content.split('\n'):
                 line = line.strip().lstrip('- ').strip()
                 if ':' in line and not line.startswith('#') and not line.startswith('http'):
@@ -71,23 +82,27 @@ class PotentialContradictionsRule(Rule):
                 if pair_key not in seen_pairs:
                     seen_pairs.add(pair_key)
                     values_str = ", ".join(f"{p}={v}" for p, v in all_values[:3])
-                    contradictions.append({
+                    results.append({
                         "type": "value_conflict",
                         "attribute": attr,
                         "pages": [{"page": p, "value": v} for p, v in all_values[:4]],
                         "observation": f"Pages reference different values for '{attr}': {values_str}",
                     })
 
-            if len(contradictions) >= MAX_CONTRADICTIONS:
+            if len(results) >= self.max_results:
                 break
 
-        # 2. Year conflicts
+    def _detect_year_conflicts(
+        self,
+        pages: dict[str, str],
+        results: list[dict[str, Any]],
+    ) -> None:
         year_claims: dict[str, list[dict]] = {}
         year_pattern = re.compile(
             r'([^\n]{3,30}?)\s+(?:launched|founded|started|established|created|born|died|closed|shutdown|ended)\s+(?:in\s+)?(20\d{2}|19\d{2})',
             re.IGNORECASE
         )
-        for page_name, content in pages_content.items():
+        for page_name, content in pages.items():
             for line in content.split('\n'):
                 for match in year_pattern.finditer(line):
                     entity = match.group(1).strip()
@@ -101,19 +116,23 @@ class PotentialContradictionsRule(Rule):
             years = {c["year"] for c in claims}
             if len(years) >= 2:
                 claims_str = ", ".join(f"{c['page']}={c['year']}" for c in claims[:3])
-                contradictions.append({
+                results.append({
                     "type": "year_conflict",
                     "entity": entity,
                     "claims": claims,
                     "observation": f"'{entity}' has conflicting year claims: {claims_str}",
                 })
 
-            if len(contradictions) >= MAX_CONTRADICTIONS:
+            if len(results) >= self.max_results:
                 break
 
-        # 3. Negation patterns
+    def _detect_negation_patterns(
+        self,
+        pages: dict[str, str],
+        results: list[dict[str, Any]],
+    ) -> None:
         negation_claims: dict[str, list[dict]] = {}
-        for page_name, content in pages_content.items():
+        for page_name, content in pages.items():
             for line in content.split('\n'):
                 line = line.strip()
                 if not line or line.startswith('#'):
@@ -141,14 +160,12 @@ class PotentialContradictionsRule(Rule):
             has_positive = any(not c["negated"] for c in claims)
             has_negative = any(c["negated"] for c in claims)
             if has_positive and has_negative:
-                contradictions.append({
+                results.append({
                     "type": "negation_pattern",
                     "subject": subject,
                     "claims": claims,
                     "observation": f"'{subject}' has both affirmative and negative claims across pages",
                 })
 
-            if len(contradictions) >= MAX_CONTRADICTIONS:
+            if len(results) >= self.max_results:
                 break
-
-        return contradictions[:MAX_CONTRADICTIONS]

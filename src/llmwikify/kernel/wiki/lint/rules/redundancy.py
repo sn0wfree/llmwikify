@@ -22,20 +22,21 @@ class RedundancyRule(Rule):
     """
 
     name = "redundancy"
+    max_results = 2
 
     def run(self, wiki: Wiki) -> list[dict[str, Any]]:
-        redundancy: list[dict[str, Any]] = []
         pages = wiki._wiki_pages()
-
         if not pages:
-            return redundancy
+            return []
 
         page_names = [wiki._page_display_name(p) for p in pages]
+        results: list[dict[str, Any]] = []
+
         for i, name1 in enumerate(page_names):
             for name2 in page_names[i+1:]:
                 if (name1.lower() in name2.lower() or name2.lower() in name1.lower()):
                     if len(name1) > 5 and len(name2) > 5:
-                        redundancy.append({
+                        results.append({
                             "type": "similar_page_names",
                             "page_a": name1,
                             "page_b": name2,
@@ -45,7 +46,7 @@ class RedundancyRule(Rule):
                             ),
                         })
 
-            if len(redundancy) >= 2:
+            if len(results) >= self.max_results:
                 break
 
-        return redundancy[:2]
+        return results[: self.max_results]
