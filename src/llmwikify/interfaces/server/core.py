@@ -74,6 +74,8 @@ class WikiServer:
         provider: Any = None,
         enable_dream_scheduler: bool = True,
         enable_auto_compact: bool = True,
+        enable_confirmations_cleanup: bool = True,
+        confirmations_cleanup_interval_seconds: float = 300.0,
         *,
         public_read: bool = True,
         local_mode: bool = False,
@@ -112,6 +114,12 @@ class WikiServer:
         self.provider = provider
         self.enable_dream_scheduler = enable_dream_scheduler
         self.enable_auto_compact = enable_auto_compact
+        # v0.40: periodic cleanup of expired POST /page confirmation
+        # tokens. Default ON; same default as AutoCompact.
+        self.enable_confirmations_cleanup = enable_confirmations_cleanup
+        self.confirmations_cleanup_interval_seconds = (
+            confirmations_cleanup_interval_seconds
+        )
         # Phase 2a: public_read + local_mode flags drive the new
         # JWTAuthMiddleware. Defaults match decision 12 + decision 1.
         self.public_read = public_read
@@ -219,10 +227,38 @@ class WikiServer:
                         "WikiServer: auto_compact start failed "
                         "during lifespan startup",
                     )
+            # v0.40: start confirmations cleanup task (deletes expired
+            # POST /page confirmation tokens). No config file — interval
+            # is set via WikiServer(confirmations_cleanup_interval_seconds=...).
+            if (
+                self.enable_confirmations_cleanup
+                and self._agent_service is not None
+            ):
+                try:
+                    await self._agent_service.start_confirmations_cleanup(
+                        interval_seconds=(
+                            self.confirmations_cleanup_interval_seconds
+                        ),
+                        enabled=True,
+                    )
+                except Exception:
+                    logger.exception(
+                        "WikiServer: confirmations_cleanup start failed "
+                        "during lifespan startup",
+                    )
             try:
                 yield
             finally:
-                # Stop AutoCompact first (cheaper / no LLM call in flight)
+                # Stop confirmations_cleanup first (cheap, just DELETE).
+                if self._agent_service is not None:
+                    try:
+                        await self._agent_service.stop_confirmations_cleanup()
+                    except Exception:
+                        logger.warning(
+                            "WikiServer: confirmations_cleanup stop failed",
+                            exc_info=True,
+                        )
+                # Stop AutoCompact next (cheaper / no LLM call in flight)
                 if self._agent_service is not None:
                     try:
                         await self._agent_service.stop_auto_compact()
@@ -231,7 +267,7 @@ class WikiServer:
                             "WikiServer: auto_compact stop failed",
                             exc_info=True,
                         )
-                # Stop DreamScheduler next (so it doesn't fire mid-shutdown)
+                # Stop DreamScheduler last (so it doesn't fire mid-shutdown)
                 if self._agent_service is not None:
                     try:
                         await self._agent_service.stop_dream_scheduler()
@@ -363,6 +399,16 @@ class WikiServer:
                                 self._agent_service, "auto_compact", None,
                             ) is not None
                         ),
+                        # v0.40: confirmations cleanup task
+                        "confirmations_cleanup": (
+                            self.enable_confirmations_cleanup
+                            and self._agent_service is not None
+                            and getattr(
+                                self._agent_service,
+                                "_confirmations_cleanup_task",
+                                None,
+                            ) is not None
+                        ),
                         # Phase 20 feature flag: the only trigger that
                         # routes a user message to the Research workflow
                         # is an explicit ``/study <question>`` prefix.
@@ -402,6 +448,16 @@ class WikiServer:
                             and self._agent_service is not None
                             and getattr(
                                 self._agent_service, "auto_compact", None,
+                            ) is not None
+                        ),
+                        # v0.40: confirmations cleanup task
+                        "confirmations_cleanup": (
+                            self.enable_confirmations_cleanup
+                            and self._agent_service is not None
+                            and getattr(
+                                self._agent_service,
+                                "_confirmations_cleanup_task",
+                                None,
                             ) is not None
                         ),
                         # Phase 20: only `/study` routes to Research.

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import tempfile
+import time
 
 import pytest
 
@@ -153,3 +154,72 @@ class TestWikiDatabaseGetConfirmationDecoded:
         assert conf is not None
         assert conf["arguments"] == "{not valid json"
         assert isinstance(conf["arguments"], str)
+
+
+class TestWikiDatabaseDeleteExpiredConfirmations:
+    def test_returns_zero_when_no_pending(self, app_db: AppDatabase) -> None:
+        assert app_db.wiki.delete_expired_confirmations() == 0
+
+    def test_deletes_only_expired_pending(self, app_db: AppDatabase) -> None:
+        now = time.time()
+        # Expired pending → DELETE
+        app_db.wiki.save_confirmation({
+            "id": "exp1", "wiki_id": "w1", "tool": "wiki_page_update",
+            "arguments": {"page_name": "p1", "expires_at": now - 10},
+            "status": "pending",
+        })
+        # Future expires_at pending → keep
+        app_db.wiki.save_confirmation({
+            "id": "fut1", "wiki_id": "w1", "tool": "wiki_page_update",
+            "arguments": {"page_name": "p2", "expires_at": now + 9999},
+            "status": "pending",
+        })
+        # Expired but approved → keep
+        app_db.wiki.save_confirmation({
+            "id": "app1", "wiki_id": "w1", "tool": "wiki_page_update",
+            "arguments": {"page_name": "p3", "expires_at": now - 10},
+            "status": "approved",
+        })
+        # Pending without expires_at (legacy agent-layer) → keep
+        app_db.wiki.save_confirmation({
+            "id": "leg1", "wiki_id": "w1", "tool": "x",
+            "arguments": {"page_name": "p4"},
+            "status": "pending",
+        })
+
+        deleted = app_db.wiki.delete_expired_confirmations()
+        assert deleted == 1
+
+        remaining_ids = {
+            c["id"]
+            for c in app_db.wiki.get_confirmations("w1")
+        }
+        assert remaining_ids == {"fut1", "app1", "leg1"}
+
+    def test_accepts_explicit_now_argument(self, app_db: AppDatabase) -> None:
+        """Caller can supply a custom cutoff timestamp."""
+        app_db.wiki.save_confirmation({
+            "id": "exp1", "wiki_id": "w1", "tool": "x",
+            "arguments": {"expires_at": 100.0},
+            "status": "pending",
+        })
+        deleted = app_db.wiki.delete_expired_confirmations(now=200.0)
+        assert deleted == 1
+        deleted_again = app_db.wiki.delete_expired_confirmations(now=50.0)
+        assert deleted_again == 0
+
+    def test_handles_corrupt_json_arguments(self, app_db: AppDatabase) -> None:
+        """Corrupt JSON in arguments is preserved (json_extract returns NULL)."""
+        import sqlite3
+
+        with sqlite3.connect(app_db.db_path) as conn:
+            conn.execute(
+                """INSERT INTO confirmations
+                   (id, wiki_id, tool, arguments, status)
+                   VALUES (?, ?, ?, ?, ?)""",
+                ("bad1", "w1", "x", "{not json", "pending"),
+            )
+            conn.commit()
+        deleted = app_db.wiki.delete_expired_confirmations()
+        assert deleted == 0
+        assert app_db.wiki.get_confirmation("bad1") is not None

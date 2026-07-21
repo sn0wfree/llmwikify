@@ -130,6 +130,12 @@ class AgentService:
         self.auto_compact: Any = None
         self._auto_compact_task: Any = None
 
+        # v0.40: ConfirmationsCleanup lifecycle hook. Deletes
+        # pending POST /page confirmation tokens whose ``expires_at``
+        # has passed. Same shape as auto_compact: asyncio sleep loop
+        # driven by ``interval_seconds``.
+        self._confirmations_cleanup_task: Any = None
+
     # ─── DB facade shortcut ─────────────────────────────────────
 
     @property
@@ -352,6 +358,98 @@ class AgentService:
         finally:
             self._auto_compact_task = None
             self.auto_compact = None
+
+    # ─── v0.40 ConfirmationsCleanup lifecycle ──────────────────
+
+    async def start_confirmations_cleanup(
+        self,
+        interval_seconds: float = 300.0,
+        enabled: bool = True,
+    ) -> Any:
+        """Start a periodic task that deletes expired POST /page confirmation tokens.
+
+        Confirmation tokens issued by ``_wiki_ops.write_page`` carry an
+        ``expires_at`` (default TTL 300s). If the user never confirms, the
+        token leaks into the ``confirmations`` table forever. This task
+        walks the table on a fixed interval and deletes pending tokens
+        whose ``expires_at`` has passed.
+
+        Idempotent: re-calling returns the existing task. ``enabled=False``
+        short-circuits to ``None``.
+
+        Args:
+            interval_seconds: how often to wake up and call
+                :meth:`WikiDatabase.delete_expired_confirmations`. The first
+                tick fires ``interval_seconds`` after start.
+            enabled: short-circuits to ``None`` so callers can disable
+                via config without restructuring lifespan code.
+        """
+        if not enabled:
+            logger.info(
+                "AgentService: confirmations_cleanup disabled, skipping start",
+            )
+            return None
+
+        if self._confirmations_cleanup_task is not None:
+            logger.debug("AgentService: confirmations_cleanup already running")
+            return self._confirmations_cleanup_task
+
+        wiki_db = getattr(self.wiki_service, "_wiki_db", None)
+        if wiki_db is None:
+            logger.warning(
+                "AgentService: confirmations_cleanup start skipped — "
+                "WikiService has no _wiki_db",
+            )
+            return None
+
+        import asyncio
+
+        async def _periodic_tick() -> None:
+            try:
+                while True:
+                    await asyncio.sleep(interval_seconds)
+                    try:
+                        deleted = wiki_db.delete_expired_confirmations()
+                        if deleted:
+                            logger.info(
+                                "AgentService: confirmations_cleanup "
+                                "deleted %d expired tokens",
+                                deleted,
+                            )
+                    except Exception:
+                        logger.warning(
+                            "AgentService: confirmations_cleanup tick failed",
+                            exc_info=True,
+                        )
+            except asyncio.CancelledError:
+                raise
+
+        self._confirmations_cleanup_task = asyncio.create_task(
+            _periodic_tick(), name="confirmations_cleanup_tick",
+        )
+        logger.info(
+            "AgentService: confirmations_cleanup started (interval=%.0fs)",
+            interval_seconds,
+        )
+        return self._confirmations_cleanup_task
+
+    async def stop_confirmations_cleanup(self) -> None:
+        """Stop the confirmations cleanup task.
+
+        Idempotent: safe to call even if cleanup was never started.
+        """
+        if self._confirmations_cleanup_task is None:
+            return
+        self._confirmations_cleanup_task.cancel()
+        try:
+            await self._confirmations_cleanup_task
+        except BaseException:  # noqa: BLE001 — CancelledError + bubbled errors
+            logger.debug(
+                "confirmations_cleanup task cancellation settled",
+                exc_info=True,
+            )
+        finally:
+            self._confirmations_cleanup_task = None
 
     def _active_session_keys(self) -> list[str]:
         """Return ids of sessions currently marked as active.

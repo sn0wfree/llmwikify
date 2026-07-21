@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 import uuid
 
 from llmwikify.apps.db_base import BaseDatabase
@@ -344,6 +345,42 @@ class WikiDatabase(BaseDatabase):
             "DELETE FROM confirmations WHERE id = ?",
             (confirmation_id,),
         )
+
+    def delete_expired_confirmations(self, now: float | None = None) -> int:
+        """Delete pending confirmations whose ``expires_at`` is in the past.
+
+        Uses ``json_extract`` to read ``expires_at`` from the ``arguments``
+        JSON column (avoiding a schema migration). Tokens without an
+        ``expires_at`` (e.g., legacy agent-layer confirmations) are
+        preserved. Only ``status='pending'`` rows are eligible.
+
+        Args:
+            now: Unix timestamp (seconds) for the expiration cutoff.
+                Defaults to ``time.time()``.
+
+        Returns:
+            Number of confirmations deleted.
+        """
+        if now is None:
+            now = time.time()
+        # ``json_valid`` guard avoids "malformed JSON" errors on rows
+        # with corrupt ``arguments`` (rare, but possible if a writer
+        # bypassed save_confirmation).
+        cur = self._mgr.execute_write(
+            """DELETE FROM confirmations
+               WHERE status = 'pending'
+                 AND json_valid(arguments) = 1
+                 AND json_extract(arguments, '$.expires_at') IS NOT NULL
+                 AND json_extract(arguments, '$.expires_at') < ?""",
+            (now,),
+        )
+        deleted = cur.rowcount
+        if deleted:
+            logger.debug(
+                "WikiDatabase: deleted %d expired pending confirmations",
+                deleted,
+            )
+        return deleted
 
     # ─── Ingest log (3 methods) ─────────────────────────────────
 
