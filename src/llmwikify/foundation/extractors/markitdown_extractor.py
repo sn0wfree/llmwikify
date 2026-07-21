@@ -19,22 +19,17 @@ Supported formats (when markitdown[all] is installed):
 from pathlib import Path
 from typing import Any
 
-from .base import ExtractedContent
+# Re-export for backward compatibility (canonical definition is in base.py)
+from .base import (
+    _EXTRACTOR_REGISTRY,
+    MARKITDOWN_FORMATS,  # noqa: F401
+    ExtractedContent,
+)
 
-# All file extensions handled by MarkItDown
-MARKITDOWN_FORMATS: set[str] = {
-    ".pdf",
-    ".docx", ".doc",
-    ".xlsx", ".xls",
-    ".pptx", ".ppt",
-    ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff", ".tif", ".webp", ".svg",
-    ".mp3", ".wav", ".m4a",
-    ".html", ".htm",
-    ".csv", ".json", ".xml",
-    ".epub",
-    ".zip",
-    ".msg",
-}
+
+def _ext_to_source_type(ext: str) -> str:
+    """Map file extension to source_type string. Backward-compatible wrapper."""
+    return _EXTRACTOR_REGISTRY.get(ext, ("text", ["text"]))[0]
 
 
 class MarkItDownExtractor:
@@ -127,7 +122,7 @@ class MarkItDownExtractor:
 
             return ExtractedContent(
                 text=text_content,
-                source_type=_ext_to_source_type(ext),
+                source_type=_EXTRACTOR_REGISTRY.get(ext, ("text", ["text"]))[0],
                 title=title,
                 metadata={
                     "file_path": str(path),
@@ -155,23 +150,3 @@ class MarkItDownExtractor:
                 return stripped[:100]
 
         return path.stem.replace('-', ' ').replace('_', ' ').title()
-
-
-def _ext_to_source_type(ext: str) -> str:
-    """Map file extension to source_type string."""
-    type_map = {
-        ".pdf": "pdf",
-        ".docx": "docx", ".doc": "doc",
-        ".xlsx": "xlsx", ".xls": "xls",
-        ".pptx": "pptx", ".ppt": "ppt",
-        ".jpg": "image", ".jpeg": "image", ".png": "image",
-        ".gif": "image", ".bmp": "image", ".tiff": "image",
-        ".tif": "image", ".webp": "image", ".svg": "image",
-        ".mp3": "audio", ".wav": "audio", ".m4a": "audio",
-        ".html": "html", ".htm": "html",
-        ".csv": "csv", ".json": "json", ".xml": "xml",
-        ".epub": "epub",
-        ".zip": "zip",
-        ".msg": "outlook",
-    }
-    return type_map.get(ext, "text")

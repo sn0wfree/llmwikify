@@ -13,12 +13,7 @@ back-compat with existing wiki configs.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 from .base import BaseLLMProvider
-
-if TYPE_CHECKING:
-    from llmwikify.foundation.llm.streamable import StreamableLLMClient
 
 
 class MiniMaxProvider(BaseLLMProvider):
@@ -34,65 +29,8 @@ class MiniMaxProvider(BaseLLMProvider):
 
     _PROVIDER_ID = "minimax"
 
-    def provider_name(self) -> str:
-        return self._PROVIDER_ID
-
-    def _metadata(self) -> dict:
-        from llmwikify.foundation.llm.resolver import get_provider_metadata
-
-        return get_provider_metadata(self._PROVIDER_ID)
-
-    def default_base_url(self) -> str:
-        return self._metadata().get("base_url", "")
-
-    def default_model(self) -> str:
-        return self._metadata().get("default_model", "")
-
-    def supported_models(self) -> list[str]:
-        return list(self._metadata().get("supported_models", []))
-
-    def from_config(self, config: dict) -> StreamableLLMClient:
-        from llmwikify.foundation.llm.resolver import resolve_chat_llm, resolver_enabled
-        from llmwikify.foundation.llm.streamable import StreamableLLMClient
-
-        if resolver_enabled():
-            # Inject provider id so the resolver does not fall back
-            # to the openai default.
-            wrapped = dict(config)
-            wrapped.setdefault("provider", self.provider_name())
-            spec = resolve_chat_llm({"llm": wrapped})
-            if not spec.api_key:
-                raise ValueError("MiniMax API key not configured.")
-            return StreamableLLMClient.from_spec(spec)
-
-        api_key = self._resolve_api_key(config)
-        if not api_key:
-            raise ValueError("MiniMax API key not configured.")
-
-        base_url = self._resolve_field(config, "base_url", self.default_base_url())
-        model = self._resolve_field(config, "model", self.default_model())
-
-        reasoning_split = config.get("reasoning_split", True)
-
-        return StreamableLLMClient(
-            provider=self.provider_name(),
-            base_url=base_url,
-            api_key=api_key,
-            model=model,
-            reasoning_split=reasoning_split,
-            context_window=config.get("context_window"),
-            budget_on_exceed=config.get("budget_on_exceed", "warn"),
-        )
-
     def validate_config(self, config: dict) -> list[str]:
-        errors = []
-        api_key = self._resolve_api_key(config)
-        if not api_key:
-            errors.append("API key is required")
-        base_url = config.get("base_url", "")
-        if not base_url:
+        errors = super().validate_config(config)
+        if not config.get("base_url"):
             errors.append("Base URL is required")
-        model = config.get("model", "")
-        if model and model not in self.supported_models():
-            errors.append(f"Model '{model}' not supported. Choose from: {', '.join(self.supported_models())}")
         return errors

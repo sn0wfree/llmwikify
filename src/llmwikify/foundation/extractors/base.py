@@ -32,6 +32,60 @@ _YOUTUBE_PATTERNS = (
     r"(?:youtube\.com/watch\?v=|youtu\.be/|youtube\.com/embed/)",
 )
 
+# ---------------------------------------------------------------------------
+# Single source of truth: extension → (source_type, handlers)
+#
+# handlers is a list of extractor names to try in order:
+#   "markitdown" — Microsoft MarkItDown (try first for rich formats)
+#   "pdf"        — legacy pymupdf extractor
+#   "text"       — plain/markdown text extractor
+#   "html"       — legacy HTML extractor
+#
+# Extensions not listed here default to ("text", ["text"]).
+# ---------------------------------------------------------------------------
+
+_EXTRACTOR_REGISTRY: dict[str, tuple[str, list[str]]] = {
+    # PDF — try MarkItDown first (OCR support), fallback to pymupdf
+    ".pdf": ("pdf", ["markitdown", "pdf"]),
+    # Office formats — MarkItDown only
+    ".docx": ("docx", ["markitdown"]),
+    ".doc": ("doc", ["markitdown"]),
+    ".xlsx": ("xlsx", ["markitdown"]),
+    ".xls": ("xls", ["markitdown"]),
+    ".pptx": ("pptx", ["markitdown"]),
+    ".ppt": ("ppt", ["markitdown"]),
+    # Images — MarkItDown only (requires LLM vision)
+    ".jpg": ("image", ["markitdown"]), ".jpeg": ("image", ["markitdown"]),
+    ".png": ("image", ["markitdown"]), ".gif": ("image", ["markitdown"]),
+    ".bmp": ("image", ["markitdown"]), ".tiff": ("image", ["markitdown"]),
+    ".tif": ("image", ["markitdown"]), ".webp": ("image", ["markitdown"]),
+    ".svg": ("image", ["markitdown"]),
+    # Audio — MarkItDown only (requires speech transcription)
+    ".mp3": ("audio", ["markitdown"]), ".wav": ("audio", ["markitdown"]),
+    ".m4a": ("audio", ["markitdown"]),
+    # HTML — try MarkItDown first, fallback to legacy html extractor
+    ".html": ("html", ["markitdown", "html"]),
+    ".htm": ("html", ["markitdown", "html"]),
+    # Structured data — MarkItDown only
+    ".csv": ("csv", ["markitdown"]),
+    ".json": ("json", ["markitdown"]),
+    ".xml": ("xml", ["markitdown"]),
+    # E-book / archive / email — MarkItDown only
+    ".epub": ("epub", ["markitdown"]),
+    ".zip": ("zip", ["markitdown"]),
+    ".msg": ("outlook", ["markitdown"]),
+    # Plain text — legacy only (MarkItDown adds no value)
+    ".md": ("markdown", ["text"]),
+    ".markdown": ("markdown", ["text"]),
+    ".txt": ("text", ["text"]),
+}
+
+# Derived: set of extensions handled by MarkItDown
+MARKITDOWN_FORMATS: set[str] = {
+    ext for ext, (_, handlers) in _EXTRACTOR_REGISTRY.items()
+    if "markitdown" in handlers
+}
+
 
 def detect_source_type(source: str) -> str:
     """Detect whether a source is a URL, YouTube link, or file (by extension)."""
@@ -42,26 +96,7 @@ def detect_source_type(source: str) -> str:
         return "url"
 
     ext = Path(source).suffix.lower()
-    return {
-        ".pdf": "pdf",
-        ".md": "markdown",
-        ".markdown": "markdown",
-        ".txt": "text",
-        ".html": "html",
-        ".htm": "html",
-        # MarkItDown enhanced formats
-        ".docx": "docx", ".doc": "doc",
-        ".xlsx": "xlsx", ".xls": "xls",
-        ".pptx": "pptx", ".ppt": "ppt",
-        ".jpg": "image", ".jpeg": "image", ".png": "image",
-        ".gif": "image", ".bmp": "image", ".tiff": "image",
-        ".tif": "image", ".webp": "image", ".svg": "image",
-        ".mp3": "audio", ".wav": "audio", ".m4a": "audio",
-        ".csv": "csv", ".json": "json", ".xml": "xml",
-        ".epub": "epub",
-        ".zip": "zip",
-        ".msg": "outlook",
-    }.get(ext, "text")
+    return _EXTRACTOR_REGISTRY.get(ext, ("text", ["text"]))[0]
 
 
 def extract(source: str, wiki_root: Path | None = None) -> ExtractedContent:
@@ -95,44 +130,31 @@ def extract(source: str, wiki_root: Path | None = None) -> ExtractedContent:
         )
 
     ext = path.suffix.lower()
+    _, handlers = _EXTRACTOR_REGISTRY.get(ext, ("text", ["text"]))
 
-    # MarkItDown-enhanced formats (Office, images, audio, etc.)
-    markitdown_formats = {
-        ".pdf", ".docx", ".doc", ".xlsx", ".xls", ".pptx", ".ppt",
-        ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff", ".tif",
-        ".webp", ".svg",
-        ".mp3", ".wav", ".m4a",
-        ".csv", ".json", ".xml",
-        ".epub", ".zip", ".msg",
-    }
-
-    if ext in markitdown_formats:
-        from .markitdown_extractor import MarkItDownExtractor
-        extractor = MarkItDownExtractor()
-        result = extractor.convert(path)
-        if result:
-            return result
-        # MarkItDown unavailable or failed — fall through to legacy extractors
-
-    # Legacy extractors with known file types
-
-    if source_type in ("pdf", "markdown", "text", "html"):
-        if source_type == "pdf":
+    # Try each handler in priority order
+    for handler in handlers:
+        if handler == "markitdown":
+            from .markitdown_extractor import MarkItDownExtractor
+            extractor = MarkItDownExtractor()
+            result = extractor.convert(path)
+            if result:
+                return result
+            # MarkItDown unavailable or failed — try next handler
+        elif handler == "pdf":
             from .pdf import extract_pdf
             return extract_pdf(path)
-        elif source_type in ("markdown", "text"):
+        elif handler == "text":
             from .text import extract_text_file
             return extract_text_file(path)
-        elif source_type == "html":
+        elif handler == "html":
             from .text import extract_html_file
             return extract_html_file(path)
-    else:
-        # No legacy extractor available for this format
-        return ExtractedContent(
-            text="",
-            source_type="error",
-            title=str(path),
-            metadata={
-                "error": f"No extractor available for '{ext}' files. Install markitdown[all] for support."
-            }
-        )
+
+    # No handler succeeded (shouldn't happen for registered extensions)
+    return ExtractedContent(
+        text="",
+        source_type="error",
+        title=str(path),
+        metadata={"error": f"All extractors failed for '{ext}' files."}
+    )

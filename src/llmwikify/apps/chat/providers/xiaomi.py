@@ -6,7 +6,7 @@ v0.41: Provider 元数据（base_url、default_model、supported_models）
 
 from __future__ import annotations
 
-from typing import Any
+from llmwikify.foundation.llm.streamable import StreamableLLMClient
 
 from .base import BaseLLMProvider
 
@@ -19,44 +19,9 @@ class XiaomiProvider(BaseLLMProvider):
 
     _PROVIDER_ID = "xiaomi"
 
-    def provider_name(self) -> str:
-        return self._PROVIDER_ID
-
-    def _metadata(self) -> dict:
-        from llmwikify.foundation.llm.resolver import get_provider_metadata
-
-        return get_provider_metadata(self._PROVIDER_ID)
-
-    def default_base_url(self) -> str:
-        return self._metadata().get("base_url", "")
-
-    def default_model(self) -> str:
-        return self._metadata().get("default_model", "")
-
-    def supported_models(self) -> list[str]:
-        return list(self._metadata().get("supported_models", []))
-
-    def from_config(self, config: dict) -> Any:
-        from llmwikify.foundation.llm.resolver import resolve_chat_llm, resolver_enabled
-        from llmwikify.foundation.llm.streamable import StreamableLLMClient
-
-        if resolver_enabled():
-            # Inject provider id so the resolver does not fall back
-            # to the openai default.
-            wrapped = dict(config)
-            wrapped.setdefault("provider", self.provider_name())
-            spec = resolve_chat_llm({"llm": wrapped})
-            if not spec.api_key:
-                raise ValueError("Xiaomi MiMo API key not configured.")
-            return StreamableLLMClient.from_spec(spec)
-
-        api_key = self._resolve_api_key(config)
-        if not api_key:
-            raise ValueError("Xiaomi MiMo API key not configured.")
-
-        base_url = self._resolve_field(config, "base_url", self.default_base_url())
-        model = self._resolve_field(config, "model", self.default_model())
-
+    def _build_legacy_client(
+        self, config: dict, base_url: str, api_key: str, model: str,
+    ) -> StreamableLLMClient:
         return StreamableLLMClient(
             provider=self.provider_name(),
             base_url=base_url,
@@ -67,13 +32,3 @@ class XiaomiProvider(BaseLLMProvider):
             context_window=config.get("context_window"),
             budget_on_exceed=config.get("budget_on_exceed", "warn"),
         )
-
-    def validate_config(self, config: dict) -> list[str]:
-        errors = []
-        api_key = self._resolve_api_key(config)
-        if not api_key:
-            errors.append("API key is required")
-        model = config.get("model", "")
-        if model and model not in self.supported_models():
-            errors.append(f"Model '{model}' not supported. Choose from: {', '.join(self.supported_models())}")
-        return errors
