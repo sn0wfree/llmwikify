@@ -371,10 +371,15 @@ export const api = {
     readPage: (pageName: string) =>
       request<WikiPage>(`/wiki/page/${encodeURIComponent(pageName)}`),
     writePage: (pageName: string, content: string, confirmToken?: string) => {
-      const qs = confirmToken ? `?confirm_token=${encodeURIComponent(confirmToken)}` : '';
-      return request<{ ok: boolean }>(`/wiki/page${qs}`, {
+      // v0.40: confirm_token in POST body (not query string) — avoids
+      // leaking into HTTP access logs.
+      return request<{ ok: boolean }>(`/wiki/page`, {
         method: 'POST',
-        body: JSON.stringify({ page_name: pageName, content }),
+        body: JSON.stringify({
+          page_name: pageName,
+          content,
+          ...(confirmToken ? { confirm_token: confirmToken } : {}),
+        }),
       });
     },
     sinkStatus: () => request<SinkStatus>('/wiki/sink/status'),
@@ -398,10 +403,13 @@ export const api = {
       readPage: (wikiId: string, pageName: string) =>
         request<WikiPage>(`/wiki/${wikiId}/page/${encodeURIComponent(pageName)}`),
       writePage: (wikiId: string, pageName: string, content: string, confirmToken?: string) => {
-        const qs = confirmToken ? `?confirm_token=${encodeURIComponent(confirmToken)}` : '';
-        return request<{ ok: boolean }>(`/wiki/${wikiId}/page${qs}`, {
+        return request<{ ok: boolean }>(`/wiki/${wikiId}/page`, {
           method: 'POST',
-          body: JSON.stringify({ page_name: pageName, content }),
+          body: JSON.stringify({
+            page_name: pageName,
+            content,
+            ...(confirmToken ? { confirm_token: confirmToken } : {}),
+          }),
         });
       },
       search: (wikiId: string, query: string, limit = 10) =>

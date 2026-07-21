@@ -267,14 +267,12 @@ def get_wiki_guide(wiki: Wiki) -> dict:
                     "body": {
                         "page_name": "daily/2026-07-21 (NO .md suffix!)",
                         "content": "# Title\n\nFull markdown content...",
-                    },
-                    "params": {
-                        "confirm_token": "optional confirmation_id from 409 response to confirm update (TTL: 300s, one-shot)",
+                        "confirm_token": "OPTIONAL — from 409 response, confirms update (one-shot, TTL 300s)",
                     },
                     "behavior": {
                         "new_page": "201 Created",
                         "existing_page_no_token": "409 Conflict + confirmation_id + existing_page preview",
-                        "existing_page_with_token": "200 Updated (if token valid + wiki_id matches + page_name matches + not expired)",
+                        "existing_page_with_valid_token": "200 Updated (token must match wiki_id + page_name + not expired)",
                         "content_missing": "400 Bad Request",
                         "token_invalid_or_expired_or_wiki_mismatch": "400 Bad Request",
                         "wiki_db_unavailable": "503 Service Unavailable",
