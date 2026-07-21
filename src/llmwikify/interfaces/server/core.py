@@ -75,7 +75,6 @@ class WikiServer:
         enable_dream_scheduler: bool = True,
         enable_auto_compact: bool = True,
         enable_confirmations_cleanup: bool = True,
-        confirmations_cleanup_interval_seconds: float = 300.0,
         *,
         public_read: bool = True,
         local_mode: bool = False,
@@ -115,11 +114,10 @@ class WikiServer:
         self.enable_dream_scheduler = enable_dream_scheduler
         self.enable_auto_compact = enable_auto_compact
         # v0.40: periodic cleanup of expired POST /page confirmation
-        # tokens. Default ON; same default as AutoCompact.
+        # tokens. Default ON; interval is configured via
+        # memory_config.json (confirmations_cleanup.interval_seconds)
+        # — same pattern as AutoCompact.
         self.enable_confirmations_cleanup = enable_confirmations_cleanup
-        self.confirmations_cleanup_interval_seconds = (
-            confirmations_cleanup_interval_seconds
-        )
         # Phase 2a: public_read + local_mode flags drive the new
         # JWTAuthMiddleware. Defaults match decision 12 + decision 1.
         self.public_read = public_read
@@ -228,19 +226,28 @@ class WikiServer:
                         "during lifespan startup",
                     )
             # v0.40: start confirmations cleanup task (deletes expired
-            # POST /page confirmation tokens). No config file — interval
-            # is set via WikiServer(confirmations_cleanup_interval_seconds=...).
+            # POST /page confirmation tokens). Interval is configured via
+            # memory_config.json (confirmations_cleanup.interval_seconds),
+            # matching the AutoCompact pattern. ``enable_confirmations_cleanup``
+            # on WikiServer is a master kill-switch — even when True, the
+            # config-level ``enabled`` flag is honored.
             if (
                 self.enable_confirmations_cleanup
                 and self._agent_service is not None
             ):
                 try:
-                    await self._agent_service.start_confirmations_cleanup(
-                        interval_seconds=(
-                            self.confirmations_cleanup_interval_seconds
-                        ),
-                        enabled=True,
+                    from llmwikify.apps.chat.memory.memory_config import (
+                        load_memory_config,
                     )
+                    mem_cfg = load_memory_config(self._agent_service.data_dir)
+                    cc_cfg = mem_cfg.confirmations_cleanup
+                    if cc_cfg.get("enabled", True):
+                        await self._agent_service.start_confirmations_cleanup(
+                            interval_seconds=float(
+                                cc_cfg.get("interval_seconds", 300.0),
+                            ),
+                            enabled=True,
+                        )
                 except Exception:
                     logger.exception(
                         "WikiServer: confirmations_cleanup start failed "

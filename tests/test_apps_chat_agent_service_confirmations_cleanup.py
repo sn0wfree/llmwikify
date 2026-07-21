@@ -192,7 +192,6 @@ class TestWikiServerConfirmationsCleanupIntegration:
             enable_webui=False,
         )
         assert server.enable_confirmations_cleanup is True
-        assert server.confirmations_cleanup_interval_seconds == 300.0
 
     def test_flag_default_can_be_disabled(self, tmp_path: Path) -> None:
         from llmwikify.interfaces.server.core import WikiServer
@@ -208,18 +207,3 @@ class TestWikiServerConfirmationsCleanupIntegration:
             enable_webui=False,
         )
         assert server.enable_confirmations_cleanup is False
-
-    def test_custom_interval_stored(self, tmp_path: Path) -> None:
-        from llmwikify.interfaces.server.core import WikiServer
-        from llmwikify.kernel import Wiki
-
-        wiki = Wiki(tmp_path / "wiki")
-        wiki.init()
-        server = WikiServer(
-            wiki,
-            enable_dream_scheduler=False,
-            enable_auto_compact=False,
-            confirmations_cleanup_interval_seconds=60.0,
-            enable_webui=False,
-        )
-        assert server.confirmations_cleanup_interval_seconds == 60.0

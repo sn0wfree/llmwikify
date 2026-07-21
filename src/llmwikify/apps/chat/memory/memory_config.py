@@ -1,8 +1,9 @@
-"""memory_config — Phase 6 + Phase 9 config helpers.
+"""memory_config — Phase 6 + Phase 9 + v0.40 config helpers.
 
 Reads ~/.llmwikify/memory_config.json if present, otherwise falls
 back to defaults. Lets users tune consolidation threshold, dream
-schedule, and (Phase 9) AutoCompact TTL without code changes.
+schedule, AutoCompact TTL, and (v0.40) confirmations cleanup
+interval without code changes.
 
 Default config:
     {
@@ -22,6 +23,10 @@ Default config:
       "auto_compact": {
         "enabled": true,
         "ttl_minutes": 30,
+        "interval_seconds": 300.0
+      },
+      "confirmations_cleanup": {
+        "enabled": true,
         "interval_seconds": 300.0
       }
     }
@@ -63,6 +68,11 @@ class MemoryConfig:
         "ttl_minutes": 30,
         "interval_seconds": 300.0,
     })
+    # v0.40: periodic cleanup of expired POST /page confirmation tokens.
+    confirmations_cleanup: dict[str, Any] = field(default_factory=lambda: {
+        "enabled": True,
+        "interval_seconds": 300.0,
+    })
 
 
 def load_memory_config(data_dir: Path | str) -> MemoryConfig:
@@ -93,6 +103,10 @@ def load_memory_config(data_dir: Path | str) -> MemoryConfig:
             cfg.dream.update(data["dream"])
         if "auto_compact" in data and isinstance(data["auto_compact"], dict):
             cfg.auto_compact.update(data["auto_compact"])
+        if "confirmations_cleanup" in data and isinstance(
+            data["confirmations_cleanup"], dict,
+        ):
+            cfg.confirmations_cleanup.update(data["confirmations_cleanup"])
     return cfg
 
 
