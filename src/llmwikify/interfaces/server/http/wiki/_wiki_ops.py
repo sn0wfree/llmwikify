@@ -138,10 +138,11 @@ def enrich_status(status: dict) -> dict:
 
 
 def get_wiki_guide(wiki: Wiki) -> dict:
-    """获取 wiki 使用指南：schema、overview、index + API 说明。
+    """获取 wiki 使用指南：schema、overview、index + 完整 API 说明 + 操作流程。
 
     Returns:
-        dict with schema, overview, index, api_guide, page_types
+        dict with schema, overview, index, api_guide, workflows,
+        page_naming_rules, page_types, error_codes
     """
     schema_data = wiki.read_schema()
     schema_content = schema_data.get("content", "") if "error" not in schema_data else ""
@@ -158,34 +159,128 @@ def get_wiki_guide(wiki: Wiki) -> dict:
         "overview": overview_content,
         "index": index_content,
         "api_guide": {
-            "write_page": {
-                "endpoint": "POST /api/wiki/{wiki_id}/page",
-                "body": {
-                    "page_name": "daily/2026-07-21 (NO .md suffix!)",
-                    "content": "# Title\n\nContent...",
-                    "query": "optional query for wikify",
+            "bootstrap": {
+                "GET /api/wiki/{wiki_id}/guide": "Start here — returns all context (this endpoint)",
+            },
+            "read": {
+                "GET /api/wiki/{wiki_id}/page/{page_name}": {
+                    "description": "Read a wiki page (supports .sink/ files)",
+                    "example": "/api/wiki/mining_news/page/daily/2026-07-21",
                 },
-                "rules": [
-                    "page_name must NOT end with .md",
-                    "page_name must NOT start with wiki/",
-                    "page_name must NOT contain ..",
-                    "Both content and query are recommended",
-                ],
+                "GET /api/wiki/{wiki_id}/pages": {
+                    "description": "List all page names in the wiki",
+                },
+                "GET /api/wiki/{wiki_id}/search?q={query}": {
+                    "description": "Full-text search across wiki pages",
+                    "params": {"q": "search query", "limit": "max results (default 10)", "backend": "fts5 (default)"},
+                    "example": "/api/wiki/mining_news/search?q=gold+mining&limit=10",
+                },
             },
-            "read_page": {
-                "endpoint": "GET /api/wiki/{wiki_id}/page/{page_name}",
-                "example": "/api/wiki/mining_news/page/daily/2026-07-21",
+            "write": {
+                "POST /api/wiki/{wiki_id}/page": {
+                    "description": "Create or update a wiki page (upsert)",
+                    "body": {
+                        "page_name": "daily/2026-07-21 (NO .md suffix!)",
+                        "content": "# Title\n\nFull markdown content...",
+                        "query": "optional query for wikify processing",
+                    },
+                },
             },
-            "search": {
-                "endpoint": "GET /api/wiki/{wiki_id}/search?q={query}",
-                "example": "/api/wiki/mining_news/search?q=gold+mining",
+            "health": {
+                "GET /api/wiki/{wiki_id}/status": {
+                    "description": "Wiki status summary (page count, graph stats, types)",
+                },
+                "GET /api/wiki/{wiki_id}/lint": {
+                    "description": "Health check (broken links, orphans, contradictions)",
+                    "params": {"mode": "check (default) or fix", "limit": "max issues (default 10)"},
+                },
+                "GET /api/wiki/{wiki_id}/sink/status": {
+                    "description": "Pending sink buffer entries",
+                },
+                "GET /api/wiki/{wiki_id}/recommend": {
+                    "description": "Missing page recommendations (frequently referenced but nonexistent)",
+                },
             },
-            "guide": {
-                "endpoint": "GET /api/wiki/{wiki_id}/guide",
-                "description": "This endpoint — returns all wiki context for agents",
+            "graph": {
+                "GET /api/wiki/{wiki_id}/graph": {
+                    "description": "Knowledge graph visualization data",
+                    "params": {"current_page": "optional focus page", "mode": "auto (default)"},
+                },
+                "GET /api/wiki/{wiki_id}/graph_analyze": {
+                    "description": "Graph analysis (community detection, export)",
+                },
+            },
+            "files": {
+                "GET /api/wiki/{wiki_id}/file/{path}": {
+                    "description": "Serve raw file from wiki (PDF, markdown, source)",
+                    "example": "/api/wiki/mining_news/file/raw/gold/article.md",
+                },
+            },
+        },
+        "workflows": {
+            "agent_bootstrap": [
+                "1. GET /api/wiki/{wiki_id}/guide — get this guide (schema, overview, index)",
+                "2. Parse api_guide to learn all available endpoints",
+                "3. Parse page_types to know directory structure (daily/, company/, industry/, etc.)",
+                "4. Read index to understand current wiki state",
+                "5. Search or read pages as needed for your task",
+            ],
+            "ingest_document": [
+                "1. Place file in raw/ directory (or use CLI: python3 -m llmwikify ingest raw/file.pdf)",
+                "2. GET /api/wiki/{wiki_id}/search?q='filename' — check if already ingested",
+                "3. If not exists, POST /api/wiki/{wiki_id}/page with page_name='sources/slug' and content",
+                "4. Optionally create/update related pages (company/, industry/, daily/)",
+                "5. Verify: GET /api/wiki/{wiki_id}/page/{page_name}",
+            ],
+            "create_page": [
+                "1. GET /api/wiki/{wiki_id}/search?q='topic' — check for duplicates",
+                "2. If page exists, read first: GET /api/wiki/{wiki_id}/page/{page_name}",
+                "3. POST /api/wiki/{wiki_id}/page with page_name (NO .md suffix) and full markdown content",
+                "4. Use [[wikilinks]] to connect to related pages",
+                "5. Verify: GET /api/wiki/{wiki_id}/page/{page_name}",
+            ],
+            "daily_summary": [
+                "1. Search raw articles for target date: GET /api/wiki/{wiki_id}/search?q='YYYY-MM-DD'",
+                "2. Read each article via GET /api/wiki/{wiki_id}/file/raw/{metal}/article.md",
+                "3. Compose summary following wiki.md template (热点, 行业趋势, 公司动向, 地理分布, 市场观点)",
+                "4. POST /api/wiki/{wiki_id}/page with page_name='daily/YYYY-MM-DD'",
+                "5. Update related industry/company pages if significant new information",
+            ],
+            "health_check": [
+                "1. GET /api/wiki/{wiki_id}/lint — check for broken links, orphans, issues",
+                "2. GET /api/wiki/{wiki_id}/recommend — find missing pages that are frequently referenced",
+                "3. Fix issues by creating missing pages or updating broken links",
+                "4. Re-run GET /api/wiki/{wiki_id}/lint to verify fixes",
+            ],
+            "search_and_read": [
+                "1. GET /api/wiki/{wiki_id}/search?q='query'&limit=10 — find relevant pages",
+                "2. Review search results (page_name, score, snippet)",
+                "3. GET /api/wiki/{wiki_id}/page/{page_name} — read full content of relevant pages",
+                "4. If page has has_sink=true, also read sink: GET /api/wiki/{wiki_id}/page/sink/{page_name}",
+            ],
+        },
+        "page_naming_rules": {
+            "no_md_suffix": "page_name must NOT end with .md (auto-appended by server)",
+            "no_wiki_prefix": "page_name must NOT start with wiki/ (added automatically)",
+            "no_traversal": "page_name must NOT contain .. (path traversal blocked)",
+            "path_format": "Use 'directory/name' format for organized pages",
+            "examples": {
+                "daily": "daily/2026-07-21",
+                "weekly": "weekly/2026-W29",
+                "monthly": "monthly/2026-07",
+                "company": "company/Kinross Gold",
+                "industry": "industry/Gold Industry",
+                "source": "sources/ontario-fast-tracks-kinross-great-bear",
+                "entity": "entities/Great Bear Project",
+                "concept": "concepts/Mining Supercycle",
             },
         },
         "page_types": page_types,
+        "error_codes": {
+            "400": "Bad request — invalid page_name, missing content, or validation error",
+            "404": "Not found — wiki_id or page_name doesn't exist",
+            "500": "Internal server error — contact admin",
+        },
     }
 
 
