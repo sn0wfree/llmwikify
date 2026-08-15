@@ -74,6 +74,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   primitives; hard-refresh once.
 - **No schema migration**, no CLI breaking changes.
 
+### Hygiene
+- **`docs/TODO.md` removed** — 67 lines were 100% quant-era tasks (`sub_factors`
+  field, Polars/Pandas compatibility, 101 Alphas merge input, FactorDetail.tsx
+  display). All obsolete after [0.40.0] Refocus removed `reproduction/`.
+  Future task tracking uses [GitHub Issues](https://github.com/sn0wfree/llmwikify/issues).
+- **`docs/designs/v0.41-chat-service-split.md` archived** — moved to
+  `docs/designs/archive/implemented/` with frontmatter noting the plan was
+  *partially* implemented in v0.40 (4 components exist at
+  `apps/chat/agent/{orchestrator,prompt_builder,context_manager,tool_executor}.py`
+  but at 1968 LOC total vs planned 1050; future further split of orchestrator
+  is a separate workstream).
+
 ---
 
 ## [0.40.1] - 2026-07-07 — Search CJK Recall Fix
