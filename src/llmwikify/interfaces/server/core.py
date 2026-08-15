@@ -75,6 +75,7 @@ class WikiServer:
         enable_dream_scheduler: bool = True,
         enable_auto_compact: bool = True,
         enable_confirmations_cleanup: bool = True,
+        enable_maintenance: bool = True,
         *,
         public_read: bool = True,
         local_mode: bool = False,
@@ -118,6 +119,13 @@ class WikiServer:
         # memory_config.json (confirmations_cleanup.interval_seconds)
         # — same pattern as AutoCompact.
         self.enable_confirmations_cleanup = enable_confirmations_cleanup
+        # Self-maintenance (docs/designs/self-maintenance.md): auto-ingest
+        # of raw/ new files + gap filler + DB maintenance, covering all
+        # LOCAL wikis. Master kill-switch; the config-level ``enabled``
+        # flag in ~/.llmwikify/llmwikify.json (maintenance.enabled) is
+        # honored too — same two-level pattern as confirmations_cleanup.
+        self.enable_maintenance = enable_maintenance
+        self._maintenance_manager: Any = None
         # Phase 2a: public_read + local_mode flags drive the new
         # JWTAuthMiddleware. Defaults match decision 12 + decision 1.
         self.public_read = public_read
@@ -263,9 +271,42 @@ class WikiServer:
                         "WikiServer: confirmations_cleanup start failed "
                         "during lifespan startup",
                     )
+            # Self-maintenance: start MaintenanceManager (auto-ingest
+            # watchers + gap-filler / DB periodic loops) for all LOCAL
+            # wikis. Config-level maintenance.enabled=False disables it
+            # even when the server-level switch is on.
+            if self.enable_maintenance:
+                try:
+                    from llmwikify.apps.agent.maintenance import (
+                        MaintenanceManager,
+                        load_maintenance_config,
+                    )
+                    m_cfg = load_maintenance_config()
+                    if m_cfg.enabled:
+                        self._maintenance_manager = MaintenanceManager(
+                            registry=self.registry,
+                            config=m_cfg,
+                        )
+                        app.state.maintenance_manager = self._maintenance_manager
+                        await self._maintenance_manager.start()
+                except Exception:
+                    logger.exception(
+                        "WikiServer: maintenance start failed "
+                        "during lifespan startup",
+                    )
             try:
                 yield
             finally:
+                # Stop maintenance first: file watchers must stop
+                # accepting new events before anything else tears down.
+                if self._maintenance_manager is not None:
+                    try:
+                        await self._maintenance_manager.stop()
+                    except Exception:
+                        logger.warning(
+                            "WikiServer: maintenance stop failed",
+                            exc_info=True,
+                        )
                 # Stop confirmations_cleanup first (cheap, just DELETE).
                 if self._agent_service is not None:
                     try:

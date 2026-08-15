@@ -57,6 +57,12 @@ def register_routes(
     from llmwikify.interfaces.server.http.wiki.log_routes import register_log_routes
     register_log_routes(app)
 
+    # 自维护路由（manager 由 lifespan 挂载到 app.state）
+    from llmwikify.interfaces.server.http.maintenance_routes import (
+        register_maintenance_routes,
+    )
+    register_maintenance_routes(app)
+
     # Agent 路由
     _register_agent_routes(app, registry, provider=provider)
 
