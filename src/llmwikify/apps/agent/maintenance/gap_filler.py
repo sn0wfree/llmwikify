@@ -21,6 +21,8 @@ from typing import Any
 from llmwikify.apps.agent.wiki_dream_editor import WikiDreamProposalManager
 
 from .config import GapFillerConfig
+from .llm_support import ensure_global_llm_fallback
+from .rate_limit import SlidingWindowRateLimiter
 
 logger = logging.getLogger(__name__)
 
@@ -103,11 +105,15 @@ class GapFiller:
         config: GapFillerConfig,
         llm_semaphore: asyncio.Semaphore,
         proposal_manager: WikiDreamProposalManager | None = None,
+        rate_limiter: SlidingWindowRateLimiter | None = None,
     ) -> None:
         self.wiki = wiki
         self.wiki_id = wiki_id
         self.config = config
         self.llm_semaphore = llm_semaphore
+        self.rate_limiter = rate_limiter or SlidingWindowRateLimiter(
+            enabled=False, name=f"gap_filler_{wiki_id}",
+        )
         self._proposal_manager = proposal_manager or WikiDreamProposalManager(
             wiki_id=wiki_id,
         )
@@ -115,8 +121,12 @@ class GapFiller:
 
     async def run_cycle(self) -> GapCycleResult:
         """Detect gaps once, then fill high-priority ones (mechanical or proposal)."""
+        ensure_global_llm_fallback(self.wiki, self.wiki_id)
         result = GapCycleResult()
         try:
+            # lint(mode="check") makes one LLM call (_llm_detect_gaps)
+            # → one rate-limit unit per cycle.
+            await self.rate_limiter.acquire()
             lint_result = await asyncio.to_thread(
                 self.wiki.lint, mode="check",
             )

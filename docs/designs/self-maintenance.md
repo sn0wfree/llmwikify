@@ -52,6 +52,7 @@ lifespan (core.py)
 | 3 | LLM 写页复用 kernel 现有 self-create 链 | `ingest_source → _llm_process_source → execute_operations`（batch.py:112-118 同链），不 import apps/chat |
 | 4 | 全部同步调用 `asyncio.to_thread()` 包裹 | `lint()` / `ingest_source()` / LLM 调用是阻塞的，直接进 asyncio loop 会卡死 FastAPI |
 | 5 | 全局 LLM semaphore ≤ 3 | 对齐 api.minimaxi.com 并发限制（AGENTS.md） |
+| 5b | **背景 LLM 限流 ≤5 units / 5s**（`SlidingWindowRateLimiter`，进程级共享） | 后台任务不得抢占前台 chat/research 流量；与 semaphore(3) 正交（并发 vs 速率）。1 unit = 轨 A 一次 `_llm_process_source` 链（内部 2-4 次 API）或 轨 B 一次 `lint()`（内部 1 次 gap-detect）；单位粒度是权衡——不侵入 foundation 计数内部 API 调用，用户可经 config 调低 |
 | 6 | 配置放 `~/.llmwikify/llmwikify.json` 的 `maintenance` 段 | maintenance 是 wiki 级功能，不属于 chat memory（`memory_config.json` 语义不符） |
 | 7 | REMOTE wiki 跳过 | FileSystemWatcher / lint / DB 均只适用本地 |
 | 8 | API 只调公开方法 | `trigger(task=...)` 分发，不暴露 `_tick` 私有方法 |
@@ -74,6 +75,11 @@ lifespan (core.py)
       "max_per_cycle": 5,
       "min_priority": 30,
       "auto_approve_mechanical": true
+    },
+    "llm_rate_limit": {
+      "enabled": true,
+      "max_requests": 5,
+      "window_seconds": 5.0
     },
     "lint_interval_seconds": 86400,
     "gaps_interval_seconds": 604800,
@@ -107,6 +113,8 @@ lifespan (core.py)
 | `apps/agent/maintenance/config.py` | NEW | MaintenanceConfig 加载 |
 | `apps/agent/maintenance/auto_ingest.py` | NEW | AutoIngestService |
 | `apps/agent/maintenance/gap_filler.py` | NEW | GapDetector + GapFiller |
+| `apps/agent/maintenance/rate_limit.py` | NEW | 背景任务滑动窗口 LLM 限流器 |
+| `apps/agent/maintenance/llm_support.py` | NEW | wiki-local llm → 全局 llm 兜底 merge |
 | `interfaces/server/http/maintenance_routes.py` | NEW | REST 端点 |
 | `interfaces/server/core.py` | edit | lifespan start/stop |
 | `tests/test_maintenance_manager.py` | NEW | 单元测试 |

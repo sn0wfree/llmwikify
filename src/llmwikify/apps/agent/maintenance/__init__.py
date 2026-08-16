@@ -23,6 +23,7 @@ from llmwikify.kernel.multi_wiki.instance import WikiType
 from .auto_ingest import AutoIngestService
 from .config import MaintenanceConfig, load_maintenance_config, to_dict
 from .gap_filler import GapFiller
+from .rate_limit import SlidingWindowRateLimiter
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +43,15 @@ class MaintenanceManager:
         self.registry = registry
         self.config = config or load_maintenance_config()
         self.llm_semaphore = asyncio.Semaphore(LLM_CONCURRENCY)
+        # Process-wide background-LLM rate limit (default ≤5 units / 5s)
+        # shared by every wiki's services, so maintenance never starves
+        # the foreground chat/research traffic. See rate_limit.py.
+        self.llm_rate_limiter = SlidingWindowRateLimiter(
+            max_requests=self.config.llm_rate_limit.max_requests,
+            window_seconds=self.config.llm_rate_limit.window_seconds,
+            enabled=self.config.llm_rate_limit.enabled,
+            name="maintenance_llm",
+        )
         self.auto_ingest_services: dict[str, AutoIngestService] = {}
         self.gap_fillers: dict[str, GapFiller] = {}
         self._tasks: list[asyncio.Task] = []
@@ -98,6 +108,7 @@ class MaintenanceManager:
                         llm_semaphore=self.llm_semaphore,
                         loop=loop,
                         proposal_manager=self._make_proposal_manager(wiki_id),
+                        rate_limiter=self.llm_rate_limiter,
                     )
                     if await service.start():
                         self.auto_ingest_services[wiki_id] = service
@@ -108,6 +119,7 @@ class MaintenanceManager:
                         config=self.config.gap_filler,
                         llm_semaphore=self.llm_semaphore,
                         proposal_manager=self._make_proposal_manager(wiki_id),
+                        rate_limiter=self.llm_rate_limiter,
                     )
             except Exception:
                 logger.exception("maintenance: start failed for wiki %s", wiki_id)
@@ -276,6 +288,7 @@ class MaintenanceManager:
         return {
             "running": self._running,
             "config": to_dict(self.config),
+            "llm_rate_limit": self.llm_rate_limiter.stats(),
             "auto_ingest": {
                 wid: svc.status() for wid, svc in self.auto_ingest_services.items()
             },

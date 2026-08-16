@@ -40,12 +40,26 @@ class GapFillerConfig:
 
 
 @dataclass
+class LLMRateLimitConfig:
+    """Background LLM rate limit: N units per sliding window.
+
+    Protects foreground chat/research from maintenance bursts.
+    One unit = one full LLM-processing chain (see rate_limit.py).
+    """
+
+    enabled: bool = True
+    max_requests: int = 5
+    window_seconds: float = 5.0
+
+
+@dataclass
 class MaintenanceConfig:
     """Root config for the self-maintenance subsystem."""
 
     enabled: bool = True
     auto_ingest: AutoIngestConfig = field(default_factory=AutoIngestConfig)
     gap_filler: GapFillerConfig = field(default_factory=GapFillerConfig)
+    llm_rate_limit: LLMRateLimitConfig = field(default_factory=LLMRateLimitConfig)
     lint_interval_seconds: float = 86400.0
     gaps_interval_seconds: float = 604800.0
     db_maintenance_interval_seconds: float = 604800.0
@@ -115,6 +129,18 @@ def load_maintenance_config(config_path: Path | None = None) -> MaintenanceConfi
             gf.get("auto_approve_mechanical", cfg.gap_filler.auto_approve_mechanical),
         )
 
+    rl = section.get("llm_rate_limit", {})
+    if isinstance(rl, dict):
+        cfg.llm_rate_limit.enabled = bool(
+            rl.get("enabled", cfg.llm_rate_limit.enabled),
+        )
+        cfg.llm_rate_limit.max_requests = int(
+            rl.get("max_requests", cfg.llm_rate_limit.max_requests),
+        )
+        cfg.llm_rate_limit.window_seconds = float(
+            rl.get("window_seconds", cfg.llm_rate_limit.window_seconds),
+        )
+
     return cfg
 
 
@@ -135,6 +161,11 @@ def to_dict(cfg: MaintenanceConfig) -> dict[str, Any]:
             "max_per_cycle": cfg.gap_filler.max_per_cycle,
             "min_priority": cfg.gap_filler.min_priority,
             "auto_approve_mechanical": cfg.gap_filler.auto_approve_mechanical,
+        },
+        "llm_rate_limit": {
+            "enabled": cfg.llm_rate_limit.enabled,
+            "max_requests": cfg.llm_rate_limit.max_requests,
+            "window_seconds": cfg.llm_rate_limit.window_seconds,
         },
         "lint_interval_seconds": cfg.lint_interval_seconds,
         "gaps_interval_seconds": cfg.gaps_interval_seconds,

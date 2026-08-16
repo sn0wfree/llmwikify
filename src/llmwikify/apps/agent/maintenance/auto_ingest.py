@@ -35,6 +35,8 @@ from llmwikify.apps.agent.wiki_dream_editor import WikiDreamProposalManager
 from llmwikify.kernel.storage.watcher import SUPPORTED_EXTENSIONS, FileSystemWatcher
 
 from .config import AutoIngestConfig
+from .llm_support import ensure_global_llm_fallback
+from .rate_limit import SlidingWindowRateLimiter
 
 logger = logging.getLogger(__name__)
 
@@ -52,13 +54,18 @@ class AutoIngestService:
         llm_semaphore: asyncio.Semaphore,
         loop: asyncio.AbstractEventLoop | None = None,
         proposal_manager: WikiDreamProposalManager | None = None,
+        rate_limiter: SlidingWindowRateLimiter | None = None,
     ) -> None:
         self.wiki = wiki
         self.wiki_id = wiki_id
         self.config = config
         self.llm_semaphore = llm_semaphore
+        self.rate_limiter = rate_limiter or SlidingWindowRateLimiter(
+            enabled=False, name=f"auto_ingest_{wiki_id}",
+        )
         self._loop = loop
         self._watcher: FileSystemWatcher | None = None
+        self._backlog_task: asyncio.Task | None = None
         self._proposal_manager = proposal_manager or WikiDreamProposalManager(
             wiki_id=wiki_id,
         )
@@ -115,46 +122,25 @@ class AutoIngestService:
         logger.info("[%s] auto_ingest: watching %s", self.wiki_id, raw)
         self._ensure_llm_config()
         self._load_processed()
-        await self._scan_backlog()
+        # Background the replay: 20 files × LLM analysis can take minutes;
+        # awaiting it inline would block FastAPI's lifespan startup.
+        self._backlog_task = asyncio.create_task(
+            self._scan_backlog(), name=f"auto_ingest_backlog_{self.wiki_id}",
+        )
         return True
 
     def _ensure_llm_config(self) -> None:
-        """Fall back to the GLOBAL llm config when the wiki-local one is off.
-
-        ``wiki._llm_process_source`` builds its LLM client from
-        ``wiki.config`` (per-wiki), but typical deployments configure LLM
-        once in ~/.llmwikify/llmwikify.json (the same file serve uses to
-        wire the chat provider). Without this merge, auto-ingest would
-        fall back to a proposal for every file on such wikis (observed
-        in production 2026-08-16). In-memory only — never written back.
-        """
-        try:
-            cfg = self.wiki.config
-            if not isinstance(cfg, dict):
-                return
-            llm = cfg.get("llm") or {}
-            if llm.get("enabled") and (llm.get("api_key") or llm.get("base_url")):
-                return
-            from llmwikify.foundation.llm.client import load_llm_config
-
-            global_llm = load_llm_config()
-            if global_llm.get("enabled"):
-                cfg["llm"] = {**llm, **global_llm, "enabled": True}
-                logger.info(
-                    "[%s] auto_ingest: wiki-local llm off, using global "
-                    "config (provider=%s, model=%s)",
-                    self.wiki_id,
-                    global_llm.get("provider"),
-                    global_llm.get("model"),
-                )
-        except Exception:
-            logger.debug(
-                "[%s] auto_ingest: llm config fallback check failed",
-                self.wiki_id,
-                exc_info=True,
-            )
+        """Thin wrapper over the shared fallback (see llm_support.py)."""
+        ensure_global_llm_fallback(self.wiki, self.wiki_id)
 
     async def stop(self) -> None:
+        if self._backlog_task is not None:
+            self._backlog_task.cancel()
+            try:
+                await self._backlog_task
+            except asyncio.CancelledError:
+                pass
+            self._backlog_task = None
         if self._watcher:
             self._watcher.stop()
             self._watcher = None
@@ -336,6 +322,9 @@ class AutoIngestService:
         all count as "content settled" (re-processing would duplicate).
         """
         try:
+            # rate limit FIRST (may sleep up to a window); the semaphore
+            # slot is only taken once a slot in the window is free.
+            await self.rate_limiter.acquire()
             async with self.llm_semaphore:
                 ops_result = await asyncio.to_thread(
                     self.wiki._llm_process_source, ingest_result,
