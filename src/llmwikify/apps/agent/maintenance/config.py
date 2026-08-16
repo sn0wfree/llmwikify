@@ -22,6 +22,11 @@ class AutoIngestConfig:
     fallback_to_proposal: bool = True
     max_concurrent_per_wiki: int = 1
     debounce_seconds: float = 2.0
+    # Startup backlog replay cap: files that landed in raw/ while the
+    # server was down are replayed up to this many per start; the rest
+    # are left for a manual ``llmwikify batch raw/`` (logged). 0 disables
+    # backlog replay entirely.
+    max_backlog_per_start: int = 20
 
 
 @dataclass
@@ -93,6 +98,9 @@ def load_maintenance_config(config_path: Path | None = None) -> MaintenanceConfi
         cfg.auto_ingest.debounce_seconds = float(
             ai.get("debounce_seconds", cfg.auto_ingest.debounce_seconds),
         )
+        cfg.auto_ingest.max_backlog_per_start = int(
+            ai.get("max_backlog_per_start", cfg.auto_ingest.max_backlog_per_start),
+        )
 
     gf = section.get("gap_filler", {})
     if isinstance(gf, dict):
@@ -120,6 +128,7 @@ def to_dict(cfg: MaintenanceConfig) -> dict[str, Any]:
             "fallback_to_proposal": cfg.auto_ingest.fallback_to_proposal,
             "max_concurrent_per_wiki": cfg.auto_ingest.max_concurrent_per_wiki,
             "debounce_seconds": cfg.auto_ingest.debounce_seconds,
+            "max_backlog_per_start": cfg.auto_ingest.max_backlog_per_start,
         },
         "gap_filler": {
             "enabled": cfg.gap_filler.enabled,

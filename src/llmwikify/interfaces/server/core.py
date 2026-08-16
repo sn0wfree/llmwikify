@@ -277,15 +277,29 @@ class WikiServer:
             # even when the server-level switch is on.
             if self.enable_maintenance:
                 try:
+                    import os as _os
+                    from pathlib import Path as _Path
+
                     from llmwikify.apps.agent.maintenance import (
                         MaintenanceManager,
                         load_maintenance_config,
                     )
                     m_cfg = load_maintenance_config()
                     if m_cfg.enabled:
+                        # Same data_dir resolution as AgentService
+                        # (routes.py): env override → ~/.llmwikify/agent.
+                        # Keeps the shared .llmwiki_agent.db proposal
+                        # table identical across subsystems.
+                        _env_dir = _os.environ.get("LLMWIKIFY_DATA_DIR")
+                        m_data_dir = (
+                            _Path(_env_dir)
+                            if _env_dir
+                            else _Path.home() / ".llmwikify" / "agent"
+                        )
                         self._maintenance_manager = MaintenanceManager(
                             registry=self.registry,
                             config=m_cfg,
+                            data_dir=m_data_dir,
                         )
                         app.state.maintenance_manager = self._maintenance_manager
                         await self._maintenance_manager.start()

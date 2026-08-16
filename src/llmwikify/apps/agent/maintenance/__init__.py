@@ -17,6 +17,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+from llmwikify.apps.agent.wiki_dream_editor import WikiDreamProposalManager
 from llmwikify.kernel.multi_wiki.instance import WikiType
 
 from .auto_ingest import AutoIngestService
@@ -36,6 +37,7 @@ class MaintenanceManager:
         self,
         registry: Any,
         config: MaintenanceConfig | None = None,
+        data_dir: Path | None = None,
     ) -> None:
         self.registry = registry
         self.config = config or load_maintenance_config()
@@ -47,6 +49,35 @@ class MaintenanceManager:
         self._health_history: list[dict[str, Any]] = []
         self._last_lint_summary: dict[str, Any] = {}
         self._last_db_maintenance_at: float | None = None
+        # Shared WikiDatabase (same physical .llmwiki_agent.db as
+        # WikiService's facades — get_connection is a per-path singleton),
+        # so fallback proposals land in the SAME table the WebUI
+        # /wiki-dream/proposals review flow reads. None → in-memory
+        # proposals (pre-B1b behavior) when no data_dir is available.
+        self._data_dir = data_dir
+        self._proposal_db: Any = None
+
+    def _get_proposal_db(self) -> Any:
+        if self._proposal_db is not None or self._data_dir is None:
+            return self._proposal_db
+        try:
+            from llmwikify.apps.wiki.db import WikiDatabase
+
+            self._proposal_db = WikiDatabase(Path(self._data_dir))
+        except Exception:
+            logger.warning(
+                "maintenance: proposal DB init failed, fallback proposals "
+                "will be in-memory only",
+                exc_info=True,
+            )
+            self._proposal_db = None
+        return self._proposal_db
+
+    def _make_proposal_manager(self, wiki_id: str) -> WikiDreamProposalManager:
+        db = self._get_proposal_db()
+        if db is None:
+            return WikiDreamProposalManager(wiki_id=wiki_id)
+        return WikiDreamProposalManager(db=db, wiki_id=wiki_id)
 
     # ── lifecycle ──────────────────────────────────────────────────────
 
@@ -66,6 +97,7 @@ class MaintenanceManager:
                         config=self.config.auto_ingest,
                         llm_semaphore=self.llm_semaphore,
                         loop=loop,
+                        proposal_manager=self._make_proposal_manager(wiki_id),
                     )
                     if await service.start():
                         self.auto_ingest_services[wiki_id] = service
@@ -75,6 +107,7 @@ class MaintenanceManager:
                         wiki_id=wiki_id,
                         config=self.config.gap_filler,
                         llm_semaphore=self.llm_semaphore,
+                        proposal_manager=self._make_proposal_manager(wiki_id),
                     )
             except Exception:
                 logger.exception("maintenance: start failed for wiki %s", wiki_id)
