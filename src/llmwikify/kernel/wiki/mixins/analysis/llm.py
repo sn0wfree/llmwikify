@@ -176,31 +176,32 @@ class WikiLLMMixin(WikiProtocol):
                 last_errors = errors
                 if attempt < max_attempts:
                     error_text = "\n".join(f"- {e}" for e in errors)
-                    retry_prompt = (
-                        f"Your previous response had errors:\n{error_text}\n\n"
-                        f"Please fix and return a corrected response."
-                    )
-                    messages = [
-                        messages[0],
-                        {"role": "user", "content": retry_prompt},
-                    ]
+                    retry_msg = {
+                        "role": "user",
+                        "content": (
+                            f"The previous response had validation errors:\n"
+                            f"{error_text}\n\n"
+                            f"Please fix and return a corrected JSON response."
+                        ),
+                    }
+                    messages = messages + [retry_msg]
 
             except (ConnectionError, ValueError) as e:
                 last_errors = [str(e)]
                 if attempt < max_attempts:
-                    # Build a retry prompt that tells the LLM what went wrong
-                    # and what format is expected, so it can self-correct.
-                    retry_prompt = (
-                        f"Your previous response could not be parsed as JSON.\n"
-                        f"Error: {e}\n\n"
-                        f"You MUST return ONLY a valid JSON object. No explanations, "
-                        f"no markdown code blocks, no <think> tags — just the raw JSON.\n"
-                        f"Use the same schema as described in the original prompt."
-                    )
-                    messages = [
-                        messages[0],
-                        {"role": "user", "content": retry_prompt},
-                    ]
+                    # Append feedback as a new user message — keep all
+                    # previous messages (including the document content in
+                    # the original user message) so the LLM can self-correct.
+                    retry_msg = {
+                        "role": "user",
+                        "content": (
+                            f"The previous response had errors:\n{e}\n\n"
+                            f"Please fix and return a corrected JSON response. "
+                            f"Return ONLY valid JSON matching the schema — no "
+                            f"markdown, no <think> tags, no explanations."
+                        ),
+                    }
+                    messages = messages + [retry_msg]
                 elif attempt >= max_attempts:
                     raise
 
