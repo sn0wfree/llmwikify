@@ -20,6 +20,10 @@ class WikiLLMMixin(WikiProtocol):
         Phase 3: Targeted reading of selected sections
         Phase 4: Full analysis on selected content
         Phase 5: Generate wiki operations
+
+        Workflow optimizations:
+        - Short docs (<5000 chars): skip select_sections, read everything
+        - Empty analysis: skip generate_wiki_ops (no entities = no ops)
         """
         from .....foundation.llm import LLMClient
 
@@ -34,16 +38,25 @@ class WikiLLMMixin(WikiProtocol):
             section_metadata = self.extract_section_metadata(content, title)
 
         max_chars = 32000
-        selected_sections = self._select_sections(
-            section_metadata=section_metadata,
-            content_type=source_data.get("source_type", "unknown"),
-        )
 
-        targeted_content, content_truncated = self.targeted_read(
-            content=content,
-            selected_sections=selected_sections.get("selected_sections", []),
-            max_chars=max_chars,
-        )
+        # OPTIMIZATION 1: short docs skip select_sections LLM call
+        sections = section_metadata.get("sections", [])
+        content_len = len(content)
+        if content_len < 5000 or len(sections) <= 5:
+            # Short doc or few sections: read everything (no LLM call needed)
+            targeted_content = content[:max_chars]
+            content_truncated = content_len > max_chars
+        else:
+            # Long doc with many sections: use LLM to select
+            selected_sections_result = self._select_sections(
+                section_metadata=section_metadata,
+                content_type=source_data.get("source_type", "unknown"),
+            )
+            targeted_content, content_truncated = self.targeted_read(
+                content=content,
+                selected_sections=selected_sections_result.get("selected_sections", []),
+                max_chars=max_chars,
+            )
 
         wiki_schema = ""
         if self.wiki_md_file.exists():
@@ -66,6 +79,26 @@ class WikiLLMMixin(WikiProtocol):
         errors = registry.validate_output("analyze_source", analysis)
         if errors:
             raise ValueError(f"Analysis validation failed: {'; '.join(errors)}")
+
+        # OPTIMIZATION 2: skip generate_wiki_ops if analysis is empty
+        entities = analysis.get("entities", [])
+        relations = analysis.get("relations", [])
+        claims = analysis.get("claims", [])
+        suggested = analysis.get("suggested_pages", [])
+
+        if not entities and not relations and not claims and not suggested:
+            # Nothing to generate operations for — analysis found no extractable content
+            return {
+                "status": "success",
+                "operations": [],
+                "relations": [],
+                "entities": [],
+                "claims": [],
+                "analysis": analysis,
+                "source_title": title,
+                "mode": "chained",
+                "empty": True,
+            }
 
         template = registry._load_template("generate_wiki_ops")
         dynamic_context = {}
@@ -92,9 +125,9 @@ class WikiLLMMixin(WikiProtocol):
         return {
             "status": "success",
             "operations": operations,
-            "relations": analysis.get("relations", []),
-            "entities": analysis.get("entities", []),
-            "claims": analysis.get("claims", []),
+            "relations": relations,
+            "entities": entities,
+            "claims": claims,
             "analysis": analysis,
             "source_title": title,
             "mode": "chained",
