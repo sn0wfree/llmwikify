@@ -349,11 +349,20 @@ class AutoIngestService:
                 self.wiki_id, path.name, exc,
             )
             if self.config.fallback_to_proposal:
-                await self._fallback_to_proposal(ingest_result, reason=f"llm_write failed: {exc}")
+                fallback_ok = await self._fallback_to_proposal(
+                    ingest_result, reason=f"llm_write failed: {exc}",
+                )
+                if fallback_ok:
+                    self._mark_processed(path)
+                # else: leave unprocessed so next start retries
+                return
             self._mark_processed(path)
 
-    async def _fallback_to_proposal(self, ingest_result: dict, reason: str) -> None:
-        """Content is not lost: file stays archived in raw/, a proposal is queued."""
+    async def _fallback_to_proposal(self, ingest_result: dict, reason: str) -> bool:
+        """Content is not lost: file stays archived in raw/, a proposal is queued.
+
+        Returns True if the proposal was successfully created.
+        """
         try:
             title = ingest_result.get("title") or ingest_result.get("source_name") or "untitled"
             content = ingest_result.get("content", "")
@@ -365,10 +374,12 @@ class AutoIngestService:
                 source_entries=[{"source_name": ingest_result.get("source_name", "")}],
             )
             self.stats["fallback_proposals"] += 1
+            return True
         except Exception as exc:
             self.stats["failed"] += 1
             self.stats["last_error"] = f"proposal_fallback: {exc}"
             logger.warning("[%s] proposal fallback failed: %s", self.wiki_id, exc)
+            return False
 
     def status(self) -> dict[str, Any]:
         return {
