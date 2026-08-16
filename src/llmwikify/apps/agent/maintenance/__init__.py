@@ -99,30 +99,7 @@ class MaintenanceManager:
         loop = asyncio.get_running_loop()
 
         for wiki_id, wiki in self._local_wikis():
-            try:
-                if self.config.auto_ingest.enabled:
-                    service = AutoIngestService(
-                        wiki=wiki,
-                        wiki_id=wiki_id,
-                        config=self.config.auto_ingest,
-                        llm_semaphore=self.llm_semaphore,
-                        loop=loop,
-                        proposal_manager=self._make_proposal_manager(wiki_id),
-                        rate_limiter=self.llm_rate_limiter,
-                    )
-                    if await service.start():
-                        self.auto_ingest_services[wiki_id] = service
-                if self.config.gap_filler.enabled:
-                    self.gap_fillers[wiki_id] = GapFiller(
-                        wiki=wiki,
-                        wiki_id=wiki_id,
-                        config=self.config.gap_filler,
-                        llm_semaphore=self.llm_semaphore,
-                        proposal_manager=self._make_proposal_manager(wiki_id),
-                        rate_limiter=self.llm_rate_limiter,
-                    )
-            except Exception:
-                logger.exception("maintenance: start failed for wiki %s", wiki_id)
+            await self._start_for_wiki(wiki_id, wiki, loop)
 
         if self.gap_fillers:
             self._tasks.append(
@@ -132,6 +109,13 @@ class MaintenanceManager:
                     self._gaps_tick,
                 ),
             )
+        self._tasks.append(
+            self._periodic_loop(
+                "maintenance_lint",
+                self.config.lint_interval_seconds,
+                self._lint_tick,
+            ),
+        )
         self._tasks.append(
             self._periodic_loop(
                 "maintenance_db",
@@ -159,6 +143,72 @@ class MaintenanceManager:
             await asyncio.gather(*self._tasks, return_exceptions=True)
         self._tasks.clear()
 
+    # ── per-wiki helpers ───────────────────────────────────────────────
+
+    async def _start_for_wiki(self, wiki_id: str, wiki: Any, loop: Any) -> None:
+        """Create and start per-wiki components (watcher + filler)."""
+        try:
+            if self.config.auto_ingest.enabled:
+                service = AutoIngestService(
+                    wiki=wiki, wiki_id=wiki_id,
+                    config=self.config.auto_ingest,
+                    llm_semaphore=self.llm_semaphore,
+                    loop=loop,
+                    proposal_manager=self._make_proposal_manager(wiki_id),
+                    rate_limiter=self.llm_rate_limiter,
+                )
+                if await service.start():
+                    self.auto_ingest_services[wiki_id] = service
+            if self.config.gap_filler.enabled:
+                self.gap_fillers[wiki_id] = GapFiller(
+                    wiki=wiki, wiki_id=wiki_id,
+                    config=self.config.gap_filler,
+                    llm_semaphore=self.llm_semaphore,
+                    proposal_manager=self._make_proposal_manager(wiki_id),
+                    rate_limiter=self.llm_rate_limiter,
+                )
+        except Exception:
+            logger.exception("maintenance: start failed for wiki %s", wiki_id)
+
+    async def _stop_for_wiki(self, wiki_id: str) -> None:
+        """Stop and remove per-wiki components (watcher + filler)."""
+        svc = self.auto_ingest_services.pop(wiki_id, None)
+        if svc is not None:
+            try:
+                await svc.stop()
+            except Exception:
+                logger.warning(
+                    "maintenance: stop failed for wiki %s", wiki_id, exc_info=True,
+                )
+        self.gap_fillers.pop(wiki_id, None)
+
+    async def _sync_wikis(self) -> None:
+        """Detect newly-registered or disappeared wikis and adjust components.
+
+        Called at the start of each periodic tick so that wikis registered
+        at runtime (e.g. via the registry API) are picked up without
+        requiring a server restart, and wikis removed at runtime have
+        their watchers/fillers cleaned up.
+        """
+        if not self._running:
+            return
+        current = {wid for wid, _ in self._local_wikis()}
+        # stop components for wikis that disappeared
+        for wid in list(self.auto_ingest_services):
+            if wid not in current:
+                await self._stop_for_wiki(wid)
+                logger.info("maintenance: removed disappeared wiki %s", wid)
+        for wid in list(self.gap_fillers):
+            if wid not in current:
+                await self._stop_for_wiki(wid)
+                logger.info("maintenance: removed disappeared wiki %s", wid)
+        # start components for wikis that appeared
+        loop = asyncio.get_running_loop()
+        for wid, wiki in self._local_wikis():
+            if wid not in self.auto_ingest_services and wid not in self.gap_fillers:
+                logger.info("maintenance: new wiki discovered %s", wid)
+                await self._start_for_wiki(wid, wiki, loop)
+
     # ── periodic ticks ─────────────────────────────────────────────────
 
     def _periodic_loop(
@@ -180,6 +230,7 @@ class MaintenanceManager:
         return asyncio.create_task(_loop(), name=name)
 
     async def _gaps_tick(self) -> None:
+        await self._sync_wikis()
         for wiki_id, filler in list(self.gap_fillers.items()):
             try:
                 result = await filler.run_cycle()
@@ -199,7 +250,31 @@ class MaintenanceManager:
                 logger.warning("maintenance: gaps tick failed for %s", wiki_id, exc_info=True)
         self._trim_history()
 
+    async def _lint_tick(self) -> None:
+        """Periodic lint health check: record issue counts per wiki to health_history."""
+        await self._sync_wikis()
+        for wiki_id, wiki in self._local_wikis():
+            try:
+                result = await asyncio.to_thread(
+                    wiki.lint, mode="check", limit=10,
+                )
+                issue_count = result.get("issue_count", len(result.get("issues", [])))
+                hint_count = sum(
+                    len(v) for v in (result.get("hints") or {}).values()
+                )
+                self._health_history.append({
+                    "timestamp": time.time(),
+                    "type": "lint",
+                    "wiki_id": wiki_id,
+                    "issue_count": issue_count,
+                    "hint_count": hint_count,
+                })
+            except Exception:
+                logger.warning("maintenance: lint tick failed for %s", wiki_id, exc_info=True)
+        self._trim_history()
+
     async def _db_tick(self) -> None:
+        await self._sync_wikis()
         for wiki_id, wiki in self._local_wikis():
             try:
                 await asyncio.to_thread(self._maintain_db, wiki.db_path)

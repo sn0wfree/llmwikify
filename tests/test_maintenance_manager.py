@@ -116,7 +116,7 @@ def test_start_stops_idempotent():
     async def scenario() -> None:
         await mgr.start()
         await mgr.start()  # second call must be a no-op
-        assert len(mgr._tasks) == 1  # only db loop
+        assert len(mgr._tasks) == 2  # lint_loop + db_loop
         await mgr.stop()
         await mgr.stop()  # second stop must not raise
 
@@ -158,3 +158,103 @@ async def _run_trigger(task: str) -> dict:
 def test_trigger_unknown_task():
     result = asyncio.run(_run_trigger("bogus"))
     assert "error" in result
+
+
+# ── dynamic wiki discovery ───────────────────────────────────────────
+
+
+def test_sync_wikis_adds_new_wiki():
+    instances = [WikiInstance(wiki_id="a", name="a", wiki_type=WikiType.LOCAL, root=Path("/tmp/a"))]
+    wikis = {"a": SimpleNamespace(root=Path("/tmp/a"), raw_dir=Path("/tmp/a/raw"),
+            db_path=Path("/tmp/a/.llmwikify.db"), lint=lambda **kw: {"issue_count": 0},
+            config={"llm": {"enabled": False}})}
+
+    def list_wikis():
+        return instances
+
+    def get_wiki(wid):
+        return wikis.get(wid)
+
+    registry = SimpleNamespace(list_wikis=list_wikis, get_wiki=get_wiki)
+    cfg = MaintenanceConfig()
+    cfg.auto_ingest.enabled = False
+    cfg.gap_filler.enabled = False
+    mgr = MaintenanceManager(registry=registry, config=cfg)
+
+    async def scenario() -> None:
+        await mgr.start()
+        assert "a" not in mgr.gap_fillers  # gap disabled, so nothing to add
+        # now add a new wiki to the registry
+        instances.append(WikiInstance(wiki_id="b", name="b", wiki_type=WikiType.LOCAL, root=Path("/tmp/b")))
+        wikis["b"] = SimpleNamespace(root=Path("/tmp/b"), raw_dir=Path("/tmp/b/raw"),
+                db_path=Path("/tmp/b/.llmwikify.db"), lint=lambda **kw: {"issue_count": 0},
+                config={"llm": {"enabled": False}})
+        cfg.gap_filler.enabled = True
+        await mgr._sync_wikis()
+        assert "b" in mgr.gap_fillers  # discovered and added
+        await mgr.stop()
+
+    asyncio.run(scenario())
+
+
+def test_sync_wikis_removes_vanished_wiki():
+    from llmwikify.kernel.multi_wiki.instance import WikiInstance, WikiType
+
+    instances = [
+        WikiInstance(wiki_id="a", name="a", wiki_type=WikiType.LOCAL, root=Path("/tmp/a")),
+        WikiInstance(wiki_id="b", name="b", wiki_type=WikiType.LOCAL, root=Path("/tmp/b")),
+    ]
+    wikis = {
+        "a": SimpleNamespace(root=Path("/tmp/a"), raw_dir=Path("/tmp/a/raw"),
+            db_path=Path("/tmp/a/.llmwikify.db"), lint=lambda **kw: {"issue_count": 0},
+            config={"llm": {"enabled": False}}),
+        "b": SimpleNamespace(root=Path("/tmp/b"), raw_dir=Path("/tmp/b/raw"),
+            db_path=Path("/tmp/b/.llmwikify.db"), lint=lambda **kw: {"issue_count": 0},
+            config={"llm": {"enabled": False}}),
+    }
+    registry = SimpleNamespace(
+        list_wikis=lambda: instances, get_wiki=lambda wid: wikis.get(wid))
+    cfg = MaintenanceConfig()
+    cfg.auto_ingest.enabled = False
+    mgr = MaintenanceManager(registry=registry, config=cfg)
+
+    async def scenario() -> None:
+        await mgr.start()
+        assert "b" in mgr.gap_fillers
+        # remove b from registry
+        instances[:] = [i for i in instances if i.wiki_id != "a"]
+        await mgr._sync_wikis()
+        assert "a" not in mgr.gap_fillers  # removed
+        await mgr.stop()
+
+    asyncio.run(scenario())
+
+
+def test_lint_tick_records_to_health_history():
+    from llmwikify.kernel.multi_wiki.instance import WikiInstance, WikiType
+
+    wiki = SimpleNamespace(
+        root=Path("/tmp/x"), raw_dir=Path("/tmp/x/raw"),
+        db_path=Path("/tmp/x/.llmwikify.db"),
+        config={"llm": {"enabled": False}},
+        lint=lambda **kw: {"issue_count": 2, "hints": {"critical": ["a"], "informational": ["b"]}},
+    )
+    registry = SimpleNamespace(
+        list_wikis=lambda: [WikiInstance(wiki_id="x", name="x", wiki_type=WikiType.LOCAL, root=Path("/tmp/x"))],
+        get_wiki=lambda wid: wiki,
+    )
+    cfg = MaintenanceConfig()
+    cfg.auto_ingest.enabled = False
+    mgr = MaintenanceManager(registry=registry, config=cfg)
+
+    async def scenario() -> None:
+        await mgr.start()
+        await mgr._lint_tick()
+        await mgr.stop()
+
+    asyncio.run(scenario())
+    lint_entries = [h for h in mgr._health_history if h["type"] == "lint"]
+    assert len(lint_entries) == 1
+    assert lint_entries[0]["wiki_id"] == "x"
+    assert lint_entries[0]["issue_count"] == 2
+    assert lint_entries[0]["hint_count"] == 2

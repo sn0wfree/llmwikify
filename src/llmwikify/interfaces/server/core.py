@@ -461,6 +461,11 @@ class WikiServer:
                     "enable_confirmations_cleanup",
                     "_confirmations_cleanup_task",
                 ),
+                # v0.41: self-maintenance (auto-ingest / gap-filler / DB)
+                "maintenance": bool(
+                    self.enable_maintenance
+                    and getattr(self, "_maintenance_manager", None) is not None
+                ),
                 # Phase 20 feature flag: the only trigger that routes a
                 # user message to the Research workflow is an explicit
                 # ``/study <question>`` prefix. Any message that merely
