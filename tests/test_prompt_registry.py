@@ -19,7 +19,7 @@ def temp_prompts_dir(tmp_path):
         "description": "Test analyze template",
         "version": "1.0",
         "params": {
-            "max_tokens": 4096,
+            "max_tokens": 8192,
             "temperature": 0.1,
         },
         "system": "You are a wiki agent.\n{% if provider == 'ollama' %}Output only JSON.{% endif %}",
@@ -84,7 +84,7 @@ class TestPromptRegistryLoading:
         assert template.name == "analyze_source"
         assert template.version == "1.0"
         assert "wiki agent" in template.system
-        assert template.params["max_tokens"] == 4096
+        assert template.params["max_tokens"] == 8192
 
     def test_load_builtin_investigate_template(self, temp_prompts_dir):
         registry = PromptRegistry(custom_dir=temp_prompts_dir)
@@ -206,7 +206,7 @@ class TestPromptRegistryParams:
 
         params = registry.get_params("analyze_source")
 
-        assert params["max_tokens"] == 4096
+        assert params["max_tokens"] == 8192
         assert params["temperature"] == 0.1
 
     def test_get_params_investigate(self, temp_prompts_dir):
@@ -360,7 +360,7 @@ class TestGetApiParams:
             "version": "1.0",
             "params": {
                 "temperature": 0.1,
-                "max_tokens": 4096,
+            "max_tokens": 8192,
                 "max_content_chars": 8000,
                 "custom_thing": "value",
             },
@@ -387,7 +387,7 @@ class TestBuiltInTemplates:
 
         assert template.name == "analyze_source"
         assert "document analyst" in template.system
-        assert template.params.get("max_tokens") == 4096
+        assert template.params.get("max_tokens") == 8192
         assert template.params.get("temperature") == 0.1
 
     def test_investigate_lint_template_exists(self):
