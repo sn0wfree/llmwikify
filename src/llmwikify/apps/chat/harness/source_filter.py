@@ -28,7 +28,7 @@ class SourceFilter:
     }
 
     LOW_QUALITY_PATTERNS: list[str] = [
-        "pinterest.com", "quora.com", "reddit.com/r/",
+        "pinterest.com", "quora.com",
         "medium.com/@", "substack.com",
     ]
 

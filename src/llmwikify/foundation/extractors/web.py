@@ -33,17 +33,10 @@ def _fetch_with_timeout(url: str, timeout: tuple[int, int] = FETCH_TIMEOUT) -> s
 
 
 def _extract_url(url: str, timeout: tuple[int, int] = FETCH_TIMEOUT) -> ExtractedContent:
-    """Extract article content from a web URL using trafilatura."""
-    try:
-        import trafilatura
-    except ImportError:
-        return ExtractedContent(
-            text="",
-            source_type="error",
-            title=url,
-            metadata={"error": "trafilatura not installed. Install with: pip install trafilatura"}
-        )
+    """Extract article content from a web URL.
 
+    Fallback chain: trafilatura → Jina Reader → raw HTML.
+    """
     if not is_safe_url(url):
         return ExtractedContent(
             text="",
@@ -52,8 +45,35 @@ def _extract_url(url: str, timeout: tuple[int, int] = FETCH_TIMEOUT) -> Extracte
             metadata={"error": f"URL blocked by SSRF protection: {url}"}
         )
 
+    # Try trafilatura first
+    result = _extract_url_trafilatura(url, timeout)
+    if result and result.text and len(result.text.strip()) > 100:
+        return result
+
+    # Fallback to Jina Reader (handles JS-rendered SPAs, better extraction)
+    from .jina import extract_via_jina
+    jina_result = extract_via_jina(url)
+    if jina_result and jina_result.text and len(jina_result.text.strip()) > 100:
+        logger.info("Extracted via Jina Reader: %s", url[:80])
+        return jina_result
+
+    # Final fallback: return whatever trafilatura got (even if short)
+    return result or ExtractedContent(
+        text="",
+        source_type="error",
+        title=url,
+        metadata={"error": f"Failed to extract from {url}"},
+    )
+
+
+def _extract_url_trafilatura(url: str, timeout: tuple[int, int] = FETCH_TIMEOUT) -> ExtractedContent | None:
+    """Extract using trafilatura."""
     try:
-        # Run trafilatura with timeout via thread pool (trafilatura.fetch_url is blocking)
+        import trafilatura
+    except ImportError:
+        return None
+
+    try:
         future = _executor.submit(trafilatura.fetch_url, url)
         try:
             downloaded = future.result(timeout=15)
@@ -61,21 +81,14 @@ def _extract_url(url: str, timeout: tuple[int, int] = FETCH_TIMEOUT) -> Extracte
             future.cancel()
             downloaded = None
 
-        # Fallback to requests with timeout if trafilatura fails
         if not downloaded:
             downloaded = _fetch_with_timeout(url, timeout)
 
         if not downloaded:
-            return ExtractedContent(
-                text="",
-                source_type="error",
-                title=url,
-                metadata={"error": f"Failed to download {url}"}
-            )
+            return None
 
         text = trafilatura.extract(downloaded)
 
-        # Try to get title from HTML
         import re
         title_match = re.search(r'<title[^>]*>([^<]+)</title>', downloaded, re.IGNORECASE)
         title = title_match.group(1).strip() if title_match else url
@@ -87,13 +100,8 @@ def _extract_url(url: str, timeout: tuple[int, int] = FETCH_TIMEOUT) -> Extracte
             metadata={"url": url},
         )
 
-    except (ConnectionError, TimeoutError, ValueError, OSError) as e:
-        return ExtractedContent(
-            text="",
-            source_type="error",
-            title=url,
-            metadata={"error": f"Failed to extract from {url}: {e}"},
-        )
+    except (ConnectionError, TimeoutError, ValueError, OSError):
+        return None
 
 
 # Export with consistent name

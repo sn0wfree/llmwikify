@@ -1,10 +1,11 @@
 """Web search with multiple provider support.
 
 Providers (in fallback order):
-1. SearXNG — self-hosted meta search engine (free, no API key)
-2. MiniMax — Token Plan web search API (450 req/day)
-3. Tavily — AI-optimized search API (free tier: 1000/month)
-4. DuckDuckGo — free, may fail in restricted networks
+1. Jina — AI search + full content extraction (s.jina.ai, free)
+2. SearXNG — self-hosted meta search engine (free, no API key)
+3. MiniMax — Token Plan web search API (450 req/day)
+4. Tavily — AI-optimized search API (free tier: 1000/month)
+5. DuckDuckGo — free, may fail in restricted networks
 """
 
 from __future__ import annotations
@@ -29,6 +30,51 @@ class SearchResult:
 
 class SearchProvider(Protocol):
     async def search(self, query: str, num_results: int) -> list[SearchResult]: ...
+
+
+# ---------------------------------------------------------------------------
+# Jina Provider (AI search + full content extraction)
+# ---------------------------------------------------------------------------
+
+class JinaSearchProvider:
+    """Jina Reader search (s.jina.ai) — search + auto-extract top results.
+
+    Free tier: generous RPM, no API key required for basic use.
+    Returns full page content in results (not just snippets), so the
+    gatherer can skip the separate fetch step.
+    """
+
+    def __init__(self, api_key: str | None = None) -> None:
+        self.api_key = api_key
+
+    async def search(self, query: str, num_results: int) -> list[SearchResult]:
+        import httpx
+
+        headers: dict[str, str] = {"Accept": "application/json"}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+
+        try:
+            async with httpx.AsyncClient(timeout=30) as client:
+                resp = await client.get(
+                    f"https://s.jina.ai/{query}",
+                    headers=headers,
+                    params={"numResults": min(num_results, 10)},
+                )
+                resp.raise_for_status()
+                data = resp.json()
+
+            results = []
+            for r in data.get("data", [])[:num_results]:
+                results.append(SearchResult(
+                    title=r.get("title", ""),
+                    url=r.get("url", ""),
+                    snippet=(r.get("content", "") or r.get("description", ""))[:500],
+                ))
+            return results
+        except Exception as exc:
+            logger.warning("Jina search failed: %s", exc)
+            return []
 
 
 # ---------------------------------------------------------------------------
@@ -254,7 +300,8 @@ def create_search_provider(config: dict[str, Any]) -> FallbackSearchProvider:
     """Create search provider chain based on config.
 
     Config keys:
-        search_provider: "auto" | "searxng" | "minimax" | "tavily" | "duckduckgo"
+        search_provider: "auto" | "jina" | "searxng" | "minimax" | "tavily" | "duckduckgo"
+        jina_api_key: Jina Reader API key (optional, improves limits)
         searxng_url: SearXNG base URL (e.g. "http://localhost:8888")
         minimax_api_key: MiniMax Token Plan API key
         minimax_api_host: MiniMax API host (default: "https://api.minimaxi.com")
@@ -262,6 +309,11 @@ def create_search_provider(config: dict[str, Any]) -> FallbackSearchProvider:
     """
     provider_name = config.get("search_provider", "auto")
     chain: list[SearchProvider] = []
+
+    if provider_name in ("auto", "jina"):
+        jina_key = config.get("jina_api_key")
+        chain.append(JinaSearchProvider(jina_key))
+        logger.info("Registered Jina provider")
 
     if provider_name in ("auto", "searxng"):
         searxng_url = config.get("searxng_url")
