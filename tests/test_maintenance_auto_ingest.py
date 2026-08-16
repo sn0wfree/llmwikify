@@ -314,3 +314,58 @@ def test_fallback_proposal_persists_to_db(tmp_path: Path):
         r["page_name"] == "Persisted" and r["status"] == "pending"
         for r in rows
     )
+
+
+# ── B1 fix: global LLM config fallback ───────────────────────────────
+
+
+def test_ensure_llm_config_merges_global_when_local_off(tmp_path: Path, monkeypatch):
+    from types import SimpleNamespace as NS
+
+    import llmwikify.apps.agent.maintenance.auto_ingest as ai_mod
+    import llmwikify.foundation.llm.client as llm_client_mod
+
+    monkeypatch.setattr(
+        ai_mod, "load_llm_config", lambda: {"enabled": True, "provider": "minimax", "model": "m3", "api_key": "k"},
+        raising=False,
+    )
+    # patch where it's imported: inside function via foundation module
+    monkeypatch.setattr(
+        llm_client_mod, "load_llm_config",
+        lambda: {"enabled": True, "provider": "minimax", "model": "m3", "api_key": "k"},
+    )
+
+    wiki = NS(
+        root=tmp_path,
+        raw_dir=tmp_path / "raw",
+        config={"llm": {"enabled": False}},
+        ingest_source=lambda p: {},
+    )
+    (tmp_path / "raw").mkdir(exist_ok=True)
+    svc = AutoIngestService(
+        wiki=wiki, wiki_id="t",
+        config=AutoIngestConfig(),
+        llm_semaphore=asyncio.Semaphore(1),
+    )
+    svc._ensure_llm_config()
+    assert wiki.config["llm"]["enabled"] is True
+    assert wiki.config["llm"]["provider"] == "minimax"
+
+
+def test_ensure_llm_config_keeps_local_when_enabled(tmp_path: Path):
+    from types import SimpleNamespace as NS
+
+    wiki = NS(
+        root=tmp_path,
+        raw_dir=tmp_path / "raw",
+        config={"llm": {"enabled": True, "provider": "local", "base_url": "http://x"}},
+        ingest_source=lambda p: {},
+    )
+    (tmp_path / "raw").mkdir(exist_ok=True)
+    svc = AutoIngestService(
+        wiki=wiki, wiki_id="t",
+        config=AutoIngestConfig(),
+        llm_semaphore=asyncio.Semaphore(1),
+    )
+    svc._ensure_llm_config()
+    assert wiki.config["llm"]["provider"] == "local"  # untouched

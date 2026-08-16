@@ -113,9 +113,46 @@ class AutoIngestService:
             self._watcher = None
             return False
         logger.info("[%s] auto_ingest: watching %s", self.wiki_id, raw)
+        self._ensure_llm_config()
         self._load_processed()
         await self._scan_backlog()
         return True
+
+    def _ensure_llm_config(self) -> None:
+        """Fall back to the GLOBAL llm config when the wiki-local one is off.
+
+        ``wiki._llm_process_source`` builds its LLM client from
+        ``wiki.config`` (per-wiki), but typical deployments configure LLM
+        once in ~/.llmwikify/llmwikify.json (the same file serve uses to
+        wire the chat provider). Without this merge, auto-ingest would
+        fall back to a proposal for every file on such wikis (observed
+        in production 2026-08-16). In-memory only — never written back.
+        """
+        try:
+            cfg = self.wiki.config
+            if not isinstance(cfg, dict):
+                return
+            llm = cfg.get("llm") or {}
+            if llm.get("enabled") and (llm.get("api_key") or llm.get("base_url")):
+                return
+            from llmwikify.foundation.llm.client import load_llm_config
+
+            global_llm = load_llm_config()
+            if global_llm.get("enabled"):
+                cfg["llm"] = {**llm, **global_llm, "enabled": True}
+                logger.info(
+                    "[%s] auto_ingest: wiki-local llm off, using global "
+                    "config (provider=%s, model=%s)",
+                    self.wiki_id,
+                    global_llm.get("provider"),
+                    global_llm.get("model"),
+                )
+        except Exception:
+            logger.debug(
+                "[%s] auto_ingest: llm config fallback check failed",
+                self.wiki_id,
+                exc_info=True,
+            )
 
     async def stop(self) -> None:
         if self._watcher:
