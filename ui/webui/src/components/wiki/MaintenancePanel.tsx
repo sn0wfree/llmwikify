@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import {
   Wrench, RefreshCw, Loader2, CheckCircle2, AlertCircle,
-  Database, FileSearch, Zap, Clock,
+  Database, FileSearch, Zap, Clock, FileCheck, FileX,
 } from 'lucide-react';
 import { api } from '../../api';
 import { cn } from '@/lib/utils';
@@ -236,6 +236,16 @@ export function MaintenancePanel() {
         </div>
       </div>
 
+      {/* Alert Banner */}
+      {totalFallback > 0 && (
+        <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+          <span className="text-sm text-amber-300">
+            {totalFallback} file(s) fell back to proposals. Review in the proposals section below.
+          </span>
+        </div>
+      )}
+
       {/* Trigger Buttons */}
       <div className="flex gap-2">
         {['lint', 'gaps', 'db', 'all'].map((task) => (
@@ -250,6 +260,121 @@ export function MaintenancePanel() {
           </button>
         ))}
       </div>
+
+      {/* Proposals Section */}
+      <ProposalsSection />
+    </div>
+  );
+}
+
+function ProposalsSection() {
+  const [proposals, setProposals] = useState<Array<Record<string, unknown>>>([]);
+  const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [acting, setActing] = useState(false);
+
+  const loadProposals = useCallback(async () => {
+    setLoading(true);
+    try {
+      const result = await fetch('/api/maintenance/proposals?status=pending').then(r => r.json());
+      setProposals(result.proposals || []);
+    } catch { setProposals([]); } finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { loadProposals(); }, [loadProposals]);
+
+  const toggleSelect = (id: string) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const handleBatchApprove = async () => {
+    if (selected.size === 0) return;
+    setActing(true);
+    try {
+      await fetch('/api/maintenance/proposals/approve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: Array.from(selected) }),
+      });
+      setSelected(new Set());
+      await loadProposals();
+    } finally { setActing(false); }
+  };
+
+  const handleBatchReject = async () => {
+    if (selected.size === 0) return;
+    setActing(true);
+    try {
+      await fetch('/api/maintenance/proposals/reject', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: Array.from(selected) }),
+      });
+      setSelected(new Set());
+      await loadProposals();
+    } finally { setActing(false); }
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-medium">Pending Proposals ({proposals.length})</h3>
+        <div className="flex gap-2">
+          <button
+            onClick={handleBatchApprove}
+            disabled={selected.size === 0 || acting}
+            className="flex items-center gap-1 px-2 py-1 rounded text-xs bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 disabled:opacity-50"
+          >
+            <FileCheck className="w-3 h-3" />
+            Approve ({selected.size})
+          </button>
+          <button
+            onClick={handleBatchReject}
+            disabled={selected.size === 0 || acting}
+            className="flex items-center gap-1 px-2 py-1 rounded text-xs bg-red-500/10 text-red-400 hover:bg-red-500/20 disabled:opacity-50"
+          >
+            <FileX className="w-3 h-3" />
+            Reject ({selected.size})
+          </button>
+          <button onClick={loadProposals} className="p-1 rounded text-xs text-muted-foreground hover:bg-white/[0.06]">
+            <RefreshCw className="w-3 h-3" />
+          </button>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="text-xs text-muted-foreground flex items-center gap-1">
+          <Loader2 className="w-3 h-3 animate-spin" /> Loading…
+        </div>
+      ) : proposals.length === 0 ? (
+        <div className="text-xs text-muted-foreground py-2">No pending proposals</div>
+      ) : (
+        <div className="space-y-1 max-h-60 overflow-y-auto">
+          {proposals.map((p) => (
+            <label
+              key={p.id as string}
+              className="flex items-start gap-2 p-2 rounded bg-card border cursor-pointer hover:bg-white/[0.02]"
+            >
+              <input
+                type="checkbox"
+                checked={selected.has(p.id as string)}
+                onChange={() => toggleSelect(p.id as string)}
+                className="mt-0.5 shrink-0"
+              />
+              <div className="min-w-0 flex-1">
+                <div className="text-xs font-medium truncate">{p.page_name as string}</div>
+                <div className="text-[10px] text-muted-foreground truncate">
+                  {p.edit_type as string} · {(p.content_length as number) ?? 0} chars · {p.reason as string}
+                </div>
+              </div>
+            </label>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

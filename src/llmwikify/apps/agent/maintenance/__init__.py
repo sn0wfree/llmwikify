@@ -11,8 +11,10 @@ All blocking wiki calls are wrapped in ``asyncio.to_thread``; a shared
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import sqlite3
+import tempfile
 import time
 from pathlib import Path
 from typing import Any
@@ -89,6 +91,43 @@ class MaintenanceManager:
             return WikiDreamProposalManager(wiki_id=wiki_id)
         return WikiDreamProposalManager(db=db, wiki_id=wiki_id)
 
+    @property
+    def _state_file(self) -> Path:
+        """Path to persistent health history file."""
+        # Use a fixed path under the first local wiki's root, or /tmp as fallback
+        for _, wiki in self._local_wikis():
+            root = getattr(wiki, "root", None)
+            if root:
+                return Path(root) / ".llmwikify" / "maintenance" / "health_history.json"
+        return Path("/tmp") / "llmwikify_health_history.json"
+
+    def _load_history(self) -> None:
+        """Load health history from disk."""
+        try:
+            f = self._state_file
+            if f.exists():
+                data = json.loads(f.read_text(encoding="utf-8"))
+                if isinstance(data, list):
+                    self._health_history = data[-HEALTH_HISTORY_LIMIT:]
+        except (json.JSONDecodeError, OSError):
+            pass
+
+    def _save_history(self) -> None:
+        """Persist health history to disk (atomic write)."""
+        try:
+            f = self._state_file
+            f.parent.mkdir(parents=True, exist_ok=True)
+            payload = json.dumps(self._health_history[-HEALTH_HISTORY_LIMIT:])
+            fd, tmp = tempfile.mkstemp(dir=f.parent, suffix=".tmp")
+            try:
+                with open(fd, "w", encoding="utf-8") as fh:
+                    fh.write(payload)
+                Path(tmp).replace(f)
+            finally:
+                Path(tmp).unlink(missing_ok=True)
+        except OSError:
+            pass
+
     # ── lifecycle ──────────────────────────────────────────────────────
 
     async def start(self) -> None:
@@ -100,6 +139,8 @@ class MaintenanceManager:
 
         for wiki_id, wiki in self._local_wikis():
             await self._start_for_wiki(wiki_id, wiki, loop)
+
+        self._load_history()
 
         if self.gap_fillers:
             self._tasks.append(
@@ -358,6 +399,7 @@ class MaintenanceManager:
     def _trim_history(self) -> None:
         if len(self._health_history) > HEALTH_HISTORY_LIMIT:
             self._health_history = self._health_history[-HEALTH_HISTORY_LIMIT:]
+        self._save_history()
 
     def status(self) -> dict[str, Any]:
         return {
