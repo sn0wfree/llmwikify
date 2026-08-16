@@ -187,7 +187,21 @@ class WikiLLMMixin(WikiProtocol):
 
             except (ConnectionError, ValueError) as e:
                 last_errors = [str(e)]
-                if attempt >= max_attempts:
+                if attempt < max_attempts:
+                    # Build a retry prompt that tells the LLM what went wrong
+                    # and what format is expected, so it can self-correct.
+                    retry_prompt = (
+                        f"Your previous response could not be parsed as JSON.\n"
+                        f"Error: {e}\n\n"
+                        f"You MUST return ONLY a valid JSON object. No explanations, "
+                        f"no markdown code blocks, no <think> tags — just the raw JSON.\n"
+                        f"Use the same schema as described in the original prompt."
+                    )
+                    messages = [
+                        messages[0],
+                        {"role": "user", "content": retry_prompt},
+                    ]
+                elif attempt >= max_attempts:
                     raise
 
         raise ValueError(
