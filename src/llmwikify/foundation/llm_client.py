@@ -237,6 +237,10 @@ class LLMClient:
     @staticmethod
     def _parse_json_response(raw: str) -> Any:
         """Extract JSON from potentially markdown-wrapped response."""
+        # Strip <think> blocks (minimax thinking mode) — sometimes the LLM
+        # returns thinking text without a JSON code block after it.
+        raw = re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL).strip()
+
         # Try direct parse
         try:
             return json.loads(raw)
