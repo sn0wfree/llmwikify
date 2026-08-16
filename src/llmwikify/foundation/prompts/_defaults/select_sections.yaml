@@ -46,6 +46,7 @@ user: |
 
 post_process:
   validate_schema: "section_selection"
+  required_type: "object"
   required_keys: ["selected_sections", "reasoning"]
   retry_on_failure:
     max_attempts: 2

@@ -99,13 +99,13 @@ class TestWikiRoutesPage:
         )
         assert response.status_code == 400
 
-    def test_write_page_empty_content(self, api_client):
-        """Test writing page with empty content still works."""
+    def test_write_page_empty_content_rejected(self, api_client):
+        """Test writing page with empty content returns 400."""
         response = api_client.post(
             "/api/wiki/page",
             json={"page_name": "EmptyPage", "content": ""}
         )
-        assert response.status_code == 200
+        assert response.status_code == 400
 
 
 class TestWikiRoutesLint:

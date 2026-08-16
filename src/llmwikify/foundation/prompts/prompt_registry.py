@@ -322,6 +322,13 @@ class PromptRegistry:
                     if len(answer.strip()) < 20:
                         errors.append("Answer is too short to be a useful wiki page")
 
+        elif schema_name == "section_selection":
+            if not isinstance(output, dict):
+                return [f"Expected object, got {type(output).__name__}"]
+            for key in ("selected_sections", "reasoning"):
+                if key not in output:
+                    errors.append(f"Missing required key: {key}")
+
         elif schema_name == "operations_array":
             if not isinstance(output, list):
                 return [f"Expected array, got {type(output).__name__}"]
