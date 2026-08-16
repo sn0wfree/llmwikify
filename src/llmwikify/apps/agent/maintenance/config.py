@@ -31,12 +31,15 @@ class AutoIngestConfig:
 
 @dataclass
 class GapFillerConfig:
-    """Track B: lint-driven gap detection + proposal-based filling."""
+    """Track B: lint-driven gap detection and proposal-based filling."""
 
     enabled: bool = True
     max_per_cycle: int = 5
     min_priority: int = 30
     auto_approve_mechanical: bool = True
+    # B3b: real gap research options
+    use_llm_draft: bool = True  # use LLM to generate page content (vs stub)
+    web_search_enabled: bool = False  # search web for entity info before drafting
 
 
 @dataclass
@@ -128,6 +131,12 @@ def load_maintenance_config(config_path: Path | None = None) -> MaintenanceConfi
         cfg.gap_filler.auto_approve_mechanical = bool(
             gf.get("auto_approve_mechanical", cfg.gap_filler.auto_approve_mechanical),
         )
+        cfg.gap_filler.use_llm_draft = bool(
+            gf.get("use_llm_draft", cfg.gap_filler.use_llm_draft),
+        )
+        cfg.gap_filler.web_search_enabled = bool(
+            gf.get("web_search_enabled", cfg.gap_filler.web_search_enabled),
+        )
 
     rl = section.get("llm_rate_limit", {})
     if isinstance(rl, dict):
@@ -161,6 +170,8 @@ def to_dict(cfg: MaintenanceConfig) -> dict[str, Any]:
             "max_per_cycle": cfg.gap_filler.max_per_cycle,
             "min_priority": cfg.gap_filler.min_priority,
             "auto_approve_mechanical": cfg.gap_filler.auto_approve_mechanical,
+            "use_llm_draft": cfg.gap_filler.use_llm_draft,
+            "web_search_enabled": cfg.gap_filler.web_search_enabled,
         },
         "llm_rate_limit": {
             "enabled": cfg.llm_rate_limit.enabled,

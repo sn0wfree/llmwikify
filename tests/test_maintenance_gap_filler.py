@@ -114,11 +114,11 @@ def test_fix_missing_cross_ref_respects_auto_approve_off(wiki_instance):
     assert "[[" not in wiki_instance.read_page("Solo")["content"]
 
 
-def test_entity_gap_creates_proposal(wiki_instance):
+def test_entity_gap_creates_proposal_stub_path(wiki_instance):
     filler = GapFiller(
         wiki=wiki_instance,
         wiki_id="test",
-        config=GapFillerConfig(),
+        config=GapFillerConfig(use_llm_draft=False),
         llm_semaphore=asyncio.Semaphore(1),
     )
     gap = type("G", (), {
@@ -133,3 +133,39 @@ def test_entity_gap_creates_proposal(wiki_instance):
     assert stats.get("pending", 0) >= 1
     # no page was actually written (proposal-only)
     assert wiki_instance.read_page("Orphan Idea").get("error")
+
+
+def test_entity_gap_llm_synthesizes_when_enabled():
+    """When use_llm_draft=True and LLM is configured, _llm_synthesize_draft runs."""
+    from llmwikify.apps.agent.maintenance.gap_filler import GapFiller as GF
+
+    class FakeClient:
+        def complete(self, messages, **kw):
+            return "# Fake Entity\n\nSynthesized content about the entity.\n\n## Related\n\n- [[Page A]]\n"
+
+    class FakeWiki:
+        config = {"llm": {"enabled": True, "provider": "none", "base_url": "http://x"}}
+        def search(self, q, limit=5):
+            return [{"page_name": "Page A", "content": "related info"}]
+
+    filler = GF(
+        wiki=FakeWiki(), wiki_id="test",
+        config=GapFillerConfig(use_llm_draft=True, web_search_enabled=False),
+        llm_semaphore=asyncio.Semaphore(1),
+    )
+    # patch _llm_synthesize_draft to use FakeClient
+    import llmwikify.foundation.llm as llm_mod
+    original = getattr(llm_mod, "LLMClient", None)
+    class _FakeLLMClient:
+        @staticmethod
+        def from_config(cfg):
+            return FakeClient()
+    llm_mod.LLMClient = _FakeLLMClient
+    try:
+        draft = filler._llm_synthesize_draft("Fake Entity", ["- Page A: info"], [])
+        assert draft is not None
+        assert "# Fake Entity" in draft
+        assert "Synthesized content" in draft
+    finally:
+        if original is not None:
+            llm_mod.LLMClient = original

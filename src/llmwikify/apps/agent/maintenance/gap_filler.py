@@ -233,10 +233,22 @@ class GapFiller:
     # ── content generation: unreferenced_entity ────────────────────────
 
     async def _propose_entity_page(self, gap: GapItem) -> int:
-        """Draft a page for an orphan concept; queue as proposal for review."""
+        """Research an orphan concept and draft a wiki page.
+
+        Pipeline (respects rate limiter + LLM availability):
+        1. wiki.search(concept) — find related local pages
+        2. [optional] WebSearch.search(concept) — web context
+        3. [optional] LLM synthesis — structured draft (rate-limited)
+        4. Fallback: stub page if LLM unavailable or fails
+
+        Rate limiter: one acquire per entity (LLM calls are bounded by
+        the process-wide ``llm_rate_limit`` window).
+        """
         concept = gap.concept
         if not concept:
             return 0
+
+        # 1. Local wiki search
         try:
             related = await asyncio.to_thread(self.wiki.search, concept, 5)
         except TypeError:
@@ -249,14 +261,34 @@ class GapFiller:
             r.get("page_name") or r.get("name") or str(r)
             for r in (related or [])[:5]
         ]
-        draft = (
-            f"# {concept}\n\n"
-            f"Auto-generated stub by gap_filler "
-            f"(unreferenced entity detected by lint).\n\n"
-            f"## Overview\n\n(pending human review)\n\n"
-            f"## Related\n\n"
-            + "".join(f"- [[{n}]]\n" for n in related_names if n and n != concept)
-        )
+        related_snippets = [
+            f"- {r.get('page_name', '?')}: {(r.get('content', '') or r.get('snippet', ''))[:200]}"
+            for r in (related or [])[:3]
+        ]
+
+        # 2. Optional web search
+        web_sources: list[str] = []
+        if self.config.web_search_enabled:
+            web_sources = await self._web_search(concept)
+
+        # 3. LLM draft (when enabled + LLM available)
+        draft = None
+        if self.config.use_llm_draft:
+            llm_enabled = (
+                isinstance(self.wiki.config, dict)
+                and (self.wiki.config.get("llm") or {}).get("enabled")
+            )
+            if llm_enabled:
+                await self.rate_limiter.acquire()
+                draft = await asyncio.to_thread(
+                    self._llm_synthesize_draft,
+                    concept, related_snippets, web_sources,
+                )
+
+        # 4. Fallback to stub if LLM didn't produce output
+        if not draft:
+            draft = self._stub_draft(concept, related_names)
+
         self._proposal_manager.create_proposal(
             page_name=concept,
             edit_type="create",
@@ -264,6 +296,71 @@ class GapFiller:
             reason=f"gap_filler: unreferenced_entity (priority {gap.priority})",
         )
         return 1
+
+    async def _web_search(self, concept: str) -> list[str]:
+        """Search the web for entity context. Returns formatted snippets."""
+        try:
+            from llmwikify.apps.research.web_search import WebSearch
+
+            ws = WebSearch()
+            results = await ws.search(concept, num_results=3)
+            return [
+                f"- [{r.title}]({r.url}): {r.snippet[:200]}"
+                for r in results if r.snippet
+            ]
+        except Exception as exc:
+            logger.debug("[%s] gap_filler web search failed: %s", self.wiki_id, exc)
+            return []
+
+    def _llm_synthesize_draft(
+        self, concept: str, related_snippets: list[str], web_sources: list[str],
+    ) -> str | None:
+        """Build a structured wiki page via LLM. Called in a thread."""
+        try:
+            from llmwikify.foundation.llm import LLMClient
+
+            client = LLMClient.from_config(self.wiki.config)
+            context_parts = []
+            if related_snippets:
+                context_parts.append("Related pages in wiki:\n" + "\n".join(related_snippets))
+            if web_sources:
+                context_parts.append("Web sources:\n" + "\n".join(web_sources))
+            context = "\n\n".join(context_parts) or "(no context available)"
+
+            messages = [
+                {"role": "system", "content": (
+                    "You are a wiki content author. Write a concise, factual "
+                    "markdown page for the given concept. Use [[wikilink]] "
+                    "syntax for related concepts. Do NOT fabricate facts — "
+                    "use only the provided context. Output ONLY the markdown "
+                    "page content, no explanations."
+                )},
+                {"role": "user", "content": (
+                    f"Write a wiki page for: **{concept}**\n\n"
+                    f"Context:\n{context}"
+                )},
+            ]
+            result = client.complete(messages)
+            if isinstance(result, str) and len(result.strip()) > 50:
+                return result.strip()
+        except Exception as exc:
+            logger.warning(
+                "[%s] gap_filler LLM synthesis failed for %s: %s",
+                self.wiki_id, concept, exc,
+            )
+        return None
+
+    @staticmethod
+    def _stub_draft(concept: str, related_names: list[str]) -> str:
+        """Fallback stub when LLM is unavailable."""
+        links = "".join(f"- [[{n}]]\n" for n in related_names if n and n != concept)
+        return (
+            f"# {concept}\n\n"
+            f"Auto-generated stub by gap_filler "
+            f"(unreferenced entity detected by lint).\n\n"
+            f"## Overview\n\n(pending human review)\n\n"
+            f"## Related\n\n{links}"
+        )
 
     def status(self) -> dict[str, Any]:
         last = self.last_result
