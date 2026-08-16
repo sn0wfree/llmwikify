@@ -20,6 +20,9 @@ const DreamPage = lazy(() =>
 const SinkPage = lazy(() =>
   import('./components/wiki/SinkPage').then(m => ({ default: m.SinkPage }))
 );
+const MaintenancePanel = lazy(() =>
+  import('./components/wiki/MaintenancePanel').then(m => ({ default: m.MaintenancePanel }))
+);
 const Confirmations = lazy(() =>
   import('./components/wiki/Confirmations').then(m => ({ default: m.Confirmations }))
 );
@@ -62,6 +65,7 @@ function App() {
               <Route path="insights" element={<Insights />} />
               <Route path="insights/dream" element={<DreamPage />} />
               <Route path="insights/sink" element={<SinkPage />} />
+              <Route path="insights/maintenance" element={<MaintenancePanel />} />
             </Route>
 
             {/* Agent routes */}

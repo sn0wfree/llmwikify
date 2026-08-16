@@ -4,7 +4,7 @@ import {
   BookOpen, Sparkles, FileText, BarChart3, Lightbulb,
   MessageSquare, Search, CheckSquare, Settings,
   PanelLeftClose, PanelLeftOpen, Bot, Moon, Sun,
-  Database, AlertTriangle,
+  Database, AlertTriangle, Wrench,
 } from 'lucide-react';
 import { Backdrop } from './Backdrop';
 import { Notifications } from '../wiki/Notifications';
@@ -34,6 +34,7 @@ const NAV_INSIGHTS = [
   { to: '/insights', label: 'Insights', icon: Lightbulb },
   { to: '/insights/dream', label: 'Dream', icon: Sparkles },
   { to: '/insights/sink', label: 'Sink', icon: Database },
+  { to: '/insights/maintenance', label: 'Maintenance', icon: Wrench },
 ] as const;
 
 interface BadgeCounts {

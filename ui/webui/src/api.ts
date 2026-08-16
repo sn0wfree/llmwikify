@@ -624,6 +624,13 @@ export const api = {
     },
   },
 
+  maintenance: {
+    health: () => request<Record<string, unknown>>('/maintenance/health'),
+    status: () => request<Record<string, unknown>>('/maintenance/status'),
+    trigger: (task: 'gaps' | 'db' | 'lint' | 'all' = 'all') =>
+      request<Record<string, unknown>>(`/maintenance/trigger?task=${task}`, { method: 'POST' }),
+  },
+
   ingest: {
     log: (limit = 20, wikiId?: string) => request<IngestLogEntry[]>(`/agent/ingest/log?limit=${limit}${wikiId ? `&wiki_id=${wikiId}` : ''}`),
     changes: (id: string) => request<IngestLogEntry>(`/agent/ingest/log/${id}`),
