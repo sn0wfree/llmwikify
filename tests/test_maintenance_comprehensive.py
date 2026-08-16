@@ -258,8 +258,8 @@ def test_run_cycle_budget_exhausted(wiki_instance):
 
 
 def test_run_cycle_skips_low_priority(wiki_instance):
-    from llmwikify.apps.agent.maintenance.gap_filler import GapFiller
     from llmwikify.apps.agent.maintenance.config import GapFillerConfig
+    from llmwikify.apps.agent.maintenance.gap_filler import GapFiller
 
     lint_result = {
         "hints": {"informational": []},
@@ -788,3 +788,67 @@ def test_health_report_api_includes_rate_limit():
         body = resp.json()
         assert "llm_rate_limit" in body
         assert body["llm_rate_limit"]["max_requests"] == 5
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# P2: health history persistence
+# ═══════════════════════════════════════════════════════════════════════
+
+
+def test_health_history_persists_across_instances(tmp_path):
+    from llmwikify.apps.agent.maintenance import MaintenanceConfig, MaintenanceManager
+    from llmwikify.kernel.multi_wiki.instance import WikiInstance, WikiType
+
+    wiki = SimpleNamespace(
+        root=tmp_path, raw_dir=tmp_path / "raw", db_path=tmp_path / ".db",
+        config={"llm": {"enabled": False}},
+        lint=lambda **kw: {"issue_count": 1, "hints": {"critical": [], "informational": []}},
+    )
+    registry = SimpleNamespace(
+        list_wikis=lambda: [WikiInstance(wiki_id="x", name="x", wiki_type=WikiType.LOCAL, root=tmp_path)],
+        get_wiki=lambda wid: wiki,
+    )
+
+    # first instance: add history
+    cfg = MaintenanceConfig()
+    cfg.auto_ingest.enabled = False
+    mgr1 = MaintenanceManager(registry=registry, config=cfg)
+    asyncio.run(mgr1.start())
+    asyncio.run(mgr1._lint_tick())
+    asyncio.run(mgr1.stop())
+    assert len(mgr1._health_history) >= 1
+
+    # second instance: should load from disk
+    mgr2 = MaintenanceManager(registry=registry, config=cfg)
+    asyncio.run(mgr2.start())
+    assert len(mgr2._health_history) >= 1  # loaded from disk
+    asyncio.run(mgr2.stop())
+
+
+def test_health_history_survives_restart(tmp_path):
+    from llmwikify.apps.agent.maintenance import MaintenanceConfig, MaintenanceManager
+    from llmwikify.kernel.multi_wiki.instance import WikiInstance, WikiType
+
+    wiki = SimpleNamespace(
+        root=tmp_path, raw_dir=tmp_path / "raw", db_path=tmp_path / ".db",
+        config={"llm": {"enabled": False}},
+        lint=lambda **kw: {"issue_count": 0, "hints": {}},
+    )
+    registry = SimpleNamespace(
+        list_wikis=lambda: [WikiInstance(wiki_id="x", name="x", wiki_type=WikiType.LOCAL, root=tmp_path)],
+        get_wiki=lambda wid: wiki,
+    )
+
+    cfg = MaintenanceConfig()
+    cfg.auto_ingest.enabled = False
+    mgr = MaintenanceManager(registry=registry, config=cfg)
+    asyncio.run(mgr.start())
+    asyncio.run(mgr._lint_tick())
+    asyncio.run(mgr.stop())
+
+    # verify file exists
+    state_file = tmp_path / ".llmwikify" / "maintenance" / "health_history.json"
+    assert state_file.exists()
+    data = json.loads(state_file.read_text())
+    assert len(data) >= 1
+    assert data[0]["type"] == "lint"

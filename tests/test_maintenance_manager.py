@@ -254,7 +254,7 @@ def test_lint_tick_records_to_health_history():
 
     asyncio.run(scenario())
     lint_entries = [h for h in mgr._health_history if h["type"] == "lint"]
-    assert len(lint_entries) == 1
-    assert lint_entries[0]["wiki_id"] == "x"
-    assert lint_entries[0]["issue_count"] == 2
-    assert lint_entries[0]["hint_count"] == 2
+    assert len(lint_entries) >= 1
+    assert lint_entries[-1]["wiki_id"] == "x"
+    assert lint_entries[-1]["issue_count"] == 2
+    assert lint_entries[-1]["hint_count"] == 2

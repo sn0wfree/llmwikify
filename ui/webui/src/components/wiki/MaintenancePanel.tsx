@@ -18,6 +18,7 @@ interface MaintenanceStatus {
     db_maintenance_interval_seconds: number;
   };
   llm_rate_limit: { enabled: boolean; max_requests: number; window_seconds: number; throttled_total: number; window_in_use: number };
+  performance: { total_ingested: number; total_pages_written: number; total_fallback_proposals: number; total_failed: number; llm_success_rate_pct: number | null } | null;
   auto_ingest: Record<string, {
     wiki_id: string;
     watching: boolean;
@@ -141,6 +142,23 @@ export function MaintenancePanel() {
           LLM budget: {rateLimit?.max_requests ?? '–'} units / {rateLimit?.window_seconds ?? '–'}s
         </span>
       </div>
+
+      {/* Performance Metrics */}
+      {status?.performance && (
+        <div className="flex items-center gap-4 p-3 rounded-lg bg-card border text-xs">
+          <span className="text-muted-foreground">Pages written: <b className="text-foreground">{status.performance.total_pages_written}</b></span>
+          <span className="text-muted-foreground">Fallback: <b className="text-foreground">{status.performance.total_fallback_proposals}</b></span>
+          <span className="text-muted-foreground">Failed: <b className="text-foreground">{status.performance.total_failed}</b></span>
+          {status.performance.llm_success_rate_pct !== null && (
+            <span className={cn(
+              'font-medium',
+              (status.performance.llm_success_rate_pct ?? 0) >= 80 ? 'text-emerald-400' : 'text-amber-400',
+            )}>
+              Success rate: {status.performance.llm_success_rate_pct}%
+            </span>
+          )}
+        </div>
+      )}
 
       {error && (
         <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-sm text-destructive">

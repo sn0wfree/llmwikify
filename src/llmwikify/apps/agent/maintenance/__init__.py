@@ -179,9 +179,15 @@ class MaintenanceManager:
         self.auto_ingest_services.clear()
         self.gap_fillers.clear()
         for task in self._tasks:
-            task.cancel()
+            try:
+                task.cancel()
+            except RuntimeError:
+                pass  # event loop already closed
         if self._tasks:
-            await asyncio.gather(*self._tasks, return_exceptions=True)
+            try:
+                await asyncio.gather(*self._tasks, return_exceptions=True)
+            except RuntimeError:
+                pass  # event loop already closed
         self._tasks.clear()
 
     # ── per-wiki helpers ───────────────────────────────────────────────
@@ -402,10 +408,26 @@ class MaintenanceManager:
         self._save_history()
 
     def status(self) -> dict[str, Any]:
+        # Aggregate performance metrics from all auto_ingest services
+        total_ingested = sum(s.stats.get("ingested", 0) for s in self.auto_ingest_services.values())
+        total_written = sum(s.stats.get("pages_written", 0) for s in self.auto_ingest_services.values())
+        total_fallback = sum(s.stats.get("fallback_proposals", 0) for s in self.auto_ingest_services.values())
+        total_failed = sum(s.stats.get("failed", 0) for s in self.auto_ingest_services.values())
+        llm_success_rate = (
+            round(total_written / max(total_written + total_fallback + total_failed, 1) * 100, 1)
+            if (total_written + total_fallback + total_failed) > 0 else None
+        )
         return {
             "running": self._running,
             "config": to_dict(self.config),
             "llm_rate_limit": self.llm_rate_limiter.stats(),
+            "performance": {
+                "total_ingested": total_ingested,
+                "total_pages_written": total_written,
+                "total_fallback_proposals": total_fallback,
+                "total_failed": total_failed,
+                "llm_success_rate_pct": llm_success_rate,
+            },
             "auto_ingest": {
                 wid: svc.status() for wid, svc in self.auto_ingest_services.items()
             },
