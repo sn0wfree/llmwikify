@@ -1,7 +1,9 @@
 # llmwikify Architecture
 
 > Technical architecture for developers.
-> **Version:** 0.40.0 | **Last updated:** 2026-07-17 | **Tests:** 4454+ Python collected
+> **Version:** 0.40.2 | **Last updated:** 2026-10-13 | **Tests:** 4940 Python collected
+>
+> Diagrams & flow charts live in [docs/architecture/overview.md](docs/architecture/overview.md).
 
 ---
 
@@ -13,7 +15,7 @@
 |-------|----------------|
 | **`kernel/`** | Core engines — wiki domain model, multi-wiki, search, knowledge graph, storage |
 | **`foundation/`** | LLM client, prompt registry, extractors, configuration, IO |
-| **`apps/`** | Application services — wiki, chat (ReAct + Skills), research, agent runtime |
+| **`apps/`** | Application services — wiki, chat (ChatRunner + Skills), research, agent runtime + self-maintenance |
 | **`interfaces/`** | CLI, MCP, FastAPI server (REST + MCP + Web UI), Web bundle |
 
 ### Design Principles
@@ -37,7 +39,7 @@ src/llmwikify/
 │
 ├── kernel/                       # Core engines
 │   ├── wiki/
-│   │   ├── wiki.py               # Wiki orchestrator (composes 12 mixins)
+│   │   ├── wiki.py               # Wiki orchestrator (composes 13 mixins)
 │   │   ├── protocols.py          # Typed protocols
 │   │   ├── constants.py
 │   │   ├── prompt_registry.py
@@ -46,7 +48,7 @@ src/llmwikify/
 │   │   │   ├── io/               # page_io.py, link.py, ingest.py, source_analysis.py
 │   │   │   └── analysis/         # lint.py, llm.py, query.py, relation.py, status.py, synthesis.py
 │   │   ├── engines/              # analyzer.py, relation.py, synthesis.py
-│   │   └── lint/                 # rule-based lint engine + rules/
+│   │   └── lint/                 # rule-based lint engine + rules/ (8 rules)
 │   │
 │   ├── multi_wiki/               # Multi-wiki registry
 │   │   ├── registry.py
@@ -69,21 +71,29 @@ src/llmwikify/
 │   │   ├── query_sink.py
 │   │   └── watcher.py            # Filesystem watcher
 │   │
+│   ├── agent/                    # Generic agent framework (UnifiedAgentLoop /
+│   │                             # StepHandler / UnifiedHook / spec /
+│   │                             # execution_context / steps/ / codegen_pipeline)
+│   ├── codegen/                  # LLM code generation (extract/validate/execute)
 │   └── principle_checker.py      # Prompt principle compliance
 │
 ├── foundation/                   # Cross-cutting primitives
-│   ├── config.py
-│   ├── io.py
+│   ├── config.py / db.py / io.py / logging.py / migration.py
 │   ├── llm_client.py             # OpenAI-compatible client + retry/backoff
+│   ├── auth/                     # JWT secret (OS keyring) + verification
+│   ├── callback/                 # AgentHook (13 hook points) + CompositeHook
+│   │   └── integrations/         # WikiHook / WikiDreamSyncHook / AutoIngestHook
 │   ├── llm/
+│   │   ├── client.py             # build_llm_client + load_llm_config
 │   │   ├── spec.py               # LLMSpec (LAL)
 │   │   ├── resolver.py           # from_spec / inheritance
 │   │   ├── streamable.py         # Streaming + tool-call accumulation
 │   │   ├── token_budget.py / token_estimator.py / budget_decorator.py
 │   │   ├── context_windows.py / provider_models.py / errors.py
+│   │   └── providers.yaml        # Provider metadata single source of truth
 │   ├── prompts/
 │   │   ├── prompt_registry.py    # YAML + Jinja2 templates with overrides
-│   │   └── _defaults/            # Built-in prompts (incl. repro_*.yaml)
+│   │   └── _defaults/            # Built-in prompts
 │   ├── extractors/               # text / pdf / web / youtube / markitdown
 │   └── templates/
 ```
@@ -91,67 +101,91 @@ src/llmwikify/
 
 ```
 ├── apps/                         # Application services
+│   ├── db.py / db_base.py        # AppDatabase (shared agent DB)
 │   ├── wiki/
-│   │   ├── service.py            # Wiki application service
+│   │   ├── service.py            # Wiki application service (multi-wiki facade)
 │   │   └── db.py
 │   │
-│   ├── chat/                     # Chat + ReAct + Skills
-│   │   ├── base.py / session.py / state.py
-│   │   ├── config.py / config_manager.py
-│   │   ├── db.py / db_migrations.py
-│   │   ├── prompts.py / engine_helpers.py
-│   │   ├── analyzer.py / clarifier.py / gatherer.py
-│   │   ├── synthesizer.py / structure_validator.py
-│   │   ├── reasoning_checker.py / quality_gate.py
-│   │   ├── retry_managers.py / source_filter.py
-│   │   ├── eval_harness.py / task_manager.py / research_agent.py
+│   ├── chat/                     # Chat agent + Skills
+│   │   ├── base.py / session.py / state.py / command_router.py
+│   │   ├── config.py / config_manager.py / prompts.py
+│   │   ├── config_defaults.yaml  # Chat business defaults
+│   │   ├── db_migrations.py / engine_helpers.py
+│   │   ├── analyzer.py / reasoning_checker.py / retry_managers.py
+│   │   ├── clarifier.py / gatherer.py / synthesizer.py
+│   │   ├── eval_harness.py / task_manager.py / research_agent.py / report.py
 │   │   ├── providers/            # base / minimax / xiaomi / registry
-│   │   ├── memory/
+│   │   ├── memory/               # facts / consolidation / dream + config
 │   │   ├── harness/              # service / quality_gate / review / source_*
-│   │   ├── agent/                # agent_service / orchestrator
-│   │   │                         # react_engine / react_loop / chat_react
-│   │   │                         # bridge_backend / research_bridge
-│   │   │                         # tool_executor / context_manager / context_store
-│   │   │                         # event_log / prompt_builder / text_mode_tool
+│   │   ├── db/                   # repo split: chat_session / chat_message /
+│   │   │                         # tool_call / permission / admin_stats
+│   │   │                         # (+ wiki / research delegates)
+│   │   ├── bus/                  # MessageBus in-process pub/sub
+│   │   ├── channels/websocket.py # WebSocketManager (/api/ws/agent)
+│   │   ├── agent/                # agent_service (composition root)
+│   │   │                         # orchestrator (ChatOrchestrator — chat() entry)
+│   │   │                         # runner_v2 (ChatRunnerV2 — 5-step agent loop)
+│   │   │                         # bridge_backend / tool_executor / microcompact
+│   │   │                         # prompt_builder / context_manager / context_store
+│   │   │                         # session_manager / confirmation_manager
+│   │   │                         # subagent_manager / chat_persistence
+│   │   │                         # event_log / text_mode_tool / events / spec
+│   │   ├── research_engine/      # back-compat shim → apps/research/
 │   │   └── skills/
 │   │       ├── registry.py / runtime.py / service.py / base.py
-│   │       ├── plugin_loader.py
+│   │       ├── loader.py / plugin_loader.py
 │   │       ├── wiki_query_skill.py
 │   │       ├── research_skill.py
 │   │       ├── autoresearch_compound_skill.py
 │   │       ├── actions/          # plan / observe / read / reason / revise /
 │   │       │                     # search / score / clarify / extract / filter /
-│   │       │                     # analyze / graph / lint / detect/
+│   │       │                     # analyze / graph / lint / detect /
+│   │       │                     # summarize / web_fetch / web_search / write
 │   │       ├── pipelines/
-│   │       ├── workflows/
+│   │       ├── workflows/        # dynamic workflow DSL + builtins/*.yaml
 │   │       └── crud/
 │   │
-│   ├── research/
-│   │   ├── base.py / web_search.py / db.py
+│   ├── research/                 # Research engine (canonical home since v0.40)
+│   │   ├── engine.py             # plan → gather → analyze → synthesize →
+│   │   │                         # report → review (ReAct + quality gates)
+│   │   ├── reasoner.py / observer.py / gates.py / report.py / resume.py
+│   │   ├── actions.py / llm_step.py / routes.py
+│   │   ├── web_search.py         # provider switching (minimax / tavily / ...)
+│   │   ├── db.py
+│   │   └── config_defaults.yaml  # Research business defaults
 │   │
-│   └── agent/                    # Agent runtime
-│       ├── dream_editor.py       # Async proposal + human confirmation
-│       ├── hooks.py
-│       ├── notifications/
-│       ├── scheduler/            # croniter-based task scheduler
-│       └── tools/
+│   ├── agent/                    # Agent runtime + self-maintenance
+│   │   ├── maintenance/          # MaintenanceManager: auto_ingest / gap_filler /
+│   │   │                         # rate_limit / llm_support / config
+│   │   ├── wiki_dream_editor.py  # Async proposal + human confirmation
+│   │   ├── notifications/
+│   │   ├── scheduler/            # croniter-based task scheduler
+│   │   └── tools/skill_adapter.py  # SkillToolAdapter + CompositeToolRegistry
+│   │
+│   └── api/
+│       └── openai_server.py      # OpenAI-compatible /v1/chat/completions
 │
 └── interfaces/
     ├── cli/
     │   ├── _app.py / _base.py / _config.py / _output.py
-    │   └── commands/             # 30 subcommand modules
+    │   └── commands/             # 33 command modules (34 subcommands)
     ├── mcp/
     │   ├── adapter.py            # MCPAdapter (FastMCP wrapper)
     │   ├── server.py             # Legacy entry (deprecated)
-    │   └── tools.py              # 26 wiki tools
+    │   └── tools.py              # 28 wiki tools (single + multi-wiki)
     ├── server/                   # Unified FastAPI server
     │   ├── core.py               # WikiServer
     │   ├── constants.py
     │   ├── http/
-    │   │   ├── routes.py         # /api/wiki, /api/wikis, /api/search/cross
-    │   │   ├── chat_sse.py       # /api/agent/* (chat, sessions, dream, ingest, confirmations)
-    │   │   ├── middleware.py
-    │   │   └── _models.py
+    │   │   ├── routes.py         # register_routes — composition root
+    │   │   ├── middleware.py     # JWT auth + rate limiting
+    │   │   ├── auth_routes.py    # POST /api/auth/login, GET /api/auth/me
+    │   │   ├── maintenance_routes.py
+    │   │   ├── _models.py / _handlers.py / _helpers.py
+    │   │   ├── wiki/             # wiki / registry / search / log routes
+    │   │   └── agent/            # sessions (/chat SSE) / confirmations /
+    │   │                         # dream / ingest / notifications / config /
+    │   │                         # status / _sse
     │   └── utils/
     │       └── webui.py
     └── web/
@@ -162,46 +196,63 @@ src/llmwikify/
 
 ## Architecture Diagram
 
+```mermaid
+flowchart TB
+    subgraph L4["interfaces/ · 入口层"]
+        direction LR
+        CLI["CLI · 34 子命令"]
+        MCP["MCP Adapter · 28 工具"]
+        SRV["WikiServer (FastAPI)<br/>REST + SSE + WebSocket<br/>JWT + 限流中间件"]
+        OAI["/v1/chat/completions<br/>OpenAI 兼容端点"]
+    end
+
+    subgraph L3["apps/ · 应用层"]
+        direction LR
+        AW["wiki · WikiService"]
+        AC["chat<br/>AgentService → ChatOrchestrator → ChatRunnerV2<br/>Skills · Memory · Harness · Providers"]
+        AR["research · ResearchEngine"]
+        AA["agent<br/>MaintenanceManager · DreamEditor<br/>Scheduler · Notifications"]
+    end
+
+    subgraph L2["kernel/ · 核心引擎"]
+        direction LR
+        KW["wiki<br/>Wiki (13 mixins)<br/>engines · lint"]
+        KMW["multi_wiki<br/>Registry · Remote"]
+        KST["storage<br/>FTS5 · sink · watcher"]
+        KS["search · QMD"]
+        KG["graph"]
+        KA["agent<br/>UnifiedAgentLoop · Hook"]
+    end
+
+    subgraph L1["foundation/ · 基础设施"]
+        direction LR
+        FL["llm<br/>client · spec · resolver<br/>streamable · token budget"]
+        FP["prompts"]
+        FE["extractors"]
+        FC["callback<br/>AgentHook · CompositeHook"]
+        FX["config · io · utils · auth · logging"]
+    end
+
+    CLI --> AC & AW & AR
+    MCP --> KMW
+    SRV --> AC & AW & AR & AA
+    OAI --> AC
+    L3 --> L2
+    L3 --> L1
+    L2 --> L1
 ```
-┌──────────────────────────────────────────────────────────────────────┐
-│                         Frontend (React SPA)                         │
-│  Editor │ FileTree │ Graph │ Insights │ Chat │ Quant pages           │
-└──────────────────────────────┬───────────────────────────────────────┘
-                               │ HTTP / SSE
-┌──────────────────────────────┴───────────────────────────────────────┐
-│                           interfaces/                                │
-│  CLI (30 commands)  │  MCP (26 tools)  │  FastAPI (REST + MCP + UI)  │
-│                                                                      │
-│  HTTP routers: /api/wiki  /api/wikis  /api/search/cross              │
-│                /api/agent /api/log/error                              │
-└──────────────────────────────┬───────────────────────────────────────┘
-                               │
-┌──────────────────────────────┴───────────────────────────────────────┐
-│                              apps/                                   │
-│  wiki.service  │  chat (ChatService → ReActEngine + Skills)          │
-│                │  research (web search + structured reasoning)       │
-│                │  agent (DreamEditor, Scheduler, Hooks, Notif.)      │
-└──────────────────────────────┬───────────────────────────────────────┘
-                               │
-┌──────────────────────────────┴───────────────────────────────────────┐
-│                              kernel/                                 │
-│  wiki + mixins  │  multi_wiki  │  search (QMD)  │  graph             │
-│  storage (FTS5, index, watcher)                                      │
-└──────────────────────────────┬───────────────────────────────────────┘
-                               │
-┌──────────────────────────────┴───────────────────────────────────────┐
-│                          foundation/                                 │
-│  llm_client + LAL (spec / resolver / streamable / token budget)      │
-│  prompt_registry + _defaults/                                        │
-│  extractors (text/pdf/web/youtube/markitdown) │ config │ io          │
-└──────────────────────────────────────────────────────────────────────┘
-```
+
+Dependency direction is strictly one-way (`interfaces → apps/kernel/foundation`,
+`apps → foundation/kernel`, `kernel → foundation`) — enforced by
+`python scripts/check_architecture.py`. See
+[docs/architecture/overview.md](docs/architecture/overview.md) for the
+request-level sequence diagrams and data-flow charts.
 
 ---
 
 ## Wiki Engine (`kernel/wiki/`)
 
-The `Wiki` orchestrator composes 12 mixins, grouped by intent:
+The `Wiki` orchestrator composes 13 mixins, grouped by intent:
 
 | Group | Mixin | Responsibility |
 |-------|-------|----------------|
@@ -245,48 +296,72 @@ The `Wiki` orchestrator composes 12 mixins, grouped by intent:
 
 ---
 
-## Chat / ReAct (`apps/chat/`)
+## Chat Agent (`apps/chat/`)
 
-`apps/chat/` exposes the user-facing chat experience. The v0.37 default
-flow routes every chat request through `ChatReActBridge → ReActEngine`:
+`apps/chat/` exposes the user-facing chat experience. Since Plan B
+(v0.41) every chat request runs through a single engine —
+`ChatOrchestrator → ChatRunnerV2`. The legacy ReAct stack
+(`chat_react.py` / `react_engine.py` / `react_loop.py`) was archived in
+B-5 and removed in B-7.
 
 | Component | Responsibility |
 |-----------|----------------|
-| `ChatService` | Public chat entry; orchestrates session, memory, harness, providers |
-| `agent/agent_service.py` | Tool-augmented assistant; `use_react_engine` toggles ReAct vs legacy |
-| `agent/react_engine.py` | `ReActEngine` — observe / reason / act, up to 4 tool rounds, configurable timeout |
-| `agent/react_loop.py` | Lower-level ReAct loop primitives |
-| `agent/chat_react.py` / `bridge_backend.py` | ReAct bridge into ChatService streaming |
-| `agent/research_bridge.py` | Bridge to `apps/research/` |
-| `agent/tool_executor.py` | Skill / tool invocation |
-| `agent/context_manager.py` / `context_store.py` | Per-session context |
-| `agent/orchestrator.py` | Orchestration glue (legacy + ReAct paths) |
-| `agent/event_log.py` / `prompt_builder.py` / `text_mode_tool.py` | Event logging, prompt assembly, plain-text mode |
+| `agent/agent_service.py` (`AgentService`) | Composition root: AppDatabase + chat + wiki + skills + harness + memory; lifecycle for DreamScheduler / AutoCompact / ConfirmationsCleanup |
+| `agent/orchestrator.py` (`ChatOrchestrator`) | Public `chat()` entry: session lifecycle, slash-command dispatch, prompt assembly, SSE side effects, assistant-message persistence |
+| `agent/runner_v2.py` (`ChatRunnerV2`) | The agent loop — 5-step state machine PRECHECK → REASON → ACT → OBSERVE → FINALIZE, up to `max_chat_rounds` (default 10) tool rounds |
+| `agent/bridge_backend.py` | `ChatServiceAdapter` for the runner (`_truncate_messages` / `_get_toolspec` / `_llm_stream_with_retry`) |
+| `agent/tool_executor.py` | Skill / tool invocation, result persistence, LLM stream retry |
+| `agent/context_manager.py` / `context_store.py` | Per-session context + message preparation |
+| `agent/prompt_builder.py` | System prompt assembly from wiki / memory / runtime state |
+| `agent/microcompact.py` | Tool-result compaction (ON by default, keeps 1000 chars, marker replaces body in context) |
+| `agent/session_manager.py` / `confirmation_manager.py` | Session status + abort / confirmation state |
+| `agent/subagent_manager.py` | In-process `spawn_subagent` (children cannot spawn grandchildren) |
+| `agent/chat_persistence.py` | Assistant message persistence + `/study` research_run_id extraction |
+| `agent/event_log.py` / `text_mode_tool.py` | Event log, plain-text `[TOOL_CALL]` mode |
+| `db/` | SQLite repo split (session / message / tool_call / permission / stats + delegates) |
+| `bus/` + `channels/websocket.py` | In-process MessageBus + `/api/ws/agent` |
 | `harness/` | Quality gate, review, source filter, structure validator |
 | `providers/` | LLM provider adapters (`minimax`, `xiaomi`, registry) |
-| `memory/` | Short / long-term memory |
+| `memory/` | Short / long-term memory, consolidator, dream |
+| `skills/` | Skill registry & runtime (see below) |
+
+### ChatRunnerV2 state machine
+
+```
+PRECHECK → REASON → (no tool calls) ──────────────→ FINALIZE
+              │
+              └→ ACT → OBSERVE → PRECHECK  (next round, ≤ max_chat_rounds)
+```
+
+All 13 `AgentHook` points are wired through `CompositeHook`
+(`wants_streaming` → `on_error`); `finalize_content` is the only
+pipeline-style hook (exceptions pass through).
 
 ### Streaming events
 
 | Event | Meaning |
 |-------|---------|
-| `reasoning` | LLM chain-of-thought |
-| `phase` | Research engine domain marker |
+| `message_delta` | LLM content delta |
+| `thinking` | LLM chain-of-thought / reasoning |
+| `tool_call_start` / `tool_call_end` / `tool_call_error` | Tool round execution |
 | `confirmation_required` | Pause for user approval |
+| `compacted` | Microcompact applied to a tool result |
+| `session_created` / `session_init` | Session lifecycle |
+| `command_done` | Slash command handled (bypasses the LLM loop) |
+| `research_run_started` | `/study` research run kicked off |
 | `save_warning` | DB write failed but stream continues (`{type, reason}`) |
-| `timeout` | 300 s exceeded |
-| Tool round events | Up to 4 tool-call rounds |
+| `done` / `error` | Terminal events |
 
 ### Skills system (`apps/chat/skills/`)
 
 | File / dir | Role |
 |------------|------|
 | `registry.py` / `runtime.py` / `service.py` / `base.py` | Skill registration & execution |
-| `plugin_loader.py` | Discover skills from `~/.llmwikify/skills/` |
+| `loader.py` / `plugin_loader.py` | Discover skills from `~/.llmwikify/skills/` |
 | `wiki_query_skill.py` | Wiki-aware Q&A |
 | `research_skill.py` | Web research skill |
-| `autoresearch_compound_skill.py` | Compound autoresearch flow |
-| `actions/` | Atomic actions (plan, observe, read, reason, revise, search, score, clarify, extract, filter, analyze, graph, lint, detect) |
+| `autoresearch_compound_skill.py` | Compound autoresearch flow (`/study` trigger) |
+| `actions/` | Atomic actions (plan, observe, read, reason, revise, search, score, clarify, extract, filter, analyze, graph, lint, detect, summarize, web_fetch, web_search, write) |
 | `pipelines/` | Linear skill pipelines |
 | `workflows/` | Dynamic workflow DSL (LAL) — strict validation, alias rejection, subagent inheritance |
 | `crud/` | Skill-level CRUD helpers |
@@ -295,16 +370,29 @@ flow routes every chat request through `ChatReActBridge → ReActEngine`:
 `inputs_data: dict` (not `inputs`) and `float` timestamps.
 
 ### Research engine (`apps/research/`)
-- `base.py` — Research engine entry
-- `web_search.py` — Web search + provider switching
-- `db.py` — Research run persistence
+
+Canonical home since v0.40 (`apps/chat/research_engine/` is a
+back-compat shim):
+
+- `engine.py` — `ResearchEngine`, ReAct-driven phases: plan → gather →
+  analyze → synthesize → report → review (→ revise → done)
+- `gates.py` — quality gates (min sources / type diversity / credibility)
+- `reasoner.py` / `observer.py` — per-round reason + observation
+- `report.py` / `resume.py` — report generation, pause / resume
+- `web_search.py` — provider switching; `db.py` — run persistence
+- `routes.py` — `/api/autoresearch/*` (start / stream / resume /
+  save-to-wiki / rate)
 
 ### Agent runtime (`apps/agent/`)
-- `dream_editor.py` — Async proposal generation, **human-confirm gate** (Karpathy "stay involved")
+
+- `maintenance/` — `MaintenanceManager` (self-maintenance, v0.41):
+  per-wiki `AutoIngestService` (raw/ watcher, direct write) + periodic
+  `GapFiller` (proposal-based, human confirmation) + lint + DB loops,
+  all under a shared `Semaphore(3)` + rate limiter
+- `wiki_dream_editor.py` — Async proposal generation, **human-confirm gate** (Karpathy "stay involved")
 - `scheduler/` — `croniter`-based periodic tasks
-- `hooks.py` — Pre/post operation callbacks
 - `notifications/` — User notifications, progress
-- `tools/` — Wiki tool bindings shared with the chat agent
+- `tools/skill_adapter.py` — `SkillToolAdapter` + `CompositeToolRegistry` (skills exposed as LLM tools)
 
 ---
 
@@ -314,6 +402,7 @@ flow routes every chat request through `ChatReActBridge → ReActEngine`:
 
 | Module | Role |
 |--------|------|
+| `client.py` | `build_llm_client` + `load_llm_config` (config → client construction) |
 | `spec.py` | `LLMSpec` — declarative model config |
 | `resolver.py` | `from_spec` + subagent inheritance with strict validation |
 | `streamable.py` | Streaming responses + tool-call accumulation |
@@ -339,6 +428,13 @@ Built-in prompts include wiki, lint, synthesis and skill prompts.
 - `markitdown_extractor.py` — Unified MarkItDown extractor
 - `pdf.py` (pymupdf), `web.py` (trafilatura), `youtube.py` (transcript API), `text.py`
 
+### Hooks (`foundation/callback/`)
+
+`AgentHook` (13 hook points) + `CompositeHook` (fan-out with per-hook
+error isolation; `finalize_content` passes exceptions through).
+Business hooks live in `callback/integrations/` — `WikiHook`,
+`WikiDreamSyncHook`, `AutoIngestHook`.
+
 ---
 
 ## Interfaces (`interfaces/`)
@@ -347,11 +443,11 @@ Built-in prompts include wiki, lint, synthesis and skill prompts.
 
 `_app.py` builds the top-level parser; each command in
 `interfaces/cli/commands/*.py` exposes a `name`, optional aliases, and a
-`setup_parser()` method. Currently 30 subcommands (see README §CLI Commands).
+`setup_parser()` method. Currently 34 subcommands (see README §CLI Commands).
 
 ### MCP (`interfaces/mcp/`)
 - `adapter.py` — `MCPAdapter` wraps FastMCP; preferred entry
-- `tools.py` — Registers 26 wiki tools; some (`wiki_search`, `wiki_status`)
+- `tools.py` — Registers 28 wiki tools; some (`wiki_search`, `wiki_status`)
   accept an optional `wiki_id` to scope across the multi-wiki registry
 - `server.py` — Legacy `create_mcp_server` / `serve_mcp` wrappers
   (`DeprecationWarning`, scheduled for removal in v0.33+)
@@ -360,11 +456,15 @@ Built-in prompts include wiki, lint, synthesis and skill prompts.
 
 | File | Purpose |
 |------|---------|
-| `core.py` | `WikiServer` — composes MCP adapter + REST routers + WebUI mount + auth |
+| `core.py` | `WikiServer` — composes MCP adapter + REST routers + WebUI mount + lifespan-managed background tasks |
 | `constants.py` | Default host / port |
-| `http/routes.py` | `/api/wiki/*` (single-wiki), `/api/wikis/*` (multi-wiki registry), `/api/search/cross`, `/api/log/error` |
-| `http/chat_sse.py` | `/api/agent/*` — chat (SSE), sessions, dream, ingest log, confirmations, config, tools |
-| `http/middleware.py` | CORS + API key auth |
+| `http/routes.py` | `register_routes` composition root — wiki / registry / search / log / agent / skills / WebSocket |
+| `http/wiki/*` | `/api/wiki/*` (single-wiki), `/api/wikis/*` (registry), `/api/search/cross`, `/api/log/error` |
+| `http/agent/*` | `/api/agent/*` — chat (SSE), sessions, dream, ingest log, confirmations, notifications, config, status |
+| `http/maintenance_routes.py` | `/api/maintenance/*` — health history, proposals, manual triggers |
+| `http/auth_routes.py` | `POST /api/auth/login`, `GET /api/auth/me` |
+| `http/middleware.py` | JWT auth (`public_read` + `local_mode`) + rate limiting |
+| `apps/api/openai_server.py` | OpenAI-compatible `/v1/chat/completions` + `/v1/models` + `/v1/health` (registered from `routes.py`) |
 | `utils/webui.py` | React SPA static mount |
 
 OpenAPI docs: `/docs` (Swagger UI), `/redoc`.
@@ -399,18 +499,42 @@ Question
   → Knowledge compounds — answer persists as a wiki page
 ```
 
-### Chat (v0.37 ReAct)
+### Chat (v0.41 runner)
 
 ```
 HTTP POST /api/agent/chat (SSE)
-  → apps.chat.ChatService.chat()
-  → apps.chat.agent.bridge_backend.ChatReActBridge
-  → apps.chat.agent.react_engine.ReActEngine.run()
-        ├─ reason → emit `reasoning`
-        ├─ act → ToolExecutor → Skill / Wiki tool
-        ├─ observe → next round (≤ 4)
-  → SSE events streamed back (reasoning / phase / confirmation_required /
-                              save_warning / timeout / done)
+  → interfaces/server/http/agent/sessions.py
+  → apps.chat.AgentService.chat()
+  → apps.chat.agent.orchestrator.ChatOrchestrator.chat()   # session + commands + prompt
+  → apps.chat.agent.runner_v2.ChatRunnerV2.run_stream(ChatRunSpec)
+        ├─ PRECHECK → timeout / cancel / goal predicate
+        ├─ REASON   → LLM stream → SSE message_delta / thinking
+        ├─ ACT      → ToolExecutor → Skill / Wiki tool (+microcompact, DB persist)
+        ├─ OBSERVE  → next round (≤ max_chat_rounds, default 10)
+        └─ FINALIZE → done / error / save_warning / confirmation_required
+```
+
+### Self-maintenance (v0.41)
+
+```
+WikiServer lifespan
+  → MaintenanceManager (all LOCAL wikis)
+        ├─ Track A: AutoIngestService — per-wiki FileSystemWatcher → 直写入库
+        ├─ Track B: GapFiller — periodic gap research → proposals → human confirmation
+        ├─ Lint loop + health history persistence
+        └─ DB maintenance loop
+  → shared Semaphore(3) + rate limiter (≤5 LLM calls / 5s)
+```
+
+### `/study` research
+
+```
+User: "/study <question>"
+  → ChatRunnerV2 matches autoresearch_compound skill (triggers=["/study"])
+  → run tool → apps.research.ResearchEngine
+  → run_id attached to the assistant message
+  → SSE /api/autoresearch/{id}/stream (phase / round events)
+  → POST /api/autoresearch/{id}/save-to-wiki → report page persists
 ```
 
 ---
@@ -438,7 +562,7 @@ applies to the initial connection only.
 
 ## Testing
 
-- **4454+ Python tests** collected (`pytest --collect-only -q`)
+- **4940 Python tests** collected (`pytest --collect-only -q`, `tests/ab_testing` excluded)
 - Frontend: Vitest + React Testing Library (`ui/webui`)
 - pytest with coverage target ≥ 85%
 - Test isolation via temp directories
@@ -446,7 +570,7 @@ applies to the initial connection only.
 
 ```bash
 pytest                                           # all tests
-pytest tests/test_apps_chat_agent_react_engine.py  # ReAct
+pytest tests/test_apps_chat_agent_runner_v2.py    # ChatRunnerV2
 pytest tests/test_v022_relations.py              # graph relations
 ```
 
@@ -474,6 +598,7 @@ pytest tests/test_v022_relations.py              # graph relations
 | v0.37 | ReAct loop unification — `ChatService` defaults to `ChatReActBridge` |
 | v0.38 | Nanobot v0.2.1 borrowings — `MessageBus` in-process pub/sub; `WebSocketManager` + `/api/ws/agent`; `AgentRunner[SpecT, ResultT]` ABC; `LLMProvider` ABC + `ProviderConfig` + `RetryMode` + `ThinkingStyle`. Additive — no breaking changes. |
 | v0.40 | **Quant separation** — `reproduction/` module migrated to [quantnodes](https://github.com/sn0wfree/quantnodes); `quant/` data moved to `QuantNodes/old_quant/`; project refocused on **Knowledge + Chat + Research Assistant**. Breaking: `/api/paper/*`, `/api/factor/*`, `/api/strategy/*`, `/api/reproduction/*` removed. |
+| v0.41 (in dev) | **Self-maintenance** — `apps/agent/maintenance/` (auto-ingest / gap filler / lint / DB loops, all rate-limited); **OpenAI-compatible `/v1` endpoints** (`apps/api/openai_server.py`); **Jina Reader** search integration; config defaults moved to YAML (`config_defaults.yaml`). |
 
 See [docs/MIGRATION_v0.36.md](docs/MIGRATION_v0.36.md),
 [docs/MIGRATION_v0.38.md](docs/MIGRATION_v0.38.md),
@@ -482,4 +607,4 @@ See [docs/MIGRATION_v0.36.md](docs/MIGRATION_v0.36.md),
 
 ---
 
-*Last updated: 2026-07-17 · Version: 0.40.0*
+*Last updated: 2026-10-13 · Version: 0.40.2*
