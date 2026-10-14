@@ -27,7 +27,7 @@ pytest --cov=src/llmwikify --cov-report=html
 open htmlcov/index.html
 ```
 
-**Target**: 4454+ Python tests + 38 frontend tests passing, >85% code coverage.
+**Target**: 4940+ Python tests + 76 frontend tests passing, >85% code coverage.
 
 ## Code Quality
 
@@ -75,15 +75,15 @@ src/llmwikify/
 │   └── agent/                 # Dream editor, scheduler, hooks
 │
 └── interfaces/                # Entry points
-    ├── cli/                   # CLI commands (30 subcommands)
+    ├── cli/                   # CLI commands (34 subcommands)
     │   └── commands/          # Command modules
-    ├── mcp/                   # MCP protocol adapter (26 tools)
+    ├── mcp/                   # MCP protocol adapter (28 tools)
     ├── server/                # Unified FastAPI server
     │   ├── core.py            # WikiServer orchestrator
     │   └── http/              # REST API routes
     └── web/                   # Web bundle entry
 
-tests/                         # Test suite (4454+ Python tests)
+tests/                         # Test suite (4940 Python tests)
 docs/                          # Documentation
 ui/webui/                      # React SPA (WebUI)
 ```

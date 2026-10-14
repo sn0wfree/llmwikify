@@ -253,7 +253,7 @@ New to llmwikify? Start with our **5 end-to-end scenarios**:
 | **Research Assistant** | Adaptive ReAct loop, multi-source synthesis, quality gates (general purpose) |
 | **Web UI** | React SPA: editor, graph, dashboard, chat pages |
 | **Extraction** | PDF, Word, Excel, PowerPoint, images, audio, web, YouTube |
-| **MCP Server** | 26 tools over stdio + HTTP, multi-wiki support |
+| **MCP Server** | 28 tools over stdio + HTTP, multi-wiki support |
 
 ---
 
