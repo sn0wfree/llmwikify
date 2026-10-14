@@ -269,6 +269,7 @@ nginx（服务器宿主）
 | 证书 | **Let's Encrypt IP 证书**（`--ip-address` + `shortlived` profile，ECDSA），已签发并服务；浏览器零警告 |
 | 续期 | root cron `17 */12 * * *` + `--deploy-hook "systemctl reload nginx"`；staging `renew --dry-run` 全链路成功 |
 | 回滚点 | 本地 `llmwikify-server:0.40.2-slim-r0`（MCP 修复前版本） |
+| 更新流程 | `~/llmwikify/scripts/sync_to_server.sh`：本地只读 rsync（wiki/ + wiki.md）→ 服务器容器内 `build-index` 重建索引（~9s）→ API 验证。**零停机**（实测 442→508 页无中断）；排除 .llmwikify.db / raw / reports_pipeline / log.md / .sink / reference_index.json |
 | 运维入口 | `docker logs/compose` @ `~/CKbase/deploy`；证书 `/opt/certbot/bin/certbot certificates` |
 
 ---
