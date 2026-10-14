@@ -195,8 +195,13 @@ class WikiServer:
         registry on shutdown (preserved from the previous handler).
         """
 
+        # 2026-10-14: capture the MCP ASGI app once. The ``asgi_app``
+        # property builds a FRESH app per access, so the combined lifespan
+        # below and app.mount() must share this exact instance.
+        mcp_asgi_app = self.mcp.asgi_app if self.mcp is not None else None
+
         @asynccontextmanager
-        async def lifespan(app: FastAPI) -> None:
+        async def _wiki_lifespan(app: FastAPI) -> None:
             """Phase 7+9+40 lifespan: start DreamScheduler + AutoCompact
             + ConfirmationsCleanup on startup, stop on shutdown. Always
             closes the registry on shutdown.
@@ -354,6 +359,24 @@ class WikiServer:
                 elif self.wiki:
                     self.wiki.close()
 
+        @asynccontextmanager
+        async def lifespan(app: FastAPI) -> None:
+            """Combined lifespan (2026-10-14).
+
+            Enter FastMCP's ASGI-app lifespan FIRST so its
+            StreamableHTTPSessionManager task group initializes; Starlette's
+            ``mount()`` does NOT run sub-app lifespans, which is why every
+            /mcp request failed with "task group was not initialized" (500).
+            Then delegate to the wiki subsystems lifespan.
+            """
+            from contextlib import AsyncExitStack
+
+            async with AsyncExitStack() as stack:
+                if mcp_asgi_app is not None:
+                    await stack.enter_async_context(mcp_asgi_app.lifespan(app))
+                await stack.enter_async_context(_wiki_lifespan(app))
+                yield
+
         app = FastAPI(
             title="llmwikify",
             version=__version__,
@@ -428,9 +451,9 @@ class WikiServer:
                 logger.info(f"[req] {request.method} {request.url.path} → {response.status_code} | client={client}")
             return response
 
-        # Mount MCP endpoint
-        if self.mcp is not None:
-            app.mount("/mcp", self.mcp.asgi_app)
+        # Mount MCP endpoint (same instance whose lifespan is entered above)
+        if mcp_asgi_app is not None:
+            app.mount("/mcp", mcp_asgi_app)
 
         # Health check endpoint
         @app.get("/api/health", tags=["system"])

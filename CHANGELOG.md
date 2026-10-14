@@ -5,6 +5,22 @@ All notable changes to llmwikify will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- **MCP over HTTP returned 500 on every authenticated request**
+  (`interfaces/server/core.py`). Starlette's `app.mount()` does not run the
+  sub-app's ASGI lifespan, so FastMCP's `StreamableHTTPSessionManager` task
+  group never initialized (`RuntimeError: ... task group was not initialized`).
+  The server now uses a combined lifespan that enters the MCP app's lifespan
+  first (via `AsyncExitStack`), then the wiki subsystems lifespan. The MCP ASGI
+  app is captured once at build time (`asgi_app` is a property that builds a
+  *fresh* app per access) so the lifespan-initialized instance is exactly the
+  mounted one. Verified with a real `fastmcp` client: `initialize` + 20 tools
+  listed + `wiki_search` call succeeded (previously: 500).
+  Note: the effective endpoint is `/mcp/mcp` (mount prefix `/mcp` + http_app
+  internal path `/mcp`); older docs referencing `/mcp` need updating.
+
 ## [0.40.2] - 2026-07-21 — Wiki HTTP Confirmation + WebUI Modal Unification
 
 > Wiki write-path confirmation flow lands. Every `POST /page` to an existing
