@@ -75,6 +75,18 @@ for arg in "$@"; do
   esac
 done
 
+# ── 互斥锁 (防 cron + 手动并发触发) ───────────────────────
+#   · flock -n 非阻塞: 拿不到立即退出 0 (cron 下一轮再试)
+#   · 脚本正常退出时 fd 9 自动关闭, 锁释放
+#   · SYNC_LOCK_FILE 允许覆盖路径 (debug/测试用)
+LOCK_FILE="${SYNC_LOCK_FILE:-$HOME/.llmwikify/sync.lock}"
+mkdir -p "$(dirname "$LOCK_FILE")"
+exec 9>"$LOCK_FILE"
+if ! flock -n 9; then
+    echo "[!] 另一个同步实例正在跑 (lock=$LOCK_FILE), 退出" >&2
+    exit 0
+fi
+
 echo "═══ wiki → 服务器   $(date '+%F %T') ═══"
 echo "  本地 (只读):  $LOCAL_ROOT"
 echo "  远端:         $SYNC_HOST:~/$REMOTE_ROOT"
