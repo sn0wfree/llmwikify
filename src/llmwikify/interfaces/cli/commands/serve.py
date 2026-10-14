@@ -252,7 +252,12 @@ def run_serve(wiki: Any, config: dict, args: Any) -> int:
     # We pass it to WikiServer, which uses it to mount JWTAuthMiddleware
     # in pass-through mode.
     server_local_mode = local_mode
-    server_public_read = True  # default; can be overridden later
+    # 2026-10-14: wire the previously hardcoded public_read flag to an env
+    # switch so deployments can require authentication for reads too.
+    # Default stays True (backward compatible). Set
+    # LLMWIKIFY_PUBLIC_READ=false to make token-less GETs return 401.
+    server_public_read = os.environ.get("LLMWIKIFY_PUBLIC_READ", "true") \
+        .strip().lower() not in {"0", "false", "no", "off"}
 
     try:
         # Check if multi-wiki mode is enabled

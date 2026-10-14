@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **`LLMWIKIFY_PUBLIC_READ` environment switch** (`interfaces/cli/commands/serve.py`).
+  The previously hardcoded `public_read=True` (decision 1 / Phase 2a, "本地开发友好")
+  is now wired to the environment: set `LLMWIKIFY_PUBLIC_READ=false` to require a
+  token (PAT/JWT) even for GET reads — token-less reads then return
+  **401 `auth_required`**. Default stays `true` (fully backward compatible).
+  Wires the middleware `public_read=False` branch (`_deny_no_token`) that was
+  implemented but had no configuration entry point. Verified live: no-token GET
+  → 401, PAT bearer → 200, default mode → 200 unchanged.
+
 ### Fixed
 - **MCP over HTTP returned 500 on every authenticated request**
   (`interfaces/server/core.py`). Starlette's `app.mount()` does not run the
