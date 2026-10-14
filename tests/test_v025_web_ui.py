@@ -16,6 +16,21 @@ class TestUnifiedServer:
         from llmwikify.interfaces.mcp.server import create_unified_server
         assert create_unified_server is not None
 
+    def test_server_package_wrapper_drops_agent(self, monkeypatch):
+        """Regression (Bug 4, 2026-10-14): llmwikify.interfaces.server's
+        create_unified_server passed `agent=` to WikiServer, which does not
+        accept it — every call raised TypeError."""
+        import llmwikify.interfaces.server as server_pkg
+
+        class FakeWikiServer:
+            def __init__(self, wiki, **kwargs):
+                assert "agent" not in kwargs, "agent= must not reach WikiServer"
+                self.app = object()
+
+        monkeypatch.setattr(server_pkg, "WikiServer", FakeWikiServer)
+        app = server_pkg.create_unified_server(object(), agent=object())
+        assert app is not None
+
     def test_web_server_imports(self):
         """Web server wrapper should import without errors."""
         from llmwikify.interfaces.web.server import main

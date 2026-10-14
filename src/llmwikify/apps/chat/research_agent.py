@@ -45,8 +45,10 @@ class ResearchAgent(ChatBase):
     Args:
         llm_client: any object with a ``.chat(messages, **kwargs)``
             method. Typically a ``StreamableLLMClient``.
-        engine: optional pre-constructed ``ResearchEngine``.
-            If None, one is built from the ``llm_client``.
+        engine: pre-constructed ``ResearchEngine``. Required in practice:
+            ResearchEngine needs ``wiki`` + ``db``, so the wrapper cannot
+            build one from ``llm_client`` alone (passing ``None`` raises
+            ``TypeError`` with guidance).
         system_prompt: default system prompt prepended to
             every session.
     """
@@ -62,12 +64,17 @@ class ResearchAgent(ChatBase):
         ),
     ) -> None:
         super().__init__(llm_client=llm_client, system_prompt=system_prompt)
-        # Lazy import — avoid circular dependency: research_engine.engine
-        # imports chat.__init__ which imports this file. By the time
-        # __init__ runs, chat.research_engine.engine is fully loaded.
         if engine is None:
-            from llmwikify.apps.research.engine import ResearchEngine as _RE
-            engine = _RE(llm_client=llm_client)
+            # 2026-10-14 fix (Bug 3): the llm_client-only fallback built
+            # ResearchEngine(llm_client=...) which has been missing the
+            # now-required wiki/db args since the v0.40 apps/research
+            # migration (commit 91ef936); every such construction raised a
+            # bare TypeError. Fail fast with an actionable message instead.
+            raise TypeError(
+                "ResearchAgent requires an explicit `engine=...`: "
+                "ResearchEngine needs wiki + db. Build "
+                "ResearchEngine(wiki=..., db=..., llm_client=...) and pass it in."
+            )
         self.engine = engine
 
     # ── canonical chat-style interface ─────────────────────

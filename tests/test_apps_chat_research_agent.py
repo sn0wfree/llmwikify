@@ -60,6 +60,15 @@ class TestResearchAgentConstruction:
         assert agent.engine is engine
         assert "research" in agent._default_system_prompt.lower()
 
+    def test_engine_none_raises_actionable_error(self) -> None:
+        """Regression (Bug 3, 2026-10-14): engine=None used to build
+        ResearchEngine(llm_client=...) which lacks the now-required wiki/db
+        args — a bare TypeError at construction. The fallback must fail
+        fast with an actionable message instead."""
+        llm = StubLLM()
+        with pytest.raises(TypeError, match="engine"):
+            ResearchAgent(llm_client=llm)
+
     def test_custom_system_prompt(self) -> None:
         llm = StubLLM()
         engine = self._make_custom_engine()
