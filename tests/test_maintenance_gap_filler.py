@@ -185,25 +185,25 @@ def test_entity_gap_llm_synthesizes_when_enabled():
         config=GapFillerConfig(use_llm_draft=True, web_search_enabled=False),
         llm_semaphore=asyncio.Semaphore(1),
     )
-    # patch _llm_synthesize_draft to use FakeClient
+    # 2026-10-14 (test pollution 修复): foundation.llm 包用 PEP 562 惰性转发
+    # LLMClient。必须直接操作 __dict__: monkeypatch.setattr / getattr 都会
+    # 触发 __getattr__ 返回真实类, 导致 teardown 把真实类实体化写回 __dict__,
+    # 惰性转发永久短路, 后续 patch("...llm_client.LLMClient") 的测试全部失效。
+    # (pop 恢复「属性不存在」状态, __getattr__ 重新接管。)
     import llmwikify.foundation.llm as llm_mod
-
-    original = getattr(llm_mod, "LLMClient", None)
 
     class _FakeLLMClient:
         @staticmethod
         def from_config(cfg):
             return FakeClient()
 
-    llm_mod.LLMClient = _FakeLLMClient
-    try:
-        draft = filler._llm_synthesize_draft("Fake Entity", ["- Page A: info"], [])
-        assert draft is not None
-        assert "# Fake Entity" in draft
-        assert "Synthesized content" in draft
-    finally:
-        if original is not None:
-            llm_mod.LLMClient = original
+    llm_mod.__dict__["LLMClient"] = _FakeLLMClient
+
+    draft = filler._llm_synthesize_draft("Fake Entity", ["- Page A: info"], [])
+    assert draft is not None
+    assert "# Fake Entity" in draft
+    assert "Synthesized content" in draft
+    llm_mod.__dict__.pop("LLMClient", None)
 
 
 # ── web leg (Bug 2 regression, 2026-10-14) ──────────────────────────

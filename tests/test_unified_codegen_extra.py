@@ -9,14 +9,21 @@
 
 from __future__ import annotations
 
-import polars as pl
 import pytest
 
-from llmwikify.apps.chat.agent.unified.pipelines.codegen import (
+pl = pytest.importorskip(
+    "polars", reason="polars not installed — codegen 数据框断言需要它"
+)
+
+# v0.40 quant 分离: 本文件的 codegen 流程 import QuantNodes (已迁出本仓,
+# 可选依赖) — 未安装则整文件跳过
+pytest.importorskip("QuantNodes")
+
+from llmwikify.apps.chat.agent.unified.pipelines.codegen import (  # noqa: E402
     CodeActor,
     CodegenReasoner,
 )
-from llmwikify.apps.chat.agent.unified.spec import (
+from llmwikify.apps.chat.agent.unified.spec import (  # noqa: E402
     CodegenSpec,
     ReasonResponse,
     UnifiedResult,
