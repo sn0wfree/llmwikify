@@ -11,7 +11,7 @@ license = "MIT"
 requires-python = ">=3.10"
 keywords = [ "wiki", "chat", "research-assistant", "llm", "knowledge-base", "mcp", "agent",]
 classifiers = [ "Development Status :: 4 - Beta", "Intended Audience :: Developers", "Intended Audience :: Science/Research", "Intended Audience :: Education", "Operating System :: OS Independent", "Programming Language :: Python :: 3", "Programming Language :: Python :: 3.10", "Programming Language :: Python :: 3.11", "Programming Language :: Python :: 3.12", "Topic :: Education", "Topic :: Scientific/Engineering", "Topic :: Text Processing", "Topic :: Utilities",]
-dependencies = [ "jinja2>=3.1.0", "pyyaml>=6.0", "requests>=2.28.0", "duckdb>=1.0.0", "pyjwt>=2.0,<3", "keyring>=21.2.0,<24", "jieba>=0.42",]
+dependencies = [ "jinja2>=3.1.0", "pyyaml>=6.0", "requests>=2.28.0", "duckdb>=1.0.0", "pyjwt>=2.0,<3", "keyring>=25.6,<28", "jieba>=0.42",]
 [[project.authors]]
 name = "sn0wfree"
 email = "linlu1234567@sina.com"
@@ -21,11 +21,11 @@ name = "sn0wfree"
 email = "linlu1234567@sina.com"
 
 [project.optional-dependencies]
-mcp = [ "fastmcp>=3.0.0",]
+mcp = [ "fastmcp>=3.0,<3.3",]
 config = []
 watch = [ "watchdog>=3.0.0",]
 graph = [ "networkx>=3.0", "pyvis>=0.3.0", "python-louvain>=0.16",]
-web = [ "fastapi>=0.104.0", "starlette>=0.27.0", "uvicorn>=0.23.0", "httpx>=0.24.0",]
+web = [ "fastapi>=0.104.0", "starlette>=0.45,<1", "uvicorn>=0.23.0", "httpx>=0.24.0",]
 agent = [ "croniter>=2.0.0", "filelock>=3.13.0", "duckduckgo-search>=4.0", "tavily-python>=0.3.0", "apscheduler>=3.10.0,<4",]
 llm = [ "tiktoken>=0.7.0",]
 extractors = [ "markitdown[all]>=0.1.0", "pymupdf>=1.23.0", "trafilatura>=1.7.0", "youtube-transcript-api>=0.6.0",]
@@ -39,6 +39,12 @@ all = [ "llmwikify[extractors,mcp,config,watch,graph,web,agent]",]
 # 清理: 下次升级 twine/keyring 时,先跑
 #       `pip install -e ".[dev]" --dry-run` 看是否还能解,再批量解除这些 pin。
 # 关联: GitHub Actions #tests.yml #lint.yml 也走 .[dev],自动受益。
+# 2026-10-14: keyring 上限已解除 (>=25.6,<28) — fastmcp → py-key-value-aio
+#       [keyring] 硬性要求 keyring>=25.6, 旧上限 <24 导致全新解析直接
+#       resolution-too-deep (CI「Install dependencies」全红根因, 见
+#       docs/diagnostics/ci-green-plan-2026-10.md §3.7)。同时 fastmcp<3.3 /
+#       starlette<1 对齐本机实测栈。沙盒验证: [dev] 全新解析 p312 101s /
+#       p310 128s / p311 380s 通过。jaraco/twine pin 保留 (该验证含它们)。
 dev = [
     "llmwikify[all]",
     "pytest>=7.0.0", "pytest-cov>=4.0.0",
@@ -47,7 +53,7 @@ dev = [
     "build>=0.10.0",
     # ─── 锁 jaraco 生态在 2026-06 之前 ───
     "twine>=4.0.0,<5",
-    "keyring>=21.2.0,<24",
+    "keyring>=25.6,<28",
     "jaraco.context<5.4",
     "jaraco.functools>=3,<5",
     "jaraco.classes<4",
