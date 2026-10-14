@@ -297,12 +297,30 @@ class GapFiller:
         )
         return 1
 
+    def _search_config(self) -> dict[str, Any]:
+        """Global search settings (~/.llmwikify/llmwikify.json → research).
+
+        2026-10-14 fix (Bug 2): ``WebSearch()`` used to be called without its
+        required ``config`` argument; the TypeError was swallowed by
+        ``_web_search``'s except, so the web leg silently returned [] on
+        every gap cycle. ``create_search_provider`` fills in the provider
+        chain (jina / minimax / duckduckgo) and resolves the minimax key
+        from the global llm config as fallback.
+        """
+        try:
+            from llmwikify.foundation.config import config as _llmwikify_config
+
+            cfg = _llmwikify_config.get("research", {})
+            return cfg if isinstance(cfg, dict) else {}
+        except Exception:
+            return {}
+
     async def _web_search(self, concept: str) -> list[str]:
         """Search the web for entity context. Returns formatted snippets."""
         try:
             from llmwikify.apps.research.web_search import WebSearch
 
-            ws = WebSearch()
+            ws = WebSearch(self._search_config())
             results = await ws.search(concept, num_results=3)
             return [
                 f"- [{r.title}]({r.url}): {r.snippet[:200]}"

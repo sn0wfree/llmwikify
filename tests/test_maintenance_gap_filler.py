@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 
 import pytest
 
@@ -169,3 +170,89 @@ def test_entity_gap_llm_synthesizes_when_enabled():
     finally:
         if original is not None:
             llm_mod.LLMClient = original
+
+
+# ── web leg (Bug 2 regression, 2026-10-14) ──────────────────────────
+
+
+@pytest.fixture
+def isolated_llmwikify_home(tmp_path, monkeypatch):
+    """Point the global config singleton at a fresh LLMWIKIFY_HOME."""
+    from llmwikify.foundation import config as config_module
+    from llmwikify.foundation.config import Config
+
+    monkeypatch.setenv("LLMWIKIFY_HOME", str(tmp_path))
+    Config._instance = None
+    monkeypatch.setattr(config_module, "config", Config())
+    yield tmp_path
+    Config._instance = None
+
+
+def test_web_search_passes_config_to_websearch(
+    wiki_instance, monkeypatch, isolated_llmwikify_home,
+):
+    """Regression: `WebSearch()` missed its required config arg, so the
+    TypeError was swallowed and every gap cycle ran without web sources."""
+    captured: dict = {}
+
+    class FakeWebSearch:
+        def __init__(self, config):
+            captured["config"] = config
+
+        async def search(self, query, num_results=None):
+            assert query == "Attention"
+            return [
+                type("R", (), {
+                    "title": "T", "url": "http://x", "snippet": "facts",
+                })(),
+            ]
+
+    import llmwikify.apps.research.web_search as ws_module
+
+    monkeypatch.setattr(ws_module, "WebSearch", FakeWebSearch)
+
+    filler = GapFiller(
+        wiki=wiki_instance,
+        wiki_id="test",
+        config=GapFillerConfig(),
+        llm_semaphore=asyncio.Semaphore(1),
+    )
+    out = asyncio.run(filler._web_search("Attention"))
+
+    # 旧代码：WebSearch() → TypeError → except 吞掉 → captured 为空 + out == []
+    assert captured.get("config") == {}
+    assert out == ["- [T](http://x): facts"]
+
+
+def test_search_config_reads_research_section(isolated_llmwikify_home):
+    home = isolated_llmwikify_home / ".llmwikify"
+    home.mkdir(exist_ok=True)
+    (home / "llmwikify.json").write_text(
+        json.dumps({
+            "research": {
+                "search_provider": "searxng",
+                "searxng_url": "http://localhost:8888",
+            },
+        }),
+    )
+
+    filler = GapFiller(
+        wiki=None,
+        wiki_id="test",
+        config=GapFillerConfig(),
+        llm_semaphore=asyncio.Semaphore(1),
+    )
+    assert filler._search_config() == {
+        "search_provider": "searxng",
+        "searxng_url": "http://localhost:8888",
+    }
+
+
+def test_search_config_defaults_to_empty_dict(isolated_llmwikify_home):
+    filler = GapFiller(
+        wiki=None,
+        wiki_id="test",
+        config=GapFillerConfig(),
+        llm_semaphore=asyncio.Semaphore(1),
+    )
+    assert filler._search_config() == {}
