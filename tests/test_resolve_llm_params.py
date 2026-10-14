@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-
 from llmwikify.apps.chat.engine_helpers import (
     DEFAULT_LLM_PARAMS,
     resolve_llm_params,

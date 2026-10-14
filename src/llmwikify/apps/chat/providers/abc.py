@@ -337,9 +337,9 @@ class LLMProviderABC(ABC):
 
     # ── runtime hot-swap (Phase 16) ──────────────────────────
 
-    def apply_snapshot(
+    def apply_snapshot(  # noqa: B027
         self, snapshot: ProviderConfig | dict[str, Any]
-    ) -> None:  # noqa: B027
+    ) -> None:
         """Hot-swap runtime config (model / api_key / base_url).
 
         Default implementation is a **noop** — the default provider

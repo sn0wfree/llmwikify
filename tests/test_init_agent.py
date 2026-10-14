@@ -230,7 +230,7 @@ class TestInitForceAndSkip:
         """wiki.md overwritten with --force."""
         (temp_wiki / "wiki.md").write_text("# Existing\nCustom content")
         wiki = Wiki(temp_wiki)
-        result = wiki.init(agent="opencode", force=True)
+        _result = wiki.init(agent="opencode", force=True)
 
         content = (temp_wiki / "wiki.md").read_text()
         assert "Wiki Schema" in content
@@ -250,7 +250,7 @@ class TestInitForceAndSkip:
         """MCP config overwritten with --force."""
         (temp_wiki / "opencode.json").write_text('{"old": true}')
         wiki = Wiki(temp_wiki)
-        result = wiki.init(agent="opencode", force=True)
+        _result = wiki.init(agent="opencode", force=True)
 
         config = json.loads((temp_wiki / "opencode.json").read_text())
         assert "mcp" in config
@@ -260,7 +260,7 @@ class TestInitForceAndSkip:
         """MCP config regenerated with --merge."""
         (temp_wiki / "opencode.json").write_text('{"old": true}')
         wiki = Wiki(temp_wiki)
-        result = wiki.init(agent="opencode", merge=True)
+        _result = wiki.init(agent="opencode", merge=True)
 
         config = json.loads((temp_wiki / "opencode.json").read_text())
         assert "mcp" in config
@@ -332,7 +332,7 @@ class TestWikiMdMerge:
         (temp_wiki / "wiki.md").write_text(custom_content)
 
         wiki = Wiki(temp_wiki)
-        result = wiki.init(merge=True)
+        _result = wiki.init(merge=True)
 
         updated = (temp_wiki / "wiki.md").read_text()
         assert "My Custom Section" in updated

@@ -74,17 +74,17 @@ class TestPrincipleCheckResult:
 
 class TestPrincipleDefinitions:
     def test_all_principles_have_keywords(self):
-        for name, definition in PRINCIPLE_DEFINITIONS.items():
+        for _name, definition in PRINCIPLE_DEFINITIONS.items():
             assert "keywords" in definition
             assert len(definition["keywords"]) > 0
 
     def test_all_principles_have_description(self):
-        for name, definition in PRINCIPLE_DEFINITIONS.items():
+        for _name, definition in PRINCIPLE_DEFINITIONS.items():
             assert "description" in definition
             assert len(definition["description"]) > 0
 
     def test_all_principles_have_applies_to(self):
-        for name, definition in PRINCIPLE_DEFINITIONS.items():
+        for _name, definition in PRINCIPLE_DEFINITIONS.items():
             assert "applies_to" in definition
             assert isinstance(definition["applies_to"], list)
 

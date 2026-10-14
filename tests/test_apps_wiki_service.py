@@ -62,7 +62,9 @@ class MockWikiRegistry:
         return inst
 
     def list_wikis(self) -> list:
-        return [MagicMock(to_dict=lambda: {"wiki_id": wid}) for wid in self._wikis]
+        return [
+            MagicMock(to_dict=lambda wid=wid: {"wiki_id": wid}) for wid in self._wikis
+        ]
 
     def register_wiki(self, wiki_id: str, name: str, root: Path) -> Any:
         inst = MagicMock()

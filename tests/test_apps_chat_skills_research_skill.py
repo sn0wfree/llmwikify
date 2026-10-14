@@ -551,7 +551,7 @@ class TestPersistenceIntegration:
                 ctx,
             )
             assert r1.status == "ok"
-            steps_before = len(db.list_steps(sid))
+            _steps_before = len(db.list_steps(sid))
             # Resume (no-op in offline mode, but should not crash)
             r2 = await resume_research(
                 {"session_id": sid, "query": "test q"},

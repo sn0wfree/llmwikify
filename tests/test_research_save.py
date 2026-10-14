@@ -16,6 +16,7 @@ import pytest
 
 from llmwikify.apps.agent.tools import WikiToolRegistry
 from llmwikify.apps.chat.db import ChatDatabase
+from llmwikify.apps.db import AppDatabase
 from llmwikify.kernel.wiki.wiki import Wiki
 
 # ─── Fixtures ──────────────────────────────────────────────────────────
@@ -52,7 +53,7 @@ def registry(wiki, db):
 
 
 def _make_research_session(
-    db: AgentDatabase,
+    db: AppDatabase,
     query: str = "Test query?",
     markdown: str = "Report body.",
     sources: list[dict] | None = None,
@@ -315,7 +316,7 @@ class TestIncludeSourcesToggle:
         """Response includes the toggle value for confirmation display."""
         sid = _make_research_session(db)
         r1 = json.loads(registry._handle_research_save({"session_id": sid}))
-        r2 = json.loads(
+        _r2 = json.loads(
             registry._handle_research_save(
                 {"session_id": sid, "include_sources": False}
             )

@@ -18,9 +18,12 @@ Usage:
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import yaml
+
+if TYPE_CHECKING:
+    from llmwikify.kernel.wiki.wiki import Wiki
 
 
 @dataclass
@@ -77,7 +80,7 @@ class GoldenTestRunner:
         )
 
         pipeline = golden_spec.get("pipeline", "analyze_source")
-        expected = golden_spec.get("expected", {})
+        _expected = golden_spec.get("expected", {})
 
         if pipeline == "analyze_source":
             return self._test_analyze_source(golden_spec, result)
@@ -136,7 +139,7 @@ class GoldenTestRunner:
                 "current_index": source.get("wiki_index", ""),
             }
 
-            llm_result = wiki._llm_process_source(source_data)
+            _llm_result = wiki._llm_process_source(source_data)
 
         # Validate against expected output
         if "min_topics" in expected:
@@ -300,8 +303,8 @@ class GoldenTestRunner:
         self, source: dict[str, Any], expected: dict[str, Any]
     ) -> dict[str, Any]:
         """Build a mock analyze_source response that satisfies expected output."""
-        content = source.get("content", "")
-        wiki_index = source.get("wiki_index", "")
+        _content = source.get("content", "")
+        _wiki_index = source.get("wiki_index", "")
 
         # Build entities based on expected entity_names
         entity_names = expected.get("entity_names", [])

@@ -14,7 +14,6 @@ Refs:
 
 from __future__ import annotations
 
-
 from llmwikify.foundation.llm.streamable import (
     _enforce_role_alternation,
     _extract_error_type_code,

@@ -193,7 +193,6 @@ def test_all_eight_rules_are_importable():
         RedundancyRule,
     ):
         assert cls is not None
-        assert issubclass(cls, Rule) if False else True  # isinstance check below
 
 
 def test_each_rule_has_unique_name():

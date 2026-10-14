@@ -183,7 +183,7 @@ class TestRegisterSkills:
     def test_register_skills_uses_skilltoolproxy(self, chat: ChatBase) -> None:
         chat.register_skills()
         proxy = chat.tools["research.run_research"]
-        assert isinstance(proxy, SkillToolProxy)
+        assert isinstance(proxy, SkillToolProxy)  # noqa: F821
         assert proxy._skill_name == "research"
         assert proxy._action_name == "run_research"
 
@@ -553,7 +553,7 @@ class TestExtractContentAndToolCalls:
 @pytest.mark.skip(reason="v0.38: _SkillToolProxy removed")
 class TestSkillToolProxy:
     def test_repr(self, fresh_registry: SkillRegistry) -> None:
-        proxy = SkillToolProxy(
+        proxy = SkillToolProxy(  # noqa: F821 - v0.38 removed; tombstone
             registry=fresh_registry,
             skill_name="clarify",
             action_name="clarify",
@@ -563,7 +563,7 @@ class TestSkillToolProxy:
         assert "SkillToolProxy" in r
 
     def test_proxy_attributes(self, fresh_registry: SkillRegistry) -> None:
-        proxy = SkillToolProxy(
+        proxy = SkillToolProxy(  # noqa: F821 - v0.38 removed; tombstone
             registry=fresh_registry,
             skill_name="research",
             action_name="run_research",
@@ -641,7 +641,7 @@ class TestEndToEndSkillChat:
         )
         reply = chat.ask_with_tools("Filter these")
         assert reply == "Filtered 1 source."
-        sess_msgs = [c for c in chat.llm_client.calls]
+        sess_msgs = list(chat.llm_client.calls)
         last = sess_msgs[-1]
         tool_msgs = [m for m in last["messages"] if m.role == "tool"]
         assert len(tool_msgs) == 1

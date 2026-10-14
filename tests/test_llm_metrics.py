@@ -216,7 +216,7 @@ class TestRunPromptRecordsMetrics:
             planning_llm=llm,
             config={"max_retry_attempts": 3, "llm_call_timeout_seconds": 30},
         )
-        with pytest.raises(Exception):
+        with pytest.raises(Exception):  # noqa: B017 - 任意错误都算失败
             _run(run_prompt(ctx, "research_clarify", query="q"))
         assert mc.llm_calls[0].attempt_count == 1
         assert mc.llm_calls[0].success is False
@@ -233,7 +233,7 @@ class TestRunPromptRecordsMetrics:
                 "llm_call_timeout_seconds": 30,
             },
         )
-        with pytest.raises(Exception):
+        with pytest.raises(Exception):  # noqa: B017 - 任意错误都算失败
             _run(run_prompt(ctx, "research_clarify", query="q"))
         assert mc.llm_calls[0].attempt_count == 3
         assert mc.llm_calls[0].success is False
@@ -349,7 +349,7 @@ class TestRunPromptRecordsMetrics:
         mc = MetricsCollector(session_id="s1")
         llm = _make_llm("not json {{")
         ctx = _make_ctx(metrics=mc, planning_llm=llm)
-        with pytest.raises(Exception):
+        with pytest.raises(Exception):  # noqa: B017 - 任意错误都算失败
             _run(run_prompt(ctx, "research_clarify", query="q"))
         m = mc.llm_calls[0]
         assert m.success is False

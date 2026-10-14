@@ -17,6 +17,7 @@ import inspect
 
 import pytest
 
+from llmwikify.foundation.utils import maybe_await as _maybe_await
 from llmwikify.kernel.agent import (
     ActResult,
     BaseSpec,
@@ -34,7 +35,6 @@ from llmwikify.kernel.agent import (
     generate_factor_code,
     generate_factor_code_sync,
 )
-from llmwikify.foundation.utils import maybe_await as _maybe_await
 from llmwikify.kernel.agent.steps import (
     BuildFeedbackStep,
     CheckEmptyStep,

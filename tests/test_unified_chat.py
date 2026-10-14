@@ -170,10 +170,9 @@ async def test_tool_actor_tool_error():
     spec = ChatSpec(messages=[], tool_registry=None, session_id="test")
 
     events = []
-    result = None
     async for event in actor.stream(response, spec, None):
         if isinstance(event, StepResult):
-            result = event.output
+            _result = event.output
         else:
             events.append(event)
 

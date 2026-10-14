@@ -332,6 +332,9 @@ class TestPromptRegression:
 class TestGoldenSourceIntegration:
     """Tests using golden source files with mock LLM."""
 
+    # 直连本机 LLM (localhost:11434), 默认跳过 (CI 无 LLM):
+    pytestmark = pytest.mark.llm
+
     @pytest.fixture
     def temp_wiki(self, tmp_path):
         wiki = Wiki(tmp_path)

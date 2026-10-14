@@ -24,7 +24,6 @@ Tests cover the 3 reason methods that now live in
 
 import inspect
 
-
 from llmwikify.apps.chat.state import ResearchState
 
 
@@ -80,7 +79,7 @@ def test_engine_reason_delegates_to_reasoner():
         and not line.strip().startswith('"""')
     ]
     # Should have just a docstring + the return
-    return_lines = [l for l in body_lines if l.startswith("return ")]
+    return_lines = [ln for ln in body_lines if ln.startswith("return ")]
     assert len(return_lines) == 1, (
         f"ResearchEngine._reason should have exactly 1 return statement "
         f"(the delegator), got {len(return_lines)}"

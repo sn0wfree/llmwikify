@@ -16,7 +16,6 @@ import json
 from pathlib import Path
 from typing import Any
 
-
 from llmwikify.apps.chat.skills.workflows.subagent_runner import SubagentRequest
 from llmwikify.apps.chat.skills.workflows.subagent_worker import (
     _TOOL_HANDLERS,
@@ -296,7 +295,9 @@ class TestToolLoop:
         # affect the binding).
         from unittest.mock import patch
 
-        stub = lambda **kw: {"results": [{"title": "t", "url": "u", "snippet": "s"}]}
+        def stub(**kw):
+            return {"results": [{"title": "t", "url": "u", "snippet": "s"}]}
+
         with patch.dict(
             "llmwikify.apps.chat.skills.workflows.subagent_worker._TOOL_HANDLERS",
             {"WebSearch": stub},

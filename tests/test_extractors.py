@@ -115,7 +115,7 @@ class TestLinkParsing:
         links = index._parse_links(content, "Test Page")
 
         assert len(links) == 3
-        targets = [l["target"] for l in links]
+        targets = [link["target"] for link in links]
         assert "A" in targets
         assert "B" in targets
         assert "C" in targets

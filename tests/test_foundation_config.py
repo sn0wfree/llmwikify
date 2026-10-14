@@ -10,8 +10,8 @@ from unittest.mock import patch
 import pytest
 
 from llmwikify.foundation.config import (
-    Config,
     DEFAULT_CONFIG,
+    Config,
     get_db_path,
     get_default_config,
     get_directory,

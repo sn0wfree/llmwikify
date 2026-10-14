@@ -247,7 +247,7 @@ class TestChildCtxOverrides:
 
         with patch.object(ChatRunnerV2, "__init__", _capture):
             mgr = SubagentManager(_Parent())
-            spec = SubagentSpec(
+            _spec = SubagentSpec(
                 goal="g",
                 initial_messages=[{"role": "user", "content": "u"}],
                 tool_registry=None,

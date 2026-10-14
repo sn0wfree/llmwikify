@@ -7,6 +7,9 @@ import pytest
 from llmwikify.kernel.wiki.prompt_registry import PromptRegistry
 from llmwikify.kernel.wiki.wiki import Wiki
 
+# 本文件全部用例直连真实 LLM (本机 Ollama / OpenAI), 默认跳过 (CI 无 LLM):
+pytestmark = pytest.mark.llm
+
 
 class TestWikiContextMethods:
     """Tests for Wiki's context injection methods."""

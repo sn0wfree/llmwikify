@@ -19,8 +19,8 @@ def _run_async(coro):
         raise
 
 
-from llmwikify.interfaces.mcp import create_mcp_server
-from llmwikify.kernel import Wiki
+from llmwikify.interfaces.mcp import create_mcp_server  # noqa: E402
+from llmwikify.kernel import Wiki  # noqa: E402
 
 
 @pytest.fixture

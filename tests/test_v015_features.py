@@ -67,7 +67,7 @@ class TestIngestMetadata:
         result = wiki.ingest_source(str(test_file))
 
         assert "has_images" in result
-        assert result["has_images"] == False
+        assert result["has_images"] is False
         assert result["image_count"] == 0
 
         wiki.close()
@@ -84,7 +84,7 @@ class TestIngestMetadata:
 
         result = wiki.ingest_source(str(test_file))
 
-        assert result["has_images"] == True
+        assert result["has_images"] is True
         assert result["image_count"] == 2
 
         wiki.close()
@@ -117,7 +117,7 @@ class TestIngestMetadata:
         result = wiki.ingest_source(str(test_file))
 
         assert "text_extracted" in result
-        assert result["text_extracted"] == True
+        assert result["text_extracted"] is True
 
         wiki.close()
 

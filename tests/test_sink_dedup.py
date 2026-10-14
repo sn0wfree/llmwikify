@@ -54,8 +54,8 @@ class TestContentHash:
         wiki.init()
 
         sink = wiki.query_sink
-        h1 = sink._content_hash("Gold mining is extraction.")
-        h2 = sink._content_hash("Gold mining is extraction")
+        _h1 = sink._content_hash("Gold mining is extraction.")
+        _h2 = sink._content_hash("Gold mining is extraction")
 
         # Different content → likely different hash (but not guaranteed)
         # We test normalization, not that all punctuation changes hash

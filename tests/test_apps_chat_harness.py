@@ -13,7 +13,6 @@ Target: 30+ tests, no I/O, no real LLM calls.
 
 from __future__ import annotations
 
-
 from llmwikify.apps.chat.harness import (
     GateResult,
     QualityGate,

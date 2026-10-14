@@ -47,7 +47,7 @@ all = [ "llmwikify[extractors,mcp,config,watch,graph,web,agent]",]
 #       p310 128s / p311 380s 通过。jaraco/twine pin 保留 (该验证含它们)。
 dev = [
     "llmwikify[all]",
-    "pytest>=7.0.0", "pytest-cov>=4.0.0",
+    "pytest>=7.0.0", "pytest-cov>=4.0.0", "pytest-asyncio>=0.23,<2",
     "black>=23.0.0", "ruff>=0.1.0", "mypy>=1.0.0",
     "types-PyYAML>=6.0", "types-requests>=2.30",
     "build>=0.10.0",
@@ -115,12 +115,16 @@ llmwikify = [ "py.typed",]
 select = [ "E", "F", "I", "W", "B", "C4", "UP",]
 ignore = [ "E501", "B904", "F401",]
 
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI 的 Depends() 在参数默认值中是官方惯例 (wiki_routes.py 等)
+extend-immutable-calls = [ "fastapi.Depends",]
+
 [tool.pytest.ini_options]
 minversion = "7.0"
 testpaths = [ "tests",]
 python_files = [ "test_*.py",]
 python_functions = [ "test_*",]
-addopts = "-v --tb=short --strict-markers --ignore=tests/ab_testing"
+addopts = "-v --tb=short --strict-markers --ignore=tests/ab_testing --ignore=tests/e2e -m 'not llm'"
 asyncio_mode = "auto"
 markers = [
   "e2e: end-to-end tests that start a real server (run with `pytest -m e2e`)",

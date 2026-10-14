@@ -227,7 +227,7 @@ def merge_path_a(extraction: dict, factor_list_resp: dict, paper_id: str) -> dic
     slug = factor_name.lower().replace(" ", "_").replace("-", "_")
 
     suggested = extraction.get("suggested_signal", {})
-    signal_type = suggested.get("signal_type", "unknown")
+    _signal_type = suggested.get("signal_type", "unknown")
     reasoning = suggested.get("reasoning", "TBD")
     strategy_logic = extraction.get("strategy_logic", {})
 

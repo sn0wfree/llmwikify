@@ -247,7 +247,7 @@ class TestManagedConnectionClose:
     def test_closes_connection(self, tmp_path: Path) -> None:
         db = tmp_path / "test.db"
         mc = ManagedConnection(db)
-        conn = mc.conn
+        _conn = mc.conn
         mc.close()
         assert getattr(mc._local, "conn", None) is None
 
@@ -580,7 +580,7 @@ class TestCloseEdgeCases:
     def test_multiple_close(self, tmp_path: Path) -> None:
         db = tmp_path / "test.db"
         mc = ManagedConnection(db)
-        mc.conn
+        assert mc.conn is not None
         mc.close()
         mc.close()  # should not raise
 

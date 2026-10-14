@@ -24,7 +24,7 @@ class TestRecommend:
         result = wiki.recommend()
 
         # Missing Page now exists, so only "Another Missing" should be missing
-        missing = result["missing_pages"]
+        _missing = result["missing_pages"]
 
         # "Another Missing" is only referenced once, so may not appear (threshold is 2)
         assert "missing_pages" in result

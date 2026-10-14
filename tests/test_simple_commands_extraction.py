@@ -100,7 +100,7 @@ def test_command_run_delegates_to_free_function():
 
     for _, class_name, run_fn_name, _ in MIGRATED_COMMANDS:
         cls = getattr(commands, class_name)
-        run_fn = getattr(commands, run_fn_name)
+        _run_fn = getattr(commands, run_fn_name)
         # The class source should reference the function by name
         src = inspect.getsource(cls)
         assert (
@@ -117,7 +117,7 @@ def test_wiki_cli_delegates_migrated_methods():
     """WikiCLI's migrated methods are 1-line delegates to run_<name> functions."""
     from llmwikify.interfaces.cli import WikiCLI
 
-    for _, class_name, run_fn_name, method_name in MIGRATED_COMMANDS:
+    for _, _class_name, run_fn_name, method_name in MIGRATED_COMMANDS:
         method = getattr(WikiCLI, method_name)
         src = inspect.getsource(method)
         # The method body should be a single return statement

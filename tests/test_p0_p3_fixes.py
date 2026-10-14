@@ -172,7 +172,7 @@ class TestMarkItDownPlugins:
         with patch("markitdown.MarkItDown") as MockMD:
             MockMD.return_value = MagicMock()
 
-            extractor = MarkItDownExtractor(
+            _extractor = MarkItDownExtractor(
                 config={"llm": {"enabled": True}},
                 llm_client=MagicMock(),
                 llm_model="gpt-4o",
@@ -188,7 +188,7 @@ class TestMarkItDownPlugins:
                         else None
                     ),
                 )
-                assert enable_plugins == True
+                assert enable_plugins is True
 
     def test_enable_plugins_false_without_llm(self):
         """MarkItDown should disable plugins when LLM is not configured."""
@@ -201,7 +201,7 @@ class TestMarkItDownPlugins:
         with patch("markitdown.MarkItDown") as MockMD:
             MockMD.return_value = MagicMock()
 
-            extractor = MarkItDownExtractor({})
+            _extractor = MarkItDownExtractor({})
 
             if MockMD.called:
                 call_kwargs = MockMD.call_args
@@ -213,7 +213,7 @@ class TestMarkItDownPlugins:
                         else None
                     ),
                 )
-                assert enable_plugins == False
+                assert enable_plugins is False
 
 
 # ============================================================

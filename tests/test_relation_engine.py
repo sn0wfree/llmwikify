@@ -32,7 +32,7 @@ class TestRelationEngineInit:
 
     def test_table_creation(self, wiki_instance):
         """Test that relations table is created on init."""
-        engine = RelationEngine(wiki_instance.index)
+        _engine = RelationEngine(wiki_instance.index)
         cursor = wiki_instance.index.conn.execute(
             "SELECT name FROM sqlite_master WHERE type='table' AND name='relations'"
         )

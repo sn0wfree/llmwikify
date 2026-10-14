@@ -36,9 +36,9 @@ def _run_async(coro):
         raise
 
 
-from llmwikify.interfaces.cli import WikiCLI
-from llmwikify.interfaces.mcp.server import create_mcp_server, serve_mcp
-from llmwikify.kernel import Wiki
+from llmwikify.interfaces.cli import WikiCLI  # noqa: E402
+from llmwikify.interfaces.mcp.server import create_mcp_server, serve_mcp  # noqa: E402
+from llmwikify.kernel import Wiki  # noqa: E402
 
 
 class Args:
@@ -260,7 +260,7 @@ class TestCLIServeMethod:
             MockAdapter.return_value = mock_instance
 
             # Patch asyncio.run so we don't actually start the server
-            with patch("asyncio.run") as mock_asyncio:
+            with patch("asyncio.run") as _mock_asyncio:
                 args = Args()
                 args.name = "cli-wiki"
                 args.transport = None

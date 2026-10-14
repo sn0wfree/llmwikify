@@ -204,7 +204,7 @@ class TestAppendToSink:
         formal_path.write_text("# Query: Test\n\nContent\n")
 
         # The new format stores answer content separately
-        sink_path = wiki.query_sink.append_to_sink(
+        _sink_path = wiki.query_sink.append_to_sink(
             "Query: Test",
             "Test query?",
             "Answer content.",

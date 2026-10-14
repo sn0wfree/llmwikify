@@ -14,7 +14,6 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-
 from llmwikify.apps.chat.agent.runner_v2 import ChatRunnerV2
 
 

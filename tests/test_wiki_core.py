@@ -3,6 +3,8 @@
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from llmwikify.kernel import Wiki
@@ -128,7 +130,7 @@ class TestWiki:
         wiki.write_page("Test", "# Test")
         result = wiki.status()
 
-        assert result["initialized"] == True
+        assert result["initialized"] is True
         # page_count excludes index.md and log.md (only wiki content pages)
         assert result["page_count"] == 2  # Test + overview
 
@@ -199,8 +201,8 @@ class TestWiki:
         assert "content" in result
         assert "instructions" in result
         assert "current_index" in result
-        assert result["saved_to_raw"] == False
-        assert result["already_exists"] == False
+        assert result["saved_to_raw"] is False
+        assert result["already_exists"] is False
 
         wiki.close()
 
@@ -227,7 +229,7 @@ class TestWiki:
         ingest_module.extract = orig_extract
 
         assert "error" not in result
-        assert result["saved_to_raw"] == True
+        assert result["saved_to_raw"] is True
         assert result["source_name"] == "test-article.md"
 
         saved_file = temp_wiki / "raw" / "test-article.md"
@@ -262,12 +264,13 @@ class TestWiki:
         ingest_module.extract = orig_extract
 
         assert "error" not in result
-        assert result["already_exists"] == True
-        assert result["saved_to_raw"] == False
+        assert result["already_exists"] is True
+        assert result["saved_to_raw"] is False
         assert saved_file.read_text() == "Existing content"
 
         wiki.close()
 
+    @pytest.mark.llm
     def test_llm_process_source(self, temp_wiki, monkeypatch):
         """Test LLM processing returns operations list (chained mode)."""
         wiki = Wiki(
@@ -345,6 +348,7 @@ class TestWiki:
 
         wiki.close()
 
+    @pytest.mark.llm
     def test_llm_process_source_injects_wiki_schema(self, temp_wiki, monkeypatch):
         """Test that wiki.md content is injected into analyze_source prompt."""
         # Customize wiki.md with a distinctive custom page type
@@ -436,6 +440,7 @@ class TestWiki:
 
         wiki.close()
 
+    @pytest.mark.llm
     def test_llm_process_source_no_wiki_schema(self, temp_wiki, monkeypatch):
         """Test that _llm_process_source works even if wiki.md is missing."""
         wiki = Wiki(
@@ -562,15 +567,15 @@ class TestWiki:
             wiki._should_exclude_orphan(
                 "2025-07-31", temp_wiki / "wiki" / "2025-07-31.md"
             )
-            == False
+            is False
         )
         assert (
             wiki._should_exclude_orphan("2025-07", temp_wiki / "wiki" / "2025-07.md")
-            == False
+            is False
         )
         assert (
             wiki._should_exclude_orphan("2025-Q1", temp_wiki / "wiki" / "2025-Q1.md")
-            == False
+            is False
         )
 
     def test_exclusion_with_explicit_config(self, temp_wiki):
@@ -592,15 +597,15 @@ class TestWiki:
             wiki._should_exclude_orphan(
                 "2025-07-31", temp_wiki / "wiki" / "2025-07-31.md"
             )
-            == True
+            is True
         )
         assert (
             wiki._should_exclude_orphan("2025-07", temp_wiki / "wiki" / "2025-07.md")
-            == True
+            is True
         )
         assert (
             wiki._should_exclude_orphan("2025-Q1", temp_wiki / "wiki" / "2025-Q1.md")
-            == True
+            is True
         )
 
     def test_no_redirect_exclusion_without_config(self, temp_wiki):
@@ -616,7 +621,7 @@ redirect_to: target.md
 """)
 
         # Without config, redirect_to pages should NOT be excluded
-        assert wiki._should_exclude_orphan("redirect", redirect_page) == False
+        assert wiki._should_exclude_orphan("redirect", redirect_page) is False
 
     def test_redirect_exclusion_with_config(self, temp_wiki):
         """Verify redirect_to works when configured."""
@@ -632,7 +637,7 @@ redirect_to: target.md
 """)
 
         # With explicit config, redirect_to pages should be excluded
-        assert wiki._should_exclude_orphan("redirect", redirect_page) == True
+        assert wiki._should_exclude_orphan("redirect", redirect_page) is True
 
     def test_should_exclude_orphan_normal_page(self, temp_wiki):
         """Test that normal pages are not excluded from orphan detection."""
@@ -642,7 +647,7 @@ redirect_to: target.md
         normal_page = temp_wiki / "wiki" / "Important Page.md"
         normal_page.write_text("# Important")
 
-        assert wiki._should_exclude_orphan("important-page", normal_page) == False
+        assert wiki._should_exclude_orphan("important-page", normal_page) is False
 
     def test_should_exclude_orphan_user_config(self, temp_wiki):
         """Test that user-configured patterns are respected."""
@@ -653,7 +658,7 @@ redirect_to: target.md
         draft_page = temp_wiki / "wiki" / "draft-test.md"
         draft_page.write_text("# Draft")
 
-        assert wiki._should_exclude_orphan("draft-test", draft_page) == True
+        assert wiki._should_exclude_orphan("draft-test", draft_page) is True
 
     def test_lint_respects_config(self, temp_wiki):
         """Test that lint() respects user configuration."""
@@ -726,7 +731,7 @@ redirect_to: target.md
         wiki = Wiki(temp_wiki)
         wiki.init()
 
-        original_content = wiki.read_schema()["content"]
+        _original_content = wiki.read_schema()["content"]
         new_content = "# New Schema\n\nUpdated conventions\n"
 
         result = wiki.update_schema(new_content)
@@ -788,8 +793,8 @@ redirect_to: target.md
         result = wiki.ingest_source(str(test_file))
 
         assert "error" not in result
-        assert result["saved_to_raw"] == True
-        assert result["already_exists"] == False
+        assert result["saved_to_raw"] is True
+        assert result["already_exists"] is False
         assert "source_raw_path" in result
         assert result["source_raw_path"] == "raw/research-report.md"
         assert "hint" in result
@@ -814,8 +819,8 @@ redirect_to: target.md
         result = wiki.ingest_source(str(test_file))
 
         assert "error" not in result
-        assert result["saved_to_raw"] == False
-        assert result["already_exists"] == False
+        assert result["saved_to_raw"] is False
+        assert result["already_exists"] is False
         assert "source_raw_path" in result
         assert result["source_raw_path"] == "raw/existing-source.md"
         assert "hint" in result
@@ -835,12 +840,12 @@ redirect_to: target.md
         test_file.write_text("# Report Content\n\nSome data")
 
         result1 = wiki.ingest_source(str(test_file))
-        assert result1["saved_to_raw"] == True
+        assert result1["saved_to_raw"] is True
 
         # Second ingest: file already exists in raw/
         result2 = wiki.ingest_source(str(test_file))
-        assert result2["already_exists"] == True
-        assert result2["saved_to_raw"] == False
+        assert result2["already_exists"] is True
+        assert result2["saved_to_raw"] is False
         assert "hint" in result2
         assert "already exists" in result2["hint"].lower()
 

@@ -18,7 +18,7 @@ def _run_async(coro):
         raise
 
 
-from llmwikify.kernel import Wiki
+from llmwikify.kernel import Wiki  # noqa: E402
 
 
 @pytest.fixture
@@ -28,7 +28,7 @@ def wiki_root(tmp_path):
     (root / "raw").mkdir()
     (root / "wiki").mkdir()
     (root / "wiki" / ".sink").mkdir()
-    db_path = root / ".llmwikify.db"
+    _db_path = root / ".llmwikify.db"
     wiki = Wiki(root)
     wiki.init()
     return wiki

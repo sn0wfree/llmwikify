@@ -284,7 +284,7 @@ class TestBatchPartialFailure:
             patch("sys.stderr", stderr),
             patch.object(cli.wiki, "ingest_source", side_effect=mock_ingest),
         ):
-            result = cli.batch(args)
+            _result = cli.batch(args)
 
         parsed = json.loads(stdout.getvalue())
         assert parsed["batch_summary"]["failed"] >= 1
