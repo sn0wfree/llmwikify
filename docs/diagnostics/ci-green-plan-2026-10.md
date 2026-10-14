@@ -228,17 +228,20 @@ fastmcp>=3.0               → fastmcp-slim[client,server]==X
 - e2e.yml 是 docker 流程（wheel → 镜像 → `00→01→02→03` 脚本链），失败原因未排查。
 - mypy baseline 是过渡方案，需要 TODO 跟踪后续逐模块收紧。
 
-## 7. 执行计划（暂缓，待执行）
+## 7. 执行计划（✅ 已执行，2026-10-14 全部完成）
 
 | # | 提交 | 内容 | 验收 |
 |---|---|---|---|
-| 1 | `style: black 全量格式化` | `black src/llmwikify tests` + `.git-blame-ignore-revs` | `black --check` 绿 |
-| 2 | `fix(mypy): 修复 4 个真 bug` | §4 四处 + 复现测试 + 清 13 个 unused-ignore | 相关测试通过 |
-| 3 | `chore(lint): ruff 113 清零` | 30 自动 + 手工（tests 为主） | `ruff check` 绿 |
-| 4 | `chore(mypy): baseline` | 140 文件 per-module `ignore_errors` + TODO | `mypy` 绿 |
-| 5 | `fix(deps): keyring 解禁 + 栈对齐 + pytest` | pyproject 三处改动：`keyring>=25.6,<28`（必改，冲突无退路）+ `fastmcp>=3.0,<3.3` + `starlette>=0.45,<1`（沙盒 V1b 已验证 106s ✅）；复核 twine/jaraco pin；清 pytest 52 failed（e2e/llm marker 过滤 + 15 个断言修复） | 3.10/3.11/3.12 干净安装 + pytest 全绿 |
-| 6 | `fix(e2e): 四脚本链跑通` | 本地 docker `docker-tests/run-e2e.sh` | e2e 绿 |
-| 7 | 推送 + PR + 合并 | `git push origin dev/...` → `gh pr create` → checks 全绿 → `gh pr merge --merge` | CI 三绿 |
+| 1 | `1631263` + `4051a66` | black 26.10.1 全量格式化（546 文件）+ `.git-blame-ignore-revs` | ✅ black --check 绿 |
+| 2 | `8ae8c2b` `d81ac94` `74a19fd` | 4 个真 bug 修复 + 复现测试（1b SSRF / 2 gap_filler / 3 ResearchAgent / 4 server wrapper） | ✅ 相关测试通过 |
+| 3 | `61fa079` | ruff 109→0（I001/F841/E712 批量 + B008 FastAPI 豁免 + 24 项手工） | ✅ ruff 绿 |
+| 4 | `8edd50f` | mypy baseline：138 存量模块 `ignore_errors`（`__init__` 归一化为包名） | ✅ mypy 全绿 401 files |
+| 5 | `e52c90f` + `d9af82d` 等 | keyring 解禁 + fastmcp/starlette 栈对齐 + dev 补 pytest-asyncio/polars + llm/e2e marker 门禁 + 依赖升级兼容（youtube 1.x / markitdown 0.1.8）+ 测试污染修复（PEP 562 实体化）+ flaky 去除 | ✅ 全量 4795 passed / 0 failed |
+| 6 | — | e2e docker `run-e2e.sh` | 🔶 执行中 |
+| 7 | — | push + PR + CI 三绿 | 待做 |
+
+执行顺序调整：deps 修复（原第 5 步前半）提到最前——black/ruff/mypy 必须在
+「CI 同款干净 venv」下执行（`/tmp/opencode/b2-venv`，解析 = CI 完全一致）。
 
 边界：`graphify-out/`、`dist/`、`.pytest_cache` 不入库；每步独立可回滚；全程无 force push。
 
@@ -248,7 +251,11 @@ fastmcp>=3.0               → fastmcp-slim[client,server]==X
       → 日志：`/tmp/opencode/ci-repro/install-3.10.log`、`install-3.12.log`
 - [x] 逐 extra 隔离 + 根因定位：✅ `keyring<24` × `fastmcp`（见 §3.7）
 - [x] 沙盒修复验证：✅ V1b（keyring 解禁 + fastmcp<3.3 + starlette<1）p312 106s / p310 128s / p311 380s
-- [ ] e2e 本地 docker 验证（未开始）
+- [x] B2 venv 实装：✅ p310 99s，black 26.10.1 / ruff 0.17.0 / mypy 2.4.0（= CI 解析）
+- [x] black / ruff / mypy 三门禁本地全绿
+- [x] pytest 全绿：4795 passed / 0 failed（36 → 0，含 17 QuantNodes/polars、
+      6 llm marker、6 依赖兼容、7 测试污染/PEP 562 实体化、1 flaky）
+- [ ] e2e 本地 docker 验证（执行中）
 - [ ] PR 后 CI 实际表现（3 版本矩阵 + e2e 容器）
 
 ## 9. 证据（关键命令）
