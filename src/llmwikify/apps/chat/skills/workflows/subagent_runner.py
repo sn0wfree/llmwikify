@@ -37,6 +37,7 @@ The child writes ONE line of JSON to stdout::
 Anything else on stdout is treated as an error. The child is killed
 on timeout.
 """
+
 from __future__ import annotations
 
 import json
@@ -72,16 +73,16 @@ class SubagentRequest:
     """
 
     actor_name: str
-    actor_prompt_source: str       # "file:<path>" or "inline:<truncated>"
-    actor_prompt_text: str         # the actual prompt body (loaded from file or inline)
+    actor_prompt_source: str  # "file:<path>" or "inline:<truncated>"
+    actor_prompt_text: str  # the actual prompt body (loaded from file or inline)
     actor_model: str
     actor_tools: tuple[str, ...]
     actor_permission_mode: str
     inputs: dict[str, Any]
     budget: dict[str, Any]
     session_id: str
-    worktree_path: str | None      # if isolation == "worktree", path inside worktree
-    llm: LLMSpec | None = None   # LAL: parent-resolved LLM config (None for back-compat)
+    worktree_path: str | None  # if isolation == "worktree", path inside worktree
+    llm: LLMSpec | None = None  # LAL: parent-resolved LLM config (None for back-compat)
 
     def to_json(self) -> str:
         llm_dict = None
@@ -118,6 +119,7 @@ class SubagentRequest:
     @classmethod
     def from_json(cls, text: str) -> SubagentRequest:
         from llmwikify.foundation.llm.spec import LLMSpec
+
         d = json.loads(text)
         llm = None
         llm_dict = d.get("llm")
@@ -154,12 +156,12 @@ class SubagentRequest:
 class SubagentResult:
     """What the child subagent process returns to the parent."""
 
-    status: str                       # "ok" | "error" | "timeout"
+    status: str  # "ok" | "error" | "timeout"
     output: dict[str, Any]
     tokens_used: int
     duration_seconds: float
     error: str | None
-    log_tail: tuple[str, ...] = ()    # last N log lines (for debugging)
+    log_tail: tuple[str, ...] = ()  # last N log lines (for debugging)
 
     def to_json(self) -> str:
         return json.dumps(
@@ -203,10 +205,12 @@ def _child_main() -> None:  # pragma: no cover (legacy stdin/stdout path)
         _emit_error(f"failed to parse request: {e}")
         return
     from llmwikify.apps.chat.skills.workflows.subagent_worker import run_subagent
+
     try:
         result = run_subagent(req)
     except Exception as e:
         import traceback
+
         tb = traceback.format_exc(limit=8)
         result = SubagentResult(
             status="error",
@@ -304,7 +308,7 @@ def _spawn_subprocess(
     ctx = mp.get_context("spawn")
     # Pipe(duplex=False) returns (r, w).  We use r locally, w in child.
     # Request: parent writes, child reads.
-    req_r, req_w = ctx.Pipe(duplex=False)   # noqa: F841 (req_r unused; closed in parent)
+    req_r, req_w = ctx.Pipe(duplex=False)  # noqa: F841 (req_r unused; closed in parent)
     # Reply: child writes, parent reads.
     rep_r, rep_w = ctx.Pipe(duplex=False)
     start = time.monotonic()
@@ -396,6 +400,7 @@ def _child_entry_duplex(conn: Any) -> None:  # pragma: no cover (child)
         req = SubagentRequest.from_json(raw.decode("utf-8"))
     except Exception as e:
         import traceback
+
         tb = traceback.format_exc(limit=8)
         result = SubagentResult(
             status="error",
@@ -411,10 +416,12 @@ def _child_entry_duplex(conn: Any) -> None:  # pragma: no cover (child)
             conn.close()
         return
     from llmwikify.apps.chat.skills.workflows.subagent_worker import run_subagent
+
     try:
         result = run_subagent(req)
     except Exception as e:
         import traceback
+
         tb = traceback.format_exc(limit=8)
         result = SubagentResult(
             status="error",
@@ -447,10 +454,12 @@ def _child_entry_two_pipes(req_conn: Any, rep_conn: Any) -> None:  # pragma: no 
         rep_conn.close()
         return
     from llmwikify.apps.chat.skills.workflows.subagent_worker import run_subagent
+
     try:
         result = run_subagent(req)
     except Exception as e:
         import traceback
+
         tb = traceback.format_exc(limit=8)
         result = SubagentResult(
             status="error",
@@ -466,9 +475,12 @@ def _child_entry_two_pipes(req_conn: Any, rep_conn: Any) -> None:  # pragma: no 
         rep_conn.close()
 
 
-def _child_entry_via_pipe(conn: Any, request: SubagentRequest) -> None:  # pragma: no cover
+def _child_entry_via_pipe(
+    conn: Any, request: SubagentRequest
+) -> None:  # pragma: no cover
     """Legacy single-pipe entry; kept for completeness but not used."""
     from llmwikify.apps.chat.skills.workflows.subagent_worker import run_subagent
+
     try:
         result = run_subagent(request)
         conn.send_bytes(result.to_json().encode("utf-8"))

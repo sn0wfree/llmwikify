@@ -52,13 +52,16 @@ def get_app_db_path(data_dir: Path | str) -> Path:
             legacy_path.rename(new_path)
             logger.info(
                 "Auto-migrated DB file: %s -> %s",
-                legacy_path, new_path,
+                legacy_path,
+                new_path,
             )
         except OSError as e:
             logger.warning(
                 "Failed to auto-migrate %s -> %s: %s. "
                 "Will create new DB at canonical path.",
-                legacy_path, new_path, e,
+                legacy_path,
+                new_path,
+                e,
             )
     return new_path
 
@@ -123,7 +126,8 @@ class BaseDatabase:
         if size_mb > DB_SIZE_WARNING_MB:
             logger.warning(
                 "App DB is large: %.2f MB (threshold: %d MB).",
-                size_mb, DB_SIZE_WARNING_MB,
+                size_mb,
+                DB_SIZE_WARNING_MB,
             )
 
     # ─── shared low-level helper ──────────────────────────────
@@ -137,9 +141,7 @@ class BaseDatabase:
         message.
         """
         if not self.db_path.exists():
-            raise FileNotFoundError(
-                f"DB file does not exist: {self.db_path}"
-            )
+            raise FileNotFoundError(f"DB file does not exist: {self.db_path}")
         return self._mgr.conn
 
 

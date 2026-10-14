@@ -23,6 +23,7 @@ Public API:
 - :func:`detect_config_version` — read ``version`` field with safe default.
 - :class:`MigrationResult` / :class:`MigrationChange` / :class:`MigrationConflict` — result types.
 """
+
 from __future__ import annotations
 
 import copy
@@ -53,16 +54,18 @@ MIGRATABLE_SECTIONS: dict[str, str] = {
 }
 
 # Sections that stay in .wiki-config.yaml (no migration).
-PRESERVED_SECTIONS: frozenset[str] = frozenset({
-    "directories",
-    "database",
-    "files",
-    "wikis",
-    "orphan_detection",
-    "performance",
-    "reference_index",
-    "version",
-})
+PRESERVED_SECTIONS: frozenset[str] = frozenset(
+    {
+        "directories",
+        "database",
+        "files",
+        "wikis",
+        "orphan_detection",
+        "performance",
+        "reference_index",
+        "version",
+    }
+)
 
 
 # ─── Data classes ────────────────────────────────────────────────────
@@ -414,8 +417,11 @@ def auto_migrate_wiki_config(
             new_config = copy.deepcopy(config)
             new_config["version"] = CURRENT_VERSION
             import yaml
+
             config_path.write_text(
-                yaml.safe_dump(new_config, default_flow_style=False, allow_unicode=True),
+                yaml.safe_dump(
+                    new_config, default_flow_style=False, allow_unicode=True
+                ),
                 encoding="utf-8",
             )
         result.migrated = True
@@ -444,8 +450,7 @@ def auto_migrate_wiki_config(
     result.conflicts = conflicts
     result.changes = changes
     result.resolutions = {
-        (c.section, c.key): _ask_conflict_resolution(c, auto_resolve)
-        for c in conflicts
+        (c.section, c.key): _ask_conflict_resolution(c, auto_resolve) for c in conflicts
     }
 
     if dry_run:

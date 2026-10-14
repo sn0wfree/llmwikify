@@ -54,7 +54,7 @@ class WikiLinkMixin(WikiProtocol):
 
         for page in self._wiki_pages():
             content = page.read_text()
-            links = re.findall(r'\[\[(.*?)\]\]', content)
+            links = re.findall(r"\[\[(.*?)\]\]", content)
             new_content = content
             page_modified = False
 
@@ -63,7 +63,7 @@ class WikiLinkMixin(WikiProtocol):
                 if target in (self._index_page_name, self._log_page_name):
                     continue
 
-                if '/' in target:
+                if "/" in target:
                     continue
                 if (self.wiki_dir / f"{target}.md").exists():
                     continue
@@ -76,25 +76,29 @@ class WikiLinkMixin(WikiProtocol):
 
                 if len(matches) > 1:
                     stats["ambiguous"] += 1
-                    changes.append({
-                        "page": self._page_display_name(page),
-                        "link": target,
-                        "status": "ambiguous",
-                        "matches": [str(m.relative_to(self.wiki_dir)) for m in matches],
-                    })
+                    changes.append(
+                        {
+                            "page": self._page_display_name(page),
+                            "link": target,
+                            "status": "ambiguous",
+                            "matches": [
+                                str(m.relative_to(self.wiki_dir)) for m in matches
+                            ],
+                        }
+                    )
                     continue
 
                 rel_path = str(matches[0].relative_to(self.wiki_dir))[:-3]
 
-                if '#' in link:
-                    section = link.split('#', 1)[1]
-                    if '|' in section:
-                        sec, disp = section.split('|', 1)
+                if "#" in link:
+                    section = link.split("#", 1)[1]
+                    if "|" in section:
+                        sec, disp = section.split("|", 1)
                         new_wikilink = f"[[{rel_path}#{sec}|{disp}]]"
                     else:
                         new_wikilink = f"[[{rel_path}#{section}]]"
-                elif '|' in link:
-                    display = link.split('|', 1)[1]
+                elif "|" in link:
+                    display = link.split("|", 1)[1]
                     new_wikilink = f"[[{rel_path}|{display}]]"
                 else:
                     new_wikilink = f"[[{rel_path}]]"
@@ -103,12 +107,14 @@ class WikiLinkMixin(WikiProtocol):
                 new_content = new_content.replace(old_wikilink, new_wikilink, 1)
                 page_modified = True
                 stats["fixed"] += 1
-                changes.append({
-                    "page": self._page_display_name(page),
-                    "old": old_wikilink,
-                    "new": new_wikilink,
-                    "status": "fixed",
-                })
+                changes.append(
+                    {
+                        "page": self._page_display_name(page),
+                        "old": old_wikilink,
+                        "new": new_wikilink,
+                        "status": "fixed",
+                    }
+                )
 
             if page_modified and not dry_run:
                 page.write_text(new_content)
@@ -128,8 +134,8 @@ class WikiLinkMixin(WikiProtocol):
 
         if include_context:
             for link in links:
-                link['context'] = self._get_link_context(
-                    link['source'], link.get('section', ''), page_name
+                link["context"] = self._get_link_context(
+                    link["source"], link.get("section", ""), page_name
                 )
 
         return links
@@ -145,13 +151,19 @@ class WikiLinkMixin(WikiProtocol):
 
         if include_context:
             for link in links:
-                link['context'] = self._get_link_context(
-                    page_name, link.get('section', ''), link.get('target', '')
+                link["context"] = self._get_link_context(
+                    page_name, link.get("section", ""), link.get("target", "")
                 )
 
         return links
 
-    def _get_link_context(self, source_page: str, section: str, target_page: str = "", context_chars: int = 80) -> str:
+    def _get_link_context(
+        self,
+        source_page: str,
+        section: str,
+        target_page: str = "",
+        context_chars: int = 80,
+    ) -> str:
         """Extract context around a wikilink in source file.
 
         Args:
@@ -173,26 +185,26 @@ class WikiLinkMixin(WikiProtocol):
             return ""
 
         if section:
-            section_name = section.lstrip('#')
-            pattern = rf'^#+\s*{re.escape(section_name)}'
+            section_name = section.lstrip("#")
+            pattern = rf"^#+\s*{re.escape(section_name)}"
             match = re.search(pattern, content, re.MULTILINE | re.IGNORECASE)
             if match:
                 start = match.end()
-                next_section = re.search(r'^#+\s+', content[start:], re.MULTILINE)
+                next_section = re.search(r"^#+\s+", content[start:], re.MULTILINE)
                 if next_section:
-                    content = content[start:start+next_section.start()]
+                    content = content[start : start + next_section.start()]
                 else:
                     content = content[start:]
 
         search_target = target_page if target_page else source_page
-        link_pattern = r'\[\[' + re.escape(search_target) + r'(?:[^\]]*)?\]\]'
+        link_pattern = r"\[\[" + re.escape(search_target) + r"(?:[^\]]*)?\]\]"
         match = re.search(link_pattern, content)
 
         if match:
             start = max(0, match.start() - context_chars)
             end = min(len(content), match.end() + context_chars)
             context = content[start:end].strip()
-            context = ' '.join(context.split())
+            context = " ".join(context.split())
             if start > 0:
                 context = "..." + context
             if end < len(content):

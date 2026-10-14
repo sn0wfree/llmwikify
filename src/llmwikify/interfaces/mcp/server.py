@@ -25,6 +25,7 @@ def create_mcp_server(
 ) -> FastMCP:
     """Create FastMCP server. → ``MCPAdapter(wiki)._mcp``."""
     from .adapter import MCPAdapter
+
     return MCPAdapter(wiki, name=name, config=config)._mcp
 
 
@@ -38,6 +39,7 @@ def serve_mcp(
 ) -> None:
     """Start MCP server. → ``MCPAdapter(wiki).run_<transport>()``."""
     from .adapter import MCPAdapter
+
     adapter = MCPAdapter(wiki, name=name, config=config)
     if transport == "stdio":
         asyncio.run(adapter.run_stdio())
@@ -47,8 +49,7 @@ def serve_mcp(
         asyncio.run(adapter.run_sse(host, port))
     else:
         raise ValueError(
-            f"Unsupported transport: {transport}. "
-            "Use 'stdio', 'http', or 'sse'."
+            f"Unsupported transport: {transport}. " "Use 'stdio', 'http', or 'sse'."
         )
 
 
@@ -60,6 +61,7 @@ def create_unified_server(
 ) -> Any:
     """Create FastAPI app. → ``WikiServer(wiki).app``."""
     from llmwikify.interfaces.server import WikiServer
+
     server = WikiServer(
         wiki,
         api_key=api_key,
@@ -69,4 +71,3 @@ def create_unified_server(
         enable_webui=True,
     )
     return server.app
-

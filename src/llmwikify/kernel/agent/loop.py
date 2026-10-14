@@ -7,6 +7,7 @@ UnifiedAgentLoop 编排 StepHandler 和 StreamingHandler 两种 handler,
 
 历史: 从 apps/chat/agent/unified/loop.py 搬迁。
 """
+
 from __future__ import annotations
 
 import logging
@@ -121,7 +122,9 @@ class UnifiedAgentLoop:
 
                 # ── DECIDE after REASON ──
                 if "after_reason" in self._deciders:
-                    decide_result = await self._deciders["after_reason"].handle(response, spec, ctx)
+                    decide_result = await self._deciders["after_reason"].handle(
+                        response, spec, ctx
+                    )
                     stop, reason = decide_result.output
                     if stop:
                         ctx.stop_reason = reason
@@ -196,7 +199,9 @@ class UnifiedAgentLoop:
 
                 # ── DECIDE after ACT ──
                 if "after_act" in self._deciders:
-                    decide_result = await self._deciders["after_act"].handle(result, spec, ctx)
+                    decide_result = await self._deciders["after_act"].handle(
+                        result, spec, ctx
+                    )
                     stop, reason = decide_result.output
                     if stop:
                         ctx.stop_reason = reason
@@ -210,7 +215,9 @@ class UnifiedAgentLoop:
 
                 # ── DECIDE after OBSERVE ──
                 if "after_observe" in self._deciders:
-                    decide_result = await self._deciders["after_observe"].handle(result, spec, ctx)
+                    decide_result = await self._deciders["after_observe"].handle(
+                        result, spec, ctx
+                    )
                     stop, reason = decide_result.output
                     if stop:
                         ctx.stop_reason = reason

@@ -6,6 +6,7 @@
 - 流式 + StepHandler 混合
 - 边界情况
 """
+
 from __future__ import annotations
 
 
@@ -121,11 +122,14 @@ async def test_loop_multi_iteration():
     actor = _MockActor(ActResult(success=True))
     decider = _MultiRoundDecider(max_rounds=3)
     loop = UnifiedAgentLoop(
-        reasoner=reasoner, actor=actor,
+        reasoner=reasoner,
+        actor=actor,
         deciders={"after_act": decider},
     )
 
-    result = await loop.run_to_completion(BaseSpec(messages=[{"role": "user", "content": "hi"}]))
+    result = await loop.run_to_completion(
+        BaseSpec(messages=[{"role": "user", "content": "hi"}])
+    )
     assert result.iterations == 3
     assert result.stop_reason == "max_rounds"
 
@@ -141,7 +145,8 @@ async def test_loop_hook_called_in_order():
     actor = _MockActor(ActResult(success=True))
     # No decider — loop runs all max_iterations so OBSERVE + after_iteration fire
     loop = UnifiedAgentLoop(
-        reasoner=reasoner, actor=actor,
+        reasoner=reasoner,
+        actor=actor,
         deciders={},
         hook=hook,
     )
@@ -186,7 +191,9 @@ async def test_loop_hook_error_called():
     reasoner = _ExceptingReasoner()
     actor = _MockActor(ActResult(success=True))
     loop = UnifiedAgentLoop(
-        reasoner=reasoner, actor=actor, deciders={},
+        reasoner=reasoner,
+        actor=actor,
+        deciders={},
         hook=hook,
     )
 
@@ -223,12 +230,15 @@ async def test_loop_streaming_reasoner_with_step_actor():
     actor = _MockActor(ActResult(success=True))
     decider = _MockDecider(stop=True, reason="no_tool_calls")
     loop = UnifiedAgentLoop(
-        reasoner=reasoner, actor=actor,
+        reasoner=reasoner,
+        actor=actor,
         deciders={"after_reason": decider},
     )
 
     events = []
-    async for event in loop.run_stream(BaseSpec(messages=[{"role": "user", "content": "hi"}])):
+    async for event in loop.run_stream(
+        BaseSpec(messages=[{"role": "user", "content": "hi"}])
+    ):
         events.append(event)
 
     types = [e.get("type") for e in events]
@@ -243,6 +253,7 @@ async def test_loop_streaming_reasoner_with_step_actor():
 @pytest.mark.asyncio
 async def test_loop_precheck_sets_stop_reason():
     """Precheck can set custom stop_reason."""
+
     def custom_precheck(ctx):
         ctx.stop_reason = "custom_stop"
         return True
@@ -250,12 +261,16 @@ async def test_loop_precheck_sets_stop_reason():
     reasoner = _MockReasoner(ReasonResponse())
     actor = _MockActor(ActResult(success=True))
     loop = UnifiedAgentLoop(
-        reasoner=reasoner, actor=actor, deciders={},
+        reasoner=reasoner,
+        actor=actor,
+        deciders={},
         precheck=custom_precheck,
     )
 
     events = []
-    async for event in loop.run_stream(BaseSpec(messages=[{"role": "user", "content": "hi"}])):
+    async for event in loop.run_stream(
+        BaseSpec(messages=[{"role": "user", "content": "hi"}])
+    ):
         events.append(event)
 
     done_events = [e for e in events if e.get("type") == "done"]
@@ -265,6 +280,7 @@ async def test_loop_precheck_sets_stop_reason():
 @pytest.mark.asyncio
 async def test_loop_precheck_false_continues():
     """Precheck returning False → loop continues."""
+
     def no_precheck(ctx):
         return False
 
@@ -272,12 +288,15 @@ async def test_loop_precheck_false_continues():
     actor = _MockActor(ActResult(success=True))
     decider = _MockDecider(stop=True, reason="success")
     loop = UnifiedAgentLoop(
-        reasoner=reasoner, actor=actor,
+        reasoner=reasoner,
+        actor=actor,
         deciders={"after_act": decider},
         precheck=no_precheck,
     )
 
-    result = await loop.run_to_completion(BaseSpec(messages=[{"role": "user", "content": "hi"}]))
+    result = await loop.run_to_completion(
+        BaseSpec(messages=[{"role": "user", "content": "hi"}])
+    )
     assert result.stop_reason == "success"
     assert result.iterations == 1
 
@@ -288,6 +307,7 @@ async def test_loop_precheck_false_continues():
 @pytest.mark.asyncio
 async def test_loop_finalize_transforms_content():
     """finalize callback transforms final content."""
+
     def upper_finalize(ctx):
         return (ctx.final_content or "").upper()
 
@@ -295,13 +315,16 @@ async def test_loop_finalize_transforms_content():
     actor = _MockActor(ActResult(success=True))
     decider = _MockDecider(stop=True, reason="success")
     loop = UnifiedAgentLoop(
-        reasoner=reasoner, actor=actor,
+        reasoner=reasoner,
+        actor=actor,
         deciders={"after_act": decider},
         finalize=upper_finalize,
     )
 
     events = []
-    async for event in loop.run_stream(BaseSpec(messages=[{"role": "user", "content": "hi"}])):
+    async for event in loop.run_stream(
+        BaseSpec(messages=[{"role": "user", "content": "hi"}])
+    ):
         events.append(event)
 
     done_events = [e for e in events if e.get("type") == "done"]
@@ -319,7 +342,8 @@ async def test_loop_empty_messages():
     actor = _MockActor(ActResult(success=True))
     decider = _MockDecider(stop=True, reason="success")
     loop = UnifiedAgentLoop(
-        reasoner=reasoner, actor=actor,
+        reasoner=reasoner,
+        actor=actor,
         deciders={"after_act": decider},
     )
 
@@ -345,11 +369,15 @@ async def test_loop_max_iterations_respected():
 async def test_loop_actor_needs_confirmation():
     """Actor returning needs_confirmation → stop."""
     reasoner = _MockReasoner(ReasonResponse(tool_calls=[{"name": "wiki_write"}]))
-    actor = _MockActor(ActResult(success=True, needs_confirmation=True, tool_name="wiki_write"))
+    actor = _MockActor(
+        ActResult(success=True, needs_confirmation=True, tool_name="wiki_write")
+    )
     loop = UnifiedAgentLoop(reasoner=reasoner, actor=actor, deciders={})
 
     events = []
-    async for event in loop.run_stream(BaseSpec(messages=[{"role": "user", "content": "hi"}])):
+    async for event in loop.run_stream(
+        BaseSpec(messages=[{"role": "user", "content": "hi"}])
+    ):
         events.append(event)
 
     confirm_events = [e for e in events if e.get("type") == "confirmation_required"]
@@ -366,16 +394,19 @@ async def test_loop_messages_to_inject():
     class _CapturingActor(StepHandler):
         async def handle(self, input, spec, ctx):
             injected.extend(ctx.messages)
-            return StepResult.ok(ActResult(
-                success=True,
-                messages_to_inject=[{"role": "tool", "content": "result"}],
-            ))
+            return StepResult.ok(
+                ActResult(
+                    success=True,
+                    messages_to_inject=[{"role": "tool", "content": "result"}],
+                )
+            )
 
     reasoner = _MockReasoner(ReasonResponse(code="x = 1"))
     actor = _CapturingActor()
     decider = _MockDecider(stop=True, reason="success")
     loop = UnifiedAgentLoop(
-        reasoner=reasoner, actor=actor,
+        reasoner=reasoner,
+        actor=actor,
         deciders={"after_act": decider},
     )
 
@@ -392,11 +423,14 @@ async def test_loop_run_to_completion_fields():
     actor = _MockActor(ActResult(success=True))
     decider = _MockDecider(stop=True, reason="success")
     loop = UnifiedAgentLoop(
-        reasoner=reasoner, actor=actor,
+        reasoner=reasoner,
+        actor=actor,
         deciders={"after_act": decider},
     )
 
-    result = await loop.run_to_completion(BaseSpec(messages=[{"role": "user", "content": "hi"}]))
+    result = await loop.run_to_completion(
+        BaseSpec(messages=[{"role": "user", "content": "hi"}])
+    )
     assert isinstance(result, UnifiedResult)
     assert result.stop_reason == "success"
     assert result.error is None

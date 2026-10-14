@@ -133,7 +133,10 @@ class WikiDreamSkill(Skill):
             input_schema={
                 "type": "object",
                 "properties": {
-                    "proposal_id": {"type": "string", "description": "Proposal ID to approve"},
+                    "proposal_id": {
+                        "type": "string",
+                        "description": "Proposal ID to approve",
+                    },
                 },
                 "required": ["proposal_id"],
             },
@@ -146,7 +149,10 @@ class WikiDreamSkill(Skill):
             input_schema={
                 "type": "object",
                 "properties": {
-                    "proposal_id": {"type": "string", "description": "Proposal ID to reject"},
+                    "proposal_id": {
+                        "type": "string",
+                        "description": "Proposal ID to reject",
+                    },
                     "reason": {"type": "string", "description": "Rejection reason"},
                 },
                 "required": ["proposal_id"],

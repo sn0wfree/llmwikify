@@ -59,6 +59,7 @@ class BaseLLMProvider:
 
     def _metadata(self) -> dict:
         from llmwikify.foundation.llm.resolver import get_provider_metadata
+
         return get_provider_metadata(self._PROVIDER_ID)
 
     def default_base_url(self) -> str:
@@ -92,13 +93,18 @@ class BaseLLMProvider:
         return self._build_legacy_client(config, base_url, api_key, model)
 
     def _build_legacy_client(
-        self, config: dict, base_url: str, api_key: str, model: str,
+        self,
+        config: dict,
+        base_url: str,
+        api_key: str,
+        model: str,
     ) -> StreamableLLMClient:
         """Build client for the legacy (non-resolver) path.
 
         Override in subclasses for provider-specific kwargs.
         """
         from llmwikify.foundation.llm.streamable import StreamableLLMClient
+
         return StreamableLLMClient(
             provider=self.provider_name(),
             base_url=base_url,
@@ -125,6 +131,7 @@ class BaseLLMProvider:
     def _resolve_api_key(self, config: dict) -> str:
         """Resolve API key from config, supporting env:VAR_NAME syntax."""
         import os
+
         api_key = config.get("api_key", "")
         if isinstance(api_key, str) and api_key.startswith("env:"):
             api_key = os.environ.get(api_key[4:], "")
@@ -135,4 +142,5 @@ class BaseLLMProvider:
         """Resolve a field from config with environment variable override."""
         env_key = f"LLM_{field.upper()}"
         import os
+
         return os.environ.get(env_key, config.get(field, default))

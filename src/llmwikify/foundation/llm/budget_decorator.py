@@ -34,7 +34,9 @@ from .token_budget import TokenBudgetChecker
 F = TypeVar("F", bound=Callable[..., Any])
 
 
-def check_token_budget(checker_getter: Callable[..., TokenBudgetChecker]) -> Callable[[F], F]:
+def check_token_budget(
+    checker_getter: Callable[..., TokenBudgetChecker],
+) -> Callable[[F], F]:
     """Decorator that checks token budget before LLM calls.
 
     Args:

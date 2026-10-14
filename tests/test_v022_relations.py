@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from llmwikify.kernel.storage.index import WikiIndex
 from llmwikify.kernel.wiki.engines.relation import (
@@ -54,8 +54,12 @@ class TestAddRelation:
 
     def test_add_with_source_file(self, engine):
         rel_id = engine.add_relation(
-            "A", "B", "related_to", "INFERRED",
-            source_file="paper.pdf", context="Some context"
+            "A",
+            "B",
+            "related_to",
+            "INFERRED",
+            source_file="paper.pdf",
+            context="Some context",
         )
         result = engine.get_context(rel_id)
         assert result["source_file"] == "paper.pdf"
@@ -71,9 +75,24 @@ class TestAddRelation:
 
     def test_batch_add(self, engine):
         relations = [
-            {"source": "A", "target": "B", "relation": "uses", "confidence": "EXTRACTED"},
-            {"source": "B", "target": "C", "relation": "related_to", "confidence": "INFERRED"},
-            {"source": "C", "target": "D", "relation": "is_a", "confidence": "AMBIGUOUS"},
+            {
+                "source": "A",
+                "target": "B",
+                "relation": "uses",
+                "confidence": "EXTRACTED",
+            },
+            {
+                "source": "B",
+                "target": "C",
+                "relation": "related_to",
+                "confidence": "INFERRED",
+            },
+            {
+                "source": "C",
+                "target": "D",
+                "relation": "is_a",
+                "confidence": "AMBIGUOUS",
+            },
         ]
         count = engine.add_relations(relations)
         assert count == 3
@@ -160,8 +179,12 @@ class TestStats:
 class TestContext:
     def test_get_context(self, engine):
         rel_id = engine.add_relation(
-            "A", "B", "uses", "EXTRACTED",
-            source_file="paper.pdf", context="Quote from paper"
+            "A",
+            "B",
+            "uses",
+            "EXTRACTED",
+            source_file="paper.pdf",
+            context="Quote from paper",
         )
         result = engine.get_context(rel_id)
         assert result["source"] == "A"
@@ -176,7 +199,9 @@ class TestContext:
 class TestContradictions:
     def test_detect_contradictions(self, engine):
         engine.add_relation("A", "B", "supports", "EXTRACTED", source_file="paper1.pdf")
-        engine.add_relation("A", "B", "contradicts", "EXTRACTED", source_file="paper2.pdf")
+        engine.add_relation(
+            "A", "B", "contradicts", "EXTRACTED", source_file="paper2.pdf"
+        )
         contradictions = engine.detect_contradictions()
         assert len(contradictions) >= 1
 
@@ -202,7 +227,12 @@ class TestOrphanConcepts:
 class TestIngestRelations:
     def test_write_relations_from_wiki(self, temp_db, wiki_instance):
         relations = [
-            {"source": "A", "target": "B", "relation": "uses", "confidence": "EXTRACTED"},
+            {
+                "source": "A",
+                "target": "B",
+                "relation": "uses",
+                "confidence": "EXTRACTED",
+            },
         ]
         result = wiki_instance.write_relations(relations, source_file="test.pdf")
         assert result["status"] == "completed"

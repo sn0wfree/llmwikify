@@ -121,11 +121,13 @@ class TestParseSseLineToolCalls:
         buf: dict[int, dict] = {}
         acc = ""
         # Intermediate tool_call deltas produce no events (buffered)
-        r1 = _parse_sse_line(_line(_delta_tool_call(0, name="run", call_id="c1")), acc, buf)
+        r1 = _parse_sse_line(
+            _line(_delta_tool_call(0, name="run", call_id="c1")), acc, buf
+        )
         assert r1 is None  # buffered, no events yet
         r2 = _parse_sse_line(_line(_delta_tool_call(0, arguments='{"x":')), acc, buf)
         assert r2 is None
-        r3 = _parse_sse_line(_line(_delta_tool_call(0, arguments='1}')), acc, buf)
+        r3 = _parse_sse_line(_line(_delta_tool_call(0, arguments="1}")), acc, buf)
         assert r3 is None
         # finish_reason flushes the buffer
         r4 = _parse_sse_line(_line(_finish("tool_calls")), acc, buf)
@@ -142,8 +144,14 @@ class TestParseSseLineToolCalls:
         """Two tool calls at different indexes."""
         buf: dict[int, dict] = {}
         # Intermediate deltas: None (buffered)
-        assert _parse_sse_line(_line(_delta_tool_call(0, name="a", call_id="c1")), "", buf) is None
-        assert _parse_sse_line(_line(_delta_tool_call(1, name="b", call_id="c2")), "", buf) is None
+        assert (
+            _parse_sse_line(_line(_delta_tool_call(0, name="a", call_id="c1")), "", buf)
+            is None
+        )
+        assert (
+            _parse_sse_line(_line(_delta_tool_call(1, name="b", call_id="c2")), "", buf)
+            is None
+        )
         # Finish flushes both
         r3 = _parse_sse_line(_line(_finish("tool_calls")), "", buf)
         assert r3 is not None
@@ -165,7 +173,10 @@ class TestParseSseLineToolCalls:
     def test_length_finish_flushes(self):
         """finish_reason=length also flushes tool calls."""
         buf: dict[int, dict] = {}
-        assert _parse_sse_line(_line(_delta_tool_call(0, name="t", call_id="c1")), "", buf) is None
+        assert (
+            _parse_sse_line(_line(_delta_tool_call(0, name="t", call_id="c1")), "", buf)
+            is None
+        )
         result = _parse_sse_line(_line(_finish("length")), "", buf)
         assert result is not None
         events, _, _ = result

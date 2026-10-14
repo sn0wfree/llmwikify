@@ -31,6 +31,7 @@ CONFIRMATION_TTL_SECONDS = 300
 
 # ─── Wiki 配置读取 ────────────────────────────────────────────
 
+
 def load_wiki_config() -> dict:
     """从 ~/.llmwikify/llmwikify.json 读取 wiki 配置。
 
@@ -55,6 +56,7 @@ def check_remote_wiki_config(allowed_hosts: list[str]) -> None:
 
 
 # ─── Wiki 实例获取（上下文管理器）─────────────────────────────
+
 
 @contextmanager
 def wiki_or_404(registry: WikiRegistry, wiki_id: str) -> Iterator[Wiki]:
@@ -84,6 +86,7 @@ def wiki_or_404(registry: WikiRegistry, wiki_id: str) -> Iterator[Wiki]:
 
 
 # ─── Wiki 页面操作（固定流程）──────────────────────────────────
+
 
 def read_page_with_sink(wiki: Wiki, page_name: str) -> dict:
     """读页面 + sink 合并。
@@ -137,7 +140,9 @@ def write_page(
     if not page_name:
         raise HTTPException(status_code=400, detail="page_name required")
     if not content or not content.strip():
-        raise HTTPException(status_code=400, detail="content required and must not be empty")
+        raise HTTPException(
+            status_code=400, detail="content required and must not be empty"
+        )
 
     existing = wiki.read_page(page_name)
     page_exists = "error" not in existing
@@ -176,19 +181,25 @@ def write_page(
                     detail="Wiki database unavailable — cannot create confirmation token",
                 )
             confirmation_id = WikiDatabase.make_confirmation_id()
-            db.save_confirmation({
-                "id": confirmation_id,
-                "wiki_id": wiki_id,
-                "tool": "wiki_page_update",
-                "arguments": {
-                    "page_name": page_name,
-                    "expires_at": time.time() + CONFIRMATION_TTL_SECONDS,
-                },
-                "action_type": "write",
-                "status": "pending",
-            })
-            content_preview = existing.get("content", "")[:500] if isinstance(existing, dict) else ""
-            word_count = existing.get("word_count", 0) if isinstance(existing, dict) else 0
+            db.save_confirmation(
+                {
+                    "id": confirmation_id,
+                    "wiki_id": wiki_id,
+                    "tool": "wiki_page_update",
+                    "arguments": {
+                        "page_name": page_name,
+                        "expires_at": time.time() + CONFIRMATION_TTL_SECONDS,
+                    },
+                    "action_type": "write",
+                    "status": "pending",
+                }
+            )
+            content_preview = (
+                existing.get("content", "")[:500] if isinstance(existing, dict) else ""
+            )
+            word_count = (
+                existing.get("word_count", 0) if isinstance(existing, dict) else 0
+            )
             raise HTTPException(
                 status_code=409,
                 detail={
@@ -231,7 +242,9 @@ def get_wiki_guide(wiki: Wiki) -> dict:
         page_types, error_codes
     """
     schema_data = wiki.read_schema()
-    schema_content = schema_data.get("content", "") if "error" not in schema_data else ""
+    schema_content = (
+        schema_data.get("content", "") if "error" not in schema_data else ""
+    )
 
     page_types = wiki._load_page_type_mapping()
 
@@ -257,7 +270,11 @@ def get_wiki_guide(wiki: Wiki) -> dict:
                 },
                 "GET /api/wiki/{wiki_id}/search?q={query}": {
                     "description": "Full-text search across wiki pages",
-                    "params": {"q": "search query", "limit": "max results (default 10)", "backend": "fts5 (default)"},
+                    "params": {
+                        "q": "search query",
+                        "limit": "max results (default 10)",
+                        "backend": "fts5 (default)",
+                    },
                     "example": "/api/wiki/mining_news/search?q=gold+mining&limit=10",
                 },
             },
@@ -291,7 +308,10 @@ def get_wiki_guide(wiki: Wiki) -> dict:
                 },
                 "GET /api/wiki/{wiki_id}/lint": {
                     "description": "Health check (broken links, orphans, contradictions)",
-                    "params": {"mode": "check (default) or fix", "limit": "max issues (default 10)"},
+                    "params": {
+                        "mode": "check (default) or fix",
+                        "limit": "max issues (default 10)",
+                    },
                 },
                 "GET /api/wiki/{wiki_id}/sink/status": {
                     "description": "Pending sink buffer entries",
@@ -303,7 +323,10 @@ def get_wiki_guide(wiki: Wiki) -> dict:
             "graph": {
                 "GET /api/wiki/{wiki_id}/graph": {
                     "description": "Knowledge graph visualization data",
-                    "params": {"current_page": "optional focus page", "mode": "auto (default)"},
+                    "params": {
+                        "current_page": "optional focus page",
+                        "mode": "auto (default)",
+                    },
                 },
                 "GET /api/wiki/{wiki_id}/graph_analyze": {
                     "description": "Graph analysis (community detection, export)",
@@ -378,7 +401,7 @@ def get_wiki_guide(wiki: Wiki) -> dict:
         "error_codes": {
             "400": "Bad request — invalid page_name, missing content, invalid/expired/mismatched confirmation token",
             "404": "Not found — wiki_id or page_name doesn't exist",
-            "409": "Conflict — page exists. confirm_token accepted via either ?confirm_token=<id> query string (PRIMARY, highest priority when both present) or body {\"confirm_token\": \"<id>\"} (back-compat shim). One-shot, TTL 300s.",
+            "409": 'Conflict — page exists. confirm_token accepted via either ?confirm_token=<id> query string (PRIMARY, highest priority when both present) or body {"confirm_token": "<id>"} (back-compat shim). One-shot, TTL 300s.',
             "500": "Internal server error — contact admin",
             "503": "Service unavailable — agent service / wiki DB not initialized",
         },
@@ -386,6 +409,7 @@ def get_wiki_guide(wiki: Wiki) -> dict:
 
 
 # ─── 远程 Wiki URL 校验（SSRF 防护）────────────────────────────
+
 
 def validate_remote_url(url: str, allowed_hosts: list[str]) -> None:
     """校验远程 wiki URL 是否在白名单中。
@@ -403,9 +427,7 @@ def validate_remote_url(url: str, allowed_hosts: list[str]) -> None:
         )
     parsed = urlparse(url)
     if parsed.scheme not in ("http", "https"):
-        raise HTTPException(
-            status_code=400, detail="URL must use http or https scheme"
-        )
+        raise HTTPException(status_code=400, detail="URL must use http or https scheme")
     hostname = parsed.hostname
     if not hostname:
         raise HTTPException(status_code=400, detail="URL must have a hostname")

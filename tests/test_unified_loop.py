@@ -1,4 +1,5 @@
 """Tests for unified/loop.py — UnifiedAgentLoop。"""
+
 from __future__ import annotations
 
 
@@ -82,7 +83,9 @@ async def test_loop_step_handler_flow():
     loop = UnifiedAgentLoop(reasoner=reasoner, actor=actor, deciders={})
 
     events = []
-    async for event in loop.run_stream(BaseSpec(messages=[{"role": "user", "content": "hi"}])):
+    async for event in loop.run_stream(
+        BaseSpec(messages=[{"role": "user", "content": "hi"}])
+    ):
         events.append(event)
 
     done_events = [e for e in events if e.get("type") == "done"]
@@ -103,12 +106,15 @@ async def test_loop_streaming_handler_flow():
     actor = _MockActor(ActResult(success=True))
     decider = _MockDecider(stop=True, reason="no_tool_calls")
     loop = UnifiedAgentLoop(
-        reasoner=reasoner, actor=actor,
+        reasoner=reasoner,
+        actor=actor,
         deciders={"after_reason": decider},
     )
 
     events = []
-    async for event in loop.run_stream(BaseSpec(messages=[{"role": "user", "content": "hi"}])):
+    async for event in loop.run_stream(
+        BaseSpec(messages=[{"role": "user", "content": "hi"}])
+    ):
         events.append(event)
 
     delta_events = [e for e in events if e.get("type") == "message_delta"]
@@ -128,12 +134,15 @@ async def test_loop_decide_after_reason():
     actor = _MockActor(ActResult(success=True))
     decider = _MockDecider(stop=True, reason="no_tool_calls")
     loop = UnifiedAgentLoop(
-        reasoner=reasoner, actor=actor,
+        reasoner=reasoner,
+        actor=actor,
         deciders={"after_reason": decider},
     )
 
     events = []
-    async for event in loop.run_stream(BaseSpec(messages=[{"role": "user", "content": "hi"}])):
+    async for event in loop.run_stream(
+        BaseSpec(messages=[{"role": "user", "content": "hi"}])
+    ):
         events.append(event)
 
     done_events = [e for e in events if e.get("type") == "done"]
@@ -148,12 +157,15 @@ async def test_loop_decide_after_act():
     actor = _MockActor(ActResult(success=True))
     decider = _MockDecider(stop=True, reason="success")
     loop = UnifiedAgentLoop(
-        reasoner=reasoner, actor=actor,
+        reasoner=reasoner,
+        actor=actor,
         deciders={"after_act": decider},
     )
 
     events = []
-    async for event in loop.run_stream(BaseSpec(messages=[{"role": "user", "content": "hi"}])):
+    async for event in loop.run_stream(
+        BaseSpec(messages=[{"role": "user", "content": "hi"}])
+    ):
         events.append(event)
 
     done_events = [e for e in events if e.get("type") == "done"]
@@ -164,6 +176,7 @@ async def test_loop_decide_after_act():
 @pytest.mark.asyncio
 async def test_loop_precheck_timeout():
     """precheck triggers → stop."""
+
     def timeout_precheck(ctx):
         ctx.stop_reason = "timeout"
         return True
@@ -171,12 +184,16 @@ async def test_loop_precheck_timeout():
     reasoner = _MockReasoner(ReasonResponse())
     actor = _MockActor(ActResult(success=True))
     loop = UnifiedAgentLoop(
-        reasoner=reasoner, actor=actor, deciders={},
+        reasoner=reasoner,
+        actor=actor,
+        deciders={},
         precheck=timeout_precheck,
     )
 
     events = []
-    async for event in loop.run_stream(BaseSpec(messages=[{"role": "user", "content": "hi"}])):
+    async for event in loop.run_stream(
+        BaseSpec(messages=[{"role": "user", "content": "hi"}])
+    ):
         events.append(event)
 
     phase_events = [e for e in events if e.get("type") == "phase"]
@@ -194,7 +211,9 @@ async def test_loop_error_handling():
     loop = UnifiedAgentLoop(reasoner=reasoner, actor=actor, deciders={})
 
     events = []
-    async for event in loop.run_stream(BaseSpec(messages=[{"role": "user", "content": "hi"}])):
+    async for event in loop.run_stream(
+        BaseSpec(messages=[{"role": "user", "content": "hi"}])
+    ):
         events.append(event)
 
     error_events = [e for e in events if e.get("type") == "error"]
@@ -212,7 +231,8 @@ async def test_loop_run_to_completion():
     actor = _MockActor(ActResult(success=True, output="result"))
     decider = _MockDecider(stop=True, reason="success")
     loop = UnifiedAgentLoop(
-        reasoner=reasoner, actor=actor,
+        reasoner=reasoner,
+        actor=actor,
         deciders={"after_act": decider},
     )
 

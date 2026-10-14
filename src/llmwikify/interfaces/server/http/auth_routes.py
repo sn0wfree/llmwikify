@@ -79,13 +79,22 @@ def _build_router() -> APIRouter:
         try:
             body = await request.json()
         except Exception:
-            raise HTTPException(status_code=400, detail={"error": "invalid_json", "detail": "Request body must be JSON."}) from None
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "invalid_json",
+                    "detail": "Request body must be JSON.",
+                },
+            ) from None
 
         email = (body.get("email") or "").strip().lower()
         if not email or "@" not in email:
             raise HTTPException(
                 status_code=400,
-                detail={"error": "invalid_email", "detail": "A valid email is required."},
+                detail={
+                    "error": "invalid_email",
+                    "detail": "A valid email is required.",
+                },
             )
 
         host = _resolve_effective_host(request)
@@ -95,7 +104,10 @@ def _build_router() -> APIRouter:
         if repo.get_by_email(email) is not None:
             raise HTTPException(
                 status_code=409,
-                detail={"error": "email_taken", "detail": f"User with email {email!r} already exists."},
+                detail={
+                    "error": "email_taken",
+                    "detail": f"User with email {email!r} already exists.",
+                },
             )
 
         user = repo.create(email=email, is_first_admin=is_first)
@@ -138,7 +150,13 @@ def _build_router() -> APIRouter:
         try:
             body = await request.json()
         except Exception:
-            raise HTTPException(status_code=400, detail={"error": "invalid_json", "detail": "Request body must be JSON."}) from None
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "invalid_json",
+                    "detail": "Request body must be JSON.",
+                },
+            ) from None
 
         pat = (body.get("pat") or "").strip()
         if not pat:
@@ -161,7 +179,9 @@ def _build_router() -> APIRouter:
         try:
             ak_repo.touch_last_used(api_key.id)
         except Exception:
-            logger.warning("failed to touch last_used_at for api_key %s", api_key.id, exc_info=True)
+            logger.warning(
+                "failed to touch last_used_at for api_key %s", api_key.id, exc_info=True
+            )
 
         # Resolve user.
         repo = UserRepository()
@@ -169,7 +189,10 @@ def _build_router() -> APIRouter:
         if user is None:
             raise HTTPException(
                 status_code=401,
-                detail={"error": "user_not_found", "detail": "PAT owner no longer exists."},
+                detail={
+                    "error": "user_not_found",
+                    "detail": "PAT owner no longer exists.",
+                },
             )
 
         # Issue JWT — PAT owner is admin, always gets all-wikis access.
@@ -192,7 +215,9 @@ def _build_router() -> APIRouter:
 
         return {
             "access_token": token,
-            "expires_at": datetime.fromtimestamp(claims.exp, tz=timezone.utc).isoformat(),
+            "expires_at": datetime.fromtimestamp(
+                claims.exp, tz=timezone.utc
+            ).isoformat(),
             "user": _user_to_dict(user, claims, local_mode=False),
         }
 
@@ -206,7 +231,7 @@ def _build_router() -> APIRouter:
         The PAT is shown once. Store it securely.
         """
         claims = _require_auth(request)
-        user_id = claims.sub[len("user:"):]
+        user_id = claims.sub[len("user:") :]
         body = await request.json()
         name = (body.get("name") or "unnamed").strip()
 
@@ -235,7 +260,7 @@ def _build_router() -> APIRouter:
     async def list_tokens(request: Request) -> dict[str, Any]:
         """List all PATs for the authenticated user."""
         claims = _require_auth(request)
-        user_id = claims.sub[len("user:"):]
+        user_id = claims.sub[len("user:") :]
         ak_repo = ApiKeyRepository()
         keys = ak_repo.list_by_user(user_id)
         return {
@@ -258,7 +283,7 @@ def _build_router() -> APIRouter:
     async def revoke_token(key_id: str, request: Request) -> dict[str, Any]:
         """Revoke a PAT."""
         claims = _require_auth(request)
-        user_id = claims.sub[len("user:"):]
+        user_id = claims.sub[len("user:") :]
         ak_repo = ApiKeyRepository()
         ak = ak_repo.get_by_id(key_id)
         if ak is None or ak.user_id != user_id:
@@ -292,10 +317,15 @@ def _build_router() -> APIRouter:
                 }
             raise HTTPException(
                 status_code=401,
-                detail={"error": "not_authenticated", "detail": "No session cookie. POST /auth/verify first."},
+                detail={
+                    "error": "not_authenticated",
+                    "detail": "No session cookie. POST /auth/verify first.",
+                },
             )
 
-        if llmwikify_token == "local-mode-no-auth":  # noqa: S105 — sentinel, not a password
+        if (
+            llmwikify_token == "local-mode-no-auth"
+        ):  # noqa: S105 — sentinel, not a password
             return {
                 "authenticated": True,
                 "user": {
@@ -312,21 +342,30 @@ def _build_router() -> APIRouter:
         except Exception as exc:
             raise HTTPException(
                 status_code=401,
-                detail={"error": "invalid_token", "detail": f"Token invalid: {type(exc).__name__}"},
+                detail={
+                    "error": "invalid_token",
+                    "detail": f"Token invalid: {type(exc).__name__}",
+                },
             ) from exc
 
         if not claims.sub.startswith("user:"):
             raise HTTPException(
                 status_code=401,
-                detail={"error": "share_token_not_here", "detail": "/auth/me is owner-only."},
+                detail={
+                    "error": "share_token_not_here",
+                    "detail": "/auth/me is owner-only.",
+                },
             )
 
-        user_id = claims.sub[len("user:"):]
+        user_id = claims.sub[len("user:") :]
         user = UserRepository().get_by_id(user_id)
         if user is None:
             raise HTTPException(
                 status_code=401,
-                detail={"error": "user_not_found", "detail": "Token refers to a deleted user."},
+                detail={
+                    "error": "user_not_found",
+                    "detail": "Token refers to a deleted user.",
+                },
             )
         return {
             "authenticated": True,

@@ -17,22 +17,31 @@ FETCH_TIMEOUT = (10, 30)  # (connect_timeout, read_timeout)
 _executor = concurrent.futures.ThreadPoolExecutor(max_workers=4)
 
 
-def _fetch_with_timeout(url: str, timeout: tuple[int, int] = FETCH_TIMEOUT) -> str | None:
+def _fetch_with_timeout(
+    url: str, timeout: tuple[int, int] = FETCH_TIMEOUT
+) -> str | None:
     """Fetch URL content with explicit timeout using requests."""
     if not is_safe_url(url):
         logger.warning("SSRF blocked: %s", url)
         return None
     try:
-        resp = requests.get(url, timeout=timeout, headers={
-            "User-Agent": "Mozilla/5.0 (compatible; ResearchBot/1.0)",
-        }, allow_redirects=True)
+        resp = requests.get(
+            url,
+            timeout=timeout,
+            headers={
+                "User-Agent": "Mozilla/5.0 (compatible; ResearchBot/1.0)",
+            },
+            allow_redirects=True,
+        )
         resp.raise_for_status()
         return resp.text
     except (requests.RequestException, Exception):
         return None
 
 
-def _extract_url(url: str, timeout: tuple[int, int] = FETCH_TIMEOUT) -> ExtractedContent:
+def _extract_url(
+    url: str, timeout: tuple[int, int] = FETCH_TIMEOUT
+) -> ExtractedContent:
     """Extract article content from a web URL.
 
     Fallback chain: trafilatura → Jina Reader → raw HTML.
@@ -42,7 +51,7 @@ def _extract_url(url: str, timeout: tuple[int, int] = FETCH_TIMEOUT) -> Extracte
             text="",
             source_type="error",
             title=url,
-            metadata={"error": f"URL blocked by SSRF protection: {url}"}
+            metadata={"error": f"URL blocked by SSRF protection: {url}"},
         )
 
     # Try trafilatura first
@@ -52,6 +61,7 @@ def _extract_url(url: str, timeout: tuple[int, int] = FETCH_TIMEOUT) -> Extracte
 
     # Fallback to Jina Reader (handles JS-rendered SPAs, better extraction)
     from .jina import extract_via_jina
+
     jina_result = extract_via_jina(url)
     if jina_result and jina_result.text and len(jina_result.text.strip()) > 100:
         logger.info("Extracted via Jina Reader: %s", url[:80])
@@ -66,7 +76,9 @@ def _extract_url(url: str, timeout: tuple[int, int] = FETCH_TIMEOUT) -> Extracte
     )
 
 
-def _extract_url_trafilatura(url: str, timeout: tuple[int, int] = FETCH_TIMEOUT) -> ExtractedContent | None:
+def _extract_url_trafilatura(
+    url: str, timeout: tuple[int, int] = FETCH_TIMEOUT
+) -> ExtractedContent | None:
     """Extract using trafilatura."""
     try:
         import trafilatura
@@ -90,7 +102,10 @@ def _extract_url_trafilatura(url: str, timeout: tuple[int, int] = FETCH_TIMEOUT)
         text = trafilatura.extract(downloaded)
 
         import re
-        title_match = re.search(r'<title[^>]*>([^<]+)</title>', downloaded, re.IGNORECASE)
+
+        title_match = re.search(
+            r"<title[^>]*>([^<]+)</title>", downloaded, re.IGNORECASE
+        )
         title = title_match.group(1).strip() if title_match else url
 
         return ExtractedContent(

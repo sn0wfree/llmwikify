@@ -3,6 +3,7 @@
 Mirrors the 10-case matrix from docs/poc/phase-a-steps.md §2.6 plus
 two extras covering async and streaming-or behaviour.
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -40,7 +41,9 @@ class _RecorderHook(AgentHook):
     def after_iteration(self, ctx: AgentHookContext) -> None:
         self.calls.append(("after_iteration",))
 
-    def finalize_content(self, ctx: AgentHookContext, content: str | None) -> str | None:
+    def finalize_content(
+        self, ctx: AgentHookContext, content: str | None
+    ) -> str | None:
         self.calls.append(("finalize_content", content or ""))
         return (content or "") + "!"
 
@@ -105,6 +108,7 @@ async def test_fan_out_order_is_fifo() -> None:
             def wrapper(ctx: AgentHookContext) -> None:
                 seen.append(hook_name)
                 original_fn(ctx)
+
             return wrapper
 
         h.before_iteration = make_record(h.name, original)
@@ -160,10 +164,18 @@ async def test_wiki_hook_logs_only_on_wiki_tools() -> None:
     hook = WikiHook(wiki)
     composite = CompositeHook([hook])
     ctx = AgentHookContext()
-    await composite.after_tool_executed(ctx, _make_tool_call("wiki_write_page"), _make_result(success=True))
-    await composite.after_tool_executed(ctx, _make_tool_call("wiki_ingest"), _make_result(success=True))
-    await composite.after_tool_executed(ctx, _make_tool_call("read_file"), _make_result(success=True))
-    await composite.after_tool_executed(ctx, _make_tool_call("wiki_write_page"), _make_result(success=False))
+    await composite.after_tool_executed(
+        ctx, _make_tool_call("wiki_write_page"), _make_result(success=True)
+    )
+    await composite.after_tool_executed(
+        ctx, _make_tool_call("wiki_ingest"), _make_result(success=True)
+    )
+    await composite.after_tool_executed(
+        ctx, _make_tool_call("read_file"), _make_result(success=True)
+    )
+    await composite.after_tool_executed(
+        ctx, _make_tool_call("wiki_write_page"), _make_result(success=False)
+    )
 
     assert log_calls == [
         ("agent", "Tool wiki_write_page executed successfully"),
@@ -175,7 +187,9 @@ async def test_wiki_dream_sync_flag() -> None:
     hook = WikiDreamSyncHook(wiki_dream_editor=None)
     composite = CompositeHook([hook])
     ctx = AgentHookContext()
-    await composite.after_tool_executed(ctx, _make_tool_call("wiki_synthesize"), _make_result(success=True))
+    await composite.after_tool_executed(
+        ctx, _make_tool_call("wiki_synthesize"), _make_result(success=True)
+    )
     assert hook.pending_wiki_dream is True
     assert hook.check_and_run_wiki_dream() is False
 
@@ -208,7 +222,9 @@ async def test_finalize_content_propagates_exception() -> None:
     class Boom(AgentHook):
         name = "boom"
 
-        def finalize_content(self, ctx: AgentHookContext, content: str | None) -> str | None:
+        def finalize_content(
+            self, ctx: AgentHookContext, content: str | None
+        ) -> str | None:
             raise RuntimeError("pipeline must surface")
 
     composite = CompositeHook([Boom()])

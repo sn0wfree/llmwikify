@@ -19,6 +19,7 @@ Section assembly order (joined by ``\n\n---\n\n``):
 Each section is wrapped in a try/except so a single failure degrades
 to an empty string instead of breaking the whole prompt.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -78,6 +79,7 @@ def wrap_runtime_context(body: str, *, label: str | None = None) -> str:
         return ""
     head = RUNTIME_CONTEXT_TAG if label is None else f"{RUNTIME_CONTEXT_TAG} ({label})"
     return f"{head}\n{body.rstrip()}\n{RUNTIME_CONTEXT_END}"
+
 
 REACT_SYSTEM_PROMPT = """\
 ## Reasoning Pattern
@@ -140,7 +142,8 @@ class PromptBuilder:
         self.chat_db = chat_db
         self._bootstrap_cache: dict[str, tuple[float, float, str]] = {}
         self._bootstrap_cache_ttl = self.config.get(
-            "bootstrap_cache_seconds", DEFAULT_BOOTSTRAP_CACHE_SECONDS,
+            "bootstrap_cache_seconds",
+            DEFAULT_BOOTSTRAP_CACHE_SECONDS,
         )
 
     async def build(
@@ -171,14 +174,16 @@ class PromptBuilder:
             )
         else:
             coros.append(_empty())
-        coros.extend([
-            self._safe_section("tool_contract", self._get_tool_contract(ctx)),
-            self._safe_section("memory", self._get_memory_section(ctx)),
-            self._safe_section("skills", self._get_skills_section(ctx)),
-            self._safe_section("react", self._get_react_prompt(ctx)),
-            self._safe_section("history", self._get_recent_history(ctx)),
-            self._safe_section("goal_state", self._get_goal_state(ctx)),
-        ])
+        coros.extend(
+            [
+                self._safe_section("tool_contract", self._get_tool_contract(ctx)),
+                self._safe_section("memory", self._get_memory_section(ctx)),
+                self._safe_section("skills", self._get_skills_section(ctx)),
+                self._safe_section("react", self._get_react_prompt(ctx)),
+                self._safe_section("history", self._get_recent_history(ctx)),
+                self._safe_section("goal_state", self._get_goal_state(ctx)),
+            ]
+        )
         sections = await asyncio.gather(*coros)
         return "\n\n---\n\n".join(s for s in sections if s)
 
@@ -311,9 +316,12 @@ class PromptBuilder:
             lines = ["## User preferences"]
             for k, v in other_prefs.items():
                 lines.append(f"- **{k}**: {v}")
-            parts.append(wrap_runtime_context(
-                "\n".join(lines), label="user_preferences",
-            ))
+            parts.append(
+                wrap_runtime_context(
+                    "\n".join(lines),
+                    label="user_preferences",
+                )
+            )
         return "\n\n".join(parts) if parts else None
 
     async def _get_skills_section(self, ctx: BuildContext) -> str | None:
@@ -343,13 +351,11 @@ class PromptBuilder:
         parts: list[str] = []
         if ctx.wiki_id:
             parts.append(f"## Current wiki context\n{ctx.wiki_id}")
-        if (
-            ctx.user_message
-            and ctx.session_id
-            and self.memory_manager is not None
-        ):
+        if ctx.user_message and ctx.session_id and self.memory_manager is not None:
             results = await self.memory_manager.index.asearch(
-                ctx.user_message, session_id=ctx.session_id, limit=3,
+                ctx.user_message,
+                session_id=ctx.session_id,
+                limit=3,
             )
             if results:
                 lines = ["## Related past conversations"]
@@ -393,6 +399,7 @@ class PromptBuilder:
         from llmwikify.apps.chat.agent.goal_state import (
             goal_state_runtime_lines,
         )
+
         try:
             metadata = self.chat_db.get_session_metadata(ctx.session_id)
         except Exception:

@@ -70,14 +70,24 @@ class TestLLMSpec:
 
     def test_extra_headers_isolated_per_instance(self):
         a = LLMSpec(
-            provider="x", base_url="u", api_key="k", model="m",
-            context_window=None, timeout=1.0,
-            reasoning_split=False, auth_scheme="bearer",
+            provider="x",
+            base_url="u",
+            api_key="k",
+            model="m",
+            context_window=None,
+            timeout=1.0,
+            reasoning_split=False,
+            auth_scheme="bearer",
         )
         b = LLMSpec(
-            provider="x", base_url="u", api_key="k", model="m",
-            context_window=None, timeout=1.0,
-            reasoning_split=False, auth_scheme="bearer",
+            provider="x",
+            base_url="u",
+            api_key="k",
+            model="m",
+            context_window=None,
+            timeout=1.0,
+            reasoning_split=False,
+            auth_scheme="bearer",
         )
         a.extra_headers["X-Foo"] = "1"
         assert b.extra_headers == {}
@@ -105,9 +115,14 @@ class TestLLMSpec:
 
     def test_with_model_override_changes_model(self):
         spec = LLMSpec(
-            provider="minimax", base_url="u", api_key="k", model="minimax-M3",
-            context_window=None, timeout=1.0,
-            reasoning_split=False, auth_scheme="bearer",
+            provider="minimax",
+            base_url="u",
+            api_key="k",
+            model="minimax-M3",
+            context_window=None,
+            timeout=1.0,
+            reasoning_split=False,
+            auth_scheme="bearer",
         )
         new_spec = spec.with_model_override("minimax-M2.7")
         assert new_spec.model == "minimax-M2.7"
@@ -115,9 +130,14 @@ class TestLLMSpec:
 
     def test_with_model_override_same_model_returns_self(self):
         spec = LLMSpec(
-            provider="minimax", base_url="u", api_key="k", model="minimax-M3",
-            context_window=None, timeout=1.0,
-            reasoning_split=False, auth_scheme="bearer",
+            provider="minimax",
+            base_url="u",
+            api_key="k",
+            model="minimax-M3",
+            context_window=None,
+            timeout=1.0,
+            reasoning_split=False,
+            auth_scheme="bearer",
         )
         assert spec.with_model_override("minimax-M3") is spec
 
@@ -158,14 +178,16 @@ class TestResolveChatLLM:
         assert spec.source == "config"
 
     def test_config_provider_and_model(self):
-        spec = resolve_chat_llm({
-            "llm": {
-                "provider": "minimax",
-                "model": "minimax-M3",
-                "api_key": "k",
-                "base_url": "https://api.minimaxi.com/v1",
+        spec = resolve_chat_llm(
+            {
+                "llm": {
+                    "provider": "minimax",
+                    "model": "minimax-M3",
+                    "api_key": "k",
+                    "base_url": "https://api.minimaxi.com/v1",
+                }
             }
-        })
+        )
         assert spec.provider == "minimax"
         assert spec.model == "minimax-M3"
         assert spec.api_key == "k"
@@ -177,14 +199,16 @@ class TestResolveChatLLM:
         monkeypatch.setenv("LLM_MODEL", "gpt-4o-mini")
         monkeypatch.setenv("LLM_API_KEY", "env-key")
         monkeypatch.setenv("LLM_BASE_URL", "https://api.openai.com")
-        spec = resolve_chat_llm({
-            "llm": {
-                "provider": "minimax",
-                "model": "minimax-M3",
-                "api_key": "config-key",
-                "base_url": "https://api.minimaxi.com/v1",
+        spec = resolve_chat_llm(
+            {
+                "llm": {
+                    "provider": "minimax",
+                    "model": "minimax-M3",
+                    "api_key": "config-key",
+                    "base_url": "https://api.minimaxi.com/v1",
+                }
             }
-        })
+        )
         assert spec.provider == "openai"
         assert spec.model == "gpt-4o-mini"
         assert spec.api_key == "env-key"
@@ -349,21 +373,23 @@ class TestLLMClientFromConfigCompat:
 
     def test_env_var_syntax(self, monkeypatch):
         monkeypatch.setenv("MY_LLM_KEY", "x")
-        client = LLMClient.from_config({
-            "llm": {"enabled": True, "api_key": "env:MY_LLM_KEY"}
-        })
+        client = LLMClient.from_config(
+            {"llm": {"enabled": True, "api_key": "env:MY_LLM_KEY"}}
+        )
         assert client.api_key == "x"
 
     def test_env_overrides_config(self, monkeypatch):
         monkeypatch.setenv("LLM_API_KEY", "env-key")
         monkeypatch.setenv("LLM_MODEL", "env-model")
-        client = LLMClient.from_config({
-            "llm": {
-                "enabled": True,
-                "api_key": "config-key",
-                "model": "config-model",
+        client = LLMClient.from_config(
+            {
+                "llm": {
+                    "enabled": True,
+                    "api_key": "config-key",
+                    "model": "config-model",
+                }
             }
-        })
+        )
         assert client.api_key == "env-key"
         assert client.model == "env-model"
 
@@ -390,9 +416,9 @@ class TestLLMClientFromConfigCompat:
         # the resolver; it must use the legacy inline path.
         monkeypatch.setenv("LLM_USE_RESOLVER", "false")
         # Inline path still works as before:
-        client = LLMClient.from_config({
-            "llm": {"enabled": True, "api_key": "k", "model": "m"}
-        })
+        client = LLMClient.from_config(
+            {"llm": {"enabled": True, "api_key": "k", "model": "m"}}
+        )
         assert client.api_key == "k"
         assert client.model == "m"
 
@@ -403,14 +429,16 @@ class TestLLMClientFromConfigCompat:
 class TestStreamableFromConfig:
     def test_from_config_uses_resolver(self, monkeypatch):
         monkeypatch.delenv("LLM_USE_RESOLVER", raising=False)
-        client = StreamableLLMClient.from_config({
-            "llm": {
-                "provider": "minimax",
-                "model": "minimax-M3",
-                "api_key": "k",
-                "base_url": "https://api.minimaxi.com/v1",
+        client = StreamableLLMClient.from_config(
+            {
+                "llm": {
+                    "provider": "minimax",
+                    "model": "minimax-M3",
+                    "api_key": "k",
+                    "base_url": "https://api.minimaxi.com/v1",
+                }
             }
-        })
+        )
         assert client.provider == "minimax"
         assert client.model == "minimax-M3"
         assert client.api_key == "k"
@@ -418,12 +446,14 @@ class TestStreamableFromConfig:
 
     def test_from_config_aliases_provider(self, monkeypatch):
         monkeypatch.delenv("LLM_USE_RESOLVER", raising=False)
-        client = StreamableLLMClient.from_config({
-            "llm": {
-                "provider": "minimax",  # legacy id
-                "api_key": "k",
+        client = StreamableLLMClient.from_config(
+            {
+                "llm": {
+                    "provider": "minimax",  # legacy id
+                    "api_key": "k",
+                }
             }
-        })
+        )
         assert client.provider == "minimax"  # aliased to canonical id
         assert client.model == "minimax-M3"
 
@@ -432,9 +462,9 @@ class TestStreamableFromConfig:
         # Even with resolver off, the legacy defaults are preserved
         # (PR 1 keeps gpt-4o / openai defaults to avoid breaking
         # downstream callers).
-        client = StreamableLLMClient.from_config({
-            "llm": {"provider": "minimax", "api_key": "k", "model": "m"}
-        })
+        client = StreamableLLMClient.from_config(
+            {"llm": {"provider": "minimax", "api_key": "k", "model": "m"}}
+        )
         assert client.provider == "minimax"
 
 
@@ -445,13 +475,16 @@ class TestProviderFromConfig:
     def test_minimax_provider_uses_resolver(self, monkeypatch):
         monkeypatch.delenv("LLM_USE_RESOLVER", raising=False)
         from llmwikify.apps.chat.providers.minimax import MiniMaxProvider
+
         provider = MiniMaxProvider()
-        client = provider.from_config({
-            "provider": "minimax",
-            "api_key": "k",
-            "model": "minimax-M3",
-            "base_url": "https://api.minimaxi.com/v1",
-        })
+        client = provider.from_config(
+            {
+                "provider": "minimax",
+                "api_key": "k",
+                "model": "minimax-M3",
+                "base_url": "https://api.minimaxi.com/v1",
+            }
+        )
         assert client.provider == "minimax"
         assert client.api_key == "k"
         assert client.reasoning_split is True
@@ -459,16 +492,20 @@ class TestProviderFromConfig:
     def test_minimax_provider_aliases_legacy_id(self, monkeypatch):
         monkeypatch.delenv("LLM_USE_RESOLVER", raising=False)
         from llmwikify.apps.chat.providers.minimax import MiniMaxProvider
+
         provider = MiniMaxProvider()
-        client = provider.from_config({
-            "provider": "minimax",  # legacy id, should alias
-            "api_key": "k",
-        })
+        client = provider.from_config(
+            {
+                "provider": "minimax",  # legacy id, should alias
+                "api_key": "k",
+            }
+        )
         assert client.provider == "minimax"
 
     def test_minimax_provider_raises_without_api_key(self, monkeypatch):
         monkeypatch.delenv("LLM_API_KEY", raising=False)
         from llmwikify.apps.chat.providers.minimax import MiniMaxProvider
+
         provider = MiniMaxProvider()
         with pytest.raises(ValueError, match="API key not configured"):
             provider.from_config({"provider": "minimax", "api_key": ""})
@@ -476,13 +513,16 @@ class TestProviderFromConfig:
     def test_xiaomi_provider_uses_resolver(self, monkeypatch):
         monkeypatch.delenv("LLM_USE_RESOLVER", raising=False)
         from llmwikify.apps.chat.providers.xiaomi import XiaomiProvider
+
         provider = XiaomiProvider()
-        client = provider.from_config({
-            "provider": "xiaomi",
-            "api_key": "k",
-            "model": "mimo-v2.5-pro",
-            "base_url": "https://token-plan-cn.xiaomimimo.com",
-        })
+        client = provider.from_config(
+            {
+                "provider": "xiaomi",
+                "api_key": "k",
+                "model": "mimo-v2.5-pro",
+                "base_url": "https://token-plan-cn.xiaomimimo.com",
+            }
+        )
         assert client.provider == "xiaomi"
         assert client.api_key == "k"
         assert client.auth_header == "api-key"
@@ -491,6 +531,7 @@ class TestProviderFromConfig:
     def test_xiaomi_provider_raises_without_api_key(self, monkeypatch):
         monkeypatch.delenv("LLM_API_KEY", raising=False)
         from llmwikify.apps.chat.providers.xiaomi import XiaomiProvider
+
         provider = XiaomiProvider()
         with pytest.raises(ValueError, match="API key not configured"):
             provider.from_config({"provider": "xiaomi", "api_key": ""})
@@ -500,11 +541,14 @@ class TestProviderFromConfig:
         monkeypatch.delenv("LLM_USE_RESOLVER", raising=False)
         monkeypatch.setenv("LLM_API_KEY", "k")
         from llmwikify.apps.chat.providers.registry import create_llm
-        client = create_llm({
-            "enabled": True,
-            "provider": "minimax",
-            "model": "minimax-M3",
-        })
+
+        client = create_llm(
+            {
+                "enabled": True,
+                "provider": "minimax",
+                "model": "minimax-M3",
+            }
+        )
         assert client.provider == "minimax"
         assert client.api_key == "k"
 
@@ -515,12 +559,15 @@ class TestProviderFromConfig:
 class TestReExports:
     def test_spec_re_exported(self):
         from llmwikify.foundation.llm import LLMSpec as ReSpec
+
         assert ReSpec is LLMSpec
 
     def test_resolver_re_exported(self):
         from llmwikify.foundation.llm import resolve_chat_llm as ReResolve
+
         assert ReResolve is resolve_chat_llm
 
     def test_resolver_enabled_re_exported(self):
         from llmwikify.foundation.llm import resolver_enabled as ReEnabled
+
         assert ReEnabled is resolver_enabled

@@ -1,6 +1,5 @@
 """Unit tests for QMD hybrid search integration."""
 
-
 import pytest
 
 from llmwikify.kernel import Wiki
@@ -19,6 +18,7 @@ class TestQmdConfig:
     def test_search_config_default(self, wiki):
         """Default search backend should be 'fts5'."""
         from llmwikify.foundation.config import get_search_config
+
         config = get_search_config(wiki.config)
         assert "backend" in config
         assert "qmd" in config
@@ -26,6 +26,7 @@ class TestQmdConfig:
     def test_qmd_config_defaults(self, wiki):
         """QMD default configuration should be set."""
         from llmwikify.foundation.config import get_search_config
+
         config = get_search_config(wiki.config)
         qmd_config = config["qmd"]
         assert "host" in qmd_config
@@ -92,11 +93,13 @@ class TestQmdClient:
     def test_client_can_be_imported(self):
         """QmdClient should be importable."""
         from llmwikify.kernel.search.qmd_client import QmdClient
+
         assert QmdClient is not None
 
     def test_client_init_with_defaults(self):
         """QmdClient should initialize with default host/port."""
         from llmwikify.kernel.search.qmd_client import QmdClient
+
         client = QmdClient()
         assert client.host == "127.0.0.1"
         assert client.port == 8181
@@ -104,6 +107,7 @@ class TestQmdClient:
     def test_client_init_with_custom_host_port(self):
         """QmdClient should accept custom host/port."""
         from llmwikify.kernel.search.qmd_client import QmdClient
+
         client = QmdClient(host="localhost", port=8080)
         assert client.host == "localhost"
         assert client.port == 8080
@@ -111,6 +115,7 @@ class TestQmdClient:
     def test_is_available_returns_false_when_not_running(self):
         """QmdClient.is_available() should return False when QMD not running."""
         from llmwikify.kernel.search.qmd_client import QmdClient
+
         client = QmdClient(port=9999)  # Use unlikely port
         result = client.is_available()
         # Should not raise, and return False since QMD not running
@@ -119,6 +124,7 @@ class TestQmdClient:
     def test_health_returns_dict(self):
         """QmdClient.health() should return dict even when not available."""
         from llmwikify.kernel.search.qmd_client import QmdClient
+
         client = QmdClient(port=9999)
         result = client.health()
         assert isinstance(result, dict)
@@ -126,6 +132,7 @@ class TestQmdClient:
     def test_get_install_guide(self):
         """QmdClient should provide installation instructions."""
         from llmwikify.kernel.search.qmd_client import QmdClient
+
         guide = QmdClient.get_install_guide(QmdClient())
         assert isinstance(guide, str)
         assert "QMD" in guide
@@ -143,6 +150,7 @@ class TestQmdIndex:
     def test_qmd_index_init(self, wiki_root):
         """QmdIndex should initialize correctly."""
         from llmwikify.kernel.search.qmd_index import QmdIndex
+
         qmd = QmdIndex(wiki_root)
         assert qmd.host == "127.0.0.1"
         assert qmd.port == 8181
@@ -150,6 +158,7 @@ class TestQmdIndex:
     def test_qmd_index_with_custom_config(self, wiki_root):
         """QmdIndex should use custom config values."""
         from llmwikify.kernel.search.qmd_index import QmdIndex
+
         config = {
             "search": {
                 "qmd": {
@@ -165,6 +174,7 @@ class TestQmdIndex:
     def test_search_returns_empty_list_when_not_available(self, wiki_root):
         """QmdIndex.search() should return empty list when QMD not available."""
         from llmwikify.kernel.search.qmd_index import QmdIndex
+
         qmd = QmdIndex(wiki_root)
         results = qmd.search("test")
         assert results == []
@@ -172,6 +182,7 @@ class TestQmdIndex:
     def test_embed_returns_dict(self, wiki_root):
         """QmdIndex.embed() should return dict even when not available."""
         from llmwikify.kernel.search.qmd_index import QmdIndex
+
         qmd = QmdIndex(wiki_root)
         result = qmd.embed()
         assert isinstance(result, dict)

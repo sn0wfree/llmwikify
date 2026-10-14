@@ -63,7 +63,9 @@ def _seed_consolidations(
     store.init_schema()
     ids = []
     for sid in session_ids:
-        ids.append(store.add(session_id=sid, start_msg_idx=0, end_msg_idx=10, summary=summary))
+        ids.append(
+            store.add(session_id=sid, start_msg_idx=0, end_msg_idx=10, summary=summary)
+        )
         time.sleep(0.005)  # ensure distinct created_at
     return ids
 
@@ -141,9 +143,7 @@ class TestDreamFactExtraction:
 
     @pytest.mark.asyncio
     async def test_extract_numbered_facts(self, tmp_path: Path) -> None:
-        provider = _make_provider(
-            "1. First fact\n2. Second fact\n3. Third"
-        )
+        provider = _make_provider("1. First fact\n2. Second fact\n3. Third")
         dream = Dream(
             memory_manager=MagicMock(),
             db=_make_app_db_mock(tmp_path).chat,
@@ -212,10 +212,18 @@ class TestDreamWriteFacts:
             config=DreamConfig(enable_md_write=False),
         )
         facts = [
-            {"content": "Fact 1", "source_session_id": "s1",
-             "source_type": "dream_extraction", "confidence": 1.0},
-            {"content": "Fact 2", "source_session_id": "s2",
-             "source_type": "dream_extraction", "confidence": 1.0},
+            {
+                "content": "Fact 1",
+                "source_session_id": "s1",
+                "source_type": "dream_extraction",
+                "confidence": 1.0,
+            },
+            {
+                "content": "Fact 2",
+                "source_session_id": "s2",
+                "source_type": "dream_extraction",
+                "confidence": 1.0,
+            },
         ]
         written = await dream._write_facts(facts)
         assert written == 2
@@ -231,8 +239,12 @@ class TestDreamWriteFacts:
             config=DreamConfig(enable_md_write=True),
         )
         facts = [
-            {"content": "Momentum works in A-share", "source_session_id": "s1",
-             "source_type": "dream_extraction", "confidence": 1.0},
+            {
+                "content": "Momentum works in A-share",
+                "source_session_id": "s1",
+                "source_type": "dream_extraction",
+                "confidence": 1.0,
+            },
         ]
         await dream._write_facts(facts)
         # Per-fact md
@@ -255,8 +267,14 @@ class TestDreamWriteFacts:
             data_dir=tmp_path,
             config=DreamConfig(enable_md_write=False),
         )
-        facts = [{"content": "x", "source_session_id": "s1",
-                  "source_type": "dream_extraction", "confidence": 1.0}]
+        facts = [
+            {
+                "content": "x",
+                "source_session_id": "s1",
+                "source_type": "dream_extraction",
+                "confidence": 1.0,
+            }
+        ]
         await dream._write_facts(facts)
         assert not dream._facts_dir.exists()
 
@@ -320,9 +338,7 @@ class TestDreamRun:
         assert r2.facts_written == 0
 
     @pytest.mark.asyncio
-    async def test_run_min_consolidations_to_run(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_run_min_consolidations_to_run(self, tmp_path: Path) -> None:
         provider = _make_provider()
         dream = Dream(
             memory_manager=MagicMock(),
@@ -344,6 +360,7 @@ class TestDreamRun:
     @pytest.mark.asyncio
     async def test_run_timeout(self, tmp_path: Path) -> None:
         provider = MagicMock()
+
         # Sleep is wrapped in async lambda so the coroutine is awaited
         async def _slow(**_kw):
             await asyncio.sleep(10)
@@ -438,9 +455,7 @@ class TestMemoryManagerDreamIntegration:
         assert result.facts_written >= 1
 
     @pytest.mark.asyncio
-    async def test_dream_run_no_provider_returns_none(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_dream_run_no_provider_returns_none(self, tmp_path: Path) -> None:
         mm = MemoryManager(
             app_db=_make_app_db_mock(tmp_path),
             wiki=None,
@@ -450,9 +465,7 @@ class TestMemoryManagerDreamIntegration:
         result = await mm.dream_run()
         assert result is None
 
-    def test_memory_manager_with_provider_includes_dream(
-        self, tmp_path: Path
-    ) -> None:
+    def test_memory_manager_with_provider_includes_dream(self, tmp_path: Path) -> None:
         mm = MemoryManager(
             app_db=_make_app_db_mock(tmp_path),
             wiki=None,

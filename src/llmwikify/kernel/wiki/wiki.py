@@ -96,13 +96,17 @@ class Wiki(
         self._log_page_name = "log"
 
         # Reference index path
-        ref_index_name = self.config.get("reference_index", {}).get("name", "reference_index.json")
+        ref_index_name = self.config.get("reference_index", {}).get(
+            "name", "reference_index.json"
+        )
         self._ref_index_path: Path | None = None
         self._ref_index_name = ref_index_name
 
         # Orphan detection configuration
         orphan_config = self.config.get("orphan_detection", {})
-        self._default_exclude_patterns = orphan_config.get("default_exclude_patterns", [])
+        self._default_exclude_patterns = orphan_config.get(
+            "default_exclude_patterns", []
+        )
         self._user_exclude_patterns = orphan_config.get("exclude_patterns", [])
         self._exclude_frontmatter_keys = orphan_config.get("exclude_frontmatter", [])
         self._archive_dirs = orphan_config.get("archive_directories", [])
@@ -148,6 +152,7 @@ class Wiki(
         """
         try:
             from ..search.qmd_index import QmdIndex
+
             return QmdIndex(self.root, config=self.config)
         except Exception:
             return None

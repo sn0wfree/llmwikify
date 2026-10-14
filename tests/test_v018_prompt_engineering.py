@@ -281,7 +281,9 @@ class TestBuiltInTemplates:
         template = registry._load_template("generate_wiki_ops")
 
         assert template.post_process.get("validate_schema") == "operations_array"
-        assert template.post_process.get("retry_on_failure", {}).get("max_attempts") == 2
+        assert (
+            template.post_process.get("retry_on_failure", {}).get("max_attempts") == 2
+        )
 
 
 class TestPromptTemplateMetadata:

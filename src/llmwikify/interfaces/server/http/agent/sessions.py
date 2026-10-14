@@ -36,9 +36,7 @@ async def chat(request: Request) -> Any:
     # Issue#14: detect /study research triggers and use a longer
     # stream timeout so long-running research workflows aren't cut
     # off mid-run (the default 5min is too short for 6-step research).
-    is_study = (
-        req.message.lstrip().lower().startswith(_STUDY_TRIGGER)
-    )
+    is_study = req.message.lstrip().lower().startswith(_STUDY_TRIGGER)
     stream_timeout = STUDY_STREAM_TIMEOUT if is_study else STREAM_TIMEOUT
 
     source = service.chat(
@@ -54,6 +52,7 @@ async def chat(request: Request) -> Any:
 
 
 # ─── Sessions CRUD ─────────────────────────────────────────────
+
 
 @router.get("/sessions")
 async def list_sessions() -> dict[str, Any]:
@@ -104,7 +103,9 @@ async def get_session(session_id: str) -> Any:
 
 
 @router.get("/sessions/{session_id}/messages")
-async def get_session_messages(session_id: str, limit: int = 50, before: str | None = None) -> dict[str, Any]:
+async def get_session_messages(
+    session_id: str, limit: int = 50, before: str | None = None
+) -> dict[str, Any]:
     service = get_agent_service()
     messages = service.db.get_chat_messages(session_id, limit=limit, before=before)
     return {"messages": messages, "session_id": session_id}
@@ -135,7 +136,9 @@ async def revert_session(session_id: str, request: Request) -> dict[str, Any]:
 
 
 @router.put("/sessions/{session_id}/messages/{message_id}")
-async def edit_message(session_id: str, message_id: str, request: Request) -> dict[str, Any]:
+async def edit_message(
+    session_id: str, message_id: str, request: Request
+) -> dict[str, Any]:
     """Edit a user message's content in-place."""
     req = await JsonBodyHelper.execute(request, EditMessageRequest)
     service = get_agent_service()

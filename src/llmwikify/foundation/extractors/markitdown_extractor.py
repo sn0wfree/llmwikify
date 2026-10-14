@@ -139,14 +139,14 @@ class MarkItDownExtractor:
         import re
 
         # Try to find first markdown heading
-        heading_match = re.search(r'^#\s+(.+)$', text, re.MULTILINE)
+        heading_match = re.search(r"^#\s+(.+)$", text, re.MULTILINE)
         if heading_match:
             return heading_match.group(1).strip()
 
         # Try to find first non-empty line that looks like a title
-        for line in text.split('\n')[:10]:
+        for line in text.split("\n")[:10]:
             stripped = line.strip()
-            if stripped and not stripped.startswith('---') and len(stripped) > 3:
+            if stripped and not stripped.startswith("---") and len(stripped) > 3:
                 return stripped[:100]
 
-        return path.stem.replace('-', ' ').replace('_', ' ').title()
+        return path.stem.replace("-", " ").replace("_", " ").title()

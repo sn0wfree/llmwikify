@@ -64,7 +64,9 @@ def patched_config_path(monkeypatch, tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_lifespan_starts_and_stops_manager(tmp_path: Path, patched_config_path) -> None:
+async def test_lifespan_starts_and_stops_manager(
+    tmp_path: Path, patched_config_path
+) -> None:
     patched_config_path({"enabled": True, "auto_ingest": {"enabled": False}})
     server = _make_server(tmp_path, enable_maintenance=True)
 
@@ -76,7 +78,9 @@ async def test_lifespan_starts_and_stops_manager(tmp_path: Path, patched_config_
 
 
 @pytest.mark.asyncio
-async def test_lifespan_config_disable_wins(tmp_path: Path, patched_config_path) -> None:
+async def test_lifespan_config_disable_wins(
+    tmp_path: Path, patched_config_path
+) -> None:
     patched_config_path({"enabled": False})
     server = _make_server(tmp_path, enable_maintenance=True)
 
@@ -85,7 +89,9 @@ async def test_lifespan_config_disable_wins(tmp_path: Path, patched_config_path)
 
 
 @pytest.mark.asyncio
-async def test_lifespan_server_flag_disable(tmp_path: Path, patched_config_path) -> None:
+async def test_lifespan_server_flag_disable(
+    tmp_path: Path, patched_config_path
+) -> None:
     patched_config_path({"enabled": True})
     server = _make_server(tmp_path, enable_maintenance=False)
 

@@ -39,16 +39,20 @@ class TestMemoryConfigDefaults:
 class TestMemoryConfigLoad:
     def test_load_full_config(self, tmp_path: Path) -> None:
         config_path = tmp_path / DEFAULT_CONFIG_FILENAME
-        config_path.write_text(json.dumps({
-            "consolidation": {
-                "trigger_token_threshold": 8000,
-                "keep_recent_messages": 4,
-            },
-            "dream": {
-                "enabled": False,
-                "cron_expression": "0 * * * *",
-            },
-        }))
+        config_path.write_text(
+            json.dumps(
+                {
+                    "consolidation": {
+                        "trigger_token_threshold": 8000,
+                        "keep_recent_messages": 4,
+                    },
+                    "dream": {
+                        "enabled": False,
+                        "cron_expression": "0 * * * *",
+                    },
+                }
+            )
+        )
         cfg = load_memory_config(tmp_path)
         assert cfg.consolidation["trigger_token_threshold"] == 8000
         assert cfg.consolidation["keep_recent_messages"] == 4
@@ -58,9 +62,13 @@ class TestMemoryConfigLoad:
         assert cfg.dream["cron_expression"] == "0 * * * *"
 
     def test_load_partial_config(self, tmp_path: Path) -> None:
-        (tmp_path / DEFAULT_CONFIG_FILENAME).write_text(json.dumps({
-            "consolidation": {"trigger_token_threshold": 9999},
-        }))
+        (tmp_path / DEFAULT_CONFIG_FILENAME).write_text(
+            json.dumps(
+                {
+                    "consolidation": {"trigger_token_threshold": 9999},
+                }
+            )
+        )
         cfg = load_memory_config(tmp_path)
         assert cfg.consolidation["trigger_token_threshold"] == 9999
         # dream section untouched (uses defaults)
@@ -72,10 +80,14 @@ class TestMemoryConfigLoad:
         assert cfg.consolidation["trigger_token_threshold"] == 4000
 
     def test_load_invalid_types_ignored(self, tmp_path: Path) -> None:
-        (tmp_path / DEFAULT_CONFIG_FILENAME).write_text(json.dumps({
-            "consolidation": "not-a-dict",
-            "dream": 42,
-        }))
+        (tmp_path / DEFAULT_CONFIG_FILENAME).write_text(
+            json.dumps(
+                {
+                    "consolidation": "not-a-dict",
+                    "dream": 42,
+                }
+            )
+        )
         cfg = load_memory_config(tmp_path)
         # Both sections retain defaults
         assert cfg.consolidation["trigger_token_threshold"] == 4000

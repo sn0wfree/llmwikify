@@ -47,6 +47,7 @@ def test_wiki_accepts_custom_backend(wiki_root):
             from llmwikify.foundation.config import load_config
             from llmwikify.kernel.storage.backend import LocalFileBackend as _LFB
             from llmwikify.kernel.storage.index import WikiIndex
+
             self.root = root.resolve()
             self.wiki_dir = _LFB(root, load_config(root)).wiki_dir
             self.raw_dir = _LFB(root, load_config(root)).raw_dir
@@ -185,6 +186,7 @@ def test_mixin_uses_wiki_helpers_not_direct_fs(tmp_path):
     and fail if any new direct fs content access is found.
     """
     import re
+
     src = Path(__file__).parent.parent / "src" / "llmwikify" / "core"
     mixin_files = list(src.glob("wiki_mixin_*.py"))
 
@@ -206,9 +208,10 @@ def test_mixin_uses_wiki_helpers_not_direct_fs(tmp_path):
                     if re.search(pattern, line) and not line.strip().startswith("#"):
                         violations.append(f"{mixin_file.name}: {label}: {line.strip()}")
 
-    assert not violations, (
-        "Mixin files use direct fs ops; should use Wiki helpers instead:\n"
-        + "\n".join(violations)
+    assert (
+        not violations
+    ), "Mixin files use direct fs ops; should use Wiki helpers instead:\n" + "\n".join(
+        violations
     )
 
 

@@ -13,6 +13,7 @@ It just calls ``dynamic_workflow.run`` with ``{name, inputs}`` and
 gets back a ``run_id``. It can then ``status`` to poll, or
 ``resume`` if a run was interrupted.
 """
+
 from __future__ import annotations
 
 import logging
@@ -55,7 +56,8 @@ def _format_run_not_found(run_id: Any, workflow_name: str | None = None) -> str:
     if not rid or not rid.startswith("wf_"):
         try:
             recent = RunStore.default().list_runs(
-                workflow_name=workflow_name, limit=3,
+                workflow_name=workflow_name,
+                limit=3,
             )
             recent_ids = [s.run_id for s in recent if s.run_id]
         except Exception:
@@ -167,9 +169,7 @@ def _handle_resume(args: dict[str, Any], ctx: SkillContext) -> SkillResult:
     if state is None:
         return SkillResult.fail(_format_run_not_found(run_id, workflow_name=None))
     if state.source_path is None:
-        return SkillResult.fail(
-            f"run {run_id!r} has no source_path; cannot resume"
-        )
+        return SkillResult.fail(f"run {run_id!r} has no source_path; cannot resume")
     try:
         executor = WorkflowExecutor.from_run_id(
             run_id=run_id,

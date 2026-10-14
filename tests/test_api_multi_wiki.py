@@ -1,6 +1,5 @@
 """Tests for multi-wiki API routes (Phase 2)."""
 
-
 import pytest
 from fastapi.testclient import TestClient
 
@@ -49,9 +48,7 @@ def multi_wiki_client(registry):
     # local_mode=True disables JWT auth middleware so the in-process
     # TestClient can hit routes without a token. See decision 12
     # (JWTAuthMiddleware is pass-through on loopback).
-    server = WikiServer(
-        registry, enable_mcp=False, enable_webui=False, local_mode=True
-    )
+    server = WikiServer(registry, enable_mcp=False, enable_webui=False, local_mode=True)
     return TestClient(server.app)
 
 
@@ -60,9 +57,7 @@ def single_wiki_client(wiki_dirs):
     """Create a test client with single wiki (backward compatible)."""
     wiki_a, _ = wiki_dirs
     wiki = Wiki(wiki_a)
-    server = WikiServer(
-        wiki, enable_mcp=False, enable_webui=False, local_mode=True
-    )
+    server = WikiServer(wiki, enable_mcp=False, enable_webui=False, local_mode=True)
     return TestClient(server.app)
 
 

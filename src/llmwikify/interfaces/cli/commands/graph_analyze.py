@@ -83,7 +83,9 @@ def run_graph_analyze(wiki: Any, args: Any) -> int:
             priority_icon = {"high": "🔴", "medium": "🟡", "low": "🟢"}.get(
                 sugg.get("priority"), "•"
             )
-            print(f"  {priority_icon} [{sugg.get('priority', 'info').upper()}] {sugg['observation']}")
+            print(
+                f"  {priority_icon} [{sugg.get('priority', 'info').upper()}] {sugg['observation']}"
+            )
             print(f"     → {sugg['suggestion']}")
     else:
         print("\n✅ No suggestions at this time")
@@ -105,7 +107,11 @@ class GraphAnalyzeCommand(Command):
             raise TypeError("setup_parser requires an argparse subparsers action")
         p = subparsers.add_parser(self.name, help=self.help)
         p.add_argument("--json", action="store_true", help="Output as JSON")
-        p.add_argument("--report", action="store_true", help="Generate detailed suggested pages report")
+        p.add_argument(
+            "--report",
+            action="store_true",
+            help="Generate detailed suggested pages report",
+        )
 
     def run(self, args: Any, wiki: Any, config: dict) -> int:
         return run_graph_analyze(wiki, args)

@@ -9,6 +9,7 @@ from typing import Any
 @dataclass
 class ExtractedContent:
     """Result of extracting content from a source."""
+
     text: str
     source_type: str
     title: str = ""
@@ -22,15 +23,14 @@ class ExtractedContent:
 @dataclass
 class Link:
     """A wiki link."""
+
     target: str
     section: str = ""
     display: str = ""
 
 
 # YouTube URL patterns
-_YOUTUBE_PATTERNS = (
-    r"(?:youtube\.com/watch\?v=|youtu\.be/|youtube\.com/embed/)",
-)
+_YOUTUBE_PATTERNS = (r"(?:youtube\.com/watch\?v=|youtu\.be/|youtube\.com/embed/)",)
 
 # ---------------------------------------------------------------------------
 # Single source of truth: extension → (source_type, handlers)
@@ -55,13 +55,18 @@ _EXTRACTOR_REGISTRY: dict[str, tuple[str, list[str]]] = {
     ".pptx": ("pptx", ["markitdown"]),
     ".ppt": ("ppt", ["markitdown"]),
     # Images — MarkItDown only (requires LLM vision)
-    ".jpg": ("image", ["markitdown"]), ".jpeg": ("image", ["markitdown"]),
-    ".png": ("image", ["markitdown"]), ".gif": ("image", ["markitdown"]),
-    ".bmp": ("image", ["markitdown"]), ".tiff": ("image", ["markitdown"]),
-    ".tif": ("image", ["markitdown"]), ".webp": ("image", ["markitdown"]),
+    ".jpg": ("image", ["markitdown"]),
+    ".jpeg": ("image", ["markitdown"]),
+    ".png": ("image", ["markitdown"]),
+    ".gif": ("image", ["markitdown"]),
+    ".bmp": ("image", ["markitdown"]),
+    ".tiff": ("image", ["markitdown"]),
+    ".tif": ("image", ["markitdown"]),
+    ".webp": ("image", ["markitdown"]),
     ".svg": ("image", ["markitdown"]),
     # Audio — MarkItDown only (requires speech transcription)
-    ".mp3": ("audio", ["markitdown"]), ".wav": ("audio", ["markitdown"]),
+    ".mp3": ("audio", ["markitdown"]),
+    ".wav": ("audio", ["markitdown"]),
     ".m4a": ("audio", ["markitdown"]),
     # HTML — try MarkItDown first, fallback to legacy html extractor
     ".html": ("html", ["markitdown", "html"]),
@@ -82,7 +87,8 @@ _EXTRACTOR_REGISTRY: dict[str, tuple[str, list[str]]] = {
 
 # Derived: set of extensions handled by MarkItDown
 MARKITDOWN_FORMATS: set[str] = {
-    ext for ext, (_, handlers) in _EXTRACTOR_REGISTRY.items()
+    ext
+    for ext, (_, handlers) in _EXTRACTOR_REGISTRY.items()
     if "markitdown" in handlers
 }
 
@@ -114,7 +120,10 @@ def extract(source: str, wiki_root: Path | None = None) -> ExtractedContent:
     if source_type in ("youtube", "url"):
         from .web import extract_url
         from .youtube import extract_youtube
-        return extract_youtube(source) if source_type == "youtube" else extract_url(source)
+
+        return (
+            extract_youtube(source) if source_type == "youtube" else extract_url(source)
+        )
 
     # It's a file — resolve the path
     path = Path(source)
@@ -126,7 +135,7 @@ def extract(source: str, wiki_root: Path | None = None) -> ExtractedContent:
             text="",
             source_type="error",
             title=str(path),
-            metadata={"error": f"File not found: {source}"}
+            metadata={"error": f"File not found: {source}"},
         )
 
     ext = path.suffix.lower()
@@ -136,6 +145,7 @@ def extract(source: str, wiki_root: Path | None = None) -> ExtractedContent:
     for handler in handlers:
         if handler == "markitdown":
             from .markitdown_extractor import MarkItDownExtractor
+
             extractor = MarkItDownExtractor()
             result = extractor.convert(path)
             if result:
@@ -143,12 +153,15 @@ def extract(source: str, wiki_root: Path | None = None) -> ExtractedContent:
             # MarkItDown unavailable or failed — try next handler
         elif handler == "pdf":
             from .pdf import extract_pdf
+
             return extract_pdf(path)
         elif handler == "text":
             from .text import extract_text_file
+
             return extract_text_file(path)
         elif handler == "html":
             from .text import extract_html_file
+
             return extract_html_file(path)
 
     # No handler succeeded (shouldn't happen for registered extensions)
@@ -156,5 +169,5 @@ def extract(source: str, wiki_root: Path | None = None) -> ExtractedContent:
         text="",
         source_type="error",
         title=str(path),
-        metadata={"error": f"All extractors failed for '{ext}' files."}
+        metadata={"error": f"All extractors failed for '{ext}' files."},
     )

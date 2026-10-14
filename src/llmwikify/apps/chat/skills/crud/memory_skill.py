@@ -108,8 +108,15 @@ class MemorySkill(Skill):
             input_schema={
                 "type": "object",
                 "properties": {
-                    "session_id": {"type": "string", "description": "Session ID (defaults to ctx.session_id)"},
-                    "role": {"type": "string", "description": "Message role (user/assistant/system)", "default": "user"},
+                    "session_id": {
+                        "type": "string",
+                        "description": "Session ID (defaults to ctx.session_id)",
+                    },
+                    "role": {
+                        "type": "string",
+                        "description": "Message role (user/assistant/system)",
+                        "default": "user",
+                    },
                     "content": {"type": "string", "description": "Message content"},
                 },
                 "required": ["content"],
@@ -122,8 +129,15 @@ class MemorySkill(Skill):
             input_schema={
                 "type": "object",
                 "properties": {
-                    "session_id": {"type": "string", "description": "Session ID (defaults to ctx.session_id)"},
-                    "limit": {"type": "integer", "description": "Max entries to return (default 50)", "default": 50},
+                    "session_id": {
+                        "type": "string",
+                        "description": "Session ID (defaults to ctx.session_id)",
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Max entries to return (default 50)",
+                        "default": 50,
+                    },
                 },
             },
         ),
@@ -134,9 +148,19 @@ class MemorySkill(Skill):
             input_schema={
                 "type": "object",
                 "properties": {
-                    "session_id": {"type": "string", "description": "Session ID (defaults to ctx.session_id)"},
-                    "query": {"type": "string", "description": "Search query (substring match)"},
-                    "limit": {"type": "integer", "description": "Max results (default 10)", "default": 10},
+                    "session_id": {
+                        "type": "string",
+                        "description": "Session ID (defaults to ctx.session_id)",
+                    },
+                    "query": {
+                        "type": "string",
+                        "description": "Search query (substring match)",
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Max results (default 10)",
+                        "default": 10,
+                    },
                 },
                 "required": ["query"],
             },
@@ -148,7 +172,10 @@ class MemorySkill(Skill):
             input_schema={
                 "type": "object",
                 "properties": {
-                    "session_id": {"type": "string", "description": "Session ID (defaults to ctx.session_id)"},
+                    "session_id": {
+                        "type": "string",
+                        "description": "Session ID (defaults to ctx.session_id)",
+                    },
                 },
             },
             action_type="write",

@@ -34,12 +34,14 @@ class ToolExecutor:
         config: dict | None = None,
     ):
         from llmwikify.apps.chat.config import merge_six_step_config
+
         self.db = chat_db
         self.memory_manager = memory_manager
         self.config = config or merge_six_step_config()
         self._save_error_count: int = 0
 
         from llmwikify.apps.chat.retry_managers import DBRetryManager
+
         self._db_retry = DBRetryManager(
             max_attempts=self.config.get("chat_db_retry_max_attempts", 3),
             base_delay=self.config.get("chat_db_retry_base_delay", 0.5),
@@ -59,22 +61,33 @@ class ToolExecutor:
             result = await tool_registry.execute(tool_name, args)
             status = (
                 "confirmation_required"
-                if isinstance(result, dict) and result.get("status") == "confirmation_required"
+                if isinstance(result, dict)
+                and result.get("status") == "confirmation_required"
                 else "executed"
             )
             self.db.update_tool_call(call_id, result, status)
 
             tool_def = tool_registry._tools.get(tool_name, {})
             if tool_def.get("requires_confirmation") == "posthoc":
-                entry_id = f"ingest-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}"
-                self.db.log_ingest({
-                    "id": entry_id,
-                    "wiki_id": ctx.wiki_id or "default",
-                    "tool": tool_name,
-                    "arguments": args,
-                    "result_summary": str(result)[:self.config.get("summary_truncate_chars", 500)] if result else "",
-                    "status": "executed",
-                })
+                entry_id = (
+                    f"ingest-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}"
+                )
+                self.db.log_ingest(
+                    {
+                        "id": entry_id,
+                        "wiki_id": ctx.wiki_id or "default",
+                        "tool": tool_name,
+                        "arguments": args,
+                        "result_summary": (
+                            str(result)[
+                                : self.config.get("summary_truncate_chars", 500)
+                            ]
+                            if result
+                            else ""
+                        ),
+                        "status": "executed",
+                    }
+                )
 
             return result
         except Exception as e:
@@ -94,10 +107,13 @@ class ToolExecutor:
         try:
             content = json.dumps(
                 {"tool": tool_name, "args": args, "result": result},
-                ensure_ascii=False, default=str,
+                ensure_ascii=False,
+                default=str,
             )
             if len(content) > self.config.get("content_truncate_chars", 2000):
-                content = content[:self.config.get("content_truncate_chars", 2000)] + "…"
+                content = (
+                    content[: self.config.get("content_truncate_chars", 2000)] + "…"
+                )
             await self.memory_manager.context.aadd(
                 session_id,
                 entry_type="tool_result",
@@ -106,7 +122,8 @@ class ToolExecutor:
             )
         except Exception as e:  # noqa: BLE001
             logger.warning(
-                "Failed to persist tool result to memory.context: %s", e,
+                "Failed to persist tool result to memory.context: %s",
+                e,
             )
 
     def save_message(
@@ -142,7 +159,9 @@ class ToolExecutor:
         try:
             self._db_retry.call(self.db.save_chat_message, msg)
         except Exception as e:
-            logger.error("Failed to save chat message for session %s: %s", session_id, e)
+            logger.error(
+                "Failed to save chat message for session %s: %s", session_id, e
+            )
             self._save_error_count += 1
 
     async def llm_stream_with_retry(
@@ -153,6 +172,7 @@ class ToolExecutor:
     ) -> AsyncIterator[dict]:
         """Wrap LLM stream with retry on first chunk."""
         from llmwikify.apps.chat.retry_managers import LLMRetryManager
+
         retry = LLMRetryManager(
             max_attempts=self.config.get("llm_retry_max_attempts", 3),
             base_delay=self.config.get("llm_retry_base_delay", 1.0),
@@ -173,11 +193,14 @@ class ToolExecutor:
                     if not retry._is_retriable(e):
                         raise
                     if attempt < retry.max_attempts - 1:
-                        delay = min(retry.base_delay * (2 ** attempt), 30.0)
+                        delay = min(retry.base_delay * (2**attempt), 30.0)
                         logger.warning(
                             "LLM stream failed on attempt %d/%d "
                             "(no chunks produced): %s. Retrying in %.1fs...",
-                            attempt + 1, retry.max_attempts, e, delay,
+                            attempt + 1,
+                            retry.max_attempts,
+                            e,
+                            delay,
                         )
                         await asyncio.sleep(delay)
                 else:
@@ -194,11 +217,14 @@ class ToolExecutor:
                 "function": {
                     "name": t["name"],
                     "description": t["description"],
-                    "parameters": t.get("parameters", {
-                        "type": "object",
-                        "properties": {},
-                        "required": [],
-                    }),
+                    "parameters": t.get(
+                        "parameters",
+                        {
+                            "type": "object",
+                            "properties": {},
+                            "required": [],
+                        },
+                    ),
                 },
             }
             for t in tools

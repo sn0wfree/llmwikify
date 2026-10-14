@@ -65,7 +65,9 @@ class AgentService:
 
         # WikiService (multi-wiki registry)
         self.wiki_service = WikiService(
-            wiki_registry, self.data_dir, self.app_db.chat,
+            wiki_registry,
+            self.data_dir,
+            self.app_db.chat,
         )
 
         # MemoryManager (6 memory stores + Phase 6 Consolidator/Dream).
@@ -78,6 +80,7 @@ class AgentService:
             self.memory_manager = memory_manager
         else:
             from llmwikify.apps.chat.memory import MemoryManager
+
             self.memory_manager = MemoryManager(
                 self.app_db,
                 wiki=None,  # Wired on first skill invocation
@@ -99,6 +102,7 @@ class AgentService:
             self.skill_service = skill_service
         else:
             from llmwikify.apps.chat.skills.service import SkillService
+
             self.skill_service = SkillService()
 
         # HarnessService (lazy init for eval primitives)
@@ -106,6 +110,7 @@ class AgentService:
             self.harness_service = harness_service
         else:
             from llmwikify.apps.chat.harness.service import HarnessService
+
             self.harness_service = HarnessService(
                 config=config,
                 wiki=None,  # Wired on first skill invocation
@@ -152,7 +157,9 @@ class AgentService:
         wiki_id: str | None = None,
     ) -> AsyncIterator[dict]:
         async for event in self.chat_service.chat(
-            message, session_id, wiki_id,
+            message,
+            session_id,
+            wiki_id,
         ):
             yield event
 
@@ -214,9 +221,7 @@ class AgentService:
         # Load cron from memory_config.json if not supplied
         if cron_expression is None:
             cfg_dir = (
-                Path(config_path).parent
-                if config_path is not None
-                else self.data_dir
+                Path(config_path).parent if config_path is not None else self.data_dir
             )
             cfg_path = cfg_dir / DEFAULT_CONFIG_FILENAME
             # First-run convenience: write defaults ONLY if file missing.
@@ -225,9 +230,7 @@ class AgentService:
             # Pass the directory, NOT the full path (load_memory_config
             # internally appends the filename).
             mem_cfg = load_memory_config(cfg_dir)
-            cron_expression = (
-                mem_cfg.dream.get("cron_expression") or CRON_DAILY_03
-            )
+            cron_expression = mem_cfg.dream.get("cron_expression") or CRON_DAILY_03
             dream_enabled = mem_cfg.dream.get("enabled", True)
             if not dream_enabled:
                 logger.info(
@@ -387,7 +390,8 @@ class AgentService:
         )
         logger.info(
             "AgentService: auto_compact started (ttl=%dm, interval=%.0fs)",
-            ttl_minutes, interval_seconds,
+            ttl_minutes,
+            interval_seconds,
         )
         return self.auto_compact
 
@@ -501,6 +505,7 @@ class AgentService:
             from llmwikify.apps.chat.memory.memory_config import (
                 load_memory_config,
             )
+
             return load_memory_config(self.data_dir)
         except Exception:
             logger.warning(
@@ -508,6 +513,7 @@ class AgentService:
                 exc_info=True,
             )
             from llmwikify.apps.chat.memory.memory_config import MemoryConfig
+
             return MemoryConfig()
 
     def _active_session_keys(self) -> list[str]:
@@ -521,6 +527,7 @@ class AgentService:
             from llmwikify.apps.chat.agent.autocompact import (
                 active_keys_from_status_map,
             )
+
             status_map = self.chat_service.get_all_session_status()
             return list(active_keys_from_status_map(status_map))
         except Exception:
@@ -538,7 +545,10 @@ class AgentService:
         arguments: dict | None = None,
     ) -> AsyncIterator[dict]:
         async for event in self.chat_service.approve_confirmation_continue(
-            confirmation_id, session_id, wiki_id, arguments,
+            confirmation_id,
+            session_id,
+            wiki_id,
+            arguments,
         ):
             yield event
 
@@ -548,7 +558,9 @@ class AgentService:
         return await self.wiki_service.run_wiki_dream(wiki_id)
 
     def get_wiki_dream_log(
-        self, wiki_id: str | None = None, limit: int = 20,
+        self,
+        wiki_id: str | None = None,
+        limit: int = 20,
     ) -> list[dict]:
         return self.wiki_service.get_wiki_dream_log(wiki_id, limit)
 
@@ -565,13 +577,16 @@ class AgentService:
         return self.wiki_service.batch_approve_wiki_dream_proposals(proposal_ids)
 
     async def apply_wiki_dream_proposals(
-        self, wiki_id: str | None = None,
+        self,
+        wiki_id: str | None = None,
         proposal_ids: list[str] | None = None,
     ) -> dict:
         return await self.wiki_service.apply_wiki_dream_proposals(wiki_id, proposal_ids)
 
     def list_notifications(
-        self, wiki_id: str | None = None, unread_only: bool = False,
+        self,
+        wiki_id: str | None = None,
+        unread_only: bool = False,
     ) -> list[dict]:
         return self.wiki_service.list_notifications(wiki_id, unread_only)
 
@@ -603,43 +618,57 @@ class AgentService:
         from llmwikify.apps.chat.agent.confirmation_manager import (
             ConfirmationManager as _CM,
         )
+
         return _CM.is_unknown_confirmation(result)
 
     async def approve_confirmation(
-        self, confirmation_id: str, wiki_id: str | None = None,
+        self,
+        confirmation_id: str,
+        wiki_id: str | None = None,
         arguments: dict | None = None,
         response: str = "once",
     ) -> dict:
         result = await self.chat_service.approve_confirmation(
-            confirmation_id, wiki_id, arguments,
+            confirmation_id,
+            wiki_id,
+            arguments,
         )
         if not self._is_unknown_confirmation(result):
             return result
         return await self.wiki_service.approve_confirmation(
-            confirmation_id, wiki_id, arguments, response=response,
+            confirmation_id,
+            wiki_id,
+            arguments,
+            response=response,
         )
 
     async def reject_confirmation(
-        self, confirmation_id: str, wiki_id: str | None = None,
+        self,
+        confirmation_id: str,
+        wiki_id: str | None = None,
     ) -> dict:
         result = await self.chat_service.reject_confirmation(confirmation_id, wiki_id)
         if not self._is_unknown_confirmation(result):
             return result
         return await self.wiki_service.reject_confirmation(
-            confirmation_id, wiki_id,
+            confirmation_id,
+            wiki_id,
         )
 
     async def batch_approve_confirmations(
-        self, confirmation_ids: list[str], wiki_id: str | None = None,
+        self,
+        confirmation_ids: list[str],
+        wiki_id: str | None = None,
     ) -> dict:
         results = [
-            await self.approve_confirmation(cid, wiki_id)
-            for cid in confirmation_ids
+            await self.approve_confirmation(cid, wiki_id) for cid in confirmation_ids
         ]
         return {"approved": len(results), "results": results}
 
     def get_ingest_log(
-        self, wiki_id: str | None = None, limit: int = 20,
+        self,
+        wiki_id: str | None = None,
+        limit: int = 20,
     ) -> list[dict]:
         return self.wiki_service.get_ingest_log(wiki_id, limit)
 
@@ -661,10 +690,14 @@ class AgentService:
         if state is None:
             return {
                 "status": "error",
-                "error": _format_run_not_found(run_id, workflow_name="autoresearch-compound"),
+                "error": _format_run_not_found(
+                    run_id, workflow_name="autoresearch-compound"
+                ),
             }
         synthesize = state.phases.get("synthesize", {}) if state.phases else {}
-        final_report = synthesize.get("output") if isinstance(synthesize, dict) else None
+        final_report = (
+            synthesize.get("output") if isinstance(synthesize, dict) else None
+        )
         outputs = {"final_report": final_report} if final_report else {}
         return {
             "run_id": state.run_id,

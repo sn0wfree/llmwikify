@@ -1,4 +1,5 @@
 """Tests for foundation.db — shared SQLite connection factory."""
+
 from __future__ import annotations
 
 import sqlite3

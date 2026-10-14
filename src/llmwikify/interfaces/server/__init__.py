@@ -28,4 +28,5 @@ def create_unified_server(
     )
     return server.app
 
+
 __all__ = ["WikiServer", "create_unified_server"]

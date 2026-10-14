@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 
 class TestUnifiedServer:
@@ -14,6 +14,7 @@ class TestUnifiedServer:
     def test_unified_server_imports(self):
         """Unified server module should import without errors."""
         from llmwikify.interfaces.mcp.server import create_unified_server
+
         assert create_unified_server is not None
 
     def test_server_package_wrapper_drops_agent(self, monkeypatch):
@@ -34,13 +35,21 @@ class TestUnifiedServer:
     def test_web_server_imports(self):
         """Web server wrapper should import without errors."""
         from llmwikify.interfaces.web.server import main
+
         assert main is not None
 
     def test_webui_static_files_exist(self):
         """React WebUI build files should exist."""
-        webui_dist = Path(__file__).parent.parent / 'src' / 'llmwikify' / 'web' / 'webui' / 'dist'
+        webui_dist = (
+            Path(__file__).parent.parent
+            / "src"
+            / "llmwikify"
+            / "web"
+            / "webui"
+            / "dist"
+        )
         if webui_dist.exists():
-            assert (webui_dist / 'index.html').exists()
+            assert (webui_dist / "index.html").exists()
 
 
 class TestCLIWebArgs:
@@ -54,10 +63,10 @@ class TestCLIWebArgs:
         from llmwikify.interfaces.cli.commands import main
 
         help_output = io.StringIO()
-        with patch('sys.argv', ['llmwikify', 'serve', '--help']):
-            with patch('sys.stdout', help_output):
+        with patch("sys.argv", ["llmwikify", "serve", "--help"]):
+            with patch("sys.stdout", help_output):
                 with pytest.raises(SystemExit):
                     main()
 
         output = help_output.getvalue()
-        assert '--agent' not in output
+        assert "--agent" not in output

@@ -78,8 +78,12 @@ class TestBuildThinkingExtraBody:
 
     def test_reasoning_split_style(self):
         """MiniMax uses reasoning_split bool."""
-        assert build_thinking_extra_body("reasoning_split", True) == {"reasoning_split": True}
-        assert build_thinking_extra_body("reasoning_split", False) == {"reasoning_split": False}
+        assert build_thinking_extra_body("reasoning_split", True) == {
+            "reasoning_split": True
+        }
+        assert build_thinking_extra_body("reasoning_split", False) == {
+            "reasoning_split": False
+        }
 
     def test_thinking_type_style(self):
         """DeepSeek / VolcEngine / Xiaomi MiMo use thinking.type."""
@@ -92,8 +96,12 @@ class TestBuildThinkingExtraBody:
 
     def test_enable_thinking_style(self):
         """DashScope / Qwen use enable_thinking bool."""
-        assert build_thinking_extra_body("enable_thinking", True) == {"enable_thinking": True}
-        assert build_thinking_extra_body("enable_thinking", False) == {"enable_thinking": False}
+        assert build_thinking_extra_body("enable_thinking", True) == {
+            "enable_thinking": True
+        }
+        assert build_thinking_extra_body("enable_thinking", False) == {
+            "enable_thinking": False
+        }
 
     def test_unknown_style_returns_none(self):
         """Empty / unknown style returns None (no extra_body fragment)."""

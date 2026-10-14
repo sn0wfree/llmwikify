@@ -28,17 +28,17 @@ def _extract_youtube_id(url: str) -> str | None:
     parsed = urlparse(url)
 
     # youtu.be/{id}
-    if parsed.hostname == 'youtu.be':
+    if parsed.hostname == "youtu.be":
         return parsed.path[1:]
 
     # youtube.com/watch?v={id}
-    if parsed.hostname in ('youtube.com', 'www.youtube.com'):
+    if parsed.hostname in ("youtube.com", "www.youtube.com"):
         query = parse_qs(parsed.query)
-        return query.get('v', [None])[0]
+        return query.get("v", [None])[0]
 
     # youtube.com/embed/{id}
-    if '/embed/' in url:
-        return url.split('/embed/')[-1].split('?')[0].split('/')[0]
+    if "/embed/" in url:
+        return url.split("/embed/")[-1].split("?")[0].split("/")[0]
 
     return None
 
@@ -68,7 +68,9 @@ def _extract_youtube(
             text="",
             source_type="error",
             title=url,
-            metadata={"error": "youtube-transcript-api not installed. Install with: pip install youtube-transcript-api"}
+            metadata={
+                "error": "youtube-transcript-api not installed. Install with: pip install youtube-transcript-api"
+            },
         )
 
     video_id = _extract_youtube_id(url)
@@ -77,7 +79,7 @@ def _extract_youtube(
             text="",
             source_type="error",
             title=url,
-            metadata={"error": f"Could not extract video ID from: {url}"}
+            metadata={"error": f"Could not extract video ID from: {url}"},
         )
 
     # Run the blocking get_transcript in a thread so we can enforce
@@ -90,7 +92,9 @@ def _extract_youtube(
     except concurrent.futures.TimeoutError:
         future.cancel()
         logger.warning(
-            "YouTube transcript fetch timed out after %ds: %s", timeout, url,
+            "YouTube transcript fetch timed out after %ds: %s",
+            timeout,
+            url,
         )
         return ExtractedContent(
             text="",
@@ -106,7 +110,7 @@ def _extract_youtube(
             metadata={"error": str(e)},
         )
 
-    text = "\n".join([entry['text'] for entry in transcript])
+    text = "\n".join([entry["text"] for entry in transcript])
     return ExtractedContent(
         text=text,
         source_type="youtube",

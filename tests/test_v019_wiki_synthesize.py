@@ -35,7 +35,9 @@ class TestWikiSynthesizeTemplate:
         template = registry._load_template("wiki_synthesize")
         assert template.post_process.get("validate_schema") == "synthesize_output"
         assert "answer" in template.post_process.get("required_keys", [])
-        assert template.post_process.get("retry_on_failure", {}).get("max_attempts") == 2
+        assert (
+            template.post_process.get("retry_on_failure", {}).get("max_attempts") == 2
+        )
 
     def test_template_has_params(self):
         registry = PromptRegistry()

@@ -61,7 +61,8 @@ class AutoIngestService:
         self.config = config
         self.llm_semaphore = llm_semaphore
         self.rate_limiter = rate_limiter or SlidingWindowRateLimiter(
-            enabled=False, name=f"auto_ingest_{wiki_id}",
+            enabled=False,
+            name=f"auto_ingest_{wiki_id}",
         )
         self._loop = loop
         self._watcher: FileSystemWatcher | None = None
@@ -112,7 +113,9 @@ class AutoIngestService:
         """Start watching raw/. Returns False if raw/ missing or watchdog absent."""
         raw = self.raw_dir
         if not raw.exists():
-            logger.info("[%s] auto_ingest: raw/ not found at %s, skipped", self.wiki_id, raw)
+            logger.info(
+                "[%s] auto_ingest: raw/ not found at %s, skipped", self.wiki_id, raw
+            )
             return False
         self._loop = self._loop or asyncio.get_running_loop()
         self._watcher = FileSystemWatcher(
@@ -123,7 +126,9 @@ class AutoIngestService:
         try:
             self._watcher.start(on_event=self._on_watch_event)
         except ImportError:
-            logger.warning("[%s] auto_ingest: watchdog not installed, disabled", self.wiki_id)
+            logger.warning(
+                "[%s] auto_ingest: watchdog not installed, disabled", self.wiki_id
+            )
             self._watcher = None
             return False
         logger.info("[%s] auto_ingest: watching %s", self.wiki_id, raw)
@@ -132,7 +137,8 @@ class AutoIngestService:
         # Background the replay: 20 files × LLM analysis can take minutes;
         # awaiting it inline would block FastAPI's lifespan startup.
         self._backlog_task = asyncio.create_task(
-            self._scan_backlog(), name=f"auto_ingest_backlog_{self.wiki_id}",
+            self._scan_backlog(),
+            name=f"auto_ingest_backlog_{self.wiki_id}",
         )
         return True
 
@@ -167,7 +173,11 @@ class AutoIngestService:
             return False
         cur = self._file_state(path)
         # same mtime+size → unchanged since processing
-        return bool(cur) and cur.get("mtime") == rec.get("mtime") and cur.get("size") == rec.get("size")
+        return (
+            bool(cur)
+            and cur.get("mtime") == rec.get("mtime")
+            and cur.get("size") == rec.get("size")
+        )
 
     def _mark_processed(self, path: Path) -> None:
         state = self._file_state(path)
@@ -180,13 +190,18 @@ class AutoIngestService:
         try:
             if self._state_file.exists():
                 data = json.loads(self._state_file.read_text(encoding="utf-8"))
-                files = data.get("files", {}) if data.get("version") == _STATE_VERSION else {}
+                files = (
+                    data.get("files", {})
+                    if data.get("version") == _STATE_VERSION
+                    else {}
+                )
                 if isinstance(files, dict):
                     self._processed = files
         except (json.JSONDecodeError, OSError) as exc:
             logger.warning(
                 "[%s] auto_ingest: processed state unreadable (%s), starting fresh",
-                self.wiki_id, exc,
+                self.wiki_id,
+                exc,
             )
             self._processed = {}
 
@@ -204,7 +219,9 @@ class AutoIngestService:
             finally:
                 Path(tmp).unlink(missing_ok=True)
         except OSError as exc:
-            logger.warning("[%s] auto_ingest: processed state write failed: %s", self.wiki_id, exc)
+            logger.warning(
+                "[%s] auto_ingest: processed state write failed: %s", self.wiki_id, exc
+            )
 
     async def _scan_backlog(self) -> None:
         """Replay raw/ files that landed while the server was down."""
@@ -224,13 +241,20 @@ class AutoIngestService:
                 else:
                     deferred += 1
         except OSError as exc:
-            logger.warning("[%s] auto_ingest: backlog scan failed: %s", self.wiki_id, exc)
+            logger.warning(
+                "[%s] auto_ingest: backlog scan failed: %s", self.wiki_id, exc
+            )
             return
         if backlog or deferred:
             logger.info(
                 "[%s] auto_ingest: replaying %d backlog file(s)%s",
-                self.wiki_id, len(backlog),
-                f" ({deferred} deferred past max_backlog_per_start)" if deferred else "",
+                self.wiki_id,
+                len(backlog),
+                (
+                    f" ({deferred} deferred past max_backlog_per_start)"
+                    if deferred
+                    else ""
+                ),
             )
         for path in backlog:
             self.stats["backlog_replayed"] += 1
@@ -240,7 +264,9 @@ class AutoIngestService:
             logger.warning(
                 "[%s] auto_ingest: %d backlog file(s) beyond max_backlog_per_start=%d "
                 "left for manual 'llmwikify batch raw/'",
-                self.wiki_id, deferred, limit,
+                self.wiki_id,
+                deferred,
+                limit,
             )
 
     def _on_watch_event(self, event_type: str, path: Path) -> None:
@@ -284,8 +310,13 @@ class AutoIngestService:
             # file must have stopped growing within the window
             try:
                 if path.stat().st_size != size:
-                    self._pending[key] = (time.monotonic() + self.config.debounce_seconds, path.stat().st_size)
-                    self._loop.call_later(self.config.debounce_seconds + 0.1, self._flush_pending)
+                    self._pending[key] = (
+                        time.monotonic() + self.config.debounce_seconds,
+                        path.stat().st_size,
+                    )
+                    self._loop.call_later(
+                        self.config.debounce_seconds + 0.1, self._flush_pending
+                    )
                     continue
             except OSError:
                 continue
@@ -313,7 +344,12 @@ class AutoIngestService:
                 except Exception as exc:
                     self.stats["failed"] += 1
                     self.stats["last_error"] = f"ingest: {exc}"
-                    logger.warning("[%s] auto_ingest ingest failed %s: %s", self.wiki_id, path.name, exc)
+                    logger.warning(
+                        "[%s] auto_ingest ingest failed %s: %s",
+                        self.wiki_id,
+                        path.name,
+                        exc,
+                    )
                     return
                 # Cache successful extractions (skip error results)
                 if not result.get("error"):
@@ -360,7 +396,8 @@ class AutoIngestService:
             await self.rate_limiter.acquire()
             async with self.llm_semaphore:
                 ops_result = await asyncio.to_thread(
-                    self.wiki._llm_process_source, ingest_result,
+                    self.wiki._llm_process_source,
+                    ingest_result,
                 )
             ops = ops_result.get("operations", [])
             if not ops:
@@ -373,17 +410,22 @@ class AutoIngestService:
             self._mark_processed(path)
             logger.info(
                 "[%s] auto_ingest wrote %d ops from %s",
-                self.wiki_id, executed, path.name,
+                self.wiki_id,
+                executed,
+                path.name,
             )
         except Exception as exc:
             self.stats["last_error"] = f"llm_write: {exc}"
             logger.warning(
                 "[%s] auto_ingest LLM write failed %s: %s — falling back to proposal",
-                self.wiki_id, path.name, exc,
+                self.wiki_id,
+                path.name,
+                exc,
             )
             if self.config.fallback_to_proposal:
                 fallback_ok = await self._fallback_to_proposal(
-                    ingest_result, reason=f"llm_write failed: {exc}",
+                    ingest_result,
+                    reason=f"llm_write failed: {exc}",
                 )
                 if fallback_ok:
                     self._mark_processed(path)
@@ -397,7 +439,11 @@ class AutoIngestService:
         Returns True if the proposal was successfully created.
         """
         try:
-            title = ingest_result.get("title") or ingest_result.get("source_name") or "untitled"
+            title = (
+                ingest_result.get("title")
+                or ingest_result.get("source_name")
+                or "untitled"
+            )
             content = ingest_result.get("content", "")
             self._proposal_manager.create_proposal(
                 page_name=title,

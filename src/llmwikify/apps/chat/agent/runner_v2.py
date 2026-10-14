@@ -22,6 +22,7 @@ B-2 keeps the public surface from B-1 unchanged:
 
 See ``docs/poc/plan-b-refactor.md`` §2 for the design.
 """
+
 from __future__ import annotations
 
 import inspect
@@ -147,7 +148,9 @@ class ChatRunnerV2(AgentRunner["ChatRunSpec", "ChatRunResult"]):
             tool_executor = ctx.tool_executor
             prompt_builder = ctx.prompt_builder
             config = ctx.config if config is None else config
-            memory_manager = ctx.memory_manager if memory_manager is None else memory_manager
+            memory_manager = (
+                ctx.memory_manager if memory_manager is None else memory_manager
+            )
             hook = ctx.hook if hook is None else hook
         else:
             # Reject the "all-None" case unless the caller is
@@ -199,6 +202,7 @@ class ChatRunnerV2(AgentRunner["ChatRunSpec", "ChatRunResult"]):
         from llmwikify.apps.chat.agent.execution_context import (
             AgentExecutionContext,
         )
+
         return AgentExecutionContext(
             chat_service=self._chat_service,
             tool_executor=self._tool_executor,
@@ -209,7 +213,8 @@ class ChatRunnerV2(AgentRunner["ChatRunSpec", "ChatRunResult"]):
         )
 
     async def run_stream(
-        self, spec: ChatRunSpec,
+        self,
+        spec: ChatRunSpec,
     ) -> Any:
         ctx = _RunContext(spec=spec, messages=list(spec.messages))
         self._microcompact_fn = build_microcompact_fn(spec)
@@ -279,13 +284,15 @@ class ChatRunnerV2(AgentRunner["ChatRunSpec", "ChatRunResult"]):
             # architecture; uses MemoryManager.consolidate_session()
             # which is a thin shim over Consolidator.maybe_consolidate.
             # Failures are logged + swallowed (don't break the chat loop).
-            if self._memory_manager is not None and self._memory_manager.consolidator is not None:
+            if (
+                self._memory_manager is not None
+                and self._memory_manager.consolidator is not None
+            ):
                 try:
                     session_id = getattr(spec, "session_id", None) or ctx.session_id
                     messages = list(ctx.messages) if hasattr(ctx, "messages") else []
                     total_tokens = sum(
-                        len(str(m.get("content", ""))) // 4
-                        for m in messages
+                        len(str(m.get("content", ""))) // 4 for m in messages
                     )
                     if session_id and messages:
                         result = await self._memory_manager.consolidate_session(
@@ -297,7 +304,8 @@ class ChatRunnerV2(AgentRunner["ChatRunSpec", "ChatRunResult"]):
                             ctx.compacted_count += 1
                 except (LLMError, OSError, ValueError) as exc:
                     logger.warning(
-                        "memory consolidation failed in run_stream: %s", exc,
+                        "memory consolidation failed in run_stream: %s",
+                        exc,
                         exc_info=True,
                     )
                 except Exception:
@@ -386,6 +394,7 @@ class ChatRunnerV2(AgentRunner["ChatRunSpec", "ChatRunResult"]):
     async def _build_system_prompt(self, spec: ChatRunSpec) -> str:
         if hasattr(self._prompt_builder, "build_with_context"):
             from llmwikify.apps.chat.agent.prompt_builder import BuildContext
+
             ctx = BuildContext(
                 wiki_id=spec.wiki_id,
                 workspace=spec.workspace,
@@ -426,12 +435,13 @@ class ChatRunnerV2(AgentRunner["ChatRunSpec", "ChatRunResult"]):
         return ctx.cancelled or ctx.paused
 
     async def _reason(
-        self, ctx: _RunContext, system_prompt: str, iteration: int,
+        self,
+        ctx: _RunContext,
+        system_prompt: str,
+        iteration: int,
     ) -> None:
         messages = list(ctx.messages)
-        if system_prompt and not any(
-            m.get("role") == "system" for m in messages
-        ):
+        if system_prompt and not any(m.get("role") == "system" for m in messages):
             messages = [{"role": "system", "content": system_prompt}] + messages
 
         messages = self._safe_truncate(messages)
@@ -454,12 +464,15 @@ class ChatRunnerV2(AgentRunner["ChatRunSpec", "ChatRunResult"]):
                 return
             in_thinking = False
             try:
-                await _maybe_await(self._hook.emit_reasoning_end(
-                    ctx.hook_ctx(iteration),
-                ))
+                await _maybe_await(
+                    self._hook.emit_reasoning_end(
+                        ctx.hook_ctx(iteration),
+                    )
+                )
             except Exception:
                 logger.warning(
-                    "emit_reasoning_end hook raised", exc_info=True,
+                    "emit_reasoning_end hook raised",
+                    exc_info=True,
                 )
 
         final_done_content = ""
@@ -488,17 +501,23 @@ class ChatRunnerV2(AgentRunner["ChatRunSpec", "ChatRunResult"]):
                         content_from_parser = True
                         chunk = parsed.get("text", "")
                         accumulated += chunk
-                        await _maybe_await(self._hook.on_stream(
-                            ctx.hook_ctx(iteration), chunk,
-                        ))
+                        await _maybe_await(
+                            self._hook.on_stream(
+                                ctx.hook_ctx(iteration),
+                                chunk,
+                            )
+                        )
                         yield_event = {"type": events.MESSAGE_DELTA, "content": chunk}
                     elif kind == "thinking":
                         in_thinking = True
                         chunk = parsed.get("text", "")
                         thinking += chunk
-                        await _maybe_await(self._hook.emit_reasoning(
-                            ctx.hook_ctx(iteration), chunk,
-                        ))
+                        await _maybe_await(
+                            self._hook.emit_reasoning(
+                                ctx.hook_ctx(iteration),
+                                chunk,
+                            )
+                        )
                         yield_event = {"type": events.THINKING, "content": chunk}
                     elif kind == "tool_call":
                         tool_calls.append(parsed)
@@ -514,12 +533,20 @@ class ChatRunnerV2(AgentRunner["ChatRunSpec", "ChatRunResult"]):
                     content_from_parser = True
                     chunk = flushed.get("text", "")
                     accumulated += chunk
-                    await _maybe_await(self._hook.on_stream(
-                        ctx.hook_ctx(iteration), chunk,
-                    ))
+                    await _maybe_await(
+                        self._hook.on_stream(
+                            ctx.hook_ctx(iteration),
+                            chunk,
+                        )
+                    )
                     yield {"type": events.MESSAGE_DELTA, "content": chunk}
-        except (LLMError, LLMRequestError, json.JSONDecodeError,
-                ValueError, TimeoutError) as exc:
+        except (
+            LLMError,
+            LLMRequestError,
+            json.JSONDecodeError,
+            ValueError,
+            TimeoutError,
+        ) as exc:
             logger.exception("LLM stream failed")
             ctx.error = f"{type(exc).__name__}: {exc}"
             ctx.reason_failed = True
@@ -543,9 +570,12 @@ class ChatRunnerV2(AgentRunner["ChatRunSpec", "ChatRunResult"]):
             return
         else:
             try:
-                await _maybe_await(self._hook.on_stream_end(
-                    ctx.hook_ctx(iteration), resuming=False,
-                ))
+                await _maybe_await(
+                    self._hook.on_stream_end(
+                        ctx.hook_ctx(iteration),
+                        resuming=False,
+                    )
+                )
             except Exception:
                 logger.warning("on_stream_end hook raised", exc_info=True)
 
@@ -575,33 +605,40 @@ class ChatRunnerV2(AgentRunner["ChatRunSpec", "ChatRunResult"]):
         """
         resolved: list[dict[str, Any]] = []
         for tc in ctx.last_tool_calls:
-            resolved.append({
-                **tc,
-                "id": tc.get("id") or f"call_{uuid.uuid4().hex[:8]}",
-            })
-        ctx.last_tool_calls = resolved
-        ctx.messages.append({
-            "role": "assistant",
-            "content": ctx.last_accumulated or "",
-            "tool_calls": [
+            resolved.append(
                 {
-                    "id": tc.get("id", ""),
-                    "type": "function",
-                    "function": {
-                        "name": tc.get("name") or tc.get("tool", ""),
-                        "arguments": (
-                            json.dumps(tc.get("args", {}), ensure_ascii=False)
-                            if isinstance(tc.get("args"), (dict, list))
-                            else str(tc.get("args", "") or "")
-                        ),
-                    },
+                    **tc,
+                    "id": tc.get("id") or f"call_{uuid.uuid4().hex[:8]}",
                 }
-                for tc in resolved
-            ],
-        })
+            )
+        ctx.last_tool_calls = resolved
+        ctx.messages.append(
+            {
+                "role": "assistant",
+                "content": ctx.last_accumulated or "",
+                "tool_calls": [
+                    {
+                        "id": tc.get("id", ""),
+                        "type": "function",
+                        "function": {
+                            "name": tc.get("name") or tc.get("tool", ""),
+                            "arguments": (
+                                json.dumps(tc.get("args", {}), ensure_ascii=False)
+                                if isinstance(tc.get("args"), (dict, list))
+                                else str(tc.get("args", "") or "")
+                            ),
+                        },
+                    }
+                    for tc in resolved
+                ],
+            }
+        )
 
     async def _act(
-        self, ctx: _RunContext, tool_calls: list[dict[str, Any]], iteration: int,
+        self,
+        ctx: _RunContext,
+        tool_calls: list[dict[str, Any]],
+        iteration: int,
     ) -> None:
         await _maybe_await(self._hook.before_execute_tools(ctx.hook_ctx(iteration)))
         ctx.confirmation_required = False
@@ -644,15 +681,28 @@ class ChatRunnerV2(AgentRunner["ChatRunSpec", "ChatRunResult"]):
             with measure_latency() as get_ms:
                 try:
                     result = await self._execute_tool(
-                        tool_name, args, ctx.spec.tool_registry,
-                        ctx.spec.session_id, ctx,
+                        tool_name,
+                        args,
+                        ctx.spec.tool_registry,
+                        ctx.spec.session_id,
+                        ctx,
                     )
-                except (RuntimeError, ValueError, FileNotFoundError,
-                        PermissionError, OSError, TimeoutError) as exc:
+                except (
+                    RuntimeError,
+                    ValueError,
+                    FileNotFoundError,
+                    PermissionError,
+                    OSError,
+                    TimeoutError,
+                ) as exc:
                     logger.warning("Tool %s failed", tool_name, exc_info=True)
-                    await _maybe_await(self._hook.on_tool_error(
-                        ctx.hook_ctx(iteration), tc, exc,
-                    ))
+                    await _maybe_await(
+                        self._hook.on_tool_error(
+                            ctx.hook_ctx(iteration),
+                            tc,
+                            exc,
+                        )
+                    )
                     yield {
                         "type": events.TOOL_CALL_ERROR,
                         "tool": tool_name,
@@ -662,10 +712,16 @@ class ChatRunnerV2(AgentRunner["ChatRunSpec", "ChatRunResult"]):
                     }
                     continue
                 except Exception as exc:
-                    logger.warning("Tool %s UNEXPECTED failure", tool_name, exc_info=True)
-                    await _maybe_await(self._hook.on_tool_error(
-                        ctx.hook_ctx(iteration), tc, exc,
-                    ))
+                    logger.warning(
+                        "Tool %s UNEXPECTED failure", tool_name, exc_info=True
+                    )
+                    await _maybe_await(
+                        self._hook.on_tool_error(
+                            ctx.hook_ctx(iteration),
+                            tc,
+                            exc,
+                        )
+                    )
                     yield {
                         "type": events.TOOL_CALL_ERROR,
                         "tool": tool_name,
@@ -675,15 +731,25 @@ class ChatRunnerV2(AgentRunner["ChatRunSpec", "ChatRunResult"]):
                     }
                     continue
 
-            await _maybe_await(self._hook.after_tool_executed(
-                ctx.hook_ctx(iteration), tc, result,
-            ))
+            await _maybe_await(
+                self._hook.after_tool_executed(
+                    ctx.hook_ctx(iteration),
+                    tc,
+                    result,
+                )
+            )
 
-            if isinstance(result, dict) and result.get("status") == "confirmation_required":
+            if (
+                isinstance(result, dict)
+                and result.get("status") == "confirmation_required"
+            ):
                 ctx.confirmation_required = True
-                await _maybe_await(self._hook.on_confirmation(
-                    ctx.hook_ctx(iteration), tc,
-                ))
+                await _maybe_await(
+                    self._hook.on_confirmation(
+                        ctx.hook_ctx(iteration),
+                        tc,
+                    )
+                )
                 yield {
                     "type": events.CONFIRMATION_REQUIRED,
                     "confirmation_id": result.get("confirmation_id", ""),
@@ -704,7 +770,9 @@ class ChatRunnerV2(AgentRunner["ChatRunSpec", "ChatRunResult"]):
                 continue
 
             content, compacted, saved = self._microcompact_result(
-                result, tool_name, call_id,
+                result,
+                tool_name,
+                call_id,
             )
             if compacted:
                 ctx.compacted_count += 1
@@ -739,7 +807,10 @@ class ChatRunnerV2(AgentRunner["ChatRunSpec", "ChatRunResult"]):
             ctx.observations.append(f"thought: {truncated}")
 
     def _microcompact_result(
-        self, result: Any, tool_name: str, call_id: str,
+        self,
+        result: Any,
+        tool_name: str,
+        call_id: str,
     ) -> tuple[str, bool, int]:
         if self._microcompact_fn is None:
             return json.dumps(result, ensure_ascii=False, default=str), False, 0
@@ -748,9 +819,12 @@ class ChatRunnerV2(AgentRunner["ChatRunSpec", "ChatRunResult"]):
     async def _emit_done(self, ctx: _RunContext) -> None:
         if ctx.error is not None:
             try:
-                await _maybe_await(self._hook.on_error(
-                    ctx.hook_ctx(0), RuntimeError(ctx.error),
-                ))
+                await _maybe_await(
+                    self._hook.on_error(
+                        ctx.hook_ctx(0),
+                        RuntimeError(ctx.error),
+                    )
+                )
             except Exception:
                 logger.warning("on_error hook raised", exc_info=True)
             yield {
@@ -759,9 +833,12 @@ class ChatRunnerV2(AgentRunner["ChatRunSpec", "ChatRunResult"]):
                 "stop_reason": ctx.stop_reason,
             }
         try:
-            final = await _maybe_await(self._hook.finalize_content(
-                ctx.hook_ctx(0), ctx.final_content,
-            ))
+            final = await _maybe_await(
+                self._hook.finalize_content(
+                    ctx.hook_ctx(0),
+                    ctx.final_content,
+                )
+            )
         except Exception:
             logger.warning("finalize_content hook raised", exc_info=True)
             final = ctx.final_content
@@ -813,12 +890,17 @@ class ChatRunnerV2(AgentRunner["ChatRunSpec", "ChatRunResult"]):
             return result
         except (AttributeError, TypeError, KeyError, ValueError) as exc:
             logger.warning(
-                "%s failed: %s", log_label or attr_name, exc, exc_info=True,
+                "%s failed: %s",
+                log_label or attr_name,
+                exc,
+                exc_info=True,
             )
             return default
         except Exception:
             logger.warning(
-                "%s UNEXPECTED failure", log_label or attr_name, exc_info=True,
+                "%s UNEXPECTED failure",
+                log_label or attr_name,
+                exc_info=True,
             )
             return default
 
@@ -840,7 +922,9 @@ class ChatRunnerV2(AgentRunner["ChatRunSpec", "ChatRunResult"]):
         return result or []
 
     async def _stream_llm(
-        self, messages: list[dict[str, Any]], tools: list[dict[str, Any]],
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]],
     ) -> Any:
         # Pass7+R-1 (2026-06-23): the per-path ``measure_latency`` +
         # metrics-recording boilerplate was extracted into the
@@ -855,7 +939,10 @@ class ChatRunnerV2(AgentRunner["ChatRunSpec", "ChatRunResult"]):
 
         retry = getattr(self._chat_service, "_llm_stream_with_retry", None)
         llm = None
-        if hasattr(self._chat_service, "wiki_service") and self._chat_service.wiki_service is not None:
+        if (
+            hasattr(self._chat_service, "wiki_service")
+            and self._chat_service.wiki_service is not None
+        ):
             llm = getattr(self._chat_service.wiki_service, "get_llm", None)
             llm = llm() if callable(llm) else None
 
@@ -904,7 +991,11 @@ class ChatRunnerV2(AgentRunner["ChatRunSpec", "ChatRunResult"]):
         executor = self._tool_executor
         if hasattr(executor, "execute"):
             result = executor.execute(
-                tool_name, args, tool_registry, session_id, ctx,
+                tool_name,
+                args,
+                tool_registry,
+                session_id,
+                ctx,
             )
             if inspect.iscoroutine(result):
                 result = await result
@@ -957,11 +1048,13 @@ class _StateTrace:
         if exc is not None:
             self.event = "error"
             self.error = f"{type(exc).__name__}: {exc}"
-        self._ctx.state_trace.append(_StateTraceEntry(
-            state=self.state,
-            started_at=self._start,
-            duration_ms=duration_ms,
-            event=self.event,
-            error=self.error,
-        ))
+        self._ctx.state_trace.append(
+            _StateTraceEntry(
+                state=self.state,
+                started_at=self._start,
+                duration_ms=duration_ms,
+                event=self.event,
+                error=self.error,
+            )
+        )
         return False  # do not suppress exception

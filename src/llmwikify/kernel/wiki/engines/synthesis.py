@@ -57,10 +57,16 @@ class SynthesisEngine:
 
         result = {
             "source_name": source_name,
-            "reinforced_claims": self._find_reinforced_claims(new_analysis, existing_sources),
-            "new_contradictions": self._find_new_contradictions(new_analysis, existing_sources),
+            "reinforced_claims": self._find_reinforced_claims(
+                new_analysis, existing_sources
+            ),
+            "new_contradictions": self._find_new_contradictions(
+                new_analysis, existing_sources
+            ),
             "knowledge_gaps": self._find_knowledge_gaps(new_analysis, existing_sources),
-            "suggested_updates": self._find_suggested_updates(new_analysis, existing_sources),
+            "suggested_updates": self._find_suggested_updates(
+                new_analysis, existing_sources
+            ),
             "new_entities": self._find_new_entities(new_analysis, existing_entities),
             "topic_overlap": self._find_topic_overlap(new_analysis, existing_topics),
             "synthesis_summary": self._generate_summary(new_analysis, existing_sources),
@@ -81,7 +87,9 @@ class SynthesisEngine:
             content = source_page.read_text()
             analysis = self._extract_analysis_from_page(content)
             if analysis:
-                analysis["_source_file"] = str(source_page.relative_to(self.wiki.wiki_dir))
+                analysis["_source_file"] = str(
+                    source_page.relative_to(self.wiki.wiki_dir)
+                )
                 analyses.append(analysis)
 
         return analyses
@@ -111,19 +119,14 @@ class SynthesisEngine:
 
         # Extract claims
         claims_match = re.findall(
-            r'-\s+(.+?)\s+\(confidence:\s*(high|medium|low)\)',
-            content
+            r"-\s+(.+?)\s+\(confidence:\s*(high|medium|low)\)", content
         )
         analysis["claims"] = [
-            {"statement": stmt, "confidence": conf}
-            for stmt, conf in claims_match
+            {"statement": stmt, "confidence": conf} for stmt, conf in claims_match
         ]
 
         # Extract entities
-        entities_match = re.findall(
-            r'-\s+\*\*(.+?)\*\*\s+\((\w+)\):\s*(.+)',
-            content
-        )
+        entities_match = re.findall(r"-\s+\*\*(.+?)\*\*\s+\((\w+)\):\s*(.+)", content)
         analysis["entities"] = [
             {"name": name, "type": etype, "description": desc}
             for name, etype, desc in entities_match
@@ -146,7 +149,7 @@ class SynthesisEngine:
 
             # Also extract entities from content
             content = page.read_text()
-            for match in re.findall(r'\*\*(.+?)\*\*\s+\(\w+\)', content):
+            for match in re.findall(r"\*\*(.+?)\*\*\s+\(\w+\)", content):
                 entities.add(match)
 
         return entities
@@ -157,7 +160,7 @@ class SynthesisEngine:
         for page in self.wiki._wiki_pages():
             content = page.read_text()
             # Extract from headings
-            for match in re.findall(r'^#+\s+(.+)$', content, re.MULTILINE):
+            for match in re.findall(r"^#+\s+(.+)$", content, re.MULTILINE):
                 if len(match) > 3:
                     topics.add(match.lower().strip())
 
@@ -185,25 +188,49 @@ class SynthesisEngine:
                     new_words = set(new_statement.split())
                     existing_words = set(existing_statement.split())
                     # Filter out common words
-                    stop_words = {"the", "a", "an", "is", "are", "was", "were", "in", "on", "at", "to", "for", "of", "and", "or"}
+                    stop_words = {
+                        "the",
+                        "a",
+                        "an",
+                        "is",
+                        "are",
+                        "was",
+                        "were",
+                        "in",
+                        "on",
+                        "at",
+                        "to",
+                        "for",
+                        "of",
+                        "and",
+                        "or",
+                    }
                     new_words = new_words - stop_words
                     existing_words = existing_words - stop_words
 
                     if new_words and existing_words:
-                        overlap = len(new_words & existing_words) / max(len(new_words | existing_words), 1)
-                        if overlap >= CLAIM_OVERLAP_THRESHOLD:  # keyword overlap threshold
+                        overlap = len(new_words & existing_words) / max(
+                            len(new_words | existing_words), 1
+                        )
+                        if (
+                            overlap >= CLAIM_OVERLAP_THRESHOLD
+                        ):  # keyword overlap threshold
                             match_count += 1
-                            matching_sources.append(existing.get("_source_file", "unknown"))
+                            matching_sources.append(
+                                existing.get("_source_file", "unknown")
+                            )
                             break
 
             if match_count > 0:
-                reinforced.append({
-                    "claim": new_claim.get("statement"),
-                    "confidence": new_claim.get("confidence"),
-                    "confirmed_by_count": match_count,
-                    "confirmed_by_sources": matching_sources,
-                    "observation": f"This claim is supported by {match_count} other source(s)",
-                })
+                reinforced.append(
+                    {
+                        "claim": new_claim.get("statement"),
+                        "confidence": new_claim.get("confidence"),
+                        "confirmed_by_count": match_count,
+                        "confirmed_by_sources": matching_sources,
+                        "observation": f"This claim is supported by {match_count} other source(s)",
+                    }
+                )
 
         return reinforced
 
@@ -218,15 +245,17 @@ class SynthesisEngine:
         # Check explicit contradictions from analysis
         new_contradictions = new_analysis.get("potential_contradictions", [])
         if new_contradictions:
-            contradictions.extend([
-                {
-                    "contradiction": c,
-                    "source": new_analysis.get("_source_file", "new source"),
-                    "type": "explicit",
-                    "observation": f"New source flags potential contradiction: {c}",
-                }
-                for c in new_contradictions
-            ])
+            contradictions.extend(
+                [
+                    {
+                        "contradiction": c,
+                        "source": new_analysis.get("_source_file", "new source"),
+                        "type": "explicit",
+                        "observation": f"New source flags potential contradiction: {c}",
+                    }
+                    for c in new_contradictions
+                ]
+            )
 
         # Check for conflicting claims (same topic, opposite statements)
         new_claims = new_analysis.get("claims", [])
@@ -234,27 +263,50 @@ class SynthesisEngine:
             new_statement = new_claim.get("statement", "").lower()
 
             # Look for negation patterns
-            negation_words = ["not", "no", "never", "unlikely", "fails", "contradicts", "opposes"]
+            negation_words = [
+                "not",
+                "no",
+                "never",
+                "unlikely",
+                "fails",
+                "contradicts",
+                "opposes",
+            ]
             is_negated = any(word in new_statement for word in negation_words)
 
             for existing in existing_sources:
                 for existing_claim in existing.get("claims", []):
                     existing_statement = existing_claim.get("statement", "").lower()
-                    existing_is_negated = any(word in existing_statement for word in negation_words)
+                    existing_is_negated = any(
+                        word in existing_statement for word in negation_words
+                    )
 
                     # Check if same topic but opposite stance
                     new_words = set(new_statement.split()) - {"not", "no", "never"}
-                    existing_words = set(existing_statement.split()) - {"not", "no", "never"}
-                    overlap = len(new_words & existing_words) / max(len(new_words | existing_words), 1)
+                    existing_words = set(existing_statement.split()) - {
+                        "not",
+                        "no",
+                        "never",
+                    }
+                    overlap = len(new_words & existing_words) / max(
+                        len(new_words | existing_words), 1
+                    )
 
-                    if overlap >= CONTRADICTION_OVERLAP_THRESHOLD and is_negated != existing_is_negated:
-                        contradictions.append({
-                            "new_claim": new_claim.get("statement"),
-                            "existing_claim": existing_claim.get("statement"),
-                            "existing_source": existing.get("_source_file", "unknown"),
-                            "type": "implicit_conflict",
-                            "observation": "Claims on same topic have opposing stances",
-                        })
+                    if (
+                        overlap >= CONTRADICTION_OVERLAP_THRESHOLD
+                        and is_negated != existing_is_negated
+                    ):
+                        contradictions.append(
+                            {
+                                "new_claim": new_claim.get("statement"),
+                                "existing_claim": existing_claim.get("statement"),
+                                "existing_source": existing.get(
+                                    "_source_file", "unknown"
+                                ),
+                                "type": "implicit_conflict",
+                                "observation": "Claims on same topic have opposing stances",
+                            }
+                        )
 
         return contradictions
 
@@ -269,15 +321,17 @@ class SynthesisEngine:
         # Gaps from new source
         new_gaps = new_analysis.get("data_gaps", [])
         if new_gaps:
-            gaps.extend([
-                {
-                    "gap": g,
-                    "source": "new source",
-                    "type": "explicit_gap",
-                    "observation": f"Source identifies gap: {g}",
-                }
-                for g in new_gaps
-            ])
+            gaps.extend(
+                [
+                    {
+                        "gap": g,
+                        "source": "new source",
+                        "type": "explicit_gap",
+                        "observation": f"Source identifies gap: {g}",
+                    }
+                    for g in new_gaps
+                ]
+            )
 
         # Topics mentioned but not covered in wiki
         new_topics = new_analysis.get("topics", [])
@@ -286,12 +340,14 @@ class SynthesisEngine:
         for topic in new_topics:
             topic_lower = topic.lower()
             if topic_lower not in existing_topics and len(topic) > 3:
-                gaps.append({
-                    "gap": f"Topic '{topic}' is mentioned but not covered in wiki",
-                    "source": "topic analysis",
-                    "type": "missing_coverage",
-                    "observation": f"Consider creating a page for '{topic}'",
-                })
+                gaps.append(
+                    {
+                        "gap": f"Topic '{topic}' is mentioned but not covered in wiki",
+                        "source": "topic analysis",
+                        "type": "missing_coverage",
+                        "observation": f"Consider creating a page for '{topic}'",
+                    }
+                )
 
         return gaps
 
@@ -310,22 +366,26 @@ class SynthesisEngine:
         for entity in new_entities:
             entity_name = entity.get("name", "")
             if entity_name in existing_entities:
-                updates.append({
-                    "page": f"entities/{entity_name}",
-                    "reason": f"New information about existing entity: {entity_name}",
-                    "type": "entity_update",
-                    "new_attributes": entity.get("attributes", {}),
-                })
+                updates.append(
+                    {
+                        "page": f"entities/{entity_name}",
+                        "reason": f"New information about existing entity: {entity_name}",
+                        "type": "entity_update",
+                        "new_attributes": entity.get("attributes", {}),
+                    }
+                )
 
         # Topics with new claims
         new_claims = new_analysis.get("claims", [])
         for claim in new_claims:
             if claim.get("confidence") == "high":
-                updates.append({
-                    "page": "relevant concept pages",
-                    "reason": f"New high-confidence claim: {claim.get('statement')[:80]}",
-                    "type": "claim_addition",
-                })
+                updates.append(
+                    {
+                        "page": "relevant concept pages",
+                        "reason": f"New high-confidence claim: {claim.get('statement')[:80]}",
+                        "type": "claim_addition",
+                    }
+                )
 
         return updates[:MAX_SUGGESTED_UPDATES]  # Limit suggestions
 
@@ -340,12 +400,14 @@ class SynthesisEngine:
         for entity in new_analysis.get("entities", []):
             entity_name = entity.get("name", "")
             if entity_name and entity_name not in existing_entities:
-                new_entities.append({
-                    "name": entity_name,
-                    "type": entity.get("type", "unknown"),
-                    "attributes": entity.get("attributes", {}),
-                    "suggestion": f"Consider creating entities/{entity_name}.md",
-                })
+                new_entities.append(
+                    {
+                        "name": entity_name,
+                        "type": entity.get("type", "unknown"),
+                        "attributes": entity.get("attributes", {}),
+                        "suggestion": f"Consider creating entities/{entity_name}.md",
+                    }
+                )
 
         return new_entities
 
@@ -360,11 +422,13 @@ class SynthesisEngine:
         for topic in new_analysis.get("topics", []):
             topic_lower = topic.lower()
             if topic_lower in existing_topics:
-                overlaps.append({
-                    "topic": topic,
-                    "observation": f"Topic '{topic}' is already covered in wiki",
-                    "suggestion": "Consider updating existing pages rather than creating new ones",
-                })
+                overlaps.append(
+                    {
+                        "topic": topic,
+                        "observation": f"Topic '{topic}' is already covered in wiki",
+                        "suggestion": "Consider updating existing pages rather than creating new ones",
+                    }
+                )
 
         return overlaps
 
@@ -380,17 +444,27 @@ class SynthesisEngine:
         new_claims = len(new_analysis.get("claims", []))
         new_topics = len(new_analysis.get("topics", []))
 
-        parts.append(f"New source analysis: {new_entities} entities, {new_claims} claims, {new_topics} topics")
+        parts.append(
+            f"New source analysis: {new_entities} entities, {new_claims} claims, {new_topics} topics"
+        )
 
         if existing_sources:
             parts.append(f"Compared against {len(existing_sources)} existing source(s)")
 
-            reinforced = len(self._find_reinforced_claims(new_analysis, existing_sources))
-            contradictions = len(self._find_new_contradictions(new_analysis, existing_sources))
+            reinforced = len(
+                self._find_reinforced_claims(new_analysis, existing_sources)
+            )
+            contradictions = len(
+                self._find_new_contradictions(new_analysis, existing_sources)
+            )
 
             if reinforced > 0:
-                parts.append(f"  ✅ {reinforced} claim(s) reinforced by existing sources")
+                parts.append(
+                    f"  ✅ {reinforced} claim(s) reinforced by existing sources"
+                )
             if contradictions > 0:
-                parts.append(f"  ⚠️ {contradictions} potential contradiction(s) detected")
+                parts.append(
+                    f"  ⚠️ {contradictions} potential contradiction(s) detected"
+                )
 
         return "\n".join(parts)

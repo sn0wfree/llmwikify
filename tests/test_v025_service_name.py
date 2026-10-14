@@ -18,17 +18,19 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 
 def _run_async(coro):
     """Run async coroutine, handling nested event loop issues."""
     import asyncio
+
     try:
         return asyncio.run(coro)
     except RuntimeError as e:
         if "cannot be called from a running event loop" in str(e):
             import concurrent.futures
+
             with concurrent.futures.ThreadPoolExecutor() as pool:
                 return pool.submit(asyncio.run, coro).result()
         raise
@@ -63,30 +65,28 @@ class TestCreateMCPNameResolution:
 
     def test_name_parameter_override(self, wiki):
         """1.2: name parameter should override directory name."""
-        mcp = create_mcp_server(wiki, name='my-wiki')
-        assert mcp.name == 'my-wiki'
+        mcp = create_mcp_server(wiki, name="my-wiki")
+        assert mcp.name == "my-wiki"
 
     def test_config_name_override(self, wiki):
         """1.3: config['name'] should override directory name."""
-        mcp = create_mcp_server(wiki, config={'name': 'cfg-wiki'})
-        assert mcp.name == 'cfg-wiki'
+        mcp = create_mcp_server(wiki, config={"name": "cfg-wiki"})
+        assert mcp.name == "cfg-wiki"
 
     def test_priority_name_over_config(self, wiki):
         """1.4: name parameter wins over config['name']."""
-        mcp = create_mcp_server(
-            wiki, name='cli-wiki', config={'name': 'cfg-wiki'}
-        )
-        assert mcp.name == 'cli-wiki'
+        mcp = create_mcp_server(wiki, name="cli-wiki", config={"name": "cfg-wiki"})
+        assert mcp.name == "cli-wiki"
 
     def test_priority_config_over_directory(self, wiki, tmp_path):
         """1.5: config['name'] wins over directory name."""
-        mcp = create_mcp_server(wiki, config={'name': 'cfg-wiki'})
-        assert mcp.name == 'cfg-wiki'
+        mcp = create_mcp_server(wiki, config={"name": "cfg-wiki"})
+        assert mcp.name == "cfg-wiki"
         assert mcp.name != tmp_path.name
 
     def test_empty_string_name_falls_back_to_directory(self, wiki, tmp_path):
         """1.6: Empty string name should fall back to directory name."""
-        mcp = create_mcp_server(wiki, name='')
+        mcp = create_mcp_server(wiki, name="")
         assert mcp.name == tmp_path.name
 
     def test_none_config_no_error(self, wiki, tmp_path):
@@ -110,48 +110,54 @@ class TestServeMCPPassthrough:
 
     def test_name_passed_to_create_mcp_server(self, wiki):
         """2.1: serve_mcp should pass name to MCPAdapter."""
-        with patch('llmwikify.interfaces.mcp.adapter.MCPAdapter') as mock_adapter_cls:
+        with patch("llmwikify.interfaces.mcp.adapter.MCPAdapter") as mock_adapter_cls:
             mock_adapter = MagicMock()
-            mock_adapter.name = 'test-wiki'
+            mock_adapter.name = "test-wiki"
             mock_adapter_cls.return_value = mock_adapter
 
-            with patch('asyncio.run'):
-                serve_mcp(wiki, name='test-wiki')
-                mock_adapter_cls.assert_called_once_with(wiki, name='test-wiki', config=None)
+            with patch("asyncio.run"):
+                serve_mcp(wiki, name="test-wiki")
+                mock_adapter_cls.assert_called_once_with(
+                    wiki, name="test-wiki", config=None
+                )
 
     def test_stdio_log_contains_service_name(self, wiki, tmp_path):
         """2.2: stdio mode should call MCPAdapter with correct name."""
-        with patch('llmwikify.interfaces.mcp.adapter.MCPAdapter') as mock_adapter_cls:
+        with patch("llmwikify.interfaces.mcp.adapter.MCPAdapter") as mock_adapter_cls:
             mock_adapter = MagicMock()
-            mock_adapter.name = 'my-wiki'
+            mock_adapter.name = "my-wiki"
             mock_adapter_cls.return_value = mock_adapter
 
-            with patch('asyncio.run'):
-                serve_mcp(wiki, name='my-wiki', transport='stdio')
-                mock_adapter_cls.assert_called_once_with(wiki, name='my-wiki', config=None)
+            with patch("asyncio.run"):
+                serve_mcp(wiki, name="my-wiki", transport="stdio")
+                mock_adapter_cls.assert_called_once_with(
+                    wiki, name="my-wiki", config=None
+                )
 
     def test_http_log_contains_service_name(self, wiki, tmp_path):
         """2.3: http mode should call MCPAdapter with correct name."""
-        with patch('llmwikify.interfaces.mcp.adapter.MCPAdapter') as mock_adapter_cls:
+        with patch("llmwikify.interfaces.mcp.adapter.MCPAdapter") as mock_adapter_cls:
             mock_adapter = MagicMock()
-            mock_adapter.name = 'http-wiki'
+            mock_adapter.name = "http-wiki"
             mock_adapter_cls.return_value = mock_adapter
 
-            with patch('asyncio.run'):
-                serve_mcp(wiki, name='http-wiki', transport='http')
-                mock_adapter_cls.assert_called_once_with(wiki, name='http-wiki', config=None)
+            with patch("asyncio.run"):
+                serve_mcp(wiki, name="http-wiki", transport="http")
+                mock_adapter_cls.assert_called_once_with(
+                    wiki, name="http-wiki", config=None
+                )
 
     def test_no_name_uses_directory_name_in_log(self, wiki, tmp_path):
         """2.4: When no name provided, MCPAdapter should use directory name."""
-        with patch('llmwikify.interfaces.mcp.adapter.MCPAdapter') as mock_adapter_cls:
+        with patch("llmwikify.interfaces.mcp.adapter.MCPAdapter") as mock_adapter_cls:
             mock_adapter = MagicMock()
             mock_adapter.name = tmp_path.name
             mock_adapter_cls.return_value = mock_adapter
 
-            with patch('asyncio.run'):
-                serve_mcp(wiki, transport='stdio')
+            with patch("asyncio.run"):
+                serve_mcp(wiki, transport="stdio")
                 call_kwargs = mock_adapter_cls.call_args.kwargs
-                assert call_kwargs['name'] is None
+                assert call_kwargs["name"] is None
 
 
 # ============================================================
@@ -170,9 +176,9 @@ class TestCLIArgParsing:
 
         parser = _build_parser()
         args = parser.parse_args(["mcp", "--name", "testwiki"])
-        assert args.name == "testwiki", (
-            f"--name should parse to 'testwiki'. Got: {args.name!r}"
-        )
+        assert (
+            args.name == "testwiki"
+        ), f"--name should parse to 'testwiki'. Got: {args.name!r}"
 
     def test_name_short_parameter(self):
         """3.2: -n short parameter should be parsed.
@@ -183,34 +189,36 @@ class TestCLIArgParsing:
 
         parser = _build_parser()
         args = parser.parse_args(["mcp", "-n", "shortwiki"])
-        assert args.name == "shortwiki", (
-            f"-n should parse to 'shortwiki'. Got: {args.name!r}"
-        )
+        assert (
+            args.name == "shortwiki"
+        ), f"-n should parse to 'shortwiki'. Got: {args.name!r}"
 
     def test_mcp_help_contains_name(self):
         """3.3: mcp --help should mention --name."""
         from llmwikify.interfaces.cli.commands import main
+
         stdout = StringIO()
-        with patch('sys.argv', ['llmwikify', 'mcp', '--help']):
-            with patch('sys.stdout', stdout):
+        with patch("sys.argv", ["llmwikify", "mcp", "--help"]):
+            with patch("sys.stdout", stdout):
                 with pytest.raises(SystemExit):
                     main()
 
         output = stdout.getvalue()
-        assert '--name' in output
-        assert '-n NAME' in output
+        assert "--name" in output
+        assert "-n NAME" in output
 
     def test_serve_help_contains_name(self):
         """3.4: serve --help should mention --name."""
         from llmwikify.interfaces.cli.commands import main
+
         stdout = StringIO()
-        with patch('sys.argv', ['llmwikify', 'serve', '--help']):
-            with patch('sys.stdout', stdout):
+        with patch("sys.argv", ["llmwikify", "serve", "--help"]):
+            with patch("sys.stdout", stdout):
                 with pytest.raises(SystemExit):
                     main()
 
         output = stdout.getvalue()
-        assert '--name' in output
+        assert "--name" in output
 
     def test_no_name_defaults_to_none(self):
         """3.5: Without --name, args.name should be None.
@@ -222,8 +230,7 @@ class TestCLIArgParsing:
         parser = _build_parser()
         args = parser.parse_args(["mcp"])
         assert args.name is None, (
-            f"Without --name, args.name should be None. "
-            f"Got: {args.name!r}"
+            f"Without --name, args.name should be None. " f"Got: {args.name!r}"
         )
 
 
@@ -235,7 +242,7 @@ class TestCLIServeMethod:
 
     @pytest.fixture
     def cli(self, temp_wiki):
-        cli = WikiCLI(temp_wiki, config={'mcp': {'transport': 'stdio'}})
+        cli = WikiCLI(temp_wiki, config={"mcp": {"transport": "stdio"}})
         cli.wiki.init()
         return cli
 
@@ -248,14 +255,14 @@ class TestCLIServeMethod:
         directly. We mock ``MCPAdapter`` to verify the
         ``name=`` kwarg flows through.
         """
-        with patch('llmwikify.interfaces.cli.commands.serve.MCPAdapter') as MockAdapter:
+        with patch("llmwikify.interfaces.cli.commands.serve.MCPAdapter") as MockAdapter:
             mock_instance = MagicMock()
             MockAdapter.return_value = mock_instance
 
             # Patch asyncio.run so we don't actually start the server
-            with patch('asyncio.run') as mock_asyncio:
+            with patch("asyncio.run") as mock_asyncio:
                 args = Args()
-                args.name = 'cli-wiki'
+                args.name = "cli-wiki"
                 args.transport = None
                 args.host = None
                 args.port = None
@@ -269,9 +276,8 @@ class TestCLIServeMethod:
                 # MCPAdapter was constructed with the wiki + name
                 MockAdapter.assert_called_once()
                 call_kwargs = MockAdapter.call_args.kwargs
-                assert call_kwargs.get('name') == 'cli-wiki', (
-                    f"--name should reach MCPAdapter as name=. "
-                    f"Got: {call_kwargs}"
+                assert call_kwargs.get("name") == "cli-wiki", (
+                    f"--name should reach MCPAdapter as name=. " f"Got: {call_kwargs}"
                 )
 
     def test_no_name_falls_back_to_none(self, cli):
@@ -279,12 +285,12 @@ class TestCLIServeMethod:
 
         Phase 3 #6 — see test_name_passed_to_serve_mcp.
         """
-        cli.config['mcp']['name'] = None
-        with patch('llmwikify.interfaces.cli.commands.serve.MCPAdapter') as MockAdapter:
+        cli.config["mcp"]["name"] = None
+        with patch("llmwikify.interfaces.cli.commands.serve.MCPAdapter") as MockAdapter:
             mock_instance = MagicMock()
             MockAdapter.return_value = mock_instance
 
-            with patch('asyncio.run'):
+            with patch("asyncio.run"):
                 args = Args()
                 args.name = None
                 args.transport = None
@@ -298,7 +304,7 @@ class TestCLIServeMethod:
                 cli.serve(args)
 
                 call_kwargs = MockAdapter.call_args.kwargs
-                assert call_kwargs.get('name') is None, (
+                assert call_kwargs.get("name") is None, (
                     f"Without --name and no config, MCPAdapter should "
                     f"get name=None. Got: {call_kwargs}"
                 )
@@ -308,12 +314,12 @@ class TestCLIServeMethod:
 
         Phase 3 #6 — see test_name_passed_to_serve_mcp.
         """
-        with patch('llmwikify.interfaces.cli.commands.serve.MCPAdapter'):
-            with patch('asyncio.run'):
+        with patch("llmwikify.interfaces.cli.commands.serve.MCPAdapter"):
+            with patch("asyncio.run"):
                 stdout = StringIO()
-                with patch('sys.stdout', stdout):
+                with patch("sys.stdout", stdout):
                     args = Args()
-                    args.name = 'log-test-wiki'
+                    args.name = "log-test-wiki"
                     args.transport = None
                     args.host = None
                     args.port = None
@@ -325,13 +331,11 @@ class TestCLIServeMethod:
                     cli.serve(args)
 
                 output = stdout.getvalue()
-                assert 'log-test-wiki' in output, (
-                    f"Service name should appear in startup log. "
-                    f"Output: {output}"
+                assert "log-test-wiki" in output, (
+                    f"Service name should appear in startup log. " f"Output: {output}"
                 )
                 assert "Starting MCP server 'log-test-wiki'" in output, (
-                    f"Startup banner should include service name. "
-                    f"Output: {output}"
+                    f"Startup banner should include service name. " f"Output: {output}"
                 )
 
     def test_cli_overrides_config_name(self, cli):
@@ -339,14 +343,14 @@ class TestCLIServeMethod:
 
         Phase 3 #6 — see test_name_passed_to_serve_mcp.
         """
-        cli.config['mcp']['name'] = 'config-wiki'
-        with patch('llmwikify.interfaces.cli.commands.serve.MCPAdapter') as MockAdapter:
+        cli.config["mcp"]["name"] = "config-wiki"
+        with patch("llmwikify.interfaces.cli.commands.serve.MCPAdapter") as MockAdapter:
             mock_instance = MagicMock()
             MockAdapter.return_value = mock_instance
 
-            with patch('asyncio.run'):
+            with patch("asyncio.run"):
                 args = Args()
-                args.name = 'cli-wiki'
+                args.name = "cli-wiki"
                 args.transport = None
                 args.host = None
                 args.port = None
@@ -358,7 +362,7 @@ class TestCLIServeMethod:
                 cli.serve(args)
 
                 call_kwargs = MockAdapter.call_args.kwargs
-                assert call_kwargs.get('name') == 'cli-wiki', (
+                assert call_kwargs.get("name") == "cli-wiki", (
                     f"CLI --name should override config mcp.name. "
                     f"Got: {call_kwargs}"
                 )
@@ -373,21 +377,22 @@ class TestConfigFileIntegration:
     def test_config_file_name_is_used(self, temp_wiki):
         """5.1: .wiki-config.yaml mcp.name should be used."""
         config_content = "mcp:\n  name: config-wiki\n  transport: stdio\n"
-        (temp_wiki / '.wiki-config.yaml').write_text(config_content)
+        (temp_wiki / ".wiki-config.yaml").write_text(config_content)
 
         import yaml
-        config = yaml.safe_load((temp_wiki / '.wiki-config.yaml').read_text()) or {}
+
+        config = yaml.safe_load((temp_wiki / ".wiki-config.yaml").read_text()) or {}
         cli = WikiCLI(temp_wiki, config=config)
         cli.wiki.init()
 
-        assert cli.config.get('mcp', {}).get('name') == 'config-wiki'
+        assert cli.config.get("mcp", {}).get("name") == "config-wiki"
 
     def test_no_config_name_uses_directory(self, temp_wiki):
         """5.2: Without mcp.name in config, CLI should fall back to directory name."""
-        cli = WikiCLI(temp_wiki, config={'mcp': {'transport': 'stdio'}})
+        cli = WikiCLI(temp_wiki, config={"mcp": {"transport": "stdio"}})
         cli.wiki.init()
 
-        config_name = cli.config.get('mcp', {}).get('name')
+        config_name = cli.config.get("mcp", {}).get("name")
         assert config_name is None
 
     def test_cli_wins_over_config_name(self, temp_wiki):
@@ -396,20 +401,21 @@ class TestConfigFileIntegration:
         Phase 3 #6 — see test_name_passed_to_serve_mcp.
         """
         config_content = "mcp:\n  name: config-wiki\n"
-        (temp_wiki / '.wiki-config.yaml').write_text(config_content)
+        (temp_wiki / ".wiki-config.yaml").write_text(config_content)
 
         import yaml
-        config = yaml.safe_load((temp_wiki / '.wiki-config.yaml').read_text()) or {}
+
+        config = yaml.safe_load((temp_wiki / ".wiki-config.yaml").read_text()) or {}
         cli = WikiCLI(temp_wiki, config=config)
         cli.wiki.init()
 
-        with patch('llmwikify.interfaces.cli.commands.serve.MCPAdapter') as MockAdapter:
+        with patch("llmwikify.interfaces.cli.commands.serve.MCPAdapter") as MockAdapter:
             mock_instance = MagicMock()
             MockAdapter.return_value = mock_instance
 
-            with patch('asyncio.run'):
+            with patch("asyncio.run"):
                 args = Args()
-                args.name = 'cli-wiki'
+                args.name = "cli-wiki"
                 args.transport = None
                 args.host = None
                 args.port = None
@@ -421,7 +427,7 @@ class TestConfigFileIntegration:
                 cli.serve(args)
 
                 call_kwargs = MockAdapter.call_args.kwargs
-                assert call_kwargs.get('name') == 'cli-wiki', (
+                assert call_kwargs.get("name") == "cli-wiki", (
                     f"CLI --name should override config mcp.name. "
                     f"Got: {call_kwargs}"
                 )
@@ -436,41 +442,41 @@ class TestEdgeCases:
     def test_special_chars_directory_name(self):
         """6.1: Directory with special chars should work."""
         with tempfile.TemporaryDirectory() as tmp:
-            tmp_path = Path(tmp) / 'my-wiki_2024'
+            tmp_path = Path(tmp) / "my-wiki_2024"
             tmp_path.mkdir()
-            (tmp_path / 'raw').mkdir()
-            (tmp_path / 'wiki').mkdir()
+            (tmp_path / "raw").mkdir()
+            (tmp_path / "wiki").mkdir()
 
             wiki = Wiki(tmp_path)
             wiki.init()
 
             mcp = create_mcp_server(wiki)
-            assert mcp.name == 'my-wiki_2024'
+            assert mcp.name == "my-wiki_2024"
             wiki.close()
 
     def test_space_directory_name(self):
         """6.2: Directory with spaces should work."""
         with tempfile.TemporaryDirectory() as tmp:
-            tmp_path = Path(tmp) / 'my wiki'
+            tmp_path = Path(tmp) / "my wiki"
             tmp_path.mkdir()
-            (tmp_path / 'raw').mkdir()
-            (tmp_path / 'wiki').mkdir()
+            (tmp_path / "raw").mkdir()
+            (tmp_path / "wiki").mkdir()
 
             wiki = Wiki(tmp_path)
             wiki.init()
 
             mcp = create_mcp_server(wiki)
-            assert mcp.name == 'my wiki'
+            assert mcp.name == "my wiki"
             wiki.close()
 
     def test_very_long_directory_name(self):
         """6.3: Very long directory name should not error."""
-        long_name = 'a' * 150
+        long_name = "a" * 150
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp) / long_name
             tmp_path.mkdir()
-            (tmp_path / 'raw').mkdir()
-            (tmp_path / 'wiki').mkdir()
+            (tmp_path / "raw").mkdir()
+            (tmp_path / "wiki").mkdir()
 
             wiki = Wiki(tmp_path)
             wiki.init()
@@ -482,39 +488,39 @@ class TestEdgeCases:
     def test_unicode_directory_name(self):
         """6.4: Unicode directory name should work."""
         with tempfile.TemporaryDirectory() as tmp:
-            tmp_path = Path(tmp) / '中文wiki'
+            tmp_path = Path(tmp) / "中文wiki"
             tmp_path.mkdir()
-            (tmp_path / 'raw').mkdir()
-            (tmp_path / 'wiki').mkdir()
+            (tmp_path / "raw").mkdir()
+            (tmp_path / "wiki").mkdir()
 
             wiki = Wiki(tmp_path)
             wiki.init()
 
             mcp = create_mcp_server(wiki)
-            assert mcp.name == '中文wiki'
+            assert mcp.name == "中文wiki"
             wiki.close()
 
     def test_config_name_none_falls_back_to_directory(self, tmp_path):
         """6.5: config['name']=None should fall back to directory name."""
-        (tmp_path / 'raw').mkdir()
-        (tmp_path / 'wiki').mkdir()
+        (tmp_path / "raw").mkdir()
+        (tmp_path / "wiki").mkdir()
 
         wiki = Wiki(tmp_path)
         wiki.init()
 
-        mcp = create_mcp_server(wiki, config={'name': None})
+        mcp = create_mcp_server(wiki, config={"name": None})
         assert mcp.name == tmp_path.name
         wiki.close()
 
     def test_config_name_empty_falls_back_to_directory(self, tmp_path):
         """6.6: config['name']='' should fall back to directory name."""
-        (tmp_path / 'raw').mkdir()
-        (tmp_path / 'wiki').mkdir()
+        (tmp_path / "raw").mkdir()
+        (tmp_path / "wiki").mkdir()
 
         wiki = Wiki(tmp_path)
         wiki.init()
 
-        mcp = create_mcp_server(wiki, config={'name': ''})
+        mcp = create_mcp_server(wiki, config={"name": ""})
         assert mcp.name == tmp_path.name
         wiki.close()
 
@@ -534,12 +540,12 @@ class TestFastMCPIntegration:
 
     def test_mcp_name_attribute(self, wiki, tmp_path):
         """7.1: MCP instance .name should match expected."""
-        mcp = create_mcp_server(wiki, name='test-attr')
-        assert mcp.name == 'test-attr'
+        mcp = create_mcp_server(wiki, name="test-attr")
+        assert mcp.name == "test-attr"
 
     def test_mcp_tools_registered(self, wiki):
         """7.2: MCP should have wiki_init tool registered."""
-        mcp = create_mcp_server(wiki, name='tools-test')
+        mcp = create_mcp_server(wiki, name="tools-test")
 
         async def check_tools():
             tools = await mcp.list_tools()
@@ -547,17 +553,17 @@ class TestFastMCPIntegration:
             return tool_names
 
         tool_names = _run_async(check_tools())
-        assert 'wiki_init' in tool_names
-        assert 'wiki_ingest' in tool_names
-        assert 'wiki_write_page' in tool_names
+        assert "wiki_init" in tool_names
+        assert "wiki_ingest" in tool_names
+        assert "wiki_write_page" in tool_names
 
     def test_different_names_different_instances(self, wiki, tmp_path):
         """7.3: Two instances with different names should be independent."""
-        mcp1 = create_mcp_server(wiki, name='instance-1')
-        mcp2 = create_mcp_server(wiki, name='instance-2')
+        mcp1 = create_mcp_server(wiki, name="instance-1")
+        mcp2 = create_mcp_server(wiki, name="instance-2")
 
-        assert mcp1.name == 'instance-1'
-        assert mcp2.name == 'instance-2'
+        assert mcp1.name == "instance-1"
+        assert mcp2.name == "instance-2"
         assert mcp1.name != mcp2.name
 
 
@@ -601,11 +607,18 @@ class TestAutoRegisterMcporter:
         config_dir = fake_home / ".mcporter"
         config_dir.mkdir()
         config_file = config_dir / "mcporter.json"
-        config_file.write_text(json.dumps({
-            "mcpServers": {
-                "testwiki": {"type": "remote", "url": "http://127.0.0.1:8888/mcp"}
-            }
-        }))
+        config_file.write_text(
+            json.dumps(
+                {
+                    "mcpServers": {
+                        "testwiki": {
+                            "type": "remote",
+                            "url": "http://127.0.0.1:8888/mcp",
+                        }
+                    }
+                }
+            )
+        )
 
         stdout = StringIO()
         with patch("sys.stdout", stdout):

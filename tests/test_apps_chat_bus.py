@@ -65,7 +65,7 @@ class TestInboundMessage:
         m = InboundMessage.from_dict({"content": "hi"})
         assert m.content == "hi"
         assert m.channel == "http"  # default
-        assert m.metadata == {}      # default
+        assert m.metadata == {}  # default
 
     def test_metadata_isolation(self) -> None:
         """Two instances share no metadata state."""
@@ -112,10 +112,12 @@ class TestOutboundMessage:
 
     def test_stream_id_metadata(self) -> None:
         """Multi-segment streams carry a stream_id for concurrent dedup."""
-        m = OutboundMessage(metadata={
-            OUTBOUND_META_STREAM_DELTA: True,
-            OUTBOUND_META_STREAM_ID: "seg-42",
-        })
+        m = OutboundMessage(
+            metadata={
+                OUTBOUND_META_STREAM_DELTA: True,
+                OUTBOUND_META_STREAM_ID: "seg-42",
+            }
+        )
         assert m.metadata[OUTBOUND_META_STREAM_ID] == "seg-42"
         assert m.is_stream_delta is True
 
@@ -330,13 +332,19 @@ class TestSSEEventIntegration:
 
     def test_stream_id_groups_concurrent_segments(self) -> None:
         """A second concurrent stream gets a different stream_id."""
-        s1 = OutboundMessage(metadata={
-            OUTBOUND_META_STREAM_DELTA: True,
-            OUTBOUND_META_STREAM_ID: "stream-A",
-        })
-        s2 = OutboundMessage(metadata={
-            OUTBOUND_META_STREAM_DELTA: True,
-            OUTBOUND_META_STREAM_ID: "stream-B",
-        })
+        s1 = OutboundMessage(
+            metadata={
+                OUTBOUND_META_STREAM_DELTA: True,
+                OUTBOUND_META_STREAM_ID: "stream-A",
+            }
+        )
+        s2 = OutboundMessage(
+            metadata={
+                OUTBOUND_META_STREAM_DELTA: True,
+                OUTBOUND_META_STREAM_ID: "stream-B",
+            }
+        )
         # Channel can group deltas by stream_id
-        assert s1.metadata[OUTBOUND_META_STREAM_ID] != s2.metadata[OUTBOUND_META_STREAM_ID]
+        assert (
+            s1.metadata[OUTBOUND_META_STREAM_ID] != s2.metadata[OUTBOUND_META_STREAM_ID]
+        )

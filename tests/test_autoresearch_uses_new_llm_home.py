@@ -17,9 +17,7 @@ from pathlib import Path
 
 # Resolve autoresearch dir relative to this file so the test is
 # stable when other tests in the same suite chdir or monkeypatch cwd.
-_AUTORESEARCH_DIR = (
-    Path(__file__).parent.parent / "src" / "llmwikify" / "apps" / "chat"
-)
+_AUTORESEARCH_DIR = Path(__file__).parent.parent / "src" / "llmwikify" / "apps" / "chat"
 DEPRECATED_PATH = "llmwikify.agent.backend.adapters"
 
 
@@ -42,9 +40,9 @@ def test_autoresearch_does_not_import_from_deprecated_adapters():
     hits: list[str] = []
     for p in py_files:
         hits.extend(_imports_from(p, DEPRECATED_PATH))
-    assert hits == [], (
-        f"autoresearch still imports from deprecated {DEPRECATED_PATH}: {hits}"
-    )
+    assert (
+        hits == []
+    ), f"autoresearch still imports from deprecated {DEPRECATED_PATH}: {hits}"
 
 
 def test_autoresearch_engine_imports_streamable_from_new_home():

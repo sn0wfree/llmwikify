@@ -47,7 +47,12 @@ class ReportCommand(Command):
         if not isinstance(subparsers, _SubParsersAction):
             raise TypeError("setup_parser requires an argparse subparsers action")
         p = subparsers.add_parser(self.name, help=self.help)
-        p.add_argument("--top", type=int, default=10, help="Number of top connections (default: 10)")
+        p.add_argument(
+            "--top",
+            type=int,
+            default=10,
+            help="Number of top connections (default: 10)",
+        )
         p.add_argument("--output", "-o", default=None, help="Output file path")
 
     def run(self, args: Any, wiki: Any, config: dict) -> int:

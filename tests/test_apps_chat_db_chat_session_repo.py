@@ -1,4 +1,5 @@
 """Tests for ChatSessionRepository (chat_sessions table)."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -106,16 +107,22 @@ class TestList:
 
 
 class TestDelete:
-    def test_delete_returns_true_when_row_exists(self, repo: ChatSessionRepository) -> None:
+    def test_delete_returns_true_when_row_exists(
+        self, repo: ChatSessionRepository
+    ) -> None:
         sid = repo.create_chat_session()
         assert repo.delete_chat_session(sid) is True
         assert repo.get_chat_session(sid) is None
 
-    def test_delete_returns_false_when_missing(self, repo: ChatSessionRepository) -> None:
+    def test_delete_returns_false_when_missing(
+        self, repo: ChatSessionRepository
+    ) -> None:
         assert repo.delete_chat_session("nonexistent") is False
 
     def test_delete_does_not_touch_other_tables(
-        self, repo: ChatSessionRepository, tmp_path: Path,
+        self,
+        repo: ChatSessionRepository,
+        tmp_path: Path,
     ) -> None:
         """delete_chat_session only deletes from chat_sessions;
         cascade is the facade's responsibility.
@@ -126,6 +133,7 @@ class TestDelete:
         NOT auto-cascade (the facade does manual cascade).
         """
         from llmwikify.apps.chat.db import ToolCallRepository
+
         db_path = tmp_path / "test.db"
         repo._mgr.conn.execute("PRAGMA foreign_keys = OFF")
         tools = ToolCallRepository(db_path)

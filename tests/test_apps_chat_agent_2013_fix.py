@@ -35,7 +35,13 @@ class TestNormalizeToolCallIDs:
         assert len(cid) == 5 + 24
 
     def test_invalid_format_replaced_with_local_uuid(self) -> None:
-        buf = {0: {"id": "toolu_bdrk_01U74yxf14B6fvB7mo3dn6Kh", "name": "t", "args_parts": []}}
+        buf = {
+            0: {
+                "id": "toolu_bdrk_01U74yxf14B6fvB7mo3dn6Kh",
+                "name": "t",
+                "args_parts": [],
+            }
+        }
         _normalize_tool_call_ids(buf)
         cid = buf[0]["id"]
         assert cid.startswith("call_")
@@ -101,8 +107,11 @@ class TestEnforceRoleAlternation:
                 "role": "assistant",
                 "content": "",
                 "tool_calls": [
-                    {"id": "x", "type": "function",
-                     "function": {"name": "f", "arguments": "{}"}},
+                    {
+                        "id": "x",
+                        "type": "function",
+                        "function": {"name": "f", "arguments": "{}"},
+                    },
                 ],
             },
             {"role": "tool", "content": "result", "tool_call_id": "x"},
@@ -121,8 +130,11 @@ class TestEnforceRoleAlternation:
                 "role": "assistant",
                 "content": "",
                 "tool_calls": [
-                    {"id": "x", "type": "function",
-                     "function": {"name": "f", "arguments": "{}"}},
+                    {
+                        "id": "x",
+                        "type": "function",
+                        "function": {"name": "f", "arguments": "{}"},
+                    },
                 ],
             },
             {"role": "tool", "content": "result", "tool_call_id": "x"},
@@ -141,14 +153,16 @@ class TestCountMessagesToolCalls:
             {
                 "role": "assistant",
                 "content": "",
-                "tool_calls": [{
-                    "id": "c1",
-                    "type": "function",
-                    "function": {
-                        "name": "search",
-                        "arguments": '{"q":"hello world"}',
-                    },
-                }],
+                "tool_calls": [
+                    {
+                        "id": "c1",
+                        "type": "function",
+                        "function": {
+                            "name": "search",
+                            "arguments": '{"q":"hello world"}',
+                        },
+                    }
+                ],
             },
             {"role": "tool", "content": "result"},
         ]

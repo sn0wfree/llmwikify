@@ -37,10 +37,16 @@ from llmwikify.apps.chat.skills.crud.wiki_dream_skill import (
 )
 
 __all__ = [
-    "MemorySkill", "memory_skill",
-    "NotifySkill", "notify_skill",
-    "SchedulerSkill", "scheduler_skill",
-    "WikiDreamSkill", "wiki_dream_skill",
-    "GoalSkill", "goal_skill",
-    "SubagentSkill", "subagent_skill",
+    "MemorySkill",
+    "memory_skill",
+    "NotifySkill",
+    "notify_skill",
+    "SchedulerSkill",
+    "scheduler_skill",
+    "WikiDreamSkill",
+    "wiki_dream_skill",
+    "GoalSkill",
+    "goal_skill",
+    "SubagentSkill",
+    "subagent_skill",
 ]

@@ -5,6 +5,7 @@ v0.41: 默认配置从 ``foundation/templates/llmwikify.default.json`` 读取，
 
 v0.42: 重构为 foundation.config.Config + foundation.utils 的薄包装。
 """
+
 from __future__ import annotations
 
 import logging
@@ -64,7 +65,9 @@ class ConfigManager:
         """
         self._config.save(data, section="llm")
 
-    def load_effective_llm_config(self, wiki_root: Path | None = None) -> dict[str, Any]:
+    def load_effective_llm_config(
+        self, wiki_root: Path | None = None
+    ) -> dict[str, Any]:
         """Load the effective LLM config by merging global + per-wiki overrides.
 
         Priority: per-wiki .wiki-config.yaml > global config > template default

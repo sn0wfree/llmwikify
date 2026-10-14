@@ -5,6 +5,7 @@
 
 历史: 从 apps/chat/agent/unified/steps/llm.py 搬迁。
 """
+
 from __future__ import annotations
 
 import logging
@@ -40,9 +41,13 @@ class LLMCallStep(StepHandler):
                 return StepResult.ok(response)
             except Exception as exc:
                 last_error = f"{type(exc).__name__}: {exc}"
-                logger.warning("LLM call attempt %d failed: %s", attempt + 1, last_error)
+                logger.warning(
+                    "LLM call attempt %d failed: %s", attempt + 1, last_error
+                )
 
-        return StepResult.fail(f"LLM call failed after {self._max_retries} attempts: {last_error}")
+        return StepResult.fail(
+            f"LLM call failed after {self._max_retries} attempts: {last_error}"
+        )
 
 
 class ExtractJSONStep(StepHandler):

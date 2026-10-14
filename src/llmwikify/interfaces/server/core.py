@@ -29,6 +29,7 @@ logger = logging.getLogger(__name__)
 
 __all__ = ["WikiServer", "setup_logging"]
 
+
 class WikiServer:
     """llmwikify Unified Server - combines all service layers.
 
@@ -86,11 +87,12 @@ class WikiServer:
         else:
             # Single wiki mode: create a registry and auto-register the wiki
             from llmwikify.kernel.multi_wiki.instance import WikiType
+
             self.registry = WikiRegistry(config={})
-            wiki_id = str(wiki.root).split('/')[-1] or 'default'
+            wiki_id = str(wiki.root).split("/")[-1] or "default"
             self.registry.register_wiki(
                 wiki_id=wiki_id,
-                name=wiki_id.replace('-', ' ').replace('_', ' ').title(),
+                name=wiki_id.replace("-", " ").replace("_", " ").title(),
                 root=wiki.root,
                 wiki_type=WikiType.LOCAL,
                 is_default=True,
@@ -146,6 +148,7 @@ class WikiServer:
         from llmwikify.apps.chat.channels.websocket import (
             get_default_ws_manager,
         )
+
         get_default_bus()
         get_default_ws_manager()
 
@@ -159,7 +162,8 @@ class WikiServer:
         # 3. Register REST API routes (Phase 7: provider forwarded)
         if enable_rest:
             register_routes(
-                self.app, self.registry,
+                self.app,
+                self.registry,
                 provider=self.provider,
                 api_key=self.api_key,
             )
@@ -168,6 +172,7 @@ class WikiServer:
             from llmwikify.interfaces.server.http.agent._common import (
                 get_agent_service,
             )
+
             self._agent_service = get_agent_service()
 
             # Phase 2a: register auth routes (POST /auth/login, GET /auth/me)
@@ -177,6 +182,7 @@ class WikiServer:
             from llmwikify.interfaces.server.http.auth_routes import (
                 auth_router,
             )
+
             self.app.include_router(auth_router)
             # Make the registry reachable from request handlers.
             self.app.state.wiki_registry = self.registry
@@ -233,6 +239,7 @@ class WikiServer:
                     from llmwikify.apps.chat.memory.memory_config import (
                         load_memory_config,
                     )
+
                     mem_cfg = load_memory_config(self._agent_service.data_dir)
                     ac_cfg = mem_cfg.auto_compact
                     if ac_cfg.get("enabled", True):
@@ -254,14 +261,12 @@ class WikiServer:
             # matching the AutoCompact pattern. ``enable_confirmations_cleanup``
             # on WikiServer is a master kill-switch — even when True, the
             # config-level ``enabled`` flag is honored.
-            if (
-                self.enable_confirmations_cleanup
-                and self._agent_service is not None
-            ):
+            if self.enable_confirmations_cleanup and self._agent_service is not None:
                 try:
                     from llmwikify.apps.chat.memory.memory_config import (
                         load_memory_config,
                     )
+
                     mem_cfg = load_memory_config(self._agent_service.data_dir)
                     cc_cfg = mem_cfg.confirmations_cleanup
                     if cc_cfg.get("enabled", True):
@@ -289,6 +294,7 @@ class WikiServer:
                         MaintenanceManager,
                         load_maintenance_config,
                     )
+
                     m_cfg = load_maintenance_config()
                     if m_cfg.enabled:
                         # Same data_dir resolution as AgentService
@@ -405,6 +411,7 @@ class WikiServer:
         from llmwikify.interfaces.server.http.middleware import (
             JWTAuthMiddleware,
         )
+
         if not self.local_mode:
             try:
                 secret = self._load_jwt_secret()
@@ -440,6 +447,7 @@ class WikiServer:
             RateLimitMiddleware,
             get_client_ip,
         )
+
         app.add_middleware(RateLimitMiddleware)
 
         # Request logging middleware - logs every request for debugging
@@ -448,7 +456,9 @@ class WikiServer:
             response = await call_next(request)
             if response.status_code >= 400:
                 client = get_client_ip(request)
-                logger.info(f"[req] {request.method} {request.url.path} → {response.status_code} | client={client}")
+                logger.info(
+                    f"[req] {request.method} {request.url.path} → {response.status_code} | client={client}"
+                )
             return response
 
         # Mount MCP endpoint (same instance whose lifespan is entered above)
@@ -473,11 +483,13 @@ class WikiServer:
                 "multi_wiki": is_multi,
                 # Phase 7 feature flag (visible in /api/health)
                 "dream_scheduler": self._feature_running(
-                    "enable_dream_scheduler", "dream_scheduler",
+                    "enable_dream_scheduler",
+                    "dream_scheduler",
                 ),
                 # Phase 9 feature flag
                 "auto_compact": self._feature_running(
-                    "enable_auto_compact", "auto_compact",
+                    "enable_auto_compact",
+                    "auto_compact",
                 ),
                 # v0.40: confirmations cleanup task
                 "confirmations_cleanup": self._feature_running(
@@ -510,7 +522,8 @@ class WikiServer:
             # Single wiki mode (1 wiki, no explicit default)
             page_count = (
                 len(list(self.wiki.wiki_dir.glob("**/*.md")))
-                if self.wiki.wiki_dir.exists() else 0
+                if self.wiki.wiki_dir.exists()
+                else 0
             )
             return {
                 "status": "ok",
@@ -566,12 +579,14 @@ class WikiServer:
         the caller falls back to lazy verification at request time.
         """
         from llmwikify.foundation.auth import require_secret
+
         return require_secret()
 
     def run(self, host: str = DEFAULT_HOST, port: int = DEFAULT_PORT) -> None:
         """Run unified HTTP server."""
         setup_logging()
         import uvicorn
+
         logger.info(f"llmwikify server starting on {host}:{port}")
         uvicorn.run(self.app, host=host, port=port, log_level="info")
 

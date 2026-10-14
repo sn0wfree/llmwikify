@@ -8,7 +8,6 @@ without conflict.
 import sys
 from pathlib import Path
 
-
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from llmwikify.kernel.storage.index import WikiIndex
@@ -36,15 +35,22 @@ class TestMultiWikiDict:
         wiki_a.mkdir()
         wiki_b.mkdir()
 
-        self._seed_wiki(wiki_a, [
-            ("p1", "# 量化配置\n\n资产配置方法。", "p1.md"),
-        ])
-        self._seed_wiki(wiki_b, [
-            ("p1", "# 机器学习\n\n深度学习算法。", "p1.md"),
-        ])
+        self._seed_wiki(
+            wiki_a,
+            [
+                ("p1", "# 量化配置\n\n资产配置方法。", "p1.md"),
+            ],
+        )
+        self._seed_wiki(
+            wiki_b,
+            [
+                ("p1", "# 机器学习\n\n深度学习算法。", "p1.md"),
+            ],
+        )
 
         # Generate dicts
         from llmwikify.kernel.storage.jieba_dict_gen import generate_user_dict
+
         result_a = generate_user_dict(wiki_a / ".llmwikify.db", wiki_a)
         result_b = generate_user_dict(wiki_b / ".llmwikify.db", wiki_b)
 
@@ -57,8 +63,16 @@ class TestMultiWikiDict:
         assert dict_b.exists()
 
         # Content of dicts should differ (different domain vocab)
-        words_a = {line.split("\t")[0] for line in dict_a.read_text().splitlines() if line.strip()}
-        words_b = {line.split("\t")[0] for line in dict_b.read_text().splitlines() if line.strip()}
+        words_a = {
+            line.split("\t")[0]
+            for line in dict_a.read_text().splitlines()
+            if line.strip()
+        }
+        words_b = {
+            line.split("\t")[0]
+            for line in dict_b.read_text().splitlines()
+            if line.strip()
+        }
         assert words_a != words_b, "Different wikis should generate different dicts"
         # Each should contain domain-relevant terms
         assert any("配置" in w for w in words_a) or any("量化" in w for w in words_a)
@@ -71,14 +85,21 @@ class TestMultiWikiDict:
         wiki_a.mkdir()
         wiki_b.mkdir()
 
-        self._seed_wiki(wiki_a, [
-            ("p1", "# Alpha\n\nContent A.", "p1.md"),
-        ])
-        self._seed_wiki(wiki_b, [
-            ("p1", "# Beta\n\nContent B.", "p1.md"),
-        ])
+        self._seed_wiki(
+            wiki_a,
+            [
+                ("p1", "# Alpha\n\nContent A.", "p1.md"),
+            ],
+        )
+        self._seed_wiki(
+            wiki_b,
+            [
+                ("p1", "# Beta\n\nContent B.", "p1.md"),
+            ],
+        )
 
         from llmwikify.kernel.storage.jieba_dict_gen import generate_user_dict
+
         generate_user_dict(wiki_a / ".llmwikify.db", wiki_a)
         generate_user_dict(wiki_b / ".llmwikify.db", wiki_b)
 

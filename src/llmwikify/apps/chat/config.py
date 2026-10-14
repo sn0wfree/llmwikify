@@ -14,6 +14,7 @@ structure / strict-exit / retry managers / per-prompt
 ``llm_params``) are kept in this module as ``_SIX_STEP_EXTRAS``
 and merged with the base defaults at module load.
 """
+
 from __future__ import annotations
 
 from functools import lru_cache

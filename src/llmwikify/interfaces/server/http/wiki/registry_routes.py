@@ -49,7 +49,9 @@ def register_registry_routes(app, registry: WikiRegistry) -> None:
         if wiki_type == "remote":
             url = body.get("url")
             if not url:
-                raise HTTPException(status_code=400, detail="url required for remote wiki")
+                raise HTTPException(
+                    status_code=400, detail="url required for remote wiki"
+                )
             validate_remote_url(url, allowed_remote_hosts)  # SSRF 校验
             instance = registry.register_remote(
                 wiki_id=wiki_id,
@@ -62,7 +64,9 @@ def register_registry_routes(app, registry: WikiRegistry) -> None:
         else:
             root = body.get("root")
             if not root:
-                raise HTTPException(status_code=400, detail="root required for local wiki")
+                raise HTTPException(
+                    status_code=400, detail="root required for local wiki"
+                )
             instance = registry.register_wiki(
                 wiki_id=wiki_id,
                 name=name,

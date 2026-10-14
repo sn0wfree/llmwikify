@@ -12,7 +12,9 @@ logger = logging.getLogger(__name__)
 class WikiPageIOMixin(WikiProtocol):
     """Page read/write, search, log, and index file update."""
 
-    def write_page(self, page_name: str, content: str, page_type: str | None = None) -> str:
+    def write_page(
+        self, page_name: str, content: str, page_type: str | None = None
+    ) -> str:
         """Write a wiki page.
 
         Args:
@@ -29,7 +31,9 @@ class WikiPageIOMixin(WikiProtocol):
             write_page("concepts/Risk Parity", content)  # legacy
         """
         if ".." in page_name or page_name.startswith("/"):
-            raise ValueError(f"Invalid page name: {page_name!r} — path traversal not allowed")
+            raise ValueError(
+                f"Invalid page name: {page_name!r} — path traversal not allowed"
+            )
 
         if page_name.endswith(".md"):
             page_name = page_name[:-3]
@@ -53,22 +57,24 @@ class WikiPageIOMixin(WikiProtocol):
                 directory = page_type.lower()
 
             full_path = f"{directory}/{page_name}"
-        elif '/' in page_name:
+        elif "/" in page_name:
             full_path = page_name
         else:
             full_path = page_name
 
-        if '\\n' in content:
-            content = content.replace('\\n', '\n')
-        if '\\t' in content:
-            content = content.replace('\\t', '\t')
+        if "\\n" in content:
+            content = content.replace("\\n", "\n")
+        if "\\t" in content:
+            content = content.replace("\\t", "\t")
 
         page_path = (self.wiki_dir / f"{full_path}.md").resolve()
 
         try:
             page_path.relative_to(self.wiki_dir.resolve())
         except ValueError:
-            raise ValueError(f"Page path escapes wiki/ directory: {full_path!r}") from None
+            raise ValueError(
+                f"Page path escapes wiki/ directory: {full_path!r}"
+            ) from None
 
         action = "Updated" if page_path.exists() else "Created"
         self._backend.put_page(full_path, content)
@@ -90,19 +96,19 @@ class WikiPageIOMixin(WikiProtocol):
         if page_name.endswith(".md"):
             page_name = page_name[:-3]
 
-        if page_name.startswith('sink/'):
-            page_name = page_name.replace('sink/', '.sink/', 1)
+        if page_name.startswith("sink/"):
+            page_name = page_name.replace("sink/", ".sink/", 1)
 
-        if page_name.startswith('.sink/') or page_name.startswith('wiki/.sink/'):
-            sink_name = page_name.rsplit('/', 1)[-1]
+        if page_name.startswith(".sink/") or page_name.startswith("wiki/.sink/"):
+            sink_name = page_name.rsplit("/", 1)[-1]
             sink_file = self.sink_dir / sink_name
             if not sink_file.exists():
                 return {"error": f"Sink file not found: {page_name}"}
             raw_name = sink_file.name
-            if raw_name.endswith('.sink.md'):
-                page_name_from_file = raw_name[:-len('.sink.md')]
+            if raw_name.endswith(".sink.md"):
+                page_name_from_file = raw_name[: -len(".sink.md")]
             else:
-                page_name_from_file = sink_file.stem.replace('.sink', '')
+                page_name_from_file = sink_file.stem.replace(".sink", "")
 
             return {
                 "page_name": page_name_from_file,
@@ -111,7 +117,7 @@ class WikiPageIOMixin(WikiProtocol):
                 "is_sink": True,
             }
 
-        if page_type and '/' not in page_name:
+        if page_type and "/" not in page_name:
             type_to_dir = self._load_page_type_mapping()
             directory = type_to_dir.get(page_type)
             if directory is None:
@@ -140,8 +146,8 @@ class WikiPageIOMixin(WikiProtocol):
         }
 
         sink_info = self.query_sink.get_info_for_page(full_path)
-        result['has_sink'] = sink_info['has_sink']
-        result['sink_entries'] = sink_info['sink_entries']
+        result["has_sink"] = sink_info["has_sink"]
+        result["sink_entries"] = sink_info["sink_entries"]
 
         return result
 
@@ -162,36 +168,43 @@ class WikiPageIOMixin(WikiProtocol):
             logger.debug("Failed to load page type mapping: %s", e)
 
         for result in results:
-            page_name = result['page_name']
+            page_name = result["page_name"]
             sink_info = self.query_sink.get_info_for_page(page_name)
-            result['has_sink'] = sink_info['has_sink']
-            result['sink_entries'] = sink_info['sink_entries']
+            result["has_sink"] = sink_info["has_sink"]
+            result["sink_entries"] = sink_info["sink_entries"]
 
-            page_type = 'wiki_page'
+            page_type = "wiki_page"
             for _type_name, type_dir in page_types.items():
-                if page_name.startswith(type_dir + '/') or page_name == type_dir:
+                if page_name.startswith(type_dir + "/") or page_name == type_dir:
                     page_type = type_dir
                     break
-            result['page_type'] = page_type
+            result["page_type"] = page_type
 
         return results
 
     def append_log(self, operation: str, details: str) -> str:
         """Append entry to wiki log."""
-        self._backend.append_log({
-            "timestamp": self._now(),
-            "operation": operation,
-            "details": details,
-        })
+        self._backend.append_log(
+            {
+                "timestamp": self._now(),
+                "operation": operation,
+                "details": details,
+            }
+        )
         return "Logged"
 
-    def build_index(self, auto_export: bool = True, output_path: Path | None = None) -> dict:
+    def build_index(
+        self, auto_export: bool = True, output_path: Path | None = None
+    ) -> dict:
         """Build reference index and auto-generate jieba dictionary."""
-        result = self.index.build_index_from_files(self.wiki_dir, batch_size=self._batch_size)
+        result = self.index.build_index_from_files(
+            self.wiki_dir, batch_size=self._batch_size
+        )
 
         # Auto-generate jieba user dictionary from page content
         try:
             from ....storage.jieba_dict_gen import generate_user_dict
+
             dict_result = generate_user_dict(self.db_path, self.root)
             result["dict_terms"] = dict_result
         except Exception as e:
@@ -223,44 +236,48 @@ class WikiPageIOMixin(WikiProtocol):
         except OSError:
             return ""
 
-        fm_match = re.match(r'^---\s*\n(.*?)\n---\s*\n', content, re.DOTALL)
+        fm_match = re.match(r"^---\s*\n(.*?)\n---\s*\n", content, re.DOTALL)
         if fm_match:
             fm_text = fm_match.group(1)
-            for line in fm_text.split('\n'):
-                if line.startswith('summary:'):
-                    val = line.split(':', 1)[1].strip().strip('"').strip("'")
+            for line in fm_text.split("\n"):
+                if line.startswith("summary:"):
+                    val = line.split(":", 1)[1].strip().strip('"').strip("'")
                     if val:
-                        return val if len(val) <= max_len else val[:max_len - 3] + '...'
+                        return (
+                            val if len(val) <= max_len else val[: max_len - 3] + "..."
+                        )
 
-        summary_match = re.search(r'^## Summary\s*\n(.*?)(?:\n## |\Z)', content, re.MULTILINE | re.DOTALL)
+        summary_match = re.search(
+            r"^## Summary\s*\n(.*?)(?:\n## |\Z)", content, re.MULTILINE | re.DOTALL
+        )
         if summary_match:
             section_text = summary_match.group(1).strip()
-            for line in section_text.split('\n'):
+            for line in section_text.split("\n"):
                 line = line.strip()
-                if line and not line.startswith('<!--'):
-                    return line if len(line) <= max_len else line[:max_len - 3] + '...'
+                if line and not line.startswith("<!--"):
+                    return line if len(line) <= max_len else line[: max_len - 3] + "..."
 
         body = content
         if fm_match:
-            body = content[fm_match.end():]
+            body = content[fm_match.end() :]
 
-        lines = body.split('\n')
+        lines = body.split("\n")
         in_title = True
         for line in lines:
             stripped = line.strip()
             if not stripped:
                 continue
-            if in_title and stripped.startswith('#'):
+            if in_title and stripped.startswith("#"):
                 continue
             if in_title:
                 in_title = False
-            if stripped.startswith('<!--'):
+            if stripped.startswith("<!--"):
                 continue
-            clean = re.sub(r'\*\*|\*|`', '', stripped).strip()
+            clean = re.sub(r"\*\*|\*|`", "", stripped).strip()
             if clean:
-                return clean if len(clean) <= max_len else clean[:max_len - 3] + '...'
+                return clean if len(clean) <= max_len else clean[: max_len - 3] + "..."
 
-        title_match = re.match(r'^#\s*(.+)', content)
+        title_match = re.match(r"^#\s*(.+)", content)
         if title_match:
             return title_match.group(1).strip()
 
@@ -278,14 +295,18 @@ class WikiPageIOMixin(WikiProtocol):
         if not cached:
             return None
 
-        data = cached.get('data', {})
-        topics = [t for t in data.get('topics', []) if isinstance(t, str)][:5]
-        entities = [e['name'] for e in data.get('entities', []) if isinstance(e, dict) and 'name' in e][:5]
+        data = cached.get("data", {})
+        topics = [t for t in data.get("topics", []) if isinstance(t, str)][:5]
+        entities = [
+            e["name"]
+            for e in data.get("entities", [])
+            if isinstance(e, dict) and "name" in e
+        ][:5]
 
         if not topics and not entities:
             return None
 
-        return {'topics': topics, 'entities': entities}
+        return {"topics": topics, "entities": entities}
 
     def _update_index_file(self) -> None:
         # TODO(refactor): C901=24 — too complex, consider splitting
@@ -299,12 +320,12 @@ class WikiPageIOMixin(WikiProtocol):
         - Sink status if applicable
         """
         dir_labels = {
-            'sources': 'Sources',
-            'concepts': 'Concepts',
-            'entities': 'Entities',
-            'comparisons': 'Comparisons',
-            'synthesis': 'Synthesis',
-            'claims': 'Claims',
+            "sources": "Sources",
+            "concepts": "Concepts",
+            "entities": "Entities",
+            "comparisons": "Comparisons",
+            "synthesis": "Synthesis",
+            "claims": "Claims",
         }
 
         groups: dict[str, list[str]] = {}
@@ -314,19 +335,23 @@ class WikiPageIOMixin(WikiProtocol):
         for page in sorted(self._backend.list_page_paths()):
             page_path = page.relative_to(self.wiki_dir)
 
-            if page_path.parts[0] == '.sink':
+            if page_path.parts[0] == ".sink":
                 try:
                     sink_content = page.read_text()
-                    entries = len(re.findall(
-                        r'^## \[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]',
-                        sink_content, re.MULTILINE
-                    ))
+                    entries = len(
+                        re.findall(
+                            r"^## \[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]",
+                            sink_content,
+                            re.MULTILINE,
+                        )
+                    )
                     last_match = re.search(
-                        r'^## \[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\]',
-                        sink_content, re.MULTILINE
+                        r"^## \[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\]",
+                        sink_content,
+                        re.MULTILINE,
                     )
                     last_entry = last_match.group(1) if last_match else "unknown"
-                    sink_name = page_path.stem.replace('.sink', '')
+                    sink_name = page_path.stem.replace(".sink", "")
                     sink_entries.append(
                         f"- [[{sink_name}]] — {entries} pending updates\n"
                         f"  Last entry: {last_entry}"
@@ -338,13 +363,13 @@ class WikiPageIOMixin(WikiProtocol):
             if page.name in ("index.md", "log.md"):
                 continue
 
-            page_name = str(page_path.with_suffix(''))
+            page_name = str(page_path.with_suffix(""))
 
-            subdir = page_path.parts[0] if len(page_path.parts) > 1 else ''
+            subdir = page_path.parts[0] if len(page_path.parts) > 1 else ""
             if len(page_path.parts) > 1:
                 label = dir_labels.get(subdir, subdir.capitalize())
             else:
-                label = 'Overview'
+                label = "Overview"
 
             if label not in groups:
                 groups[label] = []
@@ -354,13 +379,13 @@ class WikiPageIOMixin(WikiProtocol):
             summary = self._extract_page_summary(page)
 
             analysis_extra = ""
-            if subdir == 'sources':
+            if subdir == "sources":
                 analysis = self._get_source_analysis_summary(page)
                 if analysis:
                     parts = []
-                    if analysis['topics']:
+                    if analysis["topics"]:
                         parts.append(f"📊 Topics: {', '.join(analysis['topics'])}")
-                    if analysis['entities']:
+                    if analysis["entities"]:
                         parts.append(f"👤 Entities: {', '.join(analysis['entities'])}")
                     if parts:
                         analysis_extra = "\n  " + " | ".join(parts)
@@ -368,12 +393,11 @@ class WikiPageIOMixin(WikiProtocol):
             stats_extra = ""
             try:
                 cursor = self.index.conn.execute(
-                    "SELECT word_count FROM pages WHERE page_name = ?",
-                    (page_name,)
+                    "SELECT word_count FROM pages WHERE page_name = ?", (page_name,)
                 )
                 row = cursor.fetchone()
-                if row and row['word_count']:
-                    wc = row['word_count']
+                if row and row["word_count"]:
+                    wc = row["word_count"]
                     wc_str = f"{wc / 1000:.1f}k" if wc >= 1000 else str(wc)
                     stats_extra = f" | 📝 {wc_str} words"
             except Exception as e:
@@ -393,7 +417,7 @@ class WikiPageIOMixin(WikiProtocol):
             sink_marker = ""
             try:
                 sink_info = self.query_sink.get_info_for_page(page_name)
-                if sink_info['has_sink']:
+                if sink_info["has_sink"]:
                     sink_marker = f" 📥 {sink_info['sink_entries']} pending"
             except Exception as e:
                 logger.warning("Failed to get sink info for %s: %s", page_name, e)
@@ -405,7 +429,9 @@ class WikiPageIOMixin(WikiProtocol):
             groups[label].append(entry)
 
         total = sum(type_counts.values())
-        type_summary = " | ".join(f"{label}: {count}" for label, count in type_counts.items() if count > 0)
+        type_summary = " | ".join(
+            f"{label}: {count}" for label, count in type_counts.items() if count > 0
+        )
 
         index_content = (
             f"# Wiki Index\n\n"
@@ -415,7 +441,15 @@ class WikiPageIOMixin(WikiProtocol):
             + "\n\n---\n\n"
         )
 
-        section_order = ['Sources', 'Concepts', 'Entities', 'Comparisons', 'Synthesis', 'Claims', 'Overview']
+        section_order = [
+            "Sources",
+            "Concepts",
+            "Entities",
+            "Comparisons",
+            "Synthesis",
+            "Claims",
+            "Overview",
+        ]
         remaining = [k for k in groups if k not in section_order]
         ordered_sections = section_order + sorted(remaining)
 
@@ -426,13 +460,13 @@ class WikiPageIOMixin(WikiProtocol):
             has_content = True
             count = type_counts.get(section, len(groups[section]))
             index_content += f"## {section} ({count})\n\n"
-            index_content += '\n\n'.join(groups[section]) + '\n\n'
+            index_content += "\n\n".join(groups[section]) + "\n\n"
 
         if not has_content:
             index_content += "*(No pages yet)*\n\n"
 
         if sink_entries:
             index_content += "## Pending Sink Buffers 📥\n\n"
-            index_content += '\n\n'.join(sink_entries) + '\n'
+            index_content += "\n\n".join(sink_entries) + "\n"
 
         self._write_index_content(index_content)

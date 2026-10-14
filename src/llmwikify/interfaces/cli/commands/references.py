@@ -65,11 +65,13 @@ def _show_broken_references(wiki: Any, args: Any) -> int:
             if target in (wiki._index_page_name, wiki._log_page_name):
                 continue
             if wiki._resolve_wikilink_target(target) is None:
-                broken.append({
-                    "source": wiki._page_display_name(page),
-                    "target": target,
-                    "file": str(page),
-                })
+                broken.append(
+                    {
+                        "source": wiki._page_display_name(page),
+                        "target": target,
+                        "file": str(page),
+                    }
+                )
 
     print("=== Broken References ===\n")
 
@@ -135,7 +137,11 @@ def run_references(wiki: Any, args: Any) -> int:
             for i, link in enumerate(outbound, 1):
                 section = link.get("section", "")
                 display = link.get("display", "")
-                display_str = f' [as "{display}"]' if display and display != link.get("target", "") else ""
+                display_str = (
+                    f' [as "{display}"]'
+                    if display and display != link.get("target", "")
+                    else ""
+                )
                 print(f"  {i}. {link['target']}{section}{display_str}")
                 if detail and link.get("context"):
                     print(f"     Context: \"{link['context']}\"")
@@ -176,9 +182,15 @@ class ReferencesCommand(Command):
         p.add_argument("page", help="Page name")
         p.add_argument("--detail", "-d", action="store_true", help="Show full context")
         p.add_argument("--inbound", "-i", action="store_true", help="Show only inbound")
-        p.add_argument("--outbound", "-o", action="store_true", help="Show only outbound")
-        p.add_argument("--stats", "-s", action="store_true", help="Show reference statistics")
-        p.add_argument("--broken", "-b", action="store_true", help="Show broken references")
+        p.add_argument(
+            "--outbound", "-o", action="store_true", help="Show only outbound"
+        )
+        p.add_argument(
+            "--stats", "-s", action="store_true", help="Show reference statistics"
+        )
+        p.add_argument(
+            "--broken", "-b", action="store_true", help="Show broken references"
+        )
         p.add_argument("--top", "-t", type=int, default=10, help="Top N for stats")
 
     def run(self, args: Any, wiki: Any, config: dict) -> int:

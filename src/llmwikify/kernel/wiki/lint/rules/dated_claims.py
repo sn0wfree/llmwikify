@@ -38,7 +38,7 @@ class DatedClaimsRule(Rule):
                 if not src.is_file():
                     continue
                 content = src.read_text(errors="ignore")
-                years = re.findall(r'\b(20\d{2})\b', content)
+                years = re.findall(r"\b(20\d{2})\b", content)
                 if years:
                     latest_source_year = max(
                         latest_source_year, max(int(y) for y in years)
@@ -58,23 +58,27 @@ class DatedClaimsRule(Rule):
         wiki: Wiki,
         results: list[dict[str, Any]],
     ) -> None:
-        years_in_page = re.findall(r'\b(20\d{2})\b', content)
+        years_in_page = re.findall(r"\b(20\d{2})\b", content)
 
         for year_str in years_in_page:
             year = int(year_str)
             if MIN_YEAR_THRESHOLD <= year <= self._current_year - YEAR_GAP_THRESHOLD:
                 if self._latest_source_year - year >= YEAR_GAP_THRESHOLD:
-                    results.append({
-                        "type": self.name,
-                        "page": page_name,
-                        "file": str(wiki.wiki_dir / f"{page_name.replace('/', '_')}.md"),
-                        "claim_year": year,
-                        "latest_source_year": self._latest_source_year,
-                        "gap_years": self._latest_source_year - year,
-                        "observation": (
-                            f"'{page_name}' references {year}, but the latest raw source is from {self._latest_source_year}. "
-                            f"The gap is {self._latest_source_year - year} years. "
-                            f"Content may be outdated."
-                        ),
-                    })
+                    results.append(
+                        {
+                            "type": self.name,
+                            "page": page_name,
+                            "file": str(
+                                wiki.wiki_dir / f"{page_name.replace('/', '_')}.md"
+                            ),
+                            "claim_year": year,
+                            "latest_source_year": self._latest_source_year,
+                            "gap_years": self._latest_source_year - year,
+                            "observation": (
+                                f"'{page_name}' references {year}, but the latest raw source is from {self._latest_source_year}. "
+                                f"The gap is {self._latest_source_year - year} years. "
+                                f"Content may be outdated."
+                            ),
+                        }
+                    )
                     break

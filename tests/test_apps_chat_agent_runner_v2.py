@@ -81,6 +81,7 @@ Total: 617 cases covering:
     boundary values (8) / mutation testing (8) / real services (8) /
     misc/defensive (13)
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -239,9 +240,9 @@ def test_runner_does_not_import_legacy_engines() -> None:
         "from llmwikify.apps.chat.agent.agent_service",
     )
     for needle in forbidden:
-        assert needle not in src, (
-            f"runner_v2 must not import legacy engines; found: {needle}"
-        )
+        assert (
+            needle not in src
+        ), f"runner_v2 must not import legacy engines; found: {needle}"
 
 
 def test_runner_dependencies_are_minimal() -> None:
@@ -262,9 +263,9 @@ def test_runner_dependencies_are_minimal() -> None:
     }
     for line in src.splitlines():
         if line.startswith("from llmwikify") or line.startswith("import llmwikify"):
-            assert any(line.startswith(p) for p in allowed_local_imports), (
-                f"unexpected llmwikify import in runner_v2: {line.strip()}"
-            )
+            assert any(
+                line.startswith(p) for p in allowed_local_imports
+            ), f"unexpected llmwikify import in runner_v2: {line.strip()}"
 
 
 def test_skeleton_works_without_db_llm_sse() -> None:
@@ -400,7 +401,11 @@ def test_run_stream_drains_multiple_event_types() -> None:
     events = asyncio.run(collect())
     assert len(events) == 5
     assert [e["type"] for e in events] == [
-        "message_delta", "thinking", "tool_call_start", "tool_call_end", "done",
+        "message_delta",
+        "thinking",
+        "tool_call_start",
+        "tool_call_end",
+        "done",
     ]
 
 
@@ -509,7 +514,9 @@ class _StubLLMService:
         self.config: dict = {}
         self._events = events or [{"type": "done", "content": "stub answer"}]
         self._followup = followup_events or [{"type": "done", "content": "stub answer"}]
-        self._followup2 = followup2_events or [{"type": "done", "content": "stub answer"}]
+        self._followup2 = followup2_events or [
+            {"type": "done", "content": "stub answer"}
+        ]
         self.tool_spec_called = False
         self.truncate_called = False
         self.call_count = 0
@@ -828,10 +835,12 @@ def test_composite_hook_lifecycle_invoked() -> None:
             self.events_seen: list[str] = []
 
     spy = _Spy()
-    llm = _StubLLMService(events=[
-        {"type": "content", "text": "hi"},
-        {"type": "done", "content": "hi"},
-    ])
+    llm = _StubLLMService(
+        events=[
+            {"type": "content", "text": "hi"},
+            {"type": "done", "content": "hi"},
+        ]
+    )
     executor = _StubExecutor()
     prompt_builder = _StubPromptBuilder()
     runner = ChatRunnerV2(
@@ -851,7 +860,10 @@ def test_composite_hook_lifecycle_invoked() -> None:
 def test_text_mode_tool_call_parsed_by_parser() -> None:
     runner, _llm, executor, _pb = _make_full_runner(
         llm_events=[
-            {"type": "content", "text": '[TOOL_CALL] {tool => "read_file", args => { --path "/x"}} [/TOOL_CALL]'},
+            {
+                "type": "content",
+                "text": '[TOOL_CALL] {tool => "read_file", args => { --path "/x"}} [/TOOL_CALL]',
+            },
             {"type": "done", "content": ""},
         ],
     )
@@ -893,7 +905,8 @@ def test_max_iterations_caps_loop() -> None:
                 "args": {"path": f"/{i}"},
             }
             for i in range(10)
-        ] + [{"type": "done", "content": ""}],
+        ]
+        + [{"type": "done", "content": ""}],
     )
     spec = _make_spec(max_iterations=2)
     result = asyncio.run(runner.run_to_completion(spec))
@@ -1007,7 +1020,9 @@ def test_golden_single_tool_call_event_sequence() -> None:
 
     events = asyncio.run(run())
     assert [e["type"] for e in events] == [
-        "tool_call_start", "tool_call_end", "done",
+        "tool_call_start",
+        "tool_call_end",
+        "done",
     ]
     assert events[0]["tool"] == "read_file"
     assert events[0]["args"] == {"path": "/x"}
@@ -1073,6 +1088,7 @@ def test_golden_confirmation_breaks_loop() -> None:
 
 def test_golden_llm_error_emits_error_event() -> None:
     """LLM stream raising → ctx.error set + error event emitted before done."""
+
     class _BoomLLM(_StubLLMService):
         async def _llm_stream_with_retry(self, _m, _t):
             raise RuntimeError("api down")
@@ -1328,6 +1344,7 @@ def test_edge_tool_returns_error_dict() -> None:
 
 def test_edge_tool_raises_exception_caught() -> None:
     """Tool raising should be caught and yield tool_call_error event."""
+
     class _BoomExec(_StubExecutor):
         async def execute(self, *_a, **_kw):
             raise RuntimeError("exec died")
@@ -1735,7 +1752,10 @@ def test_microcompact_threshold_exact_boundary() -> None:
     spec = _make_spec(microcompact=True, microcompact_keep_chars=10)
     result_str = "x" * 10
     content, compacted, _saved = microcompact_serialize(
-        result_str, "read_file", "c1", spec,
+        result_str,
+        "read_file",
+        "c1",
+        spec,
     )
     assert compacted is False
     assert content == result_str
@@ -1748,7 +1768,10 @@ def test_microcompact_threshold_just_over() -> None:
     spec = _make_spec(microcompact=True, microcompact_keep_chars=10)
     result_str = "x" * 11
     content, compacted, _saved = microcompact_serialize(
-        result_str, "read_file", "c1", spec,
+        result_str,
+        "read_file",
+        "c1",
+        spec,
     )
     assert compacted is True
     assert "[Tool result compacted]" in content
@@ -1789,7 +1812,12 @@ def test_run_context_messages_appended_after_tool_call() -> None:
 
     runner, _llm, _exec, _pb = _make_full_runner(
         llm_events=[
-            {"type": "tool_call", "id": "c1", "name": "read_file", "args": {"path": "/x"}},
+            {
+                "type": "tool_call",
+                "id": "c1",
+                "name": "read_file",
+                "args": {"path": "/x"},
+            },
             {"type": "done", "content": ""},
         ],
     )
@@ -1814,6 +1842,7 @@ def test_run_to_completion_with_no_microcompact_and_small_results() -> None:
 
 def test_truncation_failure_falls_back_to_original() -> None:
     """If chat_service._truncate raises, runner should use messages unchanged."""
+
     class _BoomTruncate(_StubLLMService):
         def _truncate_messages(self, messages):
             raise RuntimeError("truncate failed")
@@ -1830,6 +1859,7 @@ def test_truncation_failure_falls_back_to_original() -> None:
 
 def test_get_toolspec_failure_returns_empty_list() -> None:
     """If chat_service._get_toolspec raises, runner should use empty tools."""
+
     class _BoomSpec(_StubLLMService):
         def _get_toolspec(self, _registry):
             raise RuntimeError("spec failed")
@@ -1866,6 +1896,7 @@ def test_final_content_empty_when_no_content_streamed() -> None:
 
 def test_run_stream_propagates_exception_to_caller() -> None:
     """An unexpected exception in run_stream should propagate (not be swallowed)."""
+
     class _BoomRunner(ChatRunnerV2):
         async def run_stream(self, spec):
             raise RuntimeError("kaboom")
@@ -1887,6 +1918,7 @@ def test_run_stream_propagates_exception_to_caller() -> None:
 
 def test_emit_done_emits_error_before_done_when_failed() -> None:
     """When ctx.error is set, _emit_done should yield error event first then done."""
+
     class _BoomLLM(_StubLLMService):
         async def _llm_stream_with_retry(self, _m, _t):
             raise RuntimeError("crash")
@@ -1941,6 +1973,7 @@ def test_tool_result_is_string_passes_through() -> None:
 
 def test_tool_result_is_none_passes_through() -> None:
     """Tool returning None should work (not crash)."""
+
     class _NoneExec(_StubExecutor):
         async def execute(self, *_a, **_kw):
             return None
@@ -1995,11 +2028,17 @@ def test_microcompact_with_custom_compactable_tools() -> None:
     )
     big = {"data": "x" * 5000}
     content_default, comp_default, _ = microcompact_serialize(
-        big, "read_file", "c1", spec,
+        big,
+        "read_file",
+        "c1",
+        spec,
     )
     assert comp_default is False
     content_custom, comp_custom, _ = microcompact_serialize(
-        big, "custom_tool", "c2", spec,
+        big,
+        "custom_tool",
+        "c2",
+        spec,
     )
     assert comp_custom is True
 
@@ -2524,7 +2563,10 @@ def test_microcompact_empty_compactable_tools() -> None:
         microcompact_compactable_tools=frozenset(),
     )
     content, compacted, _ = microcompact_serialize(
-        {"x": "y" * 5000}, "read_file", "c1", spec,
+        {"x": "y" * 5000},
+        "read_file",
+        "c1",
+        spec,
     )
     assert compacted is False
 
@@ -2537,11 +2579,17 @@ def test_microcompact_single_compactable_tool() -> None:
         microcompact_compactable_tools=frozenset({"only_one"}),
     )
     content1, c1, _ = microcompact_serialize(
-        {"x": "y" * 5000}, "only_one", "c1", spec,
+        {"x": "y" * 5000},
+        "only_one",
+        "c1",
+        spec,
     )
     assert c1 is True
     content2, c2, _ = microcompact_serialize(
-        {"x": "y" * 5000}, "read_file", "c2", spec,
+        {"x": "y" * 5000},
+        "read_file",
+        "c2",
+        spec,
     )
     assert c2 is False
 
@@ -2567,7 +2615,10 @@ def test_microcompact_returns_marker_with_correct_id() -> None:
 
     spec = _make_spec(microcompact=True, microcompact_keep_chars=10)
     content, compacted, _ = microcompact_serialize(
-        "x" * 100, "read_file", "call_xyz_999", spec,
+        "x" * 100,
+        "read_file",
+        "call_xyz_999",
+        spec,
     )
     assert "call_xyz_999" in content
 
@@ -2602,7 +2653,10 @@ def test_microcompact_chars_saved_is_positive() -> None:
 
     spec = _make_spec(microcompact=True, microcompact_keep_chars=10)
     content, compacted, saved = microcompact_serialize(
-        "x" * 1000, "read_file", "c1", spec,
+        "x" * 1000,
+        "read_file",
+        "c1",
+        spec,
     )
     assert compacted is True
     assert saved > 0
@@ -2642,12 +2696,19 @@ def test_microcompact_default_compactable_matches_nanobot() -> None:
 
     spec = _make_spec(microcompact=True, microcompact_keep_chars=10)
     nanobot_set = {
-        "read_file", "exec", "grep", "find_files",
-        "web_search", "list_dir",
+        "read_file",
+        "exec",
+        "grep",
+        "find_files",
+        "web_search",
+        "list_dir",
     }
     for tool in nanobot_set:
         content, compacted, _ = microcompact_serialize(
-            "x" * 100, tool, f"c_{tool}", spec,
+            "x" * 100,
+            tool,
+            f"c_{tool}",
+            spec,
         )
         assert compacted is True, f"Failed for {tool}"
 
@@ -2732,6 +2793,7 @@ def test_precheck_returns_bool() -> None:
 
     async def go():
         from llmwikify.apps.chat.agent.runner_v2 import _RunContext
+
         ctx = _RunContext(spec=spec, messages=[])
         return await runner._precheck(ctx)
 
@@ -2747,6 +2809,7 @@ def test_precheck_no_break_normal() -> None:
 
     async def go():
         from llmwikify.apps.chat.agent.runner_v2 import _RunContext
+
         ctx = _RunContext(spec=spec, messages=[])
         return await runner._precheck(ctx)
 
@@ -2762,6 +2825,7 @@ def test_precheck_with_timeout_zero_breaks_on_elapsed() -> None:
 
     async def go():
         from llmwikify.apps.chat.agent.runner_v2 import _RunContext
+
         ctx = _RunContext(spec=spec, messages=[])
         ctx.started_at = 0.0
         return await runner._precheck(ctx)
@@ -2779,6 +2843,7 @@ def test_precheck_respects_timeout_setting() -> None:
 
     async def go():
         from llmwikify.apps.chat.agent.runner_v2 import _RunContext
+
         ctx = _RunContext(spec=spec, messages=[])
         return await runner._precheck(ctx)
 
@@ -3075,7 +3140,12 @@ def test_concurrent_runs_state_independent() -> None:
         for i in range(3):
             r, _, _, _ = _make_full_runner(
                 llm_events=[
-                    {"type": "tool_call", "id": f"c{i}", "name": "read_file", "args": {}},
+                    {
+                        "type": "tool_call",
+                        "id": f"c{i}",
+                        "name": "read_file",
+                        "args": {},
+                    },
                     {"type": "done", "content": ""},
                 ],
                 tool_results={"read_file": {"data": "x" * 5000}},
@@ -3395,7 +3465,9 @@ def test_truncation_returns_shorter_list() -> None:
         tool_executor=_StubExecutor(),
         prompt_builder=_StubPromptBuilder(),
     )
-    spec = _make_spec(messages=[{"role": "user", "content": "a"}, {"role": "user", "content": "b"}])
+    spec = _make_spec(
+        messages=[{"role": "user", "content": "a"}, {"role": "user", "content": "b"}]
+    )
     result = asyncio.run(runner.run_to_completion(spec))
     assert result.stop_reason == "completed"
 
@@ -3497,7 +3569,10 @@ def test_tool_specs_returns_many_tools() -> None:
     class _ManySpec(_StubLLMService):
         def _get_toolspec(self, _r):
             return [
-                {"type": "function", "function": {"name": f"tool_{i}", "description": f"T{i}"}}
+                {
+                    "type": "function",
+                    "function": {"name": f"tool_{i}", "description": f"T{i}"},
+                }
                 for i in range(50)
             ]
 
@@ -4624,7 +4699,10 @@ def test_14_tool_call_id_in_each_event() -> None:
 def test_15_text_mode_tool_call_in_content() -> None:
     runner, _llm, executor, _pb = _make_full_runner(
         llm_events=[
-            {"type": "content", "text": 'Hello [TOOL_CALL] tool => "read_file", args => {"p": "/x"} [/TOOL_CALL] world'},
+            {
+                "type": "content",
+                "text": 'Hello [TOOL_CALL] tool => "read_file", args => {"p": "/x"} [/TOOL_CALL] world',
+            },
             {"type": "done", "content": "ok"},
         ],
     )
@@ -4709,7 +4787,10 @@ def test_15_text_mode_malformed_no_crash() -> None:
 def test_15_text_mode_flushed_on_done() -> None:
     runner, _llm, _exec, _pb = _make_full_runner(
         llm_events=[
-            {"type": "content", "text": "[TOOL_CALL] tool => \"read_file\", args => {} [/TOOL_CALL]"},
+            {
+                "type": "content",
+                "text": '[TOOL_CALL] tool => "read_file", args => {} [/TOOL_CALL]',
+            },
             {"type": "done", "content": ""},
         ],
     )
@@ -4756,7 +4837,12 @@ def test_15_text_mode_parser_flush_yields_content() -> None:
     async def go():
         parser = TextModeParser()
         feed_out = []
-        async for ev in parser.feed({"type": "content", "text": "[TOOL_CALL] tool => \"x\", args => {} [/TOOL_CALL] mid"}):
+        async for ev in parser.feed(
+            {
+                "type": "content",
+                "text": '[TOOL_CALL] tool => "x", args => {} [/TOOL_CALL] mid',
+            }
+        ):
             feed_out.append(ev)
         flushed = parser.flush()
         return feed_out + flushed
@@ -4772,9 +4858,13 @@ def test_15_text_mode_parser_handles_split_chunks() -> None:
     async def go():
         parser = TextModeParser()
         out = []
-        async for ev in parser.feed({"type": "content", "text": "[TOOL_CALL] tool => \"x\""}):
+        async for ev in parser.feed(
+            {"type": "content", "text": '[TOOL_CALL] tool => "x"'}
+        ):
             out.append(ev)
-        async for ev in parser.feed({"type": "content", "text": ", args => {} [/TOOL_CALL]"}):
+        async for ev in parser.feed(
+            {"type": "content", "text": ", args => {} [/TOOL_CALL]"}
+        ):
             out.append(ev)
         out.extend(parser.flush())
         return out
@@ -5425,7 +5515,11 @@ def test_21_spec_default_messages_empty() -> None:
 
 
 def test_21_spec_default_wiki_id_none() -> None:
-    spec = ChatRunSpec(messages=[{"role": "user", "content": "x"}], tool_registry=object(), session_id="s")
+    spec = ChatRunSpec(
+        messages=[{"role": "user", "content": "x"}],
+        tool_registry=object(),
+        session_id="s",
+    )
     assert spec.wiki_id is None
 
 
@@ -5435,12 +5529,20 @@ def test_21_spec_default_tool_registry_none_when_omitted() -> None:
 
 
 def test_21_spec_default_workspace_none() -> None:
-    spec = ChatRunSpec(messages=[{"role": "user", "content": "x"}], tool_registry=object(), session_id="s")
+    spec = ChatRunSpec(
+        messages=[{"role": "user", "content": "x"}],
+        tool_registry=object(),
+        session_id="s",
+    )
     assert spec.workspace is None
 
 
 def test_21_spec_default_temperature_none() -> None:
-    spec = ChatRunSpec(messages=[{"role": "user", "content": "x"}], tool_registry=object(), session_id="s")
+    spec = ChatRunSpec(
+        messages=[{"role": "user", "content": "x"}],
+        tool_registry=object(),
+        session_id="s",
+    )
     assert spec.temperature is None
 
 
@@ -5804,7 +5906,9 @@ def test_25_act_confirmation_stops_iteration_no_observe() -> None:
             {"type": "tool_call", "id": "c1", "name": "exec", "args": {}},
             {"type": "done", "content": ""},
         ],
-        tool_results={"exec": {"status": "confirmation_required", "confirmation_id": "x"}},
+        tool_results={
+            "exec": {"status": "confirmation_required", "confirmation_id": "x"}
+        },
     )
     runner._hook = _OHook()
     spec = _make_spec()
@@ -6025,7 +6129,9 @@ def test_25_confirmation_breaks_loop() -> None:
             {"type": "tool_call", "id": "c1", "name": "exec", "args": {}},
             {"type": "done", "content": ""},
         ],
-        tool_results={"exec": {"status": "confirmation_required", "confirmation_id": "x"}},
+        tool_results={
+            "exec": {"status": "confirmation_required", "confirmation_id": "x"}
+        },
     )
     spec = _make_spec()
     result = asyncio.run(runner.run_to_completion(spec))
@@ -6237,7 +6343,10 @@ def test_27_ten_concurrent_run_to_completion() -> None:
     )
 
     async def go():
-        specs = [_make_spec(messages=[{"role": "user", "content": f"m{i}"}]) for i in range(10)]
+        specs = [
+            _make_spec(messages=[{"role": "user", "content": f"m{i}"}])
+            for i in range(10)
+        ]
         return await asyncio.gather(*(runner.run_to_completion(s) for s in specs))
 
     results = asyncio.run(go())
@@ -6251,7 +6360,10 @@ def test_27_ten_concurrent_run_stream() -> None:
     )
 
     async def go():
-        specs = [_make_spec(messages=[{"role": "user", "content": f"m{i}"}]) for i in range(10)]
+        specs = [
+            _make_spec(messages=[{"role": "user", "content": f"m{i}"}])
+            for i in range(10)
+        ]
         outs = []
         for s in specs:
             events = []
@@ -6281,11 +6393,19 @@ def test_27_same_spec_concurrent_isolated() -> None:
 
 
 def test_27_different_runners_concurrent() -> None:
-    runners = [_make_full_runner(llm_events=[{"type": "done", "content": str(i)}]) for i in range(5)]
+    runners = [
+        _make_full_runner(llm_events=[{"type": "done", "content": str(i)}])
+        for i in range(5)
+    ]
 
     async def go():
-        specs = [_make_spec(messages=[{"role": "user", "content": f"m{i}"}]) for i in range(5)]
-        tasks = [r[0].run_to_completion(s) for r, s in zip(runners, specs, strict=False)]
+        specs = [
+            _make_spec(messages=[{"role": "user", "content": f"m{i}"}])
+            for i in range(5)
+        ]
+        tasks = [
+            r[0].run_to_completion(s) for r, s in zip(runners, specs, strict=False)
+        ]
         return await asyncio.gather(*tasks)
 
     results = asyncio.run(go())
@@ -6308,7 +6428,10 @@ def test_27_hook_called_concurrently_per_run() -> None:
     runner._hook = _SHook()
 
     async def go():
-        specs = [_make_spec(messages=[{"role": "user", "content": f"u{i}"}]) for i in range(5)]
+        specs = [
+            _make_spec(messages=[{"role": "user", "content": f"u{i}"}])
+            for i in range(5)
+        ]
         await asyncio.gather(*(runner.run_to_completion(s) for s in specs))
 
     asyncio.run(go())
@@ -6326,7 +6449,9 @@ def test_27_microcompact_cache_isolation_under_concurrency() -> None:
                 ],
                 tool_results={"read_file": {"big": "x" * 10000}},
             )
-            spec = _make_spec(messages=[{"role": "user", "content": f"u{i}"}], microcompact=True)
+            spec = _make_spec(
+                messages=[{"role": "user", "content": f"u{i}"}], microcompact=True
+            )
             outs.append(await runner_i.run_to_completion(spec))
         return outs
 
@@ -6343,7 +6468,9 @@ def test_27_session_id_shared_concurrent() -> None:
 
     async def go():
         specs = [
-            _make_spec(messages=[{"role": "user", "content": f"u{i}"}], session_id=shared_sid)
+            _make_spec(
+                messages=[{"role": "user", "content": f"u{i}"}], session_id=shared_sid
+            )
             for i in range(5)
         ]
         return await asyncio.gather(*(runner.run_to_completion(s) for s in specs))
@@ -6422,7 +6549,9 @@ def test_27_concurrent_with_confirmation_path() -> None:
                     {"type": "tool_call", "id": "c1", "name": "exec", "args": {}},
                     {"type": "done", "content": ""},
                 ],
-                tool_results={"exec": {"status": "confirmation_required", "confirmation_id": "x"}},
+                tool_results={
+                    "exec": {"status": "confirmation_required", "confirmation_id": "x"}
+                },
             )
             outs.append(await runner_i.run_to_completion(_make_spec()))
         return outs
@@ -6451,8 +6580,12 @@ def test_27_concurrent_different_tool_calls() -> None:
 
     async def go():
         return await asyncio.gather(
-            runner_a.run_to_completion(_make_spec(messages=[{"role": "user", "content": "a"}])),
-            runner_b.run_to_completion(_make_spec(messages=[{"role": "user", "content": "b"}])),
+            runner_a.run_to_completion(
+                _make_spec(messages=[{"role": "user", "content": "a"}])
+            ),
+            runner_b.run_to_completion(
+                _make_spec(messages=[{"role": "user", "content": "b"}])
+            ),
         )
 
     r1, r2 = asyncio.run(go())
@@ -6471,7 +6604,9 @@ def test_27_concurrent_with_microcompact_enabled() -> None:
                 ],
                 tool_results={"read_file": {"d": "x" * 5000}},
             )
-            spec = _make_spec(messages=[{"role": "user", "content": f"u{i}"}], microcompact=True)
+            spec = _make_spec(
+                messages=[{"role": "user", "content": f"u{i}"}], microcompact=True
+            )
             outs.append(await runner_i.run_to_completion(spec))
         return outs
 
@@ -6501,7 +6636,9 @@ def test_27_concurrent_with_phase_event() -> None:
     )
 
     async def go():
-        return await asyncio.gather(*(runner.run_to_completion(_make_spec()) for _ in range(3)))
+        return await asyncio.gather(
+            *(runner.run_to_completion(_make_spec()) for _ in range(3))
+        )
 
     results = asyncio.run(go())
     assert all(r.stop_reason == "cancelled" for r in results)
@@ -6860,7 +6997,10 @@ def test_29_1mb_message() -> None:
 
 
 def test_29_100k_message_history() -> None:
-    msgs = [{"role": "user" if i % 2 == 0 else "assistant", "content": f"m{i}" + "x" * 100} for i in range(1000)]
+    msgs = [
+        {"role": "user" if i % 2 == 0 else "assistant", "content": f"m{i}" + "x" * 100}
+        for i in range(1000)
+    ]
     spec = _make_spec(messages=msgs)
     runner, _llm, _exec, _pb = _make_full_runner(
         llm_events=[{"type": "done", "content": "ok"}],
@@ -6948,7 +7088,9 @@ def test_29_tool_result_unicode() -> None:
     )
     spec = _make_spec()
     result = asyncio.run(runner.run_to_completion(spec))
-    assert "ok" in (result.final_content or "") or "stub" in (result.final_content or "")
+    assert "ok" in (result.final_content or "") or "stub" in (
+        result.final_content or ""
+    )
 
 
 # -----------------------------------------------------------------------------
@@ -7135,7 +7277,12 @@ def test_30_cancel_during_long_tool() -> None:
 def test_31_tool_name_with_special_chars() -> None:
     runner, _llm, _exec, _pb = _make_full_runner(
         llm_events=[
-            {"type": "tool_call", "id": "c1", "name": "tool-with-dashes_and.dots", "args": {}},
+            {
+                "type": "tool_call",
+                "id": "c1",
+                "name": "tool-with-dashes_and.dots",
+                "args": {},
+            },
             {"type": "done", "content": "ok"},
         ],
     )
@@ -7579,6 +7726,7 @@ def test_33_safe_truncate_with_coroutine_return() -> None:
         def _truncate_messages(self, m):
             async def _c():
                 return None
+
             return _c()
 
         async def _llm_stream_with_retry(self, _m, _t):
@@ -7758,8 +7906,13 @@ def test_34_fuzz_random_llm_event_sequence() -> None:
         spec = _make_spec()
         result = asyncio.run(runner.run_to_completion(spec))
         assert result.stop_reason in {
-            "completed", "error", "in_progress",
-            "cancelled", "paused", "timeout", "confirmation_required",
+            "completed",
+            "error",
+            "in_progress",
+            "cancelled",
+            "paused",
+            "timeout",
+            "confirmation_required",
         }
 
 
@@ -7791,7 +7944,11 @@ def test_34_fuzz_random_arg_keys() -> None:
 
     for trial in range(10):
         n = random.randint(1, 20)
-        args = {"k" + "".join(random.choice(chars) for _ in range(5)): random.randint(0, 100) for _ in range(n)}
+        args = {
+            "k"
+            + "".join(random.choice(chars) for _ in range(5)): random.randint(0, 100)
+            for _ in range(n)
+        }
         events = [
             {"type": "tool_call", "id": f"c{trial}", "name": "x", "args": args},
             {"type": "done", "content": "x"},
@@ -7818,7 +7975,9 @@ def test_34_fuzz_random_message_contents() -> None:
         )
         result = asyncio.run(runner.run_to_completion(spec))
         assert result.stop_reason in {
-            "completed", "error", "in_progress",
+            "completed",
+            "error",
+            "in_progress",
         }
 
 
@@ -7840,7 +7999,9 @@ def test_34_fuzz_random_spec_variations() -> None:
         )
         result = asyncio.run(runner.run_to_completion(spec))
         assert result.stop_reason in {
-            "completed", "error", "in_progress",
+            "completed",
+            "error",
+            "in_progress",
         }
 
 
@@ -7868,9 +8029,9 @@ def test_34_fuzz_random_content_chunks() -> None:
     random.seed(4040)
     for _trial in range(5):
         n_chunks = random.randint(1, 20)
-        events = [
-            {"type": "content", "text": f"c{i}"} for i in range(n_chunks)
-        ] + [{"type": "done", "content": "x"}]
+        events = [{"type": "content", "text": f"c{i}"} for i in range(n_chunks)] + [
+            {"type": "done", "content": "x"}
+        ]
         runner, _llm, _exec, _pb = _make_full_runner(llm_events=events)
         spec = _make_spec()
         result = asyncio.run(runner.run_to_completion(spec))
@@ -7915,7 +8076,15 @@ def test_34_fuzz_random_compactable_tools_set() -> None:
     import random
 
     random.seed(7070)
-    all_tools = ["read_file", "exec", "grep", "find_files", "web_search", "web_fetch", "list_dir"]
+    all_tools = [
+        "read_file",
+        "exec",
+        "grep",
+        "find_files",
+        "web_search",
+        "web_fetch",
+        "list_dir",
+    ]
     for _trial in range(5):
         size = random.randint(0, len(all_tools))
         compactable = frozenset(random.sample(all_tools, size))
@@ -7942,7 +8111,9 @@ def test_34_fuzz_random_max_iterations() -> None:
         )
         result = asyncio.run(runner.run_to_completion(spec))
         assert result.stop_reason in {
-            "completed", "error", "in_progress",
+            "completed",
+            "error",
+            "in_progress",
         }
 
 
@@ -8011,7 +8182,9 @@ def test_34_fuzz_random_mixed_event_types() -> None:
                 events.append({"type": "done", "content": f"d{i}"})
                 break
             elif kind == "tool_call":
-                events.append({"type": "tool_call", "id": f"c{i}", "name": "x", "args": {}})
+                events.append(
+                    {"type": "tool_call", "id": f"c{i}", "name": "x", "args": {}}
+                )
             elif kind == "phase":
                 events.append({"type": "phase", "phase": "cancelled"})
                 break
@@ -8022,8 +8195,13 @@ def test_34_fuzz_random_mixed_event_types() -> None:
         spec = _make_spec()
         result = asyncio.run(runner.run_to_completion(spec))
         assert result.stop_reason in {
-            "completed", "error", "in_progress",
-            "cancelled", "paused", "timeout", "confirmation_required",
+            "completed",
+            "error",
+            "in_progress",
+            "cancelled",
+            "paused",
+            "timeout",
+            "confirmation_required",
         }
 
 
@@ -8034,8 +8212,13 @@ def test_34_fuzz_random_mixed_event_types() -> None:
 
 def test_35_property_stop_reason_in_valid_set() -> None:
     valid = {
-        "completed", "error", "in_progress",
-        "cancelled", "paused", "timeout", "confirmation_required",
+        "completed",
+        "error",
+        "in_progress",
+        "cancelled",
+        "paused",
+        "timeout",
+        "confirmation_required",
     }
     runner, _llm, _exec, _pb = _make_full_runner(
         llm_events=[{"type": "done", "content": "x"}],
@@ -8228,6 +8411,7 @@ def test_36_determinism_same_llm_events_same_result() -> None:
         {"type": "content", "text": "a"},
         {"type": "done", "content": "a"},
     ]
+
     async def go():
         outs = []
         for _ in range(3):
@@ -8341,7 +8525,11 @@ def test_36_invariant_cancelled_implies_cancelled_flag() -> None:
     runner._precheck = cancel_precheck
     result = asyncio.run(runner.run_to_completion(spec))
     if result.stop_reason == "cancelled":
-        assert result.error is None or "cancelled" in (result.error or "").lower() or result.error is not None
+        assert (
+            result.error is None
+            or "cancelled" in (result.error or "").lower()
+            or result.error is not None
+        )
 
 
 def test_36_invariant_messages_count_non_negative() -> None:
@@ -8359,7 +8547,9 @@ def test_36_invariant_confirmation_implies_stop_reason() -> None:
             {"type": "tool_call", "id": "c1", "name": "exec", "args": {}},
             {"type": "done", "content": ""},
         ],
-        tool_results={"exec": {"status": "confirmation_required", "confirmation_id": "x"}},
+        tool_results={
+            "exec": {"status": "confirmation_required", "confirmation_id": "x"}
+        },
     )
     spec = _make_spec()
     result = asyncio.run(runner.run_to_completion(spec))
@@ -8457,7 +8647,10 @@ def test_37_fuzz_random_ctx_cancelled_at_random_iter() -> None:
         spec = _make_spec(max_iterations=10)
         result = asyncio.run(runner.run_to_completion(spec))
         assert result.stop_reason in {
-            "completed", "cancelled", "in_progress", "error",
+            "completed",
+            "cancelled",
+            "in_progress",
+            "error",
         }
 
 
@@ -8489,7 +8682,10 @@ def test_37_fuzz_random_pause_at_random_iter() -> None:
         spec = _make_spec(max_iterations=5)
         result = asyncio.run(runner.run_to_completion(spec))
         assert result.stop_reason in {
-            "completed", "paused", "in_progress", "error",
+            "completed",
+            "paused",
+            "in_progress",
+            "error",
         }
 
 
@@ -8498,7 +8694,9 @@ def test_37_fuzz_random_tool_results() -> None:
 
     random.seed(44)
     for _trial in range(5):
-        result_type = random.choice(["ok", "error", "confirmation", "list", "string", "int"])
+        result_type = random.choice(
+            ["ok", "error", "confirmation", "list", "string", "int"]
+        )
         if result_type == "ok":
             tr = {"ok": True}
         elif result_type == "error":
@@ -8516,7 +8714,9 @@ def test_37_fuzz_random_tool_results() -> None:
             {"type": "tool_call", "id": "c1", "name": "x", "args": {}},
             {"type": "done", "content": "x"},
         ]
-        runner, _llm, _exec, _pb = _make_full_runner(llm_events=events, tool_results={"x": tr})
+        runner, _llm, _exec, _pb = _make_full_runner(
+            llm_events=events, tool_results={"x": tr}
+        )
         spec = _make_spec()
         result = asyncio.run(runner.run_to_completion(spec))
         assert isinstance(result.tools_used, list)
@@ -8618,7 +8818,10 @@ def test_37_fuzz_random_phase_event_order() -> None:
         spec = _make_spec()
         result = asyncio.run(runner.run_to_completion(spec))
         assert result.stop_reason in {
-            "completed", "cancelled", "paused", "timeout",
+            "completed",
+            "cancelled",
+            "paused",
+            "timeout",
         }
 
 
@@ -8626,7 +8829,15 @@ def test_37_fuzz_random_compactable_tool_mix() -> None:
     import random
 
     random.seed(48)
-    compactable = ["read_file", "exec", "grep", "find_files", "web_search", "web_fetch", "list_dir"]
+    compactable = [
+        "read_file",
+        "exec",
+        "grep",
+        "find_files",
+        "web_search",
+        "web_fetch",
+        "list_dir",
+    ]
     not_compactable = ["a", "b", "c", "x", "y", "z"]
     for _trial in range(5):
         use_compactable = random.random() < 0.5
@@ -8636,7 +8847,9 @@ def test_37_fuzz_random_compactable_tool_mix() -> None:
             {"type": "tool_call", "id": "c1", "name": tool_name, "args": {}},
             {"type": "done", "content": "x"},
         ]
-        runner, _llm, _exec, _pb = _make_full_runner(llm_events=events, tool_results={tool_name: big})
+        runner, _llm, _exec, _pb = _make_full_runner(
+            llm_events=events, tool_results={tool_name: big}
+        )
         spec = _make_spec(microcompact=True, microcompact_keep_chars=100)
         result = asyncio.run(runner.run_to_completion(spec))
         if use_compactable:
@@ -8647,7 +8860,15 @@ def test_37_fuzz_random_compactable_set_size() -> None:
     import random
 
     random.seed(49)
-    all_tools = ["read_file", "exec", "grep", "find_files", "web_search", "web_fetch", "list_dir"]
+    all_tools = [
+        "read_file",
+        "exec",
+        "grep",
+        "find_files",
+        "web_search",
+        "web_fetch",
+        "list_dir",
+    ]
     for _trial in range(5):
         size = random.randint(0, len(all_tools))
         compactable = frozenset(random.sample(all_tools, size)) if size else frozenset()
@@ -8656,7 +8877,9 @@ def test_37_fuzz_random_compactable_set_size() -> None:
             {"type": "tool_call", "id": "c1", "name": "read_file", "args": {}},
             {"type": "done", "content": "x"},
         ]
-        runner, _llm, _exec, _pb = _make_full_runner(llm_events=events, tool_results={"read_file": big})
+        runner, _llm, _exec, _pb = _make_full_runner(
+            llm_events=events, tool_results={"read_file": big}
+        )
         spec = _make_spec(
             microcompact=True,
             microcompact_keep_chars=100,
@@ -8943,7 +9166,9 @@ def test_39_streaming_confirmation_before_done() -> None:
             {"type": "tool_call", "id": "c1", "name": "exec", "args": {}},
             {"type": "done", "content": ""},
         ],
-        tool_results={"exec": {"status": "confirmation_required", "confirmation_id": "x"}},
+        tool_results={
+            "exec": {"status": "confirmation_required", "confirmation_id": "x"}
+        },
     )
     spec = _make_spec()
 
@@ -8951,7 +9176,9 @@ def test_39_streaming_confirmation_before_done() -> None:
         return [ev async for ev in runner.run_stream(spec)]
 
     events = asyncio.run(go())
-    cr_idx = next((i for i, e in enumerate(events) if e["type"] == "confirmation_required"), None)
+    cr_idx = next(
+        (i for i, e in enumerate(events) if e["type"] == "confirmation_required"), None
+    )
     done_idx = next((i for i, e in enumerate(events) if e["type"] == "done"), None)
     assert cr_idx is not None and done_idx is not None
     assert cr_idx < done_idx
@@ -8991,7 +9218,9 @@ def test_39_streaming_content_then_done() -> None:
         return [ev async for ev in runner.run_stream(spec)]
 
     events = asyncio.run(go())
-    content_idx = next((i for i, e in enumerate(events) if e["type"] == "message_delta"), None)
+    content_idx = next(
+        (i for i, e in enumerate(events) if e["type"] == "message_delta"), None
+    )
     done_idx = next((i for i, e in enumerate(events) if e["type"] == "done"), None)
     assert content_idx < done_idx
 
@@ -9011,7 +9240,9 @@ def test_39_streaming_thinking_before_content() -> None:
 
     events = asyncio.run(go())
     think_idx = next((i for i, e in enumerate(events) if e["type"] == "thinking"), None)
-    content_idx = next((i for i, e in enumerate(events) if e["type"] == "message_delta"), None)
+    content_idx = next(
+        (i for i, e in enumerate(events) if e["type"] == "message_delta"), None
+    )
     assert think_idx < content_idx
 
 
@@ -9248,7 +9479,9 @@ def test_40_hook_on_confirmation_called_on_confirmation() -> None:
             {"type": "tool_call", "id": "c1", "name": "exec", "args": {}},
             {"type": "done", "content": ""},
         ],
-        tool_results={"exec": {"status": "confirmation_required", "confirmation_id": "x"}},
+        tool_results={
+            "exec": {"status": "confirmation_required", "confirmation_id": "x"}
+        },
     )
     runner._hook = _CHook()
     spec = _make_spec()
@@ -9345,7 +9578,9 @@ def test_41_tool_returns_confirmation_stop_reason_confirmation() -> None:
             {"type": "tool_call", "id": "c1", "name": "exec", "args": {}},
             {"type": "done", "content": ""},
         ],
-        tool_results={"exec": {"status": "confirmation_required", "confirmation_id": "x"}},
+        tool_results={
+            "exec": {"status": "confirmation_required", "confirmation_id": "x"}
+        },
     )
     spec = _make_spec()
     result = asyncio.run(runner.run_to_completion(spec))
@@ -9923,7 +10158,7 @@ def test_44_text_mode_with_unclosed_tool_call() -> None:
             events=[
                 {
                     "type": "content",
-                    "text": "before [TOOL_CALL] {tool => \"exec\"",
+                    "text": 'before [TOOL_CALL] {tool => "exec"',
                 },
                 {"type": "done", "content": ""},
             ],
@@ -10159,7 +10394,10 @@ def test_46_pipeline_run_to_completion_uses_chained_content() -> None:
     h2 = _make_pipeline_hook("exclaim", lambda _c, x: x + "!")
     composite = CompositeHook([h1, h2])
     runner, _llm, _exec, _pb = _make_full_runner(
-        llm_events=[{"type": "content", "text": "hello"}, {"type": "done", "content": "hello"}],
+        llm_events=[
+            {"type": "content", "text": "hello"},
+            {"type": "done", "content": "hello"},
+        ],
     )
     runner._hook = composite
     result = asyncio.run(runner.run_to_completion(_make_spec()))
@@ -10221,6 +10459,7 @@ def test_47_hook_ctx_is_snapshot_observations_dont_persist() -> None:
 
 def test_47_hook_ctx_is_snapshot_cancelled_dont_propagate() -> None:
     """Setting ctx.cancelled on hook ctx does NOT break precheck (snapshot)."""
+
     class _CancelHook(AgentHook):
         def before_iteration(self, ctx) -> None:
             ctx.cancelled = True
@@ -10235,6 +10474,7 @@ def test_47_hook_ctx_is_snapshot_cancelled_dont_propagate() -> None:
 
 def test_47_hook_ctx_is_snapshot_paused_dont_propagate() -> None:
     """Setting ctx.paused on hook ctx does NOT break precheck (snapshot)."""
+
     class _PauseHook(AgentHook):
         def before_iteration(self, ctx) -> None:
             ctx.paused = True
@@ -10573,7 +10813,9 @@ def test_49_compacted_event_emitted_for_microcompact() -> None:
         ],
         tool_results={"read_file": {"data": "x" * 5000}},
     )
-    events = asyncio.run(_collect(runner, _make_spec(microcompact=True, microcompact_keep_chars=200)))
+    events = asyncio.run(
+        _collect(runner, _make_spec(microcompact=True, microcompact_keep_chars=200))
+    )
     compacted = [e for e in events if e["type"] == "compacted"]
     assert len(compacted) == 1
     assert compacted[0]["tool"] == "read_file"
@@ -10660,9 +10902,11 @@ def test_50_microcompact_keep_chars_zero() -> None:
         ],
         tool_results={"read_file": {"data": "x" * 1000}},
     )
-    result = asyncio.run(runner.run_to_completion(
-        _make_spec(microcompact=True, microcompact_keep_chars=0),
-    ))
+    result = asyncio.run(
+        runner.run_to_completion(
+            _make_spec(microcompact=True, microcompact_keep_chars=0),
+        )
+    )
     assert result.stop_reason == "completed"
 
 
@@ -10674,9 +10918,11 @@ def test_50_microcompact_keep_chars_negative() -> None:
         ],
         tool_results={"read_file": {"data": "x" * 1000}},
     )
-    result = asyncio.run(runner.run_to_completion(
-        _make_spec(microcompact=True, microcompact_keep_chars=-100),
-    ))
+    result = asyncio.run(
+        runner.run_to_completion(
+            _make_spec(microcompact=True, microcompact_keep_chars=-100),
+        )
+    )
     assert result.stop_reason == "completed"
 
 
@@ -10688,9 +10934,11 @@ def test_50_microcompact_compactable_tools_empty() -> None:
         ],
         tool_results={"read_file": {"data": "x" * 5000}},
     )
-    result = asyncio.run(runner.run_to_completion(
-        _make_spec(microcompact=True, microcompact_compactable_tools=frozenset()),
-    ))
+    result = asyncio.run(
+        runner.run_to_completion(
+            _make_spec(microcompact=True, microcompact_compactable_tools=frozenset()),
+        )
+    )
     assert result.compacted_count == 0
 
 
@@ -11059,7 +11307,9 @@ def test_52_tool_registry_passed_to_executor() -> None:
         tool_executor=executor,
         prompt_builder=_StubPromptBuilder(),
     )
-    asyncio.run(runner.run_to_completion(_make_spec(tool_registry=registry, session_id="s1")))
+    asyncio.run(
+        runner.run_to_completion(_make_spec(tool_registry=registry, session_id="s1"))
+    )
     assert len(executor.calls) == 1
     assert executor.calls[0][0] == "t1"
     assert executor.calls[0][2] is registry
@@ -11150,7 +11400,12 @@ def test_53_tool_call_id_with_special_chars() -> None:
     runner = ChatRunnerV2(
         chat_service=_StubLLMService(
             events=[
-                {"type": "tool_call", "id": "call_abc-123_xyz", "name": "t1", "args": {}},
+                {
+                    "type": "tool_call",
+                    "id": "call_abc-123_xyz",
+                    "name": "t1",
+                    "args": {},
+                },
                 {"type": "done", "content": ""},
             ],
         ),
@@ -11191,9 +11446,13 @@ def test_53_compacted_count_aggregates_across_iters() -> None:
         tool_executor=executor,
         prompt_builder=_StubPromptBuilder(),
     )
-    result = asyncio.run(runner.run_to_completion(
-        _make_spec(microcompact=True, microcompact_keep_chars=200, max_iterations=3),
-    ))
+    result = asyncio.run(
+        runner.run_to_completion(
+            _make_spec(
+                microcompact=True, microcompact_keep_chars=200, max_iterations=3
+            ),
+        )
+    )
     assert result.stop_reason == "completed"
     assert result.compacted_count == 2
     assert result.total_compacted_chars_saved > 0
@@ -11400,9 +11659,7 @@ def test_state_trace_preserves_chronological_order() -> None:
     # some j < i. In single-iteration tests we have one of each.
     if "ACT" in states:
         i = states.index("ACT")
-        assert "REASON" in states[:i], (
-            f"ACT at {i} but no REASON before it: {states}"
-        )
+        assert "REASON" in states[:i], f"ACT at {i} but no REASON before it: {states}"
 
 
 def test_state_trace_entry_has_numeric_duration() -> None:

@@ -53,6 +53,7 @@ Design refs
   - ``docs/designs/v0.33-service-refactor.md`` — 3-facade DB architecture
   - ``docs/designs/v0.32-skill-restructure.md`` — original consolidation
 """
+
 from __future__ import annotations
 
 import logging
@@ -103,6 +104,7 @@ class ChatDatabase(BaseDatabase):
         """
         from llmwikify.apps.db_base import get_app_db_path
         from llmwikify.foundation.db import get_connection
+
         self.data_dir = Path(data_dir)
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.db_path = get_app_db_path(self.data_dir)
@@ -152,8 +154,7 @@ class ChatDatabase(BaseDatabase):
         # The remaining tables (context_entries, event_log) are
         # still ChatDatabase's responsibility for historical reasons.
         with self._mgr.transaction() as conn:
-            conn.execute(
-                """
+            conn.execute("""
                 CREATE TABLE IF NOT EXISTS context_entries (
                     id TEXT PRIMARY KEY,
                     session_id TEXT,
@@ -165,17 +166,13 @@ class ChatDatabase(BaseDatabase):
                     updated_at TEXT DEFAULT (datetime('now')),
                     FOREIGN KEY (session_id) REFERENCES chat_sessions(id)
                 )
-                """
-            )
-            conn.execute(
-                """
+                """)
+            conn.execute("""
                 CREATE INDEX IF NOT EXISTS idx_context_entries_session
                 ON context_entries(session_id, entry_type)
-                """
-            )
+                """)
             # event_log (v0.41) — created here because no repo owns it
-            conn.execute(
-                """
+            conn.execute("""
                 CREATE TABLE IF NOT EXISTS event_log (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     session_id TEXT NOT NULL,
@@ -184,18 +181,16 @@ class ChatDatabase(BaseDatabase):
                     created_at TEXT DEFAULT (datetime('now')),
                     FOREIGN KEY (session_id) REFERENCES chat_sessions(id)
                 )
-                """
-            )
-            conn.execute(
-                """
+                """)
+            conn.execute("""
                 CREATE INDEX IF NOT EXISTS idx_event_log_session
                 ON event_log(session_id, created_at)
-                """
-            )
+                """)
             # Phase 6 (2026-06-19): memory_consolidations + memory_facts
             # (borrowed from nanobot Consolidator + Dream architecture).
             # See docs/poc/apply-plan.md §6 for full rationale.
             from llmwikify.apps.chat.memory.tables import ALL_PHASE6_DDL
+
             for ddl in ALL_PHASE6_DDL:
                 conn.execute(ddl)
 
@@ -210,14 +205,10 @@ class ChatDatabase(BaseDatabase):
     def get_chat_session(self, session_id: str) -> dict | None:
         return self._sessions.get_chat_session(session_id)
 
-    def update_chat_session_wiki(
-        self, session_id: str, wiki_id: str
-    ) -> None:
+    def update_chat_session_wiki(self, session_id: str, wiki_id: str) -> None:
         return self._sessions.update_chat_session_wiki(session_id, wiki_id)
 
-    def update_chat_session_title(
-        self, session_id: str, title: str
-    ) -> None:
+    def update_chat_session_title(self, session_id: str, title: str) -> None:
         return self._sessions.update_chat_session_title(session_id, title)
 
     def list_chat_sessions(self) -> list[dict]:
@@ -301,7 +292,10 @@ class ChatDatabase(BaseDatabase):
         include_reverted: bool = False,
     ) -> list[dict]:
         return self._messages.get_chat_messages(
-            session_id, limit, before, include_reverted,
+            session_id,
+            limit,
+            before,
+            include_reverted,
         )
 
     def revert_to_message(self, session_id: str, message_id: str) -> int:
@@ -313,7 +307,8 @@ class ChatDatabase(BaseDatabase):
         transaction.
         """
         return self._messages.revert_to_message(
-            session_id, message_id,
+            session_id,
+            message_id,
             tool_call_delete_after_rowid=self._tools.delete_after_rowid,
         )
 
@@ -328,7 +323,11 @@ class ChatDatabase(BaseDatabase):
         started_at: str | None = None,
     ) -> str:
         return self._tools.log_tool_call(
-            session_id, tool_name, arguments, status, started_at,
+            session_id,
+            tool_name,
+            arguments,
+            status,
+            started_at,
         )
 
     def update_tool_call(
@@ -339,7 +338,10 @@ class ChatDatabase(BaseDatabase):
         finished_at: str | None = None,
     ) -> None:
         return self._tools.update_tool_call(
-            call_id, result, status, finished_at,
+            call_id,
+            result,
+            status,
+            finished_at,
         )
 
     def get_tool_calls(self, session_id: str) -> list[dict]:
@@ -355,7 +357,10 @@ class ChatDatabase(BaseDatabase):
         pattern: str | None = None,
     ) -> str:
         return self._perms.save_permission(
-            tool_name, response, session_id, pattern,
+            tool_name,
+            response,
+            session_id,
+            pattern,
         )
 
     def has_always_permission(
@@ -377,51 +382,78 @@ class ChatDatabase(BaseDatabase):
         return self._research.list_research_sessions(wiki_id, limit)
 
     def update_research_status(
-        self, session_id: str, status: str,
-        step: str | None = None, iteration_round: int | None = None,
+        self,
+        session_id: str,
+        status: str,
+        step: str | None = None,
+        iteration_round: int | None = None,
         synthesis_json: str | None = None,
         review_json: str | None = None,
     ) -> None:
         return self._research.update_research_status(
-            session_id, status, step, iteration_round,
-            synthesis_json, review_json,
+            session_id,
+            status,
+            step,
+            iteration_round,
+            synthesis_json,
+            review_json,
         )
 
     def update_research_progress(
-        self, session_id: str, progress: float,
+        self,
+        session_id: str,
+        progress: float,
     ) -> None:
         return self._research.update_research_progress(session_id, progress)
 
     def persist_report(
-        self, session_id: str, result: str | None = None,
+        self,
+        session_id: str,
+        result: str | None = None,
     ) -> None:
         return self._research.persist_report(session_id, result)
 
     def finalize_research(
-        self, session_id: str, result: str | None = None,
+        self,
+        session_id: str,
+        result: str | None = None,
         wiki_page_name: str | None = None,
     ) -> None:
         return self._research.finalize_research(
-            session_id, result, wiki_page_name,
+            session_id,
+            result,
+            wiki_page_name,
         )
 
     def delete_research(self, session_id: str) -> bool:
         return self._research.delete_research(session_id)
 
     def save_sub_query(
-        self, session_id: str, query: str, source_type: str,
+        self,
+        session_id: str,
+        query: str,
+        source_type: str,
         url: str | None = None,
     ) -> str:
         return self._research.save_sub_query(
-            session_id, query, source_type, url,
+            session_id,
+            query,
+            source_type,
+            url,
         )
 
     def update_sub_query(
-        self, sq_id: str, status: str,
-        result: dict | None = None, error: str | None = None,
+        self,
+        sq_id: str,
+        status: str,
+        result: dict | None = None,
+        error: str | None = None,
     ) -> None:
         return self._research.update_sub_query(
-            sq_id, status, result, error,
+            sq_id,
+            status,
+            result,
+            error,
         )
 
     def get_sub_queries(self, session_id: str) -> list[dict]:
@@ -431,13 +463,25 @@ class ChatDatabase(BaseDatabase):
         return self._research.get_sub_query_count(session_id)
 
     def save_source(
-        self, session_id: str, sub_query_id: str, source_type: str,
-        url: str, title: str, content_length: int,
-        content_preview: str | None = None, content: str | None = None,
+        self,
+        session_id: str,
+        sub_query_id: str,
+        source_type: str,
+        url: str,
+        title: str,
+        content_length: int,
+        content_preview: str | None = None,
+        content: str | None = None,
     ) -> str:
         return self._research.save_source(
-            session_id, sub_query_id, source_type, url, title,
-            content_length, content_preview, content,
+            session_id,
+            sub_query_id,
+            source_type,
+            url,
+            title,
+            content_length,
+            content_preview,
+            content,
         )
 
     def update_source_analysis(self, source_id: str, analysis: dict) -> None:
@@ -453,7 +497,8 @@ class ChatDatabase(BaseDatabase):
         return self._research.get_source_count(session_id)
 
     def update_six_step_fields(
-        self, session_id: str,
+        self,
+        session_id: str,
         clarification: dict | None = None,
         reasoning: dict | None = None,
         structure: dict | None = None,
@@ -462,8 +507,13 @@ class ChatDatabase(BaseDatabase):
         evidence_scores: dict | None = None,
     ) -> None:
         return self._research.update_six_step_fields(
-            session_id, clarification, reasoning, structure,
-            self_loop_counts, self_loop_history, evidence_scores,
+            session_id,
+            clarification,
+            reasoning,
+            structure,
+            self_loop_counts,
+            self_loop_history,
+            evidence_scores,
         )
 
     def get_six_step_fields(self, session_id: str) -> dict[str, Any]:
@@ -476,10 +526,16 @@ class ChatDatabase(BaseDatabase):
         return self._research.get_events(session_id)
 
     def get_events_since(
-        self, session_id: str, since_ts: float, *, limit: int = 500,
+        self,
+        session_id: str,
+        since_ts: float,
+        *,
+        limit: int = 500,
     ) -> list[dict]:
         return self._research.get_events_since(
-            session_id, since_ts, limit=limit,
+            session_id,
+            since_ts,
+            limit=limit,
         )
 
     # ─── Issue#5: events_json → autoresearch_events migration ─────
@@ -491,20 +547,34 @@ class ChatDatabase(BaseDatabase):
         return self._research.list_sessions_with_unmigrated_events()
 
     def migrate_session_events_to_table(
-        self, session_id: str, *, base_ts: float | None = None,
+        self,
+        session_id: str,
+        *,
+        base_ts: float | None = None,
     ) -> int:
         return self._research.migrate_session_events_to_table(
-            session_id, base_ts=base_ts,
+            session_id,
+            base_ts=base_ts,
         )
 
     def save_step(
-        self, session_id: str, step_num: int, action: str,
-        status: str = "pending", thought: str | None = None,
-        result: Any = None, duration_ms: int = 0,
+        self,
+        session_id: str,
+        step_num: int,
+        action: str,
+        status: str = "pending",
+        thought: str | None = None,
+        result: Any = None,
+        duration_ms: int = 0,
     ) -> None:
         return self._research.save_step(
-            session_id, step_num, action, status,
-            thought, result, duration_ms,
+            session_id,
+            step_num,
+            action,
+            status,
+            thought,
+            result,
+            duration_ms,
         )
 
     def get_step(self, session_id: str, step_num: int) -> dict | None:
@@ -517,21 +587,33 @@ class ChatDatabase(BaseDatabase):
         return self._research.delete_steps(session_id)
 
     def update_step_status(
-        self, session_id: str, step_num: int, status: str,
+        self,
+        session_id: str,
+        step_num: int,
+        status: str,
     ) -> None:
         return self._research.update_step_status(
-            session_id, step_num, status,
+            session_id,
+            step_num,
+            status,
         )
 
     def save_research_state(
-        self, session_id: str, step_num: int, state: dict,
+        self,
+        session_id: str,
+        step_num: int,
+        state: dict,
     ) -> str:
         return self._research.save_research_state(
-            session_id, step_num, state,
+            session_id,
+            step_num,
+            state,
         )
 
     def load_research_state(
-        self, session_id: str, step_num: int,
+        self,
+        session_id: str,
+        step_num: int,
     ) -> dict | None:
         return self._research.load_research_state(session_id, step_num)
 
@@ -549,7 +631,9 @@ class ChatDatabase(BaseDatabase):
         return self._wiki.get_dream_proposals(wiki_id, status, limit)
 
     def update_dream_proposal_status(
-        self, proposal_id: str, status: str,
+        self,
+        proposal_id: str,
+        status: str,
     ) -> None:
         return self._wiki.update_dream_proposal_status(proposal_id, status)
 
@@ -560,7 +644,9 @@ class ChatDatabase(BaseDatabase):
         return self._wiki.save_notification(n)
 
     def list_notifications(
-        self, wiki_id: str, unread_only: bool = False,
+        self,
+        wiki_id: str,
+        unread_only: bool = False,
     ) -> list[dict]:
         return self._wiki.list_notifications(wiki_id, unread_only)
 
@@ -574,22 +660,30 @@ class ChatDatabase(BaseDatabase):
         return self._wiki.save_confirmation(c)
 
     def get_confirmations(
-        self, wiki_id: str, status: str | None = None,
+        self,
+        wiki_id: str,
+        status: str | None = None,
     ) -> list[dict]:
         return self._wiki.get_confirmations(wiki_id, status)
 
     def update_confirmation_status(
-        self, confirmation_id: str, status: str,
+        self,
+        confirmation_id: str,
+        status: str,
     ) -> None:
         return self._wiki.update_confirmation_status(
-            confirmation_id, status,
+            confirmation_id,
+            status,
         )
 
     def update_confirmation_arguments(
-        self, confirmation_id: str, arguments: dict,
+        self,
+        confirmation_id: str,
+        arguments: dict,
     ) -> None:
         return self._wiki.update_confirmation_arguments(
-            confirmation_id, arguments,
+            confirmation_id,
+            arguments,
         )
 
     def get_confirmation(self, confirmation_id: str) -> dict | None:
@@ -602,7 +696,9 @@ class ChatDatabase(BaseDatabase):
         return self._wiki.log_ingest(entry)
 
     def get_ingest_log(
-        self, wiki_id: str, limit: int = 20,
+        self,
+        wiki_id: str,
+        limit: int = 20,
     ) -> list[dict]:
         return self._wiki.get_ingest_log(wiki_id, limit)
 
@@ -639,5 +735,6 @@ class AutoResearchDatabase(ChatDatabase):
         super().__init__(data_dir)
         from llmwikify.apps.research.db import ResearchDatabase
         from llmwikify.apps.wiki.db import WikiDatabase
+
         ResearchDatabase(data_dir)
         WikiDatabase(data_dir)

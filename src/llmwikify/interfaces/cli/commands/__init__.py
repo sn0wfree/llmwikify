@@ -96,6 +96,7 @@ register_command(HelpCommand())
 register_command(AuthCommand())
 register_command(MigrateConfigCommand())
 
+
 # C3 backward-compat re-exports — when ``commands.py`` was
 # renamed to ``_app.py`` (Phase 1 #2 / C2-C3) to make room
 # for the new ``commands/`` subpackage, two public symbols
@@ -126,40 +127,71 @@ def __getattr__(name):
     """
     if name in ("WikiCLI", "main"):
         from .. import _app
+
         return getattr(_app, name)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
+
 __all__ = [
     # C2 simple commands
-    "InitCommand", "run_init",
-    "InitLlmCommand", "run_init_llm",
-    "IngestCommand", "run_ingest",
-    "StatusCommand", "run_status",
-    "LogCommand", "run_log",
-    "SinkStatusCommand", "run_sink_status",
-    "WritePageCommand", "run_write_page",
-    "ReadPageCommand", "run_read_page",
-    "SearchCommand", "run_search",
-    "BuildIndexCommand", "run_build_index",
-    "FixWikilinksCommand", "run_fix_wikilinks",
+    "InitCommand",
+    "run_init",
+    "InitLlmCommand",
+    "run_init_llm",
+    "IngestCommand",
+    "run_ingest",
+    "StatusCommand",
+    "run_status",
+    "LogCommand",
+    "run_log",
+    "SinkStatusCommand",
+    "run_sink_status",
+    "WritePageCommand",
+    "run_write_page",
+    "ReadPageCommand",
+    "run_read_page",
+    "SearchCommand",
+    "run_search",
+    "BuildIndexCommand",
+    "run_build_index",
+    "FixWikilinksCommand",
+    "run_fix_wikilinks",
     # C3 complex commands
-    "AnalyzeSourceCommand", "run_analyze_source",
-    "LintCommand", "run_lint",
-    "ReferencesCommand", "run_references",
-    "BatchCommand", "run_batch",
-    "SynthesizeCommand", "run_synthesize",
-    "WatchCommand", "run_watch",
-    "GraphQueryCommand", "run_graph_query",
-    "ExportGraphCommand", "run_export_graph",
-    "CommunityDetectCommand", "run_community_detect",
-    "ReportCommand", "run_report",
-    "WikisCommand", "run_wikis",
-    "SuggestSynthesisCommand", "run_suggest_synthesis",
-    "KnowledgeGapsCommand", "run_knowledge_gaps",
-    "GraphAnalyzeCommand", "run_graph_analyze",
-    "ServeCommand", "run_serve",  # McpCommand removed in Phase 3 #6
-    "QmdCommand", "run_qmd",
-    "DbCommand", "run_db",
-    "DoctorCommand", "run_doctor",
+    "AnalyzeSourceCommand",
+    "run_analyze_source",
+    "LintCommand",
+    "run_lint",
+    "ReferencesCommand",
+    "run_references",
+    "BatchCommand",
+    "run_batch",
+    "SynthesizeCommand",
+    "run_synthesize",
+    "WatchCommand",
+    "run_watch",
+    "GraphQueryCommand",
+    "run_graph_query",
+    "ExportGraphCommand",
+    "run_export_graph",
+    "CommunityDetectCommand",
+    "run_community_detect",
+    "ReportCommand",
+    "run_report",
+    "WikisCommand",
+    "run_wikis",
+    "SuggestSynthesisCommand",
+    "run_suggest_synthesis",
+    "KnowledgeGapsCommand",
+    "run_knowledge_gaps",
+    "GraphAnalyzeCommand",
+    "run_graph_analyze",
+    "ServeCommand",
+    "run_serve",  # McpCommand removed in Phase 3 #6
+    "QmdCommand",
+    "run_qmd",
+    "DbCommand",
+    "run_db",
+    "DoctorCommand",
+    "run_doctor",
     "HelpCommand",  # Phase 3 #6
 ]

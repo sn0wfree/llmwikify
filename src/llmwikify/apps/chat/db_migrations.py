@@ -45,6 +45,7 @@ def init_autoresearch_db(db_path) -> None:
     """
     from llmwikify.apps.chat.db import AutoResearchDatabase
     from llmwikify.apps.db_base import get_app_db_path
+
     db_path = Path(db_path)
     AutoResearchDatabase(db_path.parent)
     # The init above will create the file at the canonical
@@ -104,7 +105,8 @@ def migrate_research_six_step_columns(
                 logger.warning(
                     "Could not drop %s (SQLite version may be < 3.35): %s. "
                     "The column will remain but is no longer read by autoresearch.",
-                    col, e,
+                    col,
+                    e,
                 )
         conn.commit()
         return dropped
@@ -130,13 +132,13 @@ def migrate_v3_add_events_column(ar_db_path) -> bool:
     with sqlite3.connect(ar_db_path) as conn:
         existing = {
             row[1]
-            for row in conn.execute("PRAGMA table_info(autoresearch_sessions)").fetchall()
+            for row in conn.execute(
+                "PRAGMA table_info(autoresearch_sessions)"
+            ).fetchall()
         }
         if "events_json" in existing:
             return False
-        conn.execute(
-            "ALTER TABLE autoresearch_sessions ADD COLUMN events_json TEXT"
-        )
+        conn.execute("ALTER TABLE autoresearch_sessions ADD COLUMN events_json TEXT")
         conn.commit()
         logger.info("Added events_json column to autoresearch_sessions")
         return True
@@ -184,17 +186,16 @@ def migrate_v3_mark_partial_sessions(ar_db_path) -> list[str]:
     with sqlite3.connect(ar_db_path) as conn:
         conn.row_factory = sqlite3.Row
         # Find 'done' sessions with missing framework fields
-        rows = conn.execute(
-            """SELECT id, query, result,
+        rows = conn.execute("""SELECT id, query, result,
                       clarification_json, evidence_scores_json,
                       synthesis_json, reasoning_json, structure_json,
                       review_json
                FROM autoresearch_sessions
-               WHERE status = 'done'"""
-        ).fetchall()
+               WHERE status = 'done'""").fetchall()
         for row in rows:
             present = sum(
-                1 for f in FRAMEWORK_FIELDS
+                1
+                for f in FRAMEWORK_FIELDS
                 if row[f] is not None and str(row[f]).strip()
             )
             total = len(FRAMEWORK_FIELDS)
@@ -226,7 +227,9 @@ def migrate_v3_mark_partial_sessions(ar_db_path) -> list[str]:
             updated.append(sid)
             logger.info(
                 "Backfilled session %s: %d/%d framework steps → status=incomplete",
-                sid, present, total,
+                sid,
+                present,
+                total,
             )
         conn.commit()
     return updated

@@ -88,6 +88,7 @@ class TestAgentRunnerGeneric:
         r = CustomRunner()
         spec = CustomSpec(goal="hello")
         import asyncio
+
         result = asyncio.run(r.run_to_completion(spec))
         assert result.ok is True
 
@@ -103,6 +104,7 @@ class TestAgentRunnerGeneric:
 
         r = UnboundRunner()
         import asyncio
+
         result = asyncio.run(r.run_to_completion({"any": "spec"}))
         assert result == {"unbound": True}
 
@@ -186,14 +188,18 @@ class TestChatRunnerV2IsAgentRunner:
         but the ABC capability returns False (subclasses that actually
         stream MUST override)."""
         runner = ChatRunnerV2(
-            chat_service=None, tool_executor=None, prompt_builder=None,
+            chat_service=None,
+            tool_executor=None,
+            prompt_builder=None,
         )
         # Default from AgentRunner base; ChatRunnerV2 doesn't override
         assert runner.wants_streaming() is False
 
     def test_chat_runner_v2_name(self) -> None:
         runner = ChatRunnerV2(
-            chat_service=None, tool_executor=None, prompt_builder=None,
+            chat_service=None,
+            tool_executor=None,
+            prompt_builder=None,
         )
         assert runner.name == "ChatRunnerV2"
 
@@ -235,9 +241,7 @@ class TestFakeAgentRunnerContract:
             async def run_to_completion(self, spec):
                 self.call_count += 1
                 events = [ev async for ev in self.run_stream(spec)]
-                done = next(
-                    ev for ev in events if ev.get("type") == "done"
-                )
+                done = next(ev for ev in events if ev.get("type") == "done")
                 return FakeResult(
                     iterations=spec.max_iterations,
                     final_content=done.get("content", ""),
@@ -355,6 +359,8 @@ class TestAgentRunnerPolymorphism:
             return runner.name
 
         runner = ChatRunnerV2(
-            chat_service=None, tool_executor=None, prompt_builder=None,
+            chat_service=None,
+            tool_executor=None,
+            prompt_builder=None,
         )
         assert takes_runner(runner) == "ChatRunnerV2"

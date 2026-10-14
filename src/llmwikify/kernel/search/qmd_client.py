@@ -29,7 +29,9 @@ class QmdClient:
         results = client.search("knowledge architecture", limit=10)
     """
 
-    def __init__(self, host: str = "127.0.0.1", port: int = 8181, timeout: int = 30) -> None:
+    def __init__(
+        self, host: str = "127.0.0.1", port: int = 8181, timeout: int = 30
+    ) -> None:
         self.host = host
         self.port = port
         self.timeout = timeout
@@ -39,6 +41,7 @@ class QmdClient:
         """Check if QMD server is running and accessible."""
         try:
             import httpx
+
             response = httpx.get(f"{self.base_url}/health", timeout=self.timeout)
             return response.status_code == 200
         except Exception:
@@ -48,6 +51,7 @@ class QmdClient:
         """Get QMD server health status."""
         try:
             import httpx
+
             response = httpx.get(f"{self.base_url}/health", timeout=self.timeout)
             if response.status_code == 200:
                 return response.json()
@@ -77,6 +81,7 @@ class QmdClient:
         """
         try:
             import httpx
+
             response = httpx.post(
                 f"{self.base_url}/tools/qmd_search",
                 json={
@@ -100,16 +105,28 @@ class QmdClient:
         normalized = []
         for result in results:
             # Handle different QMD response formats
-            page_name = result.get("page_name") or result.get("filename") or result.get("title") or "Unknown"
-            snippet = result.get("snippet") or result.get("content") or result.get("text") or ""
+            page_name = (
+                result.get("page_name")
+                or result.get("filename")
+                or result.get("title")
+                or "Unknown"
+            )
+            snippet = (
+                result.get("snippet")
+                or result.get("content")
+                or result.get("text")
+                or ""
+            )
             score = result.get("score") or result.get("relevance") or 0.0
 
-            normalized.append({
-                "page_name": page_name,
-                "snippet": snippet,
-                "score": float(score),
-                "mode": "qmd_hybrid",
-            })
+            normalized.append(
+                {
+                    "page_name": page_name,
+                    "snippet": snippet,
+                    "score": float(score),
+                    "mode": "qmd_hybrid",
+                }
+            )
         return normalized
 
     def embed(self, collection: str | None = None) -> dict[str, Any]:
@@ -120,6 +137,7 @@ class QmdClient:
         """
         try:
             import httpx
+
             payload = {}
             if collection:
                 payload["collection"] = collection

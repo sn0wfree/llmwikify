@@ -20,7 +20,11 @@ class XiaomiProvider(BaseLLMProvider):
     _PROVIDER_ID = "xiaomi"
 
     def _build_legacy_client(
-        self, config: dict, base_url: str, api_key: str, model: str,
+        self,
+        config: dict,
+        base_url: str,
+        api_key: str,
+        model: str,
     ) -> StreamableLLMClient:
         return StreamableLLMClient(
             provider=self.provider_name(),

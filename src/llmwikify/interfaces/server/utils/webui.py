@@ -91,7 +91,10 @@ class SPAFallbackMiddleware(BaseHTTPMiddleware):
         if (self.dist_dir / rel).is_file():
             return response
         # Skip favicon / common static assets
-        if any(path.endswith(ext) for ext in (".ico", ".png", ".svg", ".jpg", ".gif", ".woff", ".woff2")):
+        if any(
+            path.endswith(ext)
+            for ext in (".ico", ".png", ".svg", ".jpg", ".gif", ".woff", ".woff2")
+        ):
             return response
 
         # SPA fallback: serve index.html for client-side routes

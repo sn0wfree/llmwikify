@@ -116,12 +116,32 @@ class SchedulerSkill(Skill):
             input_schema={
                 "type": "object",
                 "properties": {
-                    "name": {"type": "string", "description": "Task name (unique identifier)"},
-                    "cron_expr": {"type": "string", "description": "Cron expression (e.g. '0 */2 * * *')"},
-                    "handler_ref": {"type": "string", "description": "Handler function reference (optional)"},
-                    "description": {"type": "string", "description": "Human-readable description"},
-                    "enabled": {"type": "boolean", "description": "Start enabled (default true)", "default": True},
-                    "is_write": {"type": "boolean", "description": "Whether this is a write task (default false)", "default": False},
+                    "name": {
+                        "type": "string",
+                        "description": "Task name (unique identifier)",
+                    },
+                    "cron_expr": {
+                        "type": "string",
+                        "description": "Cron expression (e.g. '0 */2 * * *')",
+                    },
+                    "handler_ref": {
+                        "type": "string",
+                        "description": "Handler function reference (optional)",
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Human-readable description",
+                    },
+                    "enabled": {
+                        "type": "boolean",
+                        "description": "Start enabled (default true)",
+                        "default": True,
+                    },
+                    "is_write": {
+                        "type": "boolean",
+                        "description": "Whether this is a write task (default false)",
+                        "default": False,
+                    },
                 },
                 "required": ["name", "cron_expr"],
             },

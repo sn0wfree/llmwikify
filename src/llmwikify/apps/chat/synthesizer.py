@@ -15,7 +15,9 @@ class ResearchSynthesizer:
         self.wiki = wiki
         self.config = config
 
-    async def synthesize(self, sources: list[dict[str, Any]], query: str = "") -> dict[str, Any]:
+    async def synthesize(
+        self, sources: list[dict[str, Any]], query: str = ""
+    ) -> dict[str, Any]:
         """Run cross-source synthesis.
 
         High-rated sources get weighted higher in aggregation:
@@ -29,7 +31,9 @@ class ResearchSynthesizer:
         from llmwikify.kernel.wiki.engines.synthesis import SynthesisEngine
 
         # Sort by rating (highest first) for weighted consideration
-        rated_sources = sorted(sources, key=lambda s: s.get("rating") or 0, reverse=True)
+        rated_sources = sorted(
+            sources, key=lambda s: s.get("rating") or 0, reverse=True
+        )
 
         engine = SynthesisEngine(self.wiki)
         all_suggestions = []
@@ -64,13 +68,19 @@ class ResearchSynthesizer:
                         try:
                             page_content = self.wiki.read_page(page_name)
                             if page_content:
-                                wiki_comparisons.append({
-                                    "page_name": page_name,
-                                    "snippet": r.get("snippet", ""),
-                                    "content_preview": str(page_content)[:2000],
-                                })
+                                wiki_comparisons.append(
+                                    {
+                                        "page_name": page_name,
+                                        "snippet": r.get("snippet", ""),
+                                        "content_preview": str(page_content)[:2000],
+                                    }
+                                )
                         except Exception:
-                            logger.debug("Failed to read wiki page %s for comparison", page_name, exc_info=True)
+                            logger.debug(
+                                "Failed to read wiki page %s for comparison",
+                                page_name,
+                                exc_info=True,
+                            )
             except Exception as e:
                 logger.debug("Wiki comparison search failed: %s", e)
 
@@ -98,8 +108,14 @@ class ResearchSynthesizer:
             new_entities.extend(s.get("new_entities", []))
 
         # Sort reinforced claims by weight (highest-rated sources first)
-        reinforced.sort(key=lambda x: x.get("_weight", 0) if isinstance(x, dict) else 0, reverse=True)
-        suggested_updates.sort(key=lambda x: x.get("_weight", 0) if isinstance(x, dict) else 0, reverse=True)
+        reinforced.sort(
+            key=lambda x: x.get("_weight", 0) if isinstance(x, dict) else 0,
+            reverse=True,
+        )
+        suggested_updates.sort(
+            key=lambda x: x.get("_weight", 0) if isinstance(x, dict) else 0,
+            reverse=True,
+        )
 
         # Serialize to readable strings for prompt consumption
         def _claim_str(item: Any) -> str:

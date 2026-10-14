@@ -49,10 +49,20 @@ def test_streamable_default_base_url_table_includes_known_providers():
     from llmwikify.foundation.llm.streamable import StreamableLLMClient
 
     assert StreamableLLMClient._default_base_url("openai") == "https://api.openai.com"
-    assert StreamableLLMClient._default_base_url("ollama") == "http://localhost:11434/v1"
-    assert StreamableLLMClient._default_base_url("lmstudio") == "http://localhost:1234/v1"
-    assert StreamableLLMClient._default_base_url("xiaomi") == "https://token-plan-cn.xiaomimimo.com"
-    assert StreamableLLMClient._default_base_url("minimax") == "https://api.minimaxi.com/v1"
+    assert (
+        StreamableLLMClient._default_base_url("ollama") == "http://localhost:11434/v1"
+    )
+    assert (
+        StreamableLLMClient._default_base_url("lmstudio") == "http://localhost:1234/v1"
+    )
+    assert (
+        StreamableLLMClient._default_base_url("xiaomi")
+        == "https://token-plan-cn.xiaomimimo.com"
+    )
+    assert (
+        StreamableLLMClient._default_base_url("minimax")
+        == "https://api.minimaxi.com/v1"
+    )
     # Unknown provider falls back to openai default
     assert StreamableLLMClient._default_base_url("unknown") == "https://api.openai.com"
 
@@ -175,9 +185,10 @@ def test_streamable_uses_relative_imports_for_budget_modules():
     assert "from llmwikify._legacy.adapters" not in src
     # No other absolute agent imports at module level
     top_level_agent_imports = [
-        line for line in src.splitlines()
+        line
+        for line in src.splitlines()
         if line.startswith("from llmwikify.agent") and "providers.registry" not in line
     ]
-    assert top_level_agent_imports == [], (
-        f"unexpected agent import at module level: {top_level_agent_imports}"
-    )
+    assert (
+        top_level_agent_imports == []
+    ), f"unexpected agent import at module level: {top_level_agent_imports}"

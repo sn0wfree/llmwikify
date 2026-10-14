@@ -7,6 +7,7 @@ Covers:
     $-reference shape, output uniqueness)
   - build_dag topological order
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -29,8 +30,7 @@ from llmwikify.apps.chat.skills.workflows import (
 
 
 def test_parse_yaml_minimal():
-    text = dedent(
-        """
+    text = dedent("""
         version: 1
         workflow:
           name: tiny
@@ -41,8 +41,7 @@ def test_parse_yaml_minimal():
           phases:
             - id: only
               actor: a
-        """
-    )
+        """)
     spec = parse_yaml(text)
     assert spec.name == "tiny"
     assert spec.version == 1
@@ -51,8 +50,7 @@ def test_parse_yaml_minimal():
 
 
 def test_parse_yaml_missing_name_raises():
-    text = dedent(
-        """
+    text = dedent("""
         version: 1
         workflow:
           description: no name
@@ -61,8 +59,7 @@ def test_parse_yaml_missing_name_raises():
           phases:
             - id: p1
               actor: a
-        """
-    )
+        """)
     # Spec construction calls __post_init__ which checks name
     with pytest.raises(WorkflowParseError):
         parse_yaml(text)
@@ -70,8 +67,7 @@ def test_parse_yaml_missing_name_raises():
 
 def test_parse_yaml_missing_version_defaults_to_1():
     """version is optional; absent → defaults to 1 (current)."""
-    text = dedent(
-        """
+    text = dedent("""
         workflow:
           name: no-version
           description: x
@@ -80,15 +76,13 @@ def test_parse_yaml_missing_version_defaults_to_1():
           phases:
             - id: p1
               actor: a
-        """
-    )
+        """)
     spec = parse_yaml(text)
     assert spec.version == 1
 
 
 def test_parse_yaml_unsupported_version_raises():
-    text = dedent(
-        """
+    text = dedent("""
         version: 99
         workflow:
           name: future
@@ -98,8 +92,7 @@ def test_parse_yaml_unsupported_version_raises():
           phases:
             - id: p1
               actor: a
-        """
-    )
+        """)
     with pytest.raises(WorkflowValidationError):
         parse_yaml(text)
 
@@ -112,9 +105,10 @@ def test_parse_json_equivalent_to_yaml():
             "description": "x",
             "actors": {"a": {"system_prompt": "hi"}},
             "phases": [{"id": "p", "actor": "a"}],
-        }
+        },
     }
     import json
+
     spec = parse_json(json.dumps(obj))
     assert spec.name == "from-json"
 
@@ -130,12 +124,14 @@ def test_parse_json_garbage_raises():
 def test_actor_must_have_prompt_or_system_prompt():
     # Direct construction triggers __post_init__
     from llmwikify.apps.chat.skills.workflows.dag import ActorSpec
+
     with pytest.raises(WorkflowValidationError):
         ActorSpec(name="bad")
 
 
 def test_actor_prompt_file_and_inline_are_mutually_exclusive():
     from llmwikify.apps.chat.skills.workflows.dag import ActorSpec
+
     with pytest.raises(WorkflowValidationError):
         ActorSpec(
             name="both",
@@ -145,8 +141,7 @@ def test_actor_prompt_file_and_inline_are_mutually_exclusive():
 
 
 def test_parse_yaml_actor_with_both_prompts_raises():
-    text = dedent(
-        """
+    text = dedent("""
         version: 1
         workflow:
           name: bad-actor
@@ -158,8 +153,7 @@ def test_parse_yaml_actor_with_both_prompts_raises():
           phases:
             - id: p
               actor: a
-        """
-    )
+        """)
     with pytest.raises((WorkflowParseError, WorkflowValidationError)):
         parse_yaml(text)
 
@@ -168,8 +162,7 @@ def test_parse_yaml_actor_with_both_prompts_raises():
 
 
 def test_phase_fan_out_and_count_mutually_exclusive():
-    text = dedent(
-        """
+    text = dedent("""
         version: 1
         workflow:
           name: bad-phase
@@ -184,8 +177,7 @@ def test_phase_fan_out_and_count_mutually_exclusive():
                 id_prefix: inst_
                 actor: a
               count: 3
-        """
-    )
+        """)
     with pytest.raises((WorkflowParseError, WorkflowValidationError)):
         parse_yaml(text)
 
@@ -194,8 +186,7 @@ def test_phase_fan_out_and_count_mutually_exclusive():
 
 
 def _spec_plan_then_gather() -> WorkflowSpec:
-    text = dedent(
-        """
+    text = dedent("""
         version: 1
         workflow:
           name: plan-then-gather
@@ -216,8 +207,7 @@ def _spec_plan_then_gather() -> WorkflowSpec:
                 actor: researcher
                 inputs:
                   phase: $item
-        """
-    )
+        """)
     return parse_yaml(text)
 
 
@@ -227,8 +217,7 @@ def test_validate_workflow_passes_on_good_spec():
 
 
 def test_validate_workflow_rejects_unknown_actor():
-    text = dedent(
-        """
+    text = dedent("""
         version: 1
         workflow:
           name: missing-actor
@@ -238,16 +227,14 @@ def test_validate_workflow_rejects_unknown_actor():
           phases:
             - id: plan
               actor: ghost
-        """
-    )
+        """)
     spec = parse_yaml(text)
     with pytest.raises(WorkflowValidationError, match="unknown actor"):
         validate_workflow(spec)
 
 
 def test_validate_workflow_rejects_unknown_need():
-    text = dedent(
-        """
+    text = dedent("""
         version: 1
         workflow:
           name: missing-need
@@ -258,16 +245,14 @@ def test_validate_workflow_rejects_unknown_need():
             - id: p
               actor: a
               needs: [nonexistent]
-        """
-    )
+        """)
     spec = parse_yaml(text)
     with pytest.raises(WorkflowValidationError, match="unknown phase"):
         validate_workflow(spec)
 
 
 def test_validate_workflow_detects_cycle():
-    text = dedent(
-        """
+    text = dedent("""
         version: 1
         workflow:
           name: cyclic
@@ -281,16 +266,14 @@ def test_validate_workflow_detects_cycle():
             - id: p2
               actor: a
               needs: [p1]
-        """
-    )
+        """)
     spec = parse_yaml(text)
     with pytest.raises(WorkflowValidationError, match="cycle"):
         validate_workflow(spec)
 
 
 def test_validate_workflow_rejects_duplicate_output_names():
-    text = dedent(
-        """
+    text = dedent("""
         version: 1
         workflow:
           name: dup-out
@@ -306,16 +289,14 @@ def test_validate_workflow_rejects_duplicate_output_names():
               actor: b
               needs: [p1]
               outputs: shared
-        """
-    )
+        """)
     spec = parse_yaml(text)
     with pytest.raises(WorkflowValidationError, match="collides"):
         validate_workflow(spec)
 
 
 def test_validate_workflow_rejects_unknown_dollar_ref():
-    text = dedent(
-        """
+    text = dedent("""
         version: 1
         workflow:
           name: bad-ref
@@ -332,16 +313,14 @@ def test_validate_workflow_rejects_unknown_dollar_ref():
               actor: a
               inputs:
                 bad: $inputs.nonexistent
-        """
-    )
+        """)
     spec = parse_yaml(text)
     with pytest.raises(WorkflowValidationError, match="unknown input"):
         validate_workflow(spec)
 
 
 def test_validate_workflow_rejects_dollar_ref_to_unknown_output():
-    text = dedent(
-        """
+    text = dedent("""
         version: 1
         workflow:
           name: bad-out-ref
@@ -353,8 +332,7 @@ def test_validate_workflow_rejects_dollar_ref_to_unknown_output():
               actor: a
               inputs:
                 bad: $ghost.x
-        """
-    )
+        """)
     spec = parse_yaml(text)
     with pytest.raises(WorkflowValidationError, match="unknown phase output"):
         validate_workflow(spec)
@@ -372,8 +350,7 @@ def test_build_dag_topological_order_simple():
 
 
 def test_build_dag_complex_ordering():
-    text = dedent(
-        """
+    text = dedent("""
         version: 1
         workflow:
           name: diamond
@@ -392,8 +369,7 @@ def test_build_dag_complex_ordering():
             - id: top
               actor: a
               needs: [left, right]
-        """
-    )
+        """)
     spec = parse_yaml(text)
     validate_workflow(spec)
     dag = build_dag(spec)
@@ -444,8 +420,7 @@ def test_load_workflow_not_found(tmp_path: Path):
 
 
 def test_budget_defaults_applied():
-    text = dedent(
-        """
+    text = dedent("""
         version: 1
         workflow:
           name: defaults
@@ -455,8 +430,7 @@ def test_budget_defaults_applied():
           phases:
             - id: p
               actor: a
-        """
-    )
+        """)
     spec = parse_yaml(text)
     assert spec.budget.max_concurrent_agents == 8
     assert spec.budget.on_exceed == "halt"
@@ -465,8 +439,7 @@ def test_budget_defaults_applied():
 
 
 def test_budget_max_concurrent_agents_warns_above_16(caplog):
-    text = dedent(
-        """
+    text = dedent("""
         version: 1
         workflow:
           name: over-budget
@@ -478,10 +451,12 @@ def test_budget_max_concurrent_agents_warns_above_16(caplog):
           phases:
             - id: p
               actor: a
-        """
-    )
+        """)
     import logging
-    with caplog.at_level(logging.WARNING, logger="llmwikify.apps.chat.skills.workflows.dag"):
+
+    with caplog.at_level(
+        logging.WARNING, logger="llmwikify.apps.chat.skills.workflows.dag"
+    ):
         spec = parse_yaml(text)
     assert spec.budget.max_concurrent_agents == 32
     assert any("16-agent limit" in r.message for r in caplog.records)

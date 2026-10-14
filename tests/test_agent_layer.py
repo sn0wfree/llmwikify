@@ -12,6 +12,7 @@ def _run_async(coro):
     except RuntimeError as e:
         if "cannot be called from a running event loop" in str(e):
             import concurrent.futures
+
             with concurrent.futures.ThreadPoolExecutor() as pool:
                 return pool.submit(asyncio.run, coro).result()
         raise
@@ -31,5 +32,3 @@ def wiki_root(tmp_path):
     wiki = Wiki(root)
     wiki.init()
     return wiki
-
-

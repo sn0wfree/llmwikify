@@ -36,8 +36,7 @@ T = TypeVar("T", bound=BaseModel)
 class Handler(Protocol):
     """单步处理器协议。任何实现 execute 方法的类都是合法 Handler。"""
 
-    async def execute(self, ctx: HelperContext) -> None:
-        ...
+    async def execute(self, ctx: HelperContext) -> None: ...
 
 
 @dataclass(slots=True)
@@ -49,6 +48,7 @@ class HelperContext:
     - ParseJsonHandler 读取 ctx.raw，写入 ctx.parsed
     - ValidateModelHandler 读取 ctx.parsed，写入 ctx.result
     """
+
     request: Request
     model: type[BaseModel]
     raw: bytes = b""
@@ -96,26 +96,35 @@ class Helper:
             if self._debug:
                 self._logger.debug(
                     "Helper[%s] %s started | raw=%d bytes, parsed=%d keys",
-                    id(self), step_info, len(ctx.raw), len(ctx.parsed),
+                    id(self),
+                    step_info,
+                    len(ctx.raw),
+                    len(ctx.parsed),
                 )
             try:
                 await handler.execute(ctx)
             except Exception as e:
                 self._logger.error(
                     "Helper[%s] %s failed: %s",
-                    id(self), step_info, e,
+                    id(self),
+                    step_info,
+                    e,
                 )
                 raise
             if self._debug:
                 self._logger.debug(
                     "Helper[%s] %s completed | raw=%d bytes, parsed=%d keys, result=%s",
-                    id(self), step_info, len(ctx.raw), len(ctx.parsed),
+                    id(self),
+                    step_info,
+                    len(ctx.raw),
+                    len(ctx.parsed),
                     type(ctx.result).__name__ if ctx.result else "None",
                 )
         return ctx.result  # type: ignore[return-value]
 
 
 # ─── 查询参数 helper ───────────────────────────────────────────
+
 
 def get_jwt_from_request(request: Request) -> str | None:
     """从请求中提取 JWT token。"""

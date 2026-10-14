@@ -64,6 +64,7 @@ def _load_trusted_proxies() -> list[str]:
         # trusted_proxies has been dead code since its introduction. Use
         # the module's actual singleton (foundation.config.config).
         from llmwikify.foundation.config import config as _llmwikify_config
+
         cfg = _llmwikify_config.get()
         server_cfg = cfg.get("server", {})
         proxies = server_cfg.get("trusted_proxies", None)
@@ -307,32 +308,56 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
         if not token:
             # No token at all. Allow GETs if public_read, else 401/403.
             if request.method == "GET" and self.public_read:
-                logger.debug("MW: %s %s → no token, GET+public_read → pass", request.method, path)
+                logger.debug(
+                    "MW: %s %s → no token, GET+public_read → pass", request.method, path
+                )
                 return await call_next(request)
-            logger.warning("MW: %s %s → no token → deny (%s)", request.method, path, "401" if not self.public_read else "403")
+            logger.warning(
+                "MW: %s %s → no token → deny (%s)",
+                request.method,
+                path,
+                "401" if not self.public_read else "403",
+            )
             return _deny_no_token(request.method, self.public_read)
 
         # Token present — verify (JWT first, then PAT fallback).
         claims = self._verify_token(token)
         if claims is None:
-            logger.warning("MW: %s %s → token verify failed → 401", request.method, path)
+            logger.warning(
+                "MW: %s %s → token verify failed → 401", request.method, path
+            )
             return _deny(401, "invalid_token", "Token is invalid or expired.")
 
         # Scope enforcement (decision 4): non-GET requires scope=write.
         if request.method != "GET" and claims.scope != "write":
-            logger.warning("MW: %s %s → scope=%s, need write → 403", request.method, path, claims.scope)
-            return _deny(403, "forbidden_scope", f"scope=write required; got {claims.scope!r}")
+            logger.warning(
+                "MW: %s %s → scope=%s, need write → 403",
+                request.method,
+                path,
+                claims.scope,
+            )
+            return _deny(
+                403, "forbidden_scope", f"scope=write required; got {claims.scope!r}"
+            )
 
         # Wikis claim enforcement (decision 7): for /api/wiki/{wiki_id}/...
         # paths, check that the token covers this wiki.
         wiki_violation = _check_wikis_claim(path, claims)
         if wiki_violation is not None:
-            logger.warning("MW: %s %s → wikis violation: %s", request.method, path, wiki_violation)
+            logger.warning(
+                "MW: %s %s → wikis violation: %s", request.method, path, wiki_violation
+            )
             return _deny(403, "forbidden_wiki", wiki_violation)
 
         # Attach claims to request.state so downstream handlers can read.
         request.state.auth_claims = claims
-        logger.debug("MW: %s %s → pass (scope=%s, wikis=%s)", request.method, path, claims.scope, claims.wikis)
+        logger.debug(
+            "MW: %s %s → pass (scope=%s, wikis=%s)",
+            request.method,
+            path,
+            claims.scope,
+            claims.wikis,
+        )
         return await call_next(request)
 
     def _extract_token(self, request: Request) -> str:
@@ -369,7 +394,11 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
             try:
                 ak_repo.touch_last_used(api_key.id)
             except Exception:
-                logger.warning("failed to touch last_used_at for api_key %s", api_key.id, exc_info=True)
+                logger.warning(
+                    "failed to touch last_used_at for api_key %s",
+                    api_key.id,
+                    exc_info=True,
+                )
 
             # Resolve user to build claims.
             user = UserRepository().get_by_id(api_key.user_id)
@@ -411,7 +440,11 @@ def _deny_no_token(method: str, public_read: bool) -> JSONResponse:
         # Should not reach here in normal flow (GET bypassed above),
         # but be defensive.
         return _deny(401, "auth_required", "Authentication required.")
-    return _deny(403, "auth_required", f"{method} requires authentication; POST /auth/login first.")
+    return _deny(
+        403,
+        "auth_required",
+        f"{method} requires authentication; POST /auth/login first.",
+    )
 
 
 def _check_wikis_claim(path: str, claims: TokenClaims) -> str | None:

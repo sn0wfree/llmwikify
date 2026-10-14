@@ -66,11 +66,19 @@ class SynthesizeCommand(Command):
         p.add_argument("--sources", nargs="*", help="Source pages to link")
         p.add_argument("--raw-sources", nargs="*", help="Raw source files to cite")
         p.add_argument(
-            "--mode", choices=["sink", "update"], default="sink",
+            "--mode",
+            choices=["sink", "update"],
+            default="sink",
             help="Strategy when similar query exists",
         )
-        p.add_argument("--no-auto-link", action="store_true", help="Disable automatic wikilink insertion")
-        p.add_argument("--no-auto-log", action="store_true", help="Disable automatic log entry")
+        p.add_argument(
+            "--no-auto-link",
+            action="store_true",
+            help="Disable automatic wikilink insertion",
+        )
+        p.add_argument(
+            "--no-auto-log", action="store_true", help="Disable automatic log entry"
+        )
 
     def run(self, args: Any, wiki: Any, config: dict) -> int:
         return run_synthesize(wiki, args)

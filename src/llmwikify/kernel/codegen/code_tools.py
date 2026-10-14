@@ -15,6 +15,7 @@ Functions:
   - execute_code(code, df, timeout_sec) → pl.Series
         Run compute_factor(df) via CodeSandbox with timeout.
 """
+
 from __future__ import annotations
 
 import ast
@@ -30,6 +31,7 @@ _PYTHON_FENCE_RE = re.compile(r"```python\s*\n(.+?)\n```", re.DOTALL)
 
 
 # ─── Code extraction ───────────────────────────────────────────────
+
 
 def extract_python(text: str) -> str | None:
     """Extract Python code from LLM response.
@@ -56,6 +58,7 @@ def extract_python(text: str) -> str | None:
 
 # ─── Syntax validation ────────────────────────────────────────────
 
+
 def validate_syntax(code: str) -> tuple[bool, str]:
     """Check Python syntax via ast.parse.
 
@@ -73,6 +76,7 @@ def validate_syntax(code: str) -> tuple[bool, str]:
 
 
 # ─── Safety validation ────────────────────────────────────────────
+
 
 def validate_safety(code: str) -> tuple[bool, str]:
     """Delegate to CodeSandbox.validate for safety check.
@@ -93,6 +97,7 @@ def validate_safety(code: str) -> tuple[bool, str]:
 
 
 # ─── Code execution ────────────────────────────────────────────────
+
 
 def build_execute_namespace() -> dict[str, Any]:
     """Build namespace dict with QuantNodes operators + polars/pandas/numpy.

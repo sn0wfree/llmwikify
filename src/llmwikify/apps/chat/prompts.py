@@ -97,10 +97,16 @@ def render_framework_block(
         return ""
 
     if kind == "report":
-        return _render_report_block(clarification, reasoning, structure, evidence_scores)
+        return _render_report_block(
+            clarification, reasoning, structure, evidence_scores
+        )
     if kind == "review":
-        return _render_review_block(clarification, reasoning, structure, evidence_scores)
-    raise ValueError(f"Unknown framework_kind: {kind!r} (expected 'report' or 'review')")
+        return _render_review_block(
+            clarification, reasoning, structure, evidence_scores
+        )
+    raise ValueError(
+        f"Unknown framework_kind: {kind!r} (expected 'report' or 'review')"
+    )
 
 
 def _render_report_block(
@@ -121,7 +127,9 @@ def _render_report_block(
             lines.append(f"- 立场: {clarification['position'][:200]}")
         premises = clarification.get("premises") or []
         if premises:
-            lines.append(f"- 前提 ({len(premises)}): {'; '.join(str(p)[:80] for p in premises[:5])}")
+            lines.append(
+                f"- 前提 ({len(premises)}): {'; '.join(str(p)[:80] for p in premises[:5])}"
+            )
         lines.append("")
 
     if evidence_scores:
@@ -237,14 +245,18 @@ def source_hash(source: dict[str, Any]) -> str:
         12-character lowercase hex string.
     """
     key = source.get("url") or source.get("title", "unknown")
-    return hashlib.md5(key.encode()).hexdigest()[:12]  # noqa: S324 — short ID, not cryptographic
+    return hashlib.md5(key.encode()).hexdigest()[
+        :12
+    ]  # noqa: S324 — short ID, not cryptographic
 
 
 # ─── fallback functions ───────────────────────────────────────────────
 
 
 def _clarify_fallback(
-    query: str, error: Exception | None = None, **_kwargs: Any,
+    query: str,
+    error: Exception | None = None,
+    **_kwargs: Any,
 ) -> dict[str, Any]:
     """Fallback for research_clarify (verbatim from clarifier._fallback:188-206)."""
     reason = str(error) if error else "LLM call failed"
@@ -260,7 +272,9 @@ def _clarify_fallback(
 
 
 def _plan_fallback(
-    query: str, error: Exception | None = None, **_kwargs: Any,
+    query: str,
+    error: Exception | None = None,
+    **_kwargs: Any,
 ) -> list[dict[str, Any]]:
     """Fallback for research_plan (verbatim from actions._plan_sub_queries:161)."""
     return [{"query": query, "source_type": "web", "url": ""}]
@@ -279,7 +293,8 @@ def _replan_fallback(
 
 
 def _review_fallback(
-    error: Exception | None = None, **_kwargs: Any,
+    error: Exception | None = None,
+    **_kwargs: Any,
 ) -> dict[str, Any]:
     """Fallback for research_review (verbatim from review.py:77)."""
     reason = f"Review failed: {error}" if error else "Review failed: LLM call failed"
@@ -292,7 +307,8 @@ def _review_fallback(
 
 
 def _reason_fallback(
-    error: Exception | None = None, **_kwargs: Any,
+    error: Exception | None = None,
+    **_kwargs: Any,
 ) -> dict[str, str]:
     """Fallback for research_reason.
 
@@ -302,7 +318,10 @@ def _reason_fallback(
     the rule-based fallback. The actual rule-based logic stays in
     ``engine.py:_rule_based_reason`` (unchanged in this refactor).
     """
-    return {"thought": "LLM failed, applying rule-based fallback", "action": "__rule_based__"}
+    return {
+        "thought": "LLM failed, applying rule-based fallback",
+        "action": "__rule_based__",
+    }
 
 
 # ─── ResearchPrompt dataclass + registry ──────────────────────────────
@@ -327,7 +346,10 @@ class ResearchPrompt:
             raise ValueError(
                 f"ResearchPrompt.llm_role must be default/planning/report, got {self.llm_role!r}"
             )
-        if self.framework_kind is not None and self.framework_kind not in ("report", "review"):
+        if self.framework_kind is not None and self.framework_kind not in (
+            "report",
+            "review",
+        ):
             raise ValueError(
                 f"ResearchPrompt.framework_kind must be report/review/None, got {self.framework_kind!r}"
             )

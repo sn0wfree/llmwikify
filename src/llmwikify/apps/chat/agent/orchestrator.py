@@ -83,19 +83,44 @@ class ChatEvent:
 
     @staticmethod
     def tool_call_start(tool: str, args: dict, call_id: str = "") -> dict:
-        return {"type": events.TOOL_CALL_START, "tool": tool, "args": args, "call_id": call_id}
+        return {
+            "type": events.TOOL_CALL_START,
+            "tool": tool,
+            "args": args,
+            "call_id": call_id,
+        }
 
     @staticmethod
-    def tool_call_end(tool: str, result: Any, call_id: str = "", duration_ms: int = 0) -> dict:
-        return {"type": events.TOOL_CALL_END, "tool": tool, "result": result, "call_id": call_id, "duration_ms": duration_ms}
+    def tool_call_end(
+        tool: str, result: Any, call_id: str = "", duration_ms: int = 0
+    ) -> dict:
+        return {
+            "type": events.TOOL_CALL_END,
+            "tool": tool,
+            "result": result,
+            "call_id": call_id,
+            "duration_ms": duration_ms,
+        }
 
     @staticmethod
-    def tool_call_error(tool: str, error: str, call_id: str = "", duration_ms: int = 0) -> dict:
-        return {"type": events.TOOL_CALL_ERROR, "tool": tool, "error": error, "call_id": call_id, "duration_ms": duration_ms}
+    def tool_call_error(
+        tool: str, error: str, call_id: str = "", duration_ms: int = 0
+    ) -> dict:
+        return {
+            "type": events.TOOL_CALL_ERROR,
+            "tool": tool,
+            "error": error,
+            "call_id": call_id,
+            "duration_ms": duration_ms,
+        }
 
     @staticmethod
     def confirmation_required(
-        conf_id: str, tool: str, args: dict, impact: dict, call_id: str = "",
+        conf_id: str,
+        tool: str,
+        args: dict,
+        impact: dict,
+        call_id: str = "",
     ) -> dict:
         return {
             "type": events.CONFIRMATION_REQUIRED,
@@ -120,7 +145,10 @@ class ChatEvent:
 
     @staticmethod
     def command_done(
-        command: str, ok: bool, message: str, data: Any = None,
+        command: str,
+        ok: bool,
+        message: str,
+        data: Any = None,
     ) -> dict:
         ev: dict[str, Any] = {
             "type": events.COMMAND_DONE,
@@ -201,7 +229,9 @@ class ChatOrchestrator:
         self.skill_service = skill_service
 
         self.prompt_builder = PromptBuilder(
-            wiki_service, memory_manager, chat_db=chat_db,
+            wiki_service,
+            memory_manager,
+            chat_db=chat_db,
         )
         self.context_manager = ContextManager(config=self.config)
         self.tool_executor = ToolExecutor(
@@ -271,6 +301,7 @@ class ChatOrchestrator:
             CompositeToolRegistry,
             SkillToolAdapter,
         )
+
         adapter_kwargs: dict[str, Any] = {
             "wiki": self.wiki_service.get_wiki(wiki_id),
             "db": self.db,
@@ -311,12 +342,16 @@ class ChatOrchestrator:
         ] + ctx.get_messages()
         obs_summary = ctx.get_observations_summary()
         if obs_summary:
-            raw_messages.insert(-1, {
-                "role": "system",
-                "content": obs_summary,
-            })
+            raw_messages.insert(
+                -1,
+                {
+                    "role": "system",
+                    "content": obs_summary,
+                },
+            )
         raw_messages = await self.context_manager.prepare_messages(
-            raw_messages, wiki_service=self.wiki_service,
+            raw_messages,
+            wiki_service=self.wiki_service,
         )
         return system_prompt, raw_messages
 
@@ -341,9 +376,7 @@ class ChatOrchestrator:
                 )
                 yield {"type": events.SESSION_CREATED, "session_id": session_id}
             else:
-                session = await asyncio.to_thread(
-                    self.db.get_chat_session, session_id
-                )
+                session = await asyncio.to_thread(self.db.get_chat_session, session_id)
                 if session is None:
                     session_id = await asyncio.to_thread(
                         self.db.create_chat_session, wiki_id
@@ -351,16 +384,21 @@ class ChatOrchestrator:
                     yield {"type": events.SESSION_CREATED, "session_id": session_id}
 
             await asyncio.to_thread(
-                self.event_log.log, session_id, {"type": events.USER_MESSAGE, "content": message[:200]}
+                self.event_log.log,
+                session_id,
+                {"type": events.USER_MESSAGE, "content": message[:200]},
             )
 
             ctx = await self.context_manager.get_or_create(
-                session_id, wiki_id,
+                session_id,
+                wiki_id,
                 history_loader=self._load_history,
                 db=self.db,
             )
 
-            wiki_id_from_prefix, message = self.prompt_builder.parse_wiki_prefix(message)
+            wiki_id_from_prefix, message = self.prompt_builder.parse_wiki_prefix(
+                message
+            )
             if wiki_id_from_prefix:
                 ctx.set_recent_wiki(wiki_id_from_prefix)
                 await asyncio.to_thread(
@@ -396,9 +434,7 @@ class ChatOrchestrator:
             )
 
             # Auto-set session title from first user message
-            session = await asyncio.to_thread(
-                self.db.get_chat_session, session_id
-            )
+            session = await asyncio.to_thread(self.db.get_chat_session, session_id)
             if session and not session.get("title"):
                 title = message[:100].strip()
                 if title:
@@ -414,7 +450,9 @@ class ChatOrchestrator:
             tool_registry = self._get_tool_registry(ctx, session_id)
 
             system_prompt, messages_for_llm = await self._prepare_llm_messages(
-                ctx, message, session_id,
+                ctx,
+                message,
+                session_id,
             )
 
             # Delegate to ChatRunnerV2 (Plan B) with abort + per-event
@@ -432,9 +470,7 @@ class ChatOrchestrator:
         except Exception as e:
             logger.exception("Chat error")
             err_event = ChatEvent.error(str(e))
-            await asyncio.to_thread(
-                self.event_log.log, session_id, err_event
-            )
+            await asyncio.to_thread(self.event_log.log, session_id, err_event)
             await asyncio.to_thread(
                 self.tool_executor.save_message, session_id, "assistant", f"Error: {e}"
             )
@@ -459,7 +495,8 @@ class ChatOrchestrator:
             return
 
         ctx = await self.context_manager.get_or_create(
-            session_id, wiki_id,
+            session_id,
+            wiki_id,
             history_loader=self._load_history,
             db=self.db,
         )
@@ -474,7 +511,10 @@ class ChatOrchestrator:
         if result.get("status") == "error":
             message = result.get("error", "Confirmation failed")
             await asyncio.to_thread(
-                self.tool_executor.save_message, session_id, "assistant", f"Error: {message}"
+                self.tool_executor.save_message,
+                session_id,
+                "assistant",
+                f"Error: {message}",
             )
             yield ChatEvent.error(message)
             return
@@ -527,6 +567,7 @@ class ChatOrchestrator:
         from llmwikify.apps.chat.agent.confirmation_manager import (
             ConfirmationManager as _CM,
         )
+
         return _CM.is_unknown_confirmation(result)
 
     def list_confirmations(self, wiki_id: str | None = None) -> dict[str, list[dict]]:
@@ -539,19 +580,28 @@ class ChatOrchestrator:
         arguments: dict | None = None,
     ) -> dict:
         return await self._confirmation_mgr.approve_confirmation(
-            confirmation_id, wiki_id, arguments,
+            confirmation_id,
+            wiki_id,
+            arguments,
         )
 
     async def reject_confirmation(
-        self, confirmation_id: str, wiki_id: str | None = None,
+        self,
+        confirmation_id: str,
+        wiki_id: str | None = None,
     ) -> dict:
-        return await self._confirmation_mgr.reject_confirmation(confirmation_id, wiki_id)
+        return await self._confirmation_mgr.reject_confirmation(
+            confirmation_id, wiki_id
+        )
 
     async def batch_approve_confirmations(
-        self, confirmation_ids: list[str], wiki_id: str | None = None,
+        self,
+        confirmation_ids: list[str],
+        wiki_id: str | None = None,
     ) -> dict:
         return await self._confirmation_mgr.batch_approve_confirmations(
-            confirmation_ids, wiki_id,
+            confirmation_ids,
+            wiki_id,
         )
 
     # ─── Session management ──────────────────────────────────────
@@ -708,10 +758,12 @@ class ChatOrchestrator:
             wiki_service=self.wiki_service,
             config=self.config,
         )
-        hook = CompositeHook([
-            WikiHook(wiki=self.wiki_service.get_wiki(ctx.wiki_id)),
-            _V2PersistenceHook(self.tool_executor, session_id),
-        ])
+        hook = CompositeHook(
+            [
+                WikiHook(wiki=self.wiki_service.get_wiki(ctx.wiki_id)),
+                _V2PersistenceHook(self.tool_executor, session_id),
+            ]
+        )
         runner = ChatRunnerV2(
             chat_service=bridge_backend,
             tool_executor=self.tool_executor,
@@ -727,7 +779,9 @@ class ChatOrchestrator:
         # registry stitched into SkillContext.config.
         subagent_manager = SubagentManager(runner)
         child_tool_registry = self._get_tool_registry(
-            ctx, session_id, expose_subagent=False,
+            ctx,
+            session_id,
+            expose_subagent=False,
         )
         parent_tool_registry = self._get_tool_registry(
             ctx,
@@ -780,7 +834,9 @@ class ChatOrchestrator:
         )
 
         runner, spec = self._build_chat_runner_v2(
-            ctx, session_id, messages_for_llm,
+            ctx,
+            session_id,
+            messages_for_llm,
         )
 
         accumulated_tools: list[dict] = []
@@ -804,19 +860,22 @@ class ChatOrchestrator:
                                     "run_id": run_id,
                                     "status": data.get("status", "running"),
                                     "workflow_name": data.get(
-                                        "workflow_name", "autoresearch-compound",
+                                        "workflow_name",
+                                        "autoresearch-compound",
                                     ),
                                     "timeline": data.get("timeline", []),
                                     "writes_wiki": False,
                                     "proposal_only": True,
                                 }
-                    accumulated_tools.append({
-                        "tool": event.get("tool", ""),
-                        "args": event.get("args", {}),
-                        "result": event.get("result"),
-                        "call_id": event.get("call_id", ""),
-                        "status": "executed",
-                    })
+                    accumulated_tools.append(
+                        {
+                            "tool": event.get("tool", ""),
+                            "args": event.get("args", {}),
+                            "result": event.get("result"),
+                            "call_id": event.get("call_id", ""),
+                            "status": "executed",
+                        }
+                    )
                 if kind == events.DONE:
                     final = event.get("content", "") or ""
                     research_run_id = extract_research_run_id_from_tools(
@@ -859,6 +918,7 @@ class ChatOrchestrator:
         from llmwikify.apps.chat.agent.chat_persistence import (
             save_assistant_done_message,
         )
+
         save_assistant_done_message(
             self.tool_executor,
             session_id,
@@ -875,6 +935,7 @@ class ChatOrchestrator:
         from llmwikify.apps.chat.agent.chat_persistence import (
             extract_research_run_id_from_tools,
         )
+
         return extract_research_run_id_from_tools(tool_calls)
 
     async def _stream_runner_events(
@@ -938,14 +999,15 @@ class ChatOrchestrator:
     async def _load_history(self, session_id: str) -> list[dict]:
         """Load conversation history from MemoryManager or DB."""
         if self.memory_manager is not None:
-            return list(reversed(
-                await self.memory_manager.conversation.alist(
-                    session_id, limit=100,
+            return list(
+                reversed(
+                    await self.memory_manager.conversation.alist(
+                        session_id,
+                        limit=100,
+                    )
                 )
-            ))
-        return list(reversed(
-            self.db.get_chat_messages(session_id, limit=100)
-        ))
+            )
+        return list(reversed(self.db.get_chat_messages(session_id, limit=100)))
 
     def _get_wiki_for_context(self, ctx: AgentContext) -> Any:
         wiki_id = ctx.recent_wiki_id or ctx.wiki_id

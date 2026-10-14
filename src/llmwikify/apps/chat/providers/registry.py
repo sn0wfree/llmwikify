@@ -39,6 +39,7 @@ def get_provider(name: str) -> LLMProvider:
     keep working after the rename.
     """
     from llmwikify.foundation.llm.resolver import apply_provider_alias
+
     canonical = apply_provider_alias(name)
     if canonical not in PROVIDERS:
         available = ", ".join(PROVIDERS.keys()) or "none"
@@ -70,6 +71,7 @@ def create_llm(config: dict[str, Any]) -> StreamableLLMClient:
         )
 
     import os
+
     provider_name = os.environ.get("LLM_PROVIDER", llm_cfg.get("provider", "minimax"))
     if provider_name is None:
         raise LLMNotConfiguredError(

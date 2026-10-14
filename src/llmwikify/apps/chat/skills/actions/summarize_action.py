@@ -27,12 +27,14 @@ async def _summarize(args: dict, ctx: SkillContext) -> SkillResult:
         return SkillResult.fail("sources list is required (non-empty)")
     # TODO: wire to engine._action_synthesize in Phase 6.
     # For Phase 5, return a minimal synthesis placeholder.
-    return SkillResult.ok({
-        "claims": [
-            {"text": f"Key claim from {len(sources)} source(s)", "confidence": 0.7},
-        ],
-        "narrative": f"Synthesis of {len(sources)} source(s).",
-    })
+    return SkillResult.ok(
+        {
+            "claims": [
+                {"text": f"Key claim from {len(sources)} source(s)", "confidence": 0.7},
+            ],
+            "narrative": f"Synthesis of {len(sources)} source(s).",
+        }
+    )
 
 
 class SummarizeSkill(Skill):

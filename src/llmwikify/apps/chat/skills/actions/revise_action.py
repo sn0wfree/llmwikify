@@ -55,7 +55,10 @@ class ReviseSkill(Skill):
                 "type": "object",
                 "properties": {
                     "text": {"type": "string", "description": "Text to revise"},
-                    "score": {"type": "number", "description": "Current quality score (0-1)"},
+                    "score": {
+                        "type": "number",
+                        "description": "Current quality score (0-1)",
+                    },
                     "feedback": {"type": "string", "description": "Optional feedback"},
                 },
                 "required": ["text", "score"],

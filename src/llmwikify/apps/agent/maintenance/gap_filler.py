@@ -79,7 +79,14 @@ def extract_gaps(lint_result: dict[str, Any]) -> list[GapItem]:
         if (gap_type, concept) in seen:
             continue
         seen.add((gap_type, concept))
-        found.append(GapItem(gap_type=gap_type, priority=calc_priority(item), data=item, concept=concept))
+        found.append(
+            GapItem(
+                gap_type=gap_type,
+                priority=calc_priority(item),
+                data=item,
+                concept=concept,
+            )
+        )
 
     investigations = lint_result.get("investigations", {}) or {}
     for item in investigations.get("knowledge_gaps", []) or []:
@@ -90,7 +97,14 @@ def extract_gaps(lint_result: dict[str, Any]) -> list[GapItem]:
         if (gap_type, concept) in seen:
             continue
         seen.add((gap_type, concept))
-        found.append(GapItem(gap_type=gap_type, priority=calc_priority(item), data=item, concept=concept))
+        found.append(
+            GapItem(
+                gap_type=gap_type,
+                priority=calc_priority(item),
+                data=item,
+                concept=concept,
+            )
+        )
 
     return sorted(found, key=lambda g: g.priority, reverse=True)
 
@@ -112,7 +126,8 @@ class GapFiller:
         self.config = config
         self.llm_semaphore = llm_semaphore
         self.rate_limiter = rate_limiter or SlidingWindowRateLimiter(
-            enabled=False, name=f"gap_filler_{wiki_id}",
+            enabled=False,
+            name=f"gap_filler_{wiki_id}",
         )
         self._proposal_manager = proposal_manager or WikiDreamProposalManager(
             wiki_id=wiki_id,
@@ -128,7 +143,8 @@ class GapFiller:
             # → one rate-limit unit per cycle.
             await self.rate_limiter.acquire()
             lint_result = await asyncio.to_thread(
-                self.wiki.lint, mode="check",
+                self.wiki.lint,
+                mode="check",
             )
         except Exception as exc:
             result.errors += 1
@@ -160,15 +176,22 @@ class GapFiller:
                 result.errors += 1
                 logger.warning(
                     "[%s] gap_filler failed on %s/%s: %s",
-                    self.wiki_id, gap.gap_type, gap.concept, exc,
+                    self.wiki_id,
+                    gap.gap_type,
+                    gap.concept,
+                    exc,
                 )
 
         self.last_result = result
         logger.info(
             "[%s] gap_filler: %d detected, %d processed "
             "(%d mechanical, %d proposals, %d errors)",
-            self.wiki_id, result.detected, result.processed,
-            result.mechanical_fixes, result.proposals_created, result.errors,
+            self.wiki_id,
+            result.detected,
+            result.processed,
+            result.mechanical_fixes,
+            result.proposals_created,
+            result.errors,
         )
         return result
 
@@ -210,13 +233,13 @@ class GapFiller:
         out: list[str] = []
         pos = 0
         for m in re.finditer(r"\[\[.*?\]\]", content):
-            before = content[pos:m.start()]
+            before = content[pos : m.start()]
             hit = pattern.search(before)
             if hit:
-                out.append(before[:hit.start()])
+                out.append(before[: hit.start()])
                 out.append(f"[[{concept}]]")
-                out.append(before[hit.end():])
-                out.append(content[m.start():])
+                out.append(before[hit.end() :])
+                out.append(content[m.start() :])
                 return "".join(out)
             out.append(before)
             out.append(m.group(0))
@@ -224,9 +247,9 @@ class GapFiller:
         tail = content[pos:]
         hit = pattern.search(tail)
         if hit:
-            out.append(tail[:hit.start()])
+            out.append(tail[: hit.start()])
             out.append(f"[[{concept}]]")
-            out.append(tail[hit.end():])
+            out.append(tail[hit.end() :])
             return "".join(out)
         return content
 
@@ -254,12 +277,13 @@ class GapFiller:
         except TypeError:
             related = await asyncio.to_thread(self.wiki.search, concept)
         except Exception as exc:
-            logger.warning("[%s] gap_filler search failed for %s: %s", self.wiki_id, concept, exc)
+            logger.warning(
+                "[%s] gap_filler search failed for %s: %s", self.wiki_id, concept, exc
+            )
             related = []
 
         related_names = [
-            r.get("page_name") or r.get("name") or str(r)
-            for r in (related or [])[:5]
+            r.get("page_name") or r.get("name") or str(r) for r in (related or [])[:5]
         ]
         related_snippets = [
             f"- {r.get('page_name', '?')}: {(r.get('content', '') or r.get('snippet', ''))[:200]}"
@@ -274,15 +298,16 @@ class GapFiller:
         # 3. LLM draft (when enabled + LLM available)
         draft = None
         if self.config.use_llm_draft:
-            llm_enabled = (
-                isinstance(self.wiki.config, dict)
-                and (self.wiki.config.get("llm") or {}).get("enabled")
-            )
+            llm_enabled = isinstance(self.wiki.config, dict) and (
+                self.wiki.config.get("llm") or {}
+            ).get("enabled")
             if llm_enabled:
                 await self.rate_limiter.acquire()
                 draft = await asyncio.to_thread(
                     self._llm_synthesize_draft,
-                    concept, related_snippets, web_sources,
+                    concept,
+                    related_snippets,
+                    web_sources,
                 )
 
         # 4. Fallback to stub if LLM didn't produce output
@@ -324,14 +349,18 @@ class GapFiller:
             results = await ws.search(concept, num_results=3)
             return [
                 f"- [{r.title}]({r.url}): {r.snippet[:200]}"
-                for r in results if r.snippet
+                for r in results
+                if r.snippet
             ]
         except Exception as exc:
             logger.debug("[%s] gap_filler web search failed: %s", self.wiki_id, exc)
             return []
 
     def _llm_synthesize_draft(
-        self, concept: str, related_snippets: list[str], web_sources: list[str],
+        self,
+        concept: str,
+        related_snippets: list[str],
+        web_sources: list[str],
     ) -> str | None:
         """Build a structured wiki page via LLM. Called in a thread."""
         try:
@@ -340,23 +369,31 @@ class GapFiller:
             client = LLMClient.from_config(self.wiki.config)
             context_parts = []
             if related_snippets:
-                context_parts.append("Related pages in wiki:\n" + "\n".join(related_snippets))
+                context_parts.append(
+                    "Related pages in wiki:\n" + "\n".join(related_snippets)
+                )
             if web_sources:
                 context_parts.append("Web sources:\n" + "\n".join(web_sources))
             context = "\n\n".join(context_parts) or "(no context available)"
 
             messages = [
-                {"role": "system", "content": (
-                    "You are a wiki content author. Write a concise, factual "
-                    "markdown page for the given concept. Use [[wikilink]] "
-                    "syntax for related concepts. Do NOT fabricate facts — "
-                    "use only the provided context. Output ONLY the markdown "
-                    "page content, no explanations."
-                )},
-                {"role": "user", "content": (
-                    f"Write a wiki page for: **{concept}**\n\n"
-                    f"Context:\n{context}"
-                )},
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a wiki content author. Write a concise, factual "
+                        "markdown page for the given concept. Use [[wikilink]] "
+                        "syntax for related concepts. Do NOT fabricate facts — "
+                        "use only the provided context. Output ONLY the markdown "
+                        "page content, no explanations."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": (
+                        f"Write a wiki page for: **{concept}**\n\n"
+                        f"Context:\n{context}"
+                    ),
+                },
             ]
             result = client.complete(messages)
             if isinstance(result, str) and len(result.strip()) > 50:
@@ -364,7 +401,9 @@ class GapFiller:
         except Exception as exc:
             logger.warning(
                 "[%s] gap_filler LLM synthesis failed for %s: %s",
-                self.wiki_id, concept, exc,
+                self.wiki_id,
+                concept,
+                exc,
             )
         return None
 
@@ -384,13 +423,17 @@ class GapFiller:
         last = self.last_result
         return {
             "wiki_id": self.wiki_id,
-            "last_cycle": {
-                "detected": last.detected,
-                "processed": last.processed,
-                "mechanical_fixes": last.mechanical_fixes,
-                "proposals_created": last.proposals_created,
-                "skipped_low_priority": last.skipped_low_priority,
-                "errors": last.errors,
-                "ran_at": last.ran_at,
-            } if last else None,
+            "last_cycle": (
+                {
+                    "detected": last.detected,
+                    "processed": last.processed,
+                    "mechanical_fixes": last.mechanical_fixes,
+                    "proposals_created": last.proposals_created,
+                    "skipped_low_priority": last.skipped_low_priority,
+                    "errors": last.errors,
+                    "ran_at": last.ran_at,
+                }
+                if last
+                else None
+            ),
         }

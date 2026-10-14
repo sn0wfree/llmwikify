@@ -32,6 +32,7 @@ def _get_wiki_db_and_id(registry: WikiRegistry, wiki_id: str | None = None):
     """
     try:
         from llmwikify.interfaces.server.http.agent._common import get_agent_service
+
         service = get_agent_service()
         db = service.wiki_service._wiki_db
         resolved_id = wiki_id or service.wiki_service.get_default_wiki_id()
@@ -58,17 +59,23 @@ def register_wiki_routes(app, registry: WikiRegistry) -> None:
         return enrich_status(wiki.status())
 
     @wiki_router.get("/search")
-    async def wiki_search(q: str, limit: int = 10, backend: str = "fts5", wiki: Wiki = Depends(get_wiki)):  # noqa -> Any: B008
+    async def wiki_search(
+        q: str, limit: int = 10, backend: str = "fts5", wiki: Wiki = Depends(get_wiki)
+    ):  # noqa -> Any: B008
         """Full-text search across wiki pages."""
         return wiki.search(q, limit, backend=backend)
 
     @wiki_router.get("/page/{page_name:path}")
-    async def wiki_read_page(page_name: str, wiki: Wiki = Depends(get_wiki)):  # noqa -> Any: B008
+    async def wiki_read_page(
+        page_name: str, wiki: Wiki = Depends(get_wiki)
+    ):  # noqa -> Any: B008
         """Read a wiki page."""
         return read_page_with_sink(wiki, page_name)
 
     @wiki_router.post("/page")
-    async def wiki_write_page(request: Request, wiki: Wiki = Depends(get_wiki)):  # noqa -> Any: B008
+    async def wiki_write_page(
+        request: Request, wiki: Wiki = Depends(get_wiki)
+    ):  # noqa -> Any: B008
         """Write a wiki page."""
         body = await request.json()
         # v0.40: confirm_token resolution — query string > POST body.
@@ -78,11 +85,7 @@ def register_wiki_routes(app, registry: WikiRegistry) -> None:
         # HTTP access logs; body remains recommended for new callers.
         body_token = body.get("confirm_token")
         query_token = request.query_params.get("confirm_token")
-        if (
-            query_token
-            and body_token
-            and query_token != body_token
-        ):
+        if query_token and body_token and query_token != body_token:
             logger.info(
                 "wiki_write_page: confirm_token resolved from query "
                 "string, overriding body "
@@ -92,7 +95,14 @@ def register_wiki_routes(app, registry: WikiRegistry) -> None:
             )
         confirm_token = query_token or body_token
         db, wiki_id = _get_wiki_db_and_id(registry)
-        return write_page(wiki, body.get("page_name", ""), body.get("content", ""), confirm_token, db, wiki_id)
+        return write_page(
+            wiki,
+            body.get("page_name", ""),
+            body.get("content", ""),
+            confirm_token,
+            db,
+            wiki_id,
+        )
 
     @wiki_router.get("/guide")
     async def wiki_guide(wiki: Wiki = Depends(get_wiki)):  # noqa -> Any: B008
@@ -120,7 +130,9 @@ def register_wiki_routes(app, registry: WikiRegistry) -> None:
         return wiki.recommend()
 
     @wiki_router.get("/suggest_synthesis")
-    async def wiki_suggest_synthesis(source_name: str | None = None, wiki: Wiki = Depends(get_wiki)):  # noqa -> Any: B008
+    async def wiki_suggest_synthesis(
+        source_name: str | None = None, wiki: Wiki = Depends(get_wiki)
+    ):  # noqa -> Any: B008
         """Get cross-source synthesis suggestions."""
         return wiki.suggest_synthesis(source_name=source_name)
 
@@ -137,10 +149,13 @@ def register_wiki_routes(app, registry: WikiRegistry) -> None:
     ):
         """Return graph data optimized for visualization."""
         from llmwikify.kernel.graph.visualizer import build_visualization_data
+
         return build_visualization_data(wiki.index, wiki, current_page, mode)
 
     @wiki_router.get("/file/{path:path}")
-    async def wiki_serve_file(path: str, wiki: Wiki = Depends(get_wiki)):  # noqa -> Any: B008
+    async def wiki_serve_file(
+        path: str, wiki: Wiki = Depends(get_wiki)
+    ):  # noqa -> Any: B008
         """Serve a raw file from the wiki root (PDF, markdown, source)."""
         return _serve_wiki_file(wiki.root, path)
 
@@ -164,7 +179,9 @@ def register_wiki_routes(app, registry: WikiRegistry) -> None:
             return {"pages": page_names, "count": len(page_names)}
 
     @wiki_id_router.get("/{wiki_id}/search")
-    async def wiki_search_by_id(wiki_id: str, q: str, limit: int = 10, backend: str = "fts5") -> Any:
+    async def wiki_search_by_id(
+        wiki_id: str, q: str, limit: int = 10, backend: str = "fts5"
+    ) -> Any:
         """Search within a specific wiki."""
         with wiki_or_404(registry, wiki_id) as wiki:
             return wiki.search(q, limit, backend=backend)
@@ -184,11 +201,7 @@ def register_wiki_routes(app, registry: WikiRegistry) -> None:
             # (see default route for full comment).
             body_token = body.get("confirm_token")
             query_token = request.query_params.get("confirm_token")
-            if (
-                query_token
-                and body_token
-                and query_token != body_token
-            ):
+            if query_token and body_token and query_token != body_token:
                 logger.info(
                     "wiki_write_page_by_id: confirm_token resolved from "
                     "query string, overriding body "
@@ -198,7 +211,14 @@ def register_wiki_routes(app, registry: WikiRegistry) -> None:
                 )
             confirm_token = query_token or body_token
             db, _ = _get_wiki_db_and_id(registry, wiki_id)
-            return write_page(wiki, body.get("page_name", ""), body.get("content", ""), confirm_token, db, wiki_id)
+            return write_page(
+                wiki,
+                body.get("page_name", ""),
+                body.get("content", ""),
+                confirm_token,
+                db,
+                wiki_id,
+            )
 
     @wiki_id_router.get("/{wiki_id}/guide")
     async def wiki_guide_by_id(wiki_id: str) -> Any:
@@ -232,6 +252,7 @@ def register_wiki_routes(app, registry: WikiRegistry) -> None:
         """Get graph data for a specific wiki."""
         with wiki_or_404(registry, wiki_id) as wiki:
             from llmwikify.kernel.graph.visualizer import build_visualization_data
+
             return build_visualization_data(wiki.index, wiki, current_page, mode)
 
     @wiki_id_router.get("/{wiki_id}/sink/status")

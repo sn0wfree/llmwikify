@@ -7,6 +7,7 @@ The tests use a stub LLM client (no real network calls). The
 point is to exercise the session/tool/streaming mechanics
 of ``ChatBase``, not the underlying LLM client itself.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -23,7 +24,9 @@ from llmwikify.apps.chat.base import ChatBase, ChatMessage, ChatSession
 class StubLLM:
     """Minimal LLM stub that records calls and returns canned text."""
 
-    def __init__(self, reply: str = "stub-reply", raise_on_call: Exception | None = None) -> None:
+    def __init__(
+        self, reply: str = "stub-reply", raise_on_call: Exception | None = None
+    ) -> None:
         self.reply = reply
         self.raise_on_call = raise_on_call
         # We snapshot the messages list to capture what the LLM
@@ -40,12 +43,14 @@ class StubLLM:
                 out.append(dict(m))
             else:
                 # ChatMessage dataclass
-                out.append({
-                    "role": m.role,
-                    "content": m.content,
-                    "name": m.name,
-                    "tool_call_id": m.tool_call_id,
-                })
+                out.append(
+                    {
+                        "role": m.role,
+                        "content": m.content,
+                        "name": m.name,
+                        "tool_call_id": m.tool_call_id,
+                    }
+                )
         return out
 
     def chat(self, messages: list[Any], **kwargs: Any) -> str:
@@ -66,7 +71,9 @@ class StubStreamingLLM:
     def chat(self, messages: list[dict[str, str]], **kwargs: Any) -> str:
         return "".join(self.chunks)
 
-    async     def astream_chat(self, messages: list[Any], **kwargs: Any) -> AsyncIterator[str]:
+    async def astream_chat(
+        self, messages: list[Any], **kwargs: Any
+    ) -> AsyncIterator[str]:
         snapshot = StubLLM._snapshot(messages)
         for c in self.chunks:
             yield c
@@ -262,10 +269,12 @@ class TestChatBaseAstream:
         stub = StubStreamingLLM(chunks=["a", "b", "c"])
         cb = ChatBase(llm_client=stub, system_prompt="S")
         chunks = []
+
         # Use asyncio.run to drive the async generator.
         async def collect() -> None:
             async for c in cb.astream("hi"):
                 chunks.append(c)
+
         asyncio.run(collect())
         assert chunks == ["a", "b", "c"]
 
@@ -283,9 +292,11 @@ class TestChatBaseAstream:
         stub = PlainStub()
         cb = ChatBase(llm_client=stub)
         chunks: list[str] = []
+
         async def collect() -> None:
             async for c in cb.astream("hi"):
                 chunks.append(c)
+
         asyncio.run(collect())
         assert chunks == ["single-chunk"]
 
@@ -293,9 +304,11 @@ class TestChatBaseAstream:
         stub = StubStreamingLLM(chunks=["x", "y"])
         cb = ChatBase(llm_client=stub, system_prompt="S")
         s = cb.new_session()
+
         async def collect() -> None:
             async for _ in cb.astream("hi", session=s):
                 pass
+
         asyncio.run(collect())
         assert [m.role for m in s.messages] == ["system", "user", "assistant"]
 
@@ -326,10 +339,14 @@ class TestAaskWithTools:
 
     def test_plain_chat_yields_done(self) -> None:
         """No tools, single LLM call → one done event."""
-        stub = StubToolLLM([[
-            {"type": "content", "text": "hi"},
-            {"type": "done", "content": "hi"},
-        ]])
+        stub = StubToolLLM(
+            [
+                [
+                    {"type": "content", "text": "hi"},
+                    {"type": "done", "content": "hi"},
+                ]
+            ]
+        )
         cb = ChatBase(llm_client=stub)
         events: list[dict] = []
 
@@ -338,25 +355,28 @@ class TestAaskWithTools:
                 [{"role": "user", "content": "hello"}],
             ):
                 events.append(ev)
+
         asyncio.run(collect())
         assert any(ev["type"] == "done" for ev in events)
         assert stub.call_count == 1
 
     def test_iterates_on_tool_call(self) -> None:
         """LLM emits a tool_call → loop re-calls LLM with result."""
-        stub = StubToolLLM([
-            # First call: tool_call + done
+        stub = StubToolLLM(
             [
-                {"type": "content", "text": "Let me check."},
-                {"type": "tool_call", "tool": "search", "args": '{"q":"x"}'},
-                {"type": "done", "content": "Let me check."},
-            ],
-            # Second call: final answer
-            [
-                {"type": "content", "text": "Found it."},
-                {"type": "done", "content": "Found it."},
-            ],
-        ])
+                # First call: tool_call + done
+                [
+                    {"type": "content", "text": "Let me check."},
+                    {"type": "tool_call", "tool": "search", "args": '{"q":"x"}'},
+                    {"type": "done", "content": "Let me check."},
+                ],
+                # Second call: final answer
+                [
+                    {"type": "content", "text": "Found it."},
+                    {"type": "done", "content": "Found it."},
+                ],
+            ]
+        )
         cb = ChatBase(llm_client=stub)
         tool_called: list[str] = []
 
@@ -369,17 +389,19 @@ class TestAaskWithTools:
 
         async def collect() -> None:
             async for ev in cb.aask_with_tools(
-                messages, tools=[], invoke_tool=invoke,
+                messages,
+                tools=[],
+                invoke_tool=invoke,
             ):
                 events.append(ev)
+
         asyncio.run(collect())
         # LLM called twice (tool + final)
         assert stub.call_count == 2
         assert tool_called == ["search"]
         # Tool result fed back into messages list
         assert any(
-            m.get("role") == "tool" and m.get("name") == "search"
-            for m in messages
+            m.get("role") == "tool" and m.get("name") == "search" for m in messages
         )
         # One final done with the second LLM's answer
         done_events = [e for e in events if e["type"] == "done"]
@@ -388,16 +410,18 @@ class TestAaskWithTools:
 
     def test_stops_on_confirmation_required(self) -> None:
         """Tool returning confirmation_required halts the loop."""
-        stub = StubToolLLM([
+        stub = StubToolLLM(
             [
-                {"type": "tool_call", "tool": "write", "args": "{}"},
-                {"type": "done", "content": ""},
-            ],
-            # (would be a final answer if loop continued, but shouldn't be reached)
-            [
-                {"type": "done", "content": "should not see this"},
-            ],
-        ])
+                [
+                    {"type": "tool_call", "tool": "write", "args": "{}"},
+                    {"type": "done", "content": ""},
+                ],
+                # (would be a final answer if loop continued, but shouldn't be reached)
+                [
+                    {"type": "done", "content": "should not see this"},
+                ],
+            ]
+        )
         cb = ChatBase(llm_client=stub)
         invoke_calls: list[str] = []
 
@@ -406,11 +430,15 @@ class TestAaskWithTools:
             return {"status": "confirmation_required", "confirmation_id": "c1"}
 
         events: list[dict] = []
+
         async def collect() -> None:
             async for ev in cb.aask_with_tools(
-                [{"role": "user", "content": "x"}], tools=[], invoke_tool=invoke,
+                [{"role": "user", "content": "x"}],
+                tools=[],
+                invoke_tool=invoke,
             ):
                 events.append(ev)
+
         asyncio.run(collect())
         # Loop stopped after the confirmation
         assert stub.call_count == 1
@@ -419,24 +447,31 @@ class TestAaskWithTools:
 
     def test_max_iterations_cap(self) -> None:
         """Infinite-tool loop is bounded by max_iterations."""
-        stub = StubToolLLM([
+        stub = StubToolLLM(
             [
-                {"type": "tool_call", "tool": "search", "args": "{}"},
-                {"type": "done", "content": ""},
-            ],
-        ] * 10)  # always returns the same
+                [
+                    {"type": "tool_call", "tool": "search", "args": "{}"},
+                    {"type": "done", "content": ""},
+                ],
+            ]
+            * 10
+        )  # always returns the same
         cb = ChatBase(llm_client=stub)
 
         async def invoke(name: str, args: dict) -> dict:
             return {"result": []}
 
         events: list[dict] = []
+
         async def collect() -> None:
             async for ev in cb.aask_with_tools(
-                [{"role": "user", "content": "x"}], tools=[],
-                max_iterations=3, invoke_tool=invoke,
+                [{"role": "user", "content": "x"}],
+                tools=[],
+                max_iterations=3,
+                invoke_tool=invoke,
             ):
                 events.append(ev)
+
         asyncio.run(collect())
         # Capped at 3 iterations
         assert stub.call_count == 3
@@ -465,5 +500,6 @@ class TestAaskWithTools:
                 [{"role": "user", "content": "hi"}],
             ):
                 events.append(ev)
+
         asyncio.run(collect())
         assert any(e["type"] == "done" for e in events)

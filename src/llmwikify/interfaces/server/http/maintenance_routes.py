@@ -49,7 +49,9 @@ async def maintenance_trigger(request: Request, task: str = "all") -> dict:
 
 
 @router.get("/proposals")
-async def maintenance_proposals(request: Request, status: str = "pending", wiki_id: str | None = None) -> dict:
+async def maintenance_proposals(
+    request: Request, status: str = "pending", wiki_id: str | None = None
+) -> dict:
     """List maintenance proposals (fallback proposals from auto_ingest + gap_filler)."""
     manager = _get_manager(request)
     db = manager._get_proposal_db()
@@ -66,6 +68,7 @@ async def maintenance_proposals(request: Request, status: str = "pending", wiki_
 async def maintenance_approve_proposals(request: Request) -> dict:
     """Batch approve proposals by IDs."""
     from starlette.requests import Request as StarletteRequest
+
     body = await request.json()
     proposal_ids = body.get("ids", [])
     if not proposal_ids:

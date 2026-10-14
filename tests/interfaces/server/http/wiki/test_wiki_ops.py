@@ -21,6 +21,7 @@ from llmwikify.interfaces.server.http.wiki._wiki_ops import (
 
 # ─── read_page_with_sink ──────────────────────────────────────
 
+
 class TestReadPageWithSink:
     def test_normal_page(self):
         wiki = MagicMock()
@@ -46,6 +47,7 @@ class TestReadPageWithSink:
 
 
 # ─── write_page ───────────────────────────────────────────────
+
 
 class TestWritePage:
     def test_normal_write(self):
@@ -96,7 +98,10 @@ class TestWritePage:
         assert kwargs["wiki_id"] == "wiki1"
         assert kwargs["arguments"]["page_name"] == "test"
         assert kwargs["arguments"]["expires_at"] > time.time()
-        assert kwargs["arguments"]["expires_at"] <= time.time() + CONFIRMATION_TTL_SECONDS + 1
+        assert (
+            kwargs["arguments"]["expires_at"]
+            <= time.time() + CONFIRMATION_TTL_SECONDS + 1
+        )
 
     def test_confirm_token_updates_page(self):
         wiki = MagicMock()
@@ -109,7 +114,14 @@ class TestWritePage:
             "status": "pending",
             "arguments": {"page_name": "test", "expires_at": time.time() + 300},
         }
-        result = write_page(wiki, "test", "new content", confirm_token="abc12345", db=db, wiki_id="wiki1")
+        result = write_page(
+            wiki,
+            "test",
+            "new content",
+            confirm_token="abc12345",
+            db=db,
+            wiki_id="wiki1",
+        )
         assert result["page_name"] == "test"
         assert result["message"] == "Updated page"
         db.delete_confirmation.assert_called_once_with("abc12345")
@@ -120,7 +132,14 @@ class TestWritePage:
         db = MagicMock()
         db.get_confirmation_with_decoded_args.return_value = None
         with pytest.raises(HTTPException) as exc_info:
-            write_page(wiki, "test", "new content", confirm_token="invalid", db=db, wiki_id="wiki1")
+            write_page(
+                wiki,
+                "test",
+                "new content",
+                confirm_token="invalid",
+                db=db,
+                wiki_id="wiki1",
+            )
         assert exc_info.value.status_code == 400
         assert "Invalid or expired" in exc_info.value.detail
 
@@ -135,7 +154,14 @@ class TestWritePage:
             "arguments": {"page_name": "other_page", "expires_at": time.time() + 300},
         }
         with pytest.raises(HTTPException) as exc_info:
-            write_page(wiki, "test", "new content", confirm_token="abc12345", db=db, wiki_id="wiki1")
+            write_page(
+                wiki,
+                "test",
+                "new content",
+                confirm_token="abc12345",
+                db=db,
+                wiki_id="wiki1",
+            )
         assert exc_info.value.status_code == 400
         assert "does not match page_name" in exc_info.value.detail
 
@@ -150,7 +176,14 @@ class TestWritePage:
             "arguments": {"page_name": "test", "expires_at": time.time() + 300},
         }
         with pytest.raises(HTTPException) as exc_info:
-            write_page(wiki, "test", "new content", confirm_token="abc12345", db=db, wiki_id="wiki_b")
+            write_page(
+                wiki,
+                "test",
+                "new content",
+                confirm_token="abc12345",
+                db=db,
+                wiki_id="wiki_b",
+            )
         assert exc_info.value.status_code == 400
         assert "does not match wiki_id" in exc_info.value.detail
 
@@ -165,7 +198,14 @@ class TestWritePage:
             "arguments": {"page_name": "test", "expires_at": time.time() - 1},
         }
         with pytest.raises(HTTPException) as exc_info:
-            write_page(wiki, "test", "new content", confirm_token="abc12345", db=db, wiki_id="wiki1")
+            write_page(
+                wiki,
+                "test",
+                "new content",
+                confirm_token="abc12345",
+                db=db,
+                wiki_id="wiki1",
+            )
         assert exc_info.value.status_code == 400
         assert "expired" in exc_info.value.detail
 
@@ -180,7 +220,14 @@ class TestWritePage:
             "arguments": {"page_name": "test", "expires_at": time.time() + 300},
         }
         with pytest.raises(HTTPException) as exc_info:
-            write_page(wiki, "test", "new content", confirm_token="abc12345", db=db, wiki_id="wiki1")
+            write_page(
+                wiki,
+                "test",
+                "new content",
+                confirm_token="abc12345",
+                db=db,
+                wiki_id="wiki1",
+            )
         assert exc_info.value.status_code == 400
         assert "Invalid or expired" in exc_info.value.detail
 
@@ -196,7 +243,14 @@ class TestWritePage:
         wiki = MagicMock()
         wiki.read_page.return_value = {"content": "existing", "word_count": 10}
         with pytest.raises(HTTPException) as exc_info:
-            write_page(wiki, "test", "new content", confirm_token="abc12345", db=None, wiki_id="wiki1")
+            write_page(
+                wiki,
+                "test",
+                "new content",
+                confirm_token="abc12345",
+                db=None,
+                wiki_id="wiki1",
+            )
         assert exc_info.value.status_code == 503
         assert "cannot verify" in exc_info.value.detail
 
@@ -212,12 +266,20 @@ class TestWritePage:
             "status": "pending",
             "arguments": {"page_name": "test", "expires_at": time.time() + 300},
         }
-        result = write_page(wiki, "test", "new content", confirm_token="abc12345", db=db, wiki_id="wiki1")
+        result = write_page(
+            wiki,
+            "test",
+            "new content",
+            confirm_token="abc12345",
+            db=db,
+            wiki_id="wiki1",
+        )
         assert result["message"] == "Updated page"
         db.delete_confirmation.assert_called_once_with("abc12345")
 
 
 # ─── enrich_status ────────────────────────────────────────────
+
 
 class TestEnrichStatus:
     def test_with_pages_by_type(self):
@@ -237,6 +299,7 @@ class TestEnrichStatus:
 
 
 # ─── validate_remote_url ──────────────────────────────────────
+
 
 class TestValidateRemoteUrl:
     def test_allowed_host(self):
@@ -278,9 +341,11 @@ class TestValidateRemoteUrl:
 
 # ─── load_wiki_config ─────────────────────────────────────────
 
+
 class TestLoadWikiConfig:
     def test_default_config(self, monkeypatch, tmp_path):
         from llmwikify.foundation.config import Config
+
         Config._instance = None
         monkeypatch.setenv("LLMWIKIFY_HOME", str(tmp_path))
         result = load_wiki_config()
@@ -291,11 +356,12 @@ class TestLoadWikiConfig:
         import json
 
         from llmwikify.foundation.config import Config
+
         config_file = tmp_path / ".llmwikify" / "llmwikify.json"
         config_file.parent.mkdir(parents=True, exist_ok=True)
-        config_file.write_text(json.dumps({
-            "wiki": {"allowed_remote_hosts": ["*.example.com"]}
-        }))
+        config_file.write_text(
+            json.dumps({"wiki": {"allowed_remote_hosts": ["*.example.com"]}})
+        )
         Config._instance = None
         monkeypatch.setenv("LLMWIKIFY_HOME", str(tmp_path))
         result = load_wiki_config()
@@ -306,6 +372,7 @@ class TestLoadWikiConfig:
         import json
 
         from llmwikify.foundation.config import Config
+
         config_file = tmp_path / ".llmwikify" / "llmwikify.json"
         config_file.parent.mkdir(parents=True, exist_ok=True)
         config_file.write_text(json.dumps({"llm": {}}))
@@ -317,6 +384,7 @@ class TestLoadWikiConfig:
 
 
 # ─── check_remote_wiki_config ─────────────────────────────────
+
 
 class TestCheckRemoteWikiConfig:
     def test_warning_log(self, caplog):

@@ -1,4 +1,5 @@
 """Tests for foundation.migration — .wiki-config.yaml auto-migration."""
+
 from __future__ import annotations
 
 import json
@@ -47,31 +48,43 @@ class TestNeedsMigration:
         assert needs_migration(tmp_path) is False
 
     def test_missing_version_field(self, tmp_path: Path) -> None:
-        _write_yaml(tmp_path / ".wiki-config.yaml", {
-            "directories": {"raw": "raw"},
-            "llm": {"provider": "minimax", "model": "minimax-M3"},
-        })
+        _write_yaml(
+            tmp_path / ".wiki-config.yaml",
+            {
+                "directories": {"raw": "raw"},
+                "llm": {"provider": "minimax", "model": "minimax-M3"},
+            },
+        )
         assert needs_migration(tmp_path) is True
 
     def test_old_version(self, tmp_path: Path) -> None:
-        _write_yaml(tmp_path / ".wiki-config.yaml", {
-            "version": "0.40",
-            "directories": {"raw": "raw"},
-        })
+        _write_yaml(
+            tmp_path / ".wiki-config.yaml",
+            {
+                "version": "0.40",
+                "directories": {"raw": "raw"},
+            },
+        )
         assert needs_migration(tmp_path) is True
 
     def test_current_version(self, tmp_path: Path) -> None:
-        _write_yaml(tmp_path / ".wiki-config.yaml", {
-            "version": CURRENT_VERSION,
-            "directories": {"raw": "raw"},
-        })
+        _write_yaml(
+            tmp_path / ".wiki-config.yaml",
+            {
+                "version": CURRENT_VERSION,
+                "directories": {"raw": "raw"},
+            },
+        )
         assert needs_migration(tmp_path) is False
 
     def test_newer_version(self, tmp_path: Path) -> None:
-        _write_yaml(tmp_path / ".wiki-config.yaml", {
-            "version": "0.42",
-            "directories": {"raw": "raw"},
-        })
+        _write_yaml(
+            tmp_path / ".wiki-config.yaml",
+            {
+                "version": "0.42",
+                "directories": {"raw": "raw"},
+            },
+        )
         assert needs_migration(tmp_path) is False
 
     def test_unparseable_yaml(self, tmp_path: Path) -> None:
@@ -102,22 +115,36 @@ class TestAutoMigration:
         assert result.migrated is False
         assert result.reason == "no_config"
 
-    def test_already_migrated(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_already_migrated(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         _patch_home(monkeypatch, tmp_path)
-        _write_yaml(tmp_path / ".wiki-config.yaml", {
-            "version": CURRENT_VERSION,
-            "directories": {"raw": "raw"},
-        })
+        _write_yaml(
+            tmp_path / ".wiki-config.yaml",
+            {
+                "version": CURRENT_VERSION,
+                "directories": {"raw": "raw"},
+            },
+        )
         result = auto_migrate_wiki_config(tmp_path)
         assert result.migrated is False
         assert result.reason == "already_migrated"
 
-    def test_migrate_llm_only(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_migrate_llm_only(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         _patch_home(monkeypatch, tmp_path)
-        _write_yaml(tmp_path / ".wiki-config.yaml", {
-            "directories": {"raw": "raw"},
-            "llm": {"provider": "minimax", "model": "minimax-M3", "api_key": "sk-test"},
-        })
+        _write_yaml(
+            tmp_path / ".wiki-config.yaml",
+            {
+                "directories": {"raw": "raw"},
+                "llm": {
+                    "provider": "minimax",
+                    "model": "minimax-M3",
+                    "api_key": "sk-test",
+                },
+            },
+        )
         result = auto_migrate_wiki_config(tmp_path, auto_resolve="global")
         assert result.migrated is True
         assert result.reason == "migrated"
@@ -137,17 +164,22 @@ class TestAutoMigration:
         assert result.backup_path.exists()
 
     def test_migrate_multiple_sections(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         _patch_home(monkeypatch, tmp_path)
-        _write_yaml(tmp_path / ".wiki-config.yaml", {
-            "directories": {"raw": "src"},
-            "llm": {"provider": "openai"},
-            "research_mutable": {"max_sub_queries": 30},
-            "chat_mutable": {"max_chat_rounds": 8},
-            "mcp": {"port": 9000},
-            "prompts": {"custom_dir": "/tmp/prompts"},
-        })
+        _write_yaml(
+            tmp_path / ".wiki-config.yaml",
+            {
+                "directories": {"raw": "src"},
+                "llm": {"provider": "openai"},
+                "research_mutable": {"max_sub_queries": 30},
+                "chat_mutable": {"max_chat_rounds": 8},
+                "mcp": {"port": 9000},
+                "prompts": {"custom_dir": "/tmp/prompts"},
+            },
+        )
         result = auto_migrate_wiki_config(tmp_path, auto_resolve="global")
         assert result.migrated is True
         global_cfg = json.loads(
@@ -168,13 +200,18 @@ class TestAutoMigration:
         assert wiki_cfg["directories"]["raw"] == "src"
 
     def test_version_bump_only(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         _patch_home(monkeypatch, tmp_path)
-        _write_yaml(tmp_path / ".wiki-config.yaml", {
-            "version": "0.40",
-            "directories": {"raw": "raw"},
-        })
+        _write_yaml(
+            tmp_path / ".wiki-config.yaml",
+            {
+                "version": "0.40",
+                "directories": {"raw": "raw"},
+            },
+        )
         result = auto_migrate_wiki_config(tmp_path, auto_resolve="global")
         assert result.migrated is True
         assert result.reason == "version_bump_only"
@@ -182,25 +219,35 @@ class TestAutoMigration:
         assert wiki_cfg["version"] == CURRENT_VERSION
 
     def test_no_migratable_sections(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         _patch_home(monkeypatch, tmp_path)
-        _write_yaml(tmp_path / ".wiki-config.yaml", {
-            "directories": {"raw": "raw"},
-            "database": {"name": ".db"},
-        })
+        _write_yaml(
+            tmp_path / ".wiki-config.yaml",
+            {
+                "directories": {"raw": "raw"},
+                "database": {"name": ".db"},
+            },
+        )
         result = auto_migrate_wiki_config(tmp_path, auto_resolve="global")
         # No llm/research etc. → no migration, no version bump
         assert result.migrated is False
         assert result.reason == "no_migratable_sections"
 
     def test_dry_run_no_writes(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         _patch_home(monkeypatch, tmp_path)
-        _write_yaml(tmp_path / ".wiki-config.yaml", {
-            "llm": {"provider": "minimax", "model": "minimax-M3"},
-        })
+        _write_yaml(
+            tmp_path / ".wiki-config.yaml",
+            {
+                "llm": {"provider": "minimax", "model": "minimax-M3"},
+            },
+        )
         result = auto_migrate_wiki_config(tmp_path, auto_resolve="dry_run")
         assert result.dry_run is True
         assert result.migrated is False
@@ -213,7 +260,9 @@ class TestAutoMigration:
         assert "version" not in wiki_cfg
 
     def test_backup_filename_format(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         _patch_home(monkeypatch, tmp_path)
         _write_yaml(tmp_path / ".wiki-config.yaml", {"llm": {"provider": "minimax"}})
@@ -226,12 +275,18 @@ class TestAutoMigration:
         assert suffix.isdigit()
 
     def test_backup_preserves_content(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         _patch_home(monkeypatch, tmp_path)
         original = {
             "directories": {"raw": "src"},
-            "llm": {"provider": "minimax", "model": "minimax-M3", "api_key": "sk-secret"},
+            "llm": {
+                "provider": "minimax",
+                "model": "minimax-M3",
+                "api_key": "sk-secret",
+            },
         }
         _write_yaml(tmp_path / ".wiki-config.yaml", original)
         result = auto_migrate_wiki_config(tmp_path, auto_resolve="global")
@@ -244,22 +299,29 @@ class TestAutoMigration:
 
 
 class TestConflictResolution:
-    def test_no_conflicts(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_no_conflicts(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         _patch_home(monkeypatch, tmp_path)
         _write_yaml(tmp_path / ".wiki-config.yaml", {"llm": {"provider": "minimax"}})
         result = auto_migrate_wiki_config(tmp_path, auto_resolve="global")
         assert result.conflicts == []
 
-    def test_detect_conflict(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_detect_conflict(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         _patch_home(monkeypatch, tmp_path)
         # Pre-existing global config with conflicting value
         (tmp_path / ".llmwikify").mkdir()
         (tmp_path / ".llmwikify" / "llmwikify.json").write_text(
             json.dumps({"llm": {"provider": "openai", "model": "gpt-4o"}})
         )
-        _write_yaml(tmp_path / ".wiki-config.yaml", {
-            "llm": {"provider": "minimax", "model": "minimax-M3"},
-        })
+        _write_yaml(
+            tmp_path / ".wiki-config.yaml",
+            {
+                "llm": {"provider": "minimax", "model": "minimax-M3"},
+            },
+        )
         result = auto_migrate_wiki_config(tmp_path, auto_resolve="global")
         assert len(result.conflicts) == 2  # provider + model
         keys = {(c.section, c.key) for c in result.conflicts}
@@ -267,16 +329,21 @@ class TestConflictResolution:
         assert ("llm", "model") in keys
 
     def test_global_priority_keeps_existing(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         _patch_home(monkeypatch, tmp_path)
         (tmp_path / ".llmwikify").mkdir()
         (tmp_path / ".llmwikify" / "llmwikify.json").write_text(
             json.dumps({"llm": {"provider": "openai", "model": "gpt-4o"}})
         )
-        _write_yaml(tmp_path / ".wiki-config.yaml", {
-            "llm": {"provider": "minimax", "model": "minimax-M3"},
-        })
+        _write_yaml(
+            tmp_path / ".wiki-config.yaml",
+            {
+                "llm": {"provider": "minimax", "model": "minimax-M3"},
+            },
+        )
         auto_migrate_wiki_config(tmp_path, auto_resolve="global")
         global_cfg = json.loads(
             (tmp_path / ".llmwikify" / "llmwikify.json").read_text()
@@ -289,16 +356,21 @@ class TestConflictResolution:
         assert global_cfg["llm"]["model"] == "gpt-4o"
 
     def test_wiki_priority_overrides_existing(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         _patch_home(monkeypatch, tmp_path)
         (tmp_path / ".llmwikify").mkdir()
         (tmp_path / ".llmwikify" / "llmwikify.json").write_text(
             json.dumps({"llm": {"provider": "openai"}})
         )
-        _write_yaml(tmp_path / ".wiki-config.yaml", {
-            "llm": {"provider": "minimax"},
-        })
+        _write_yaml(
+            tmp_path / ".wiki-config.yaml",
+            {
+                "llm": {"provider": "minimax"},
+            },
+        )
         auto_migrate_wiki_config(tmp_path, auto_resolve="wiki")
         global_cfg = json.loads(
             (tmp_path / ".llmwikify" / "llmwikify.json").read_text()
@@ -307,16 +379,21 @@ class TestConflictResolution:
         assert global_cfg["llm"]["provider"] == "minimax"
 
     def test_strict_mode_raises(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         _patch_home(monkeypatch, tmp_path)
         (tmp_path / ".llmwikify").mkdir()
         (tmp_path / ".llmwikify" / "llmwikify.json").write_text(
             json.dumps({"llm": {"provider": "openai"}})
         )
-        _write_yaml(tmp_path / ".wiki-config.yaml", {
-            "llm": {"provider": "minimax"},
-        })
+        _write_yaml(
+            tmp_path / ".wiki-config.yaml",
+            {
+                "llm": {"provider": "minimax"},
+            },
+        )
         with pytest.raises(RuntimeError, match="conflicts"):
             auto_migrate_wiki_config(tmp_path, auto_resolve="strict")
 
@@ -326,12 +403,17 @@ class TestConflictResolution:
 
 class TestChangesTracking:
     def test_changes_recorded(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         _patch_home(monkeypatch, tmp_path)
-        _write_yaml(tmp_path / ".wiki-config.yaml", {
-            "llm": {"provider": "minimax", "model": "minimax-M3"},
-        })
+        _write_yaml(
+            tmp_path / ".wiki-config.yaml",
+            {
+                "llm": {"provider": "minimax", "model": "minimax-M3"},
+            },
+        )
         result = auto_migrate_wiki_config(tmp_path, auto_resolve="global")
         assert len(result.changes) == 2
         sections = {(c.section, c.key) for c in result.changes}
@@ -339,21 +421,24 @@ class TestChangesTracking:
         assert ("llm", "model") in sections
 
     def test_changes_record_conflicts(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         _patch_home(monkeypatch, tmp_path)
         (tmp_path / ".llmwikify").mkdir()
         (tmp_path / ".llmwikify" / "llmwikify.json").write_text(
             json.dumps({"llm": {"provider": "openai"}})
         )
-        _write_yaml(tmp_path / ".wiki-config.yaml", {
-            "llm": {"provider": "minimax"},
-        })
+        _write_yaml(
+            tmp_path / ".wiki-config.yaml",
+            {
+                "llm": {"provider": "minimax"},
+            },
+        )
         result = auto_migrate_wiki_config(tmp_path, auto_resolve="global")
         # Provider change should be flagged as conflict
-        provider_change = next(
-            c for c in result.changes if c.key == "provider"
-        )
+        provider_change = next(c for c in result.changes if c.key == "provider")
         assert provider_change.conflict is True
 
 
@@ -413,7 +498,9 @@ class TestDiscoverWikis:
         result = discover_wikis(root=tmp_path)
         assert tmp_path in result
 
-    def test_env_var_with_config(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_env_var_with_config(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Finds wiki via WIKI_ROOT env var."""
         wiki_dir = tmp_path / "env_wiki"
         wiki_dir.mkdir()
@@ -427,7 +514,9 @@ class TestDiscoverWikis:
         mock_provider = MagicMock(spec=WikiDiscoveryProvider)
         mock_provider.discover_wiki_roots.return_value = []
 
-        discover_wikis(root=tmp_path, provider=mock_provider, scan_paths=["/scan"], depth=3)
+        discover_wikis(
+            root=tmp_path, provider=mock_provider, scan_paths=["/scan"], depth=3
+        )
         mock_provider.discover_wiki_roots.assert_called_once_with(["/scan"], 3)
 
     def test_provider_defaults_scan_paths_to_root(self, tmp_path: Path) -> None:

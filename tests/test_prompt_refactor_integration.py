@@ -86,14 +86,16 @@ class TestAllSevenStepsGoThroughRunPrompt:
         EXPECTED,
     )
     def test_step_uses_correct_client(
-        self, prompt_name, llm_role, expects_json, client_attr,
+        self,
+        prompt_name,
+        llm_role,
+        expects_json,
+        client_attr,
     ):
         """Each step uses the LLM client matching its role."""
         from llmwikify.apps.chat.research_engine.llm_step import run_prompt
 
-        chat_return = (
-            json.dumps({"x": 1}) if expects_json else "raw markdown text"
-        )
+        chat_return = json.dumps({"x": 1}) if expects_json else "raw markdown text"
         default_llm = _make_llm(chat_return)
         planning_llm = _make_llm(chat_return)
         report_llm = _make_llm(chat_return)
@@ -114,9 +116,7 @@ class TestAllSevenStepsGoThroughRunPrompt:
             "planning_llm": planning_llm,
             "report_llm": report_llm,
         }[client_attr]
-        assert expected_client.chat.called, (
-            f"{prompt_name} did not call {client_attr}"
-        )
+        assert expected_client.chat.called, f"{prompt_name} did not call {client_attr}"
         # Others were NOT called
         for other_attr, other_client in [
             ("default_llm", default_llm),
@@ -124,9 +124,9 @@ class TestAllSevenStepsGoThroughRunPrompt:
             ("report_llm", report_llm),
         ]:
             if other_attr != client_attr:
-                assert not other_client.chat.called, (
-                    f"{prompt_name} called wrong client: {other_attr}"
-                )
+                assert (
+                    not other_client.chat.called
+                ), f"{prompt_name} called wrong client: {other_attr}"
 
         # Return shape matches expects_json
         if expects_json:
@@ -160,9 +160,12 @@ class TestFrameworkAugmentationEndToEnd:
         }
         asyncio.new_event_loop().run_until_complete(
             run_prompt(
-                ctx, "research_report",
+                ctx,
+                "research_report",
                 six_step_context=six_step_context,
-                query="q", source_contents=[], synthesis={},
+                query="q",
+                source_contents=[],
+                synthesis={},
             )
         )
         messages = llm.chat.call_args[0][0]
@@ -185,9 +188,12 @@ class TestFrameworkAugmentationEndToEnd:
         }
         asyncio.new_event_loop().run_until_complete(
             run_prompt(
-                ctx, "research_review",
+                ctx,
+                "research_review",
                 six_step_context=six_step_context,
-                query="q", report="r", source_count=3,
+                query="q",
+                report="r",
+                source_count=3,
             )
         )
         messages = llm.chat.call_args[0][0]
@@ -196,8 +202,11 @@ class TestFrameworkAugmentationEndToEnd:
     @pytest.mark.parametrize(
         "prompt_name",
         [
-            "research_clarify", "research_plan", "research_replan",
-            "research_reason", "research_revise",
+            "research_clarify",
+            "research_plan",
+            "research_replan",
+            "research_reason",
+            "research_revise",
         ],
     )
     def test_no_framework_injection_for_non_augmented_steps(self, prompt_name):
@@ -229,10 +238,18 @@ class TestFrameworkAugmentationEndToEnd:
             kwargs = {"issues_text": "i", "source_refs": "", "report": "r"}
         elif prompt_name == "research_reason":
             kwargs = {
-                "query": "q", "round": 0, "max_rounds": 5, "phase": "x",
-                "quality_score": 0, "budget_remaining": 1.0,
-                "sub_queries_count": 0, "failed_sq": 0, "sources_count": 0,
-                "analyzed_count": 0, "report_exists": False, "review_exists": False,
+                "query": "q",
+                "round": 0,
+                "max_rounds": 5,
+                "phase": "x",
+                "quality_score": 0,
+                "budget_remaining": 1.0,
+                "sub_queries_count": 0,
+                "failed_sq": 0,
+                "sources_count": 0,
+                "analyzed_count": 0,
+                "report_exists": False,
+                "review_exists": False,
                 "observations_text": "(none)",
             }
         elif prompt_name == "research_replan":
@@ -242,7 +259,8 @@ class TestFrameworkAugmentationEndToEnd:
 
         asyncio.new_event_loop().run_until_complete(
             run_prompt(
-                ctx, prompt_name,
+                ctx,
+                prompt_name,
                 six_step_context=six_step_context,
                 **kwargs,
             )
@@ -272,6 +290,7 @@ class TestPromptRegistrySingleSourceOfTruth:
         """clarifier.py should not have its own inline system prompt
         or message-building code; it should rely on run_prompt."""
         from llmwikify.apps.chat import clarifier
+
         source = open(clarifier.__file__).read()
         # The inline Chinese system prompt is no longer in clarifier.py
         assert "你是一个研究澄清助手" not in source
@@ -282,6 +301,7 @@ class TestPromptRegistrySingleSourceOfTruth:
         """actions._plan_for_gaps should not have its own inline
         English prompt; it should use run_prompt."""
         from llmwikify.apps.chat import actions
+
         source = open(actions.__file__).read()
         assert "You are a research planner" not in source
 
@@ -289,6 +309,7 @@ class TestPromptRegistrySingleSourceOfTruth:
         """engine._llm_reason should not have its own inline English
         ReAct prompt; it should use run_prompt."""
         from llmwikify.apps.chat import engine
+
         source = open(engine.__file__).read()
         assert "You are a research orchestrator" not in source
 
@@ -296,6 +317,7 @@ class TestPromptRegistrySingleSourceOfTruth:
         """report.py should not define its own _render_framework_block;
         it should use prompts.render_framework_block."""
         from llmwikify.apps.chat import report
+
         source = open(report.__file__).read()
         assert "def _render_framework_block" not in source
 
@@ -303,6 +325,7 @@ class TestPromptRegistrySingleSourceOfTruth:
         """review.py should not define its own _render_framework_review_block;
         it should use prompts.render_framework_block (via run_prompt)."""
         from llmwikify.apps.chat.harness import review
+
         source = open(review.__file__).read()
         assert "def _render_framework_review_block" not in source
 
@@ -311,8 +334,9 @@ class TestPromptRegistrySingleSourceOfTruth:
         not duplicated in report/review."""
         from llmwikify.apps.chat import report
         from llmwikify.apps.chat.harness import review
+
         for module in (report, review):
             source = open(module.__file__).read()
-            assert "hashlib.md5" not in source, (
-                f"{module.__name__} still has inline hashlib.md5 — should use prompts.source_hash"
-            )
+            assert (
+                "hashlib.md5" not in source
+            ), f"{module.__name__} still has inline hashlib.md5 — should use prompts.source_hash"

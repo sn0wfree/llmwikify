@@ -62,13 +62,17 @@ def test_memory_config_loads_auto_compact_section(tmp_path: Path) -> None:
     )
 
     cfg_path = tmp_path / DEFAULT_CONFIG_FILENAME
-    cfg_path.write_text(json.dumps({
-        "auto_compact": {
-            "enabled": False,
-            "ttl_minutes": 90,
-            "interval_seconds": 600.0,
-        },
-    }))
+    cfg_path.write_text(
+        json.dumps(
+            {
+                "auto_compact": {
+                    "enabled": False,
+                    "ttl_minutes": 90,
+                    "interval_seconds": 600.0,
+                },
+            }
+        )
+    )
     cfg = load_memory_config(tmp_path)
     assert cfg.auto_compact["enabled"] is False
     assert cfg.auto_compact["ttl_minutes"] == 90
@@ -155,9 +159,13 @@ async def test_lifespan_respects_memory_config_disable(tmp_path: Path) -> None:
     server._agent_service = MagicMock()
     data_dir = tmp_path
     server._agent_service.data_dir = data_dir
-    (data_dir / DEFAULT_CONFIG_FILENAME).write_text(json.dumps({
-        "auto_compact": {"enabled": False},
-    }))
+    (data_dir / DEFAULT_CONFIG_FILENAME).write_text(
+        json.dumps(
+            {
+                "auto_compact": {"enabled": False},
+            }
+        )
+    )
     server._agent_service.start_auto_compact = AsyncMock()
     server._agent_service.stop_auto_compact = AsyncMock()
     server._agent_service.start_dream_scheduler = AsyncMock()

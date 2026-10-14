@@ -39,7 +39,8 @@ def test_ensure_global_llm_fallback_merges_when_no_llm_key(monkeypatch):
     from llmwikify.apps.agent.maintenance.llm_support import ensure_global_llm_fallback
 
     monkeypatch.setattr(
-        llm_client_mod, "load_llm_config",
+        llm_client_mod,
+        "load_llm_config",
         lambda: {"enabled": True, "provider": "minimax", "api_key": "k"},
     )
     wiki = SimpleNamespace(config={"other": 123})  # no "llm" key at all
@@ -55,7 +56,8 @@ def test_ensure_global_llm_fallback_returns_false_when_global_disabled(
     from llmwikify.apps.agent.maintenance.llm_support import ensure_global_llm_fallback
 
     monkeypatch.setattr(
-        llm_client_mod, "load_llm_config",
+        llm_client_mod,
+        "load_llm_config",
         lambda: {"enabled": False, "provider": "x"},
     )
     wiki = SimpleNamespace(config={"llm": {}})
@@ -67,7 +69,8 @@ def test_ensure_global_llm_fallback_preserves_local_keys(monkeypatch):
     from llmwikify.apps.agent.maintenance.llm_support import ensure_global_llm_fallback
 
     monkeypatch.setattr(
-        llm_client_mod, "load_llm_config",
+        llm_client_mod,
+        "load_llm_config",
         lambda: {"enabled": True, "provider": "minimax", "model": "m3", "api_key": "k"},
     )
     wiki = SimpleNamespace(config={"llm": {"timeout": 300}})
@@ -100,7 +103,9 @@ def test_ensure_global_llm_fallback_skips_when_local_usable():
 def test_ensure_global_llm_fallback_skips_when_local_has_base_url():
     from llmwikify.apps.agent.maintenance.llm_support import ensure_global_llm_fallback
 
-    wiki = SimpleNamespace(config={"llm": {"enabled": True, "base_url": "http://localhost:11434"}})
+    wiki = SimpleNamespace(
+        config={"llm": {"enabled": True, "base_url": "http://localhost:11434"}}
+    )
     assert ensure_global_llm_fallback(wiki, "x") is False
 
 
@@ -113,10 +118,13 @@ def test_section_selection_valid():
     from llmwikify.foundation.prompts.prompt_registry import PromptRegistry
 
     reg = PromptRegistry()
-    errors = reg.validate_output("select_sections", {
-        "selected_sections": [1, 2, 3],
-        "reasoning": "Selected first 3 sections",
-    })
+    errors = reg.validate_output(
+        "select_sections",
+        {
+            "selected_sections": [1, 2, 3],
+            "reasoning": "Selected first 3 sections",
+        },
+    )
     assert errors == []
 
 
@@ -124,9 +132,12 @@ def test_section_selection_missing_selected_sections():
     from llmwikify.foundation.prompts.prompt_registry import PromptRegistry
 
     reg = PromptRegistry()
-    errors = reg.validate_output("select_sections", {
-        "reasoning": "Some reasoning",
-    })
+    errors = reg.validate_output(
+        "select_sections",
+        {
+            "reasoning": "Some reasoning",
+        },
+    )
     assert any("selected_sections" in e for e in errors)
 
 
@@ -134,9 +145,12 @@ def test_section_selection_missing_reasoning():
     from llmwikify.foundation.prompts.prompt_registry import PromptRegistry
 
     reg = PromptRegistry()
-    errors = reg.validate_output("select_sections", {
-        "selected_sections": [1],
-    })
+    errors = reg.validate_output(
+        "select_sections",
+        {
+            "selected_sections": [1],
+        },
+    )
     assert any("reasoning" in e for e in errors)
 
 
@@ -173,7 +187,10 @@ def test_validate_output_unknown_prompt_raises():
 def _make_gap_wiki(tmp_path, lint_result=None, search_results=None):
     """Build a stub wiki for gap_filler testing."""
     if lint_result is None:
-        lint_result = {"hints": {"informational": []}, "investigations": {"knowledge_gaps": []}}
+        lint_result = {
+            "hints": {"informational": []},
+            "investigations": {"knowledge_gaps": []},
+        }
     if search_results is None:
         search_results = []
 
@@ -198,7 +215,8 @@ def test_run_cycle_no_gaps(wiki_instance):
     from llmwikify.apps.agent.maintenance.gap_filler import GapFiller
 
     filler = GapFiller(
-        wiki=wiki_instance, wiki_id="test",
+        wiki=wiki_instance,
+        wiki_id="test",
         config=GapFillerConfig(),
         llm_semaphore=asyncio.Semaphore(1),
     )
@@ -217,7 +235,8 @@ def test_run_cycle_lint_failure_recorded(wiki_instance):
 
     wiki_instance.lint = _lint
     filler = GapFiller(
-        wiki=wiki_instance, wiki_id="test",
+        wiki=wiki_instance,
+        wiki_id="test",
         config=GapFillerConfig(),
         llm_semaphore=asyncio.Semaphore(1),
     )
@@ -233,19 +252,32 @@ def test_run_cycle_budget_exhausted(wiki_instance):
     lint_result = {
         "hints": {
             "informational": [
-                {"type": "missing_cross_ref", "concept": "A", "mention_count": 5,
-                 "mentioning_pages": ["p1"]},
-                {"type": "missing_cross_ref", "concept": "B", "mention_count": 4,
-                 "mentioning_pages": ["p2"]},
-                {"type": "missing_cross_ref", "concept": "C", "mention_count": 3,
-                 "mentioning_pages": ["p3"]},
+                {
+                    "type": "missing_cross_ref",
+                    "concept": "A",
+                    "mention_count": 5,
+                    "mentioning_pages": ["p1"],
+                },
+                {
+                    "type": "missing_cross_ref",
+                    "concept": "B",
+                    "mention_count": 4,
+                    "mentioning_pages": ["p2"],
+                },
+                {
+                    "type": "missing_cross_ref",
+                    "concept": "C",
+                    "mention_count": 3,
+                    "mentioning_pages": ["p3"],
+                },
             ],
         },
         "investigations": {"knowledge_gaps": []},
     }
 
     filler = GapFiller(
-        wiki=wiki_instance, wiki_id="test",
+        wiki=wiki_instance,
+        wiki_id="test",
         config=GapFillerConfig(max_per_cycle=2, min_priority=0),
         llm_semaphore=asyncio.Semaphore(1),
     )
@@ -271,7 +303,8 @@ def test_run_cycle_skips_low_priority(wiki_instance):
     }
 
     filler = GapFiller(
-        wiki=wiki_instance, wiki_id="test",
+        wiki=wiki_instance,
+        wiki_id="test",
         config=GapFillerConfig(min_priority=30),
         llm_semaphore=asyncio.Semaphore(1),
     )
@@ -287,7 +320,8 @@ def test_run_cycle_records_health_history(wiki_instance):
     from llmwikify.apps.agent.maintenance.gap_filler import GapFiller
 
     filler = GapFiller(
-        wiki=wiki_instance, wiki_id="test",
+        wiki=wiki_instance,
+        wiki_id="test",
         config=GapFillerConfig(),
         llm_semaphore=asyncio.Semaphore(1),
     )
@@ -301,7 +335,8 @@ def test_status_no_cycle_yet(wiki_instance):
     from llmwikify.apps.agent.maintenance.gap_filler import GapFiller
 
     filler = GapFiller(
-        wiki=wiki_instance, wiki_id="test",
+        wiki=wiki_instance,
+        wiki_id="test",
         config=GapFillerConfig(),
         llm_semaphore=asyncio.Semaphore(1),
     )
@@ -315,12 +350,15 @@ def test_fix_missing_cross_ref_empty_concept(wiki_instance):
     from llmwikify.apps.agent.maintenance.gap_filler import GapFiller
 
     filler = GapFiller(
-        wiki=wiki_instance, wiki_id="test",
+        wiki=wiki_instance,
+        wiki_id="test",
         config=GapFillerConfig(auto_approve_mechanical=True),
         llm_semaphore=asyncio.Semaphore(1),
     )
     gap = SimpleNamespace(
-        gap_type="missing_cross_ref", concept="", priority=50,
+        gap_type="missing_cross_ref",
+        concept="",
+        priority=50,
         data={"mentioning_pages": ["p1"]},
     )
     assert asyncio.run(filler._fix_missing_cross_ref(gap)) == 0
@@ -331,7 +369,8 @@ def test_propose_entity_empty_concept(wiki_instance):
     from llmwikify.apps.agent.maintenance.gap_filler import GapFiller
 
     filler = GapFiller(
-        wiki=wiki_instance, wiki_id="test",
+        wiki=wiki_instance,
+        wiki_id="test",
         config=GapFillerConfig(),
         llm_semaphore=asyncio.Semaphore(1),
     )
@@ -368,8 +407,14 @@ def test_fallback_failure_leaves_unprocessed(tmp_path):
         raise OSError("db full")
 
     wiki = NS(
-        root=tmp_path, raw_dir=tmp_path / "raw",
-        ingest_source=lambda p: {"title": "t", "source_name": "s", "content": "x", "error": None},
+        root=tmp_path,
+        raw_dir=tmp_path / "raw",
+        ingest_source=lambda p: {
+            "title": "t",
+            "source_name": "s",
+            "content": "x",
+            "error": None,
+        },
         _llm_process_source=boom,
     )
     (tmp_path / "raw").mkdir()
@@ -377,7 +422,8 @@ def test_fallback_failure_leaves_unprocessed(tmp_path):
     f.write_text("x")
 
     svc = AutoIngestService(
-        wiki=wiki, wiki_id="t",
+        wiki=wiki,
+        wiki_id="t",
         config=AutoIngestConfig(debounce_seconds=0.05, fallback_to_proposal=True),
         llm_semaphore=asyncio.Semaphore(1),
     )
@@ -400,8 +446,14 @@ def test_llm_write_pages_no_ops_marks_processed(tmp_path):
     from llmwikify.apps.agent.maintenance.config import AutoIngestConfig
 
     wiki = NS(
-        root=tmp_path, raw_dir=tmp_path / "raw",
-        ingest_source=lambda p: {"title": "t", "source_name": "s", "content": "x", "error": None},
+        root=tmp_path,
+        raw_dir=tmp_path / "raw",
+        ingest_source=lambda p: {
+            "title": "t",
+            "source_name": "s",
+            "content": "x",
+            "error": None,
+        },
         _llm_process_source=lambda r: {"operations": []},
         execute_operations=lambda ops: {"operations_executed": 0},
     )
@@ -410,7 +462,8 @@ def test_llm_write_pages_no_ops_marks_processed(tmp_path):
     f.write_text("x")
 
     svc = AutoIngestService(
-        wiki=wiki, wiki_id="t",
+        wiki=wiki,
+        wiki_id="t",
         config=AutoIngestConfig(debounce_seconds=0.05),
         llm_semaphore=asyncio.Semaphore(1),
     )
@@ -534,17 +587,24 @@ def test_to_dict_roundtrip(tmp_path):
     )
 
     path = tmp_path / "llmwikify.json"
-    path.write_text(json.dumps({
-        "maintenance": {
-            "enabled": False,
-            "auto_ingest": {"write_mode": "proposal", "max_backlog_per_start": 5},
-            "gap_filler": {"max_per_cycle": 3, "use_llm_draft": False},
-            "llm_rate_limit": {"max_requests": 10, "window_seconds": 2.0},
-            "lint_interval_seconds": 7200,
-            "gaps_interval_seconds": 1209600,
-            "db_maintenance_interval_seconds": 259200,
-        },
-    }))
+    path.write_text(
+        json.dumps(
+            {
+                "maintenance": {
+                    "enabled": False,
+                    "auto_ingest": {
+                        "write_mode": "proposal",
+                        "max_backlog_per_start": 5,
+                    },
+                    "gap_filler": {"max_per_cycle": 3, "use_llm_draft": False},
+                    "llm_rate_limit": {"max_requests": 10, "window_seconds": 2.0},
+                    "lint_interval_seconds": 7200,
+                    "gaps_interval_seconds": 1209600,
+                    "db_maintenance_interval_seconds": 259200,
+                },
+            }
+        )
+    )
     cfg = load_maintenance_config(path)
     d = to_dict(cfg)
     assert d["enabled"] is False
@@ -561,13 +621,17 @@ def test_config_non_dict_subsections_ignored(tmp_path):
     from llmwikify.apps.agent.maintenance.config import load_maintenance_config
 
     path = tmp_path / "llmwikify.json"
-    path.write_text(json.dumps({
-        "maintenance": {
-            "auto_ingest": "not-a-dict",
-            "gap_filler": 42,
-            "llm_rate_limit": True,
-        },
-    }))
+    path.write_text(
+        json.dumps(
+            {
+                "maintenance": {
+                    "auto_ingest": "not-a-dict",
+                    "gap_filler": 42,
+                    "llm_rate_limit": True,
+                },
+            }
+        )
+    )
     cfg = load_maintenance_config(path)
     # defaults preserved when sub-sections are non-dict
     assert cfg.auto_ingest.enabled is True
@@ -800,12 +864,19 @@ def test_health_history_persists_across_instances(tmp_path):
     from llmwikify.kernel.multi_wiki.instance import WikiInstance, WikiType
 
     wiki = SimpleNamespace(
-        root=tmp_path, raw_dir=tmp_path / "raw", db_path=tmp_path / ".db",
+        root=tmp_path,
+        raw_dir=tmp_path / "raw",
+        db_path=tmp_path / ".db",
         config={"llm": {"enabled": False}},
-        lint=lambda **kw: {"issue_count": 1, "hints": {"critical": [], "informational": []}},
+        lint=lambda **kw: {
+            "issue_count": 1,
+            "hints": {"critical": [], "informational": []},
+        },
     )
     registry = SimpleNamespace(
-        list_wikis=lambda: [WikiInstance(wiki_id="x", name="x", wiki_type=WikiType.LOCAL, root=tmp_path)],
+        list_wikis=lambda: [
+            WikiInstance(wiki_id="x", name="x", wiki_type=WikiType.LOCAL, root=tmp_path)
+        ],
         get_wiki=lambda wid: wiki,
     )
 
@@ -830,12 +901,16 @@ def test_health_history_survives_restart(tmp_path):
     from llmwikify.kernel.multi_wiki.instance import WikiInstance, WikiType
 
     wiki = SimpleNamespace(
-        root=tmp_path, raw_dir=tmp_path / "raw", db_path=tmp_path / ".db",
+        root=tmp_path,
+        raw_dir=tmp_path / "raw",
+        db_path=tmp_path / ".db",
         config={"llm": {"enabled": False}},
         lint=lambda **kw: {"issue_count": 0, "hints": {}},
     )
     registry = SimpleNamespace(
-        list_wikis=lambda: [WikiInstance(wiki_id="x", name="x", wiki_type=WikiType.LOCAL, root=tmp_path)],
+        list_wikis=lambda: [
+            WikiInstance(wiki_id="x", name="x", wiki_type=WikiType.LOCAL, root=tmp_path)
+        ],
         get_wiki=lambda wid: wiki,
     )
 

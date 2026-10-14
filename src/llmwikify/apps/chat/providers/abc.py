@@ -184,12 +184,17 @@ class ProviderConfig:
         if not isinstance(inner, dict):
             inner = {}
         known = {
-            "provider", "model", "api_key", "base_url", "enabled",
-            "retry_mode", "thinking_style", "max_tokens", "temperature",
+            "provider",
+            "model",
+            "api_key",
+            "base_url",
+            "enabled",
+            "retry_mode",
+            "thinking_style",
+            "max_tokens",
+            "temperature",
         }
-        kwargs: dict[str, Any] = {
-            k: v for k, v in inner.items() if k in known
-        }
+        kwargs: dict[str, Any] = {k: v for k, v in inner.items() if k in known}
         # Coerce enum fields; tolerate bad values (fall back to default).
         if "retry_mode" in kwargs:
             try:
@@ -249,6 +254,7 @@ class ProviderConfig:
             return False
         if self.api_key.startswith("env:"):
             import os
+
             return bool(os.environ.get(self.api_key[4:], ""))
         return bool(self.api_key)
 
@@ -300,7 +306,8 @@ class LLMProviderABC(ABC):
 
     @abstractmethod
     def from_config(
-        self, config: dict[str, Any] | ProviderConfig,
+        self,
+        config: dict[str, Any] | ProviderConfig,
     ) -> StreamableLLMClient:
         """Build a ``StreamableLLMClient`` from a config (dict or typed).
 
@@ -330,7 +337,9 @@ class LLMProviderABC(ABC):
 
     # ── runtime hot-swap (Phase 16) ──────────────────────────
 
-    def apply_snapshot(self, snapshot: ProviderConfig | dict[str, Any]) -> None:  # noqa: B027
+    def apply_snapshot(
+        self, snapshot: ProviderConfig | dict[str, Any]
+    ) -> None:  # noqa: B027
         """Hot-swap runtime config (model / api_key / base_url).
 
         Default implementation is a **noop** — the default provider

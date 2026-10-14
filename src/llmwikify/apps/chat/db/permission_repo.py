@@ -14,6 +14,7 @@ Methods (2):
     save_permission       — INSERT a permission grant
     has_always_permission — COUNT(*) for tool with response='always'
 """
+
 from __future__ import annotations
 
 import logging
@@ -30,8 +31,7 @@ class PermissionRepository(ChatDBBase):
 
     def _init_schema(self) -> None:
         with self._mgr.transaction() as conn:
-            conn.execute(
-                """
+            conn.execute("""
                 CREATE TABLE IF NOT EXISTS chat_permissions (
                     id TEXT PRIMARY KEY,
                     session_id TEXT,
@@ -40,14 +40,11 @@ class PermissionRepository(ChatDBBase):
                     response TEXT NOT NULL DEFAULT 'once',
                     created_at TEXT DEFAULT (datetime('now'))
                 )
-                """
-            )
-            conn.execute(
-                """
+                """)
+            conn.execute("""
                 CREATE INDEX IF NOT EXISTS idx_chat_permissions_tool
                 ON chat_permissions(tool_name, response)
-                """
-            )
+                """)
 
     def save_permission(
         self,

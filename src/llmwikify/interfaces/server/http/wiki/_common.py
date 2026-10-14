@@ -32,14 +32,16 @@ def _serve_wiki_file(wiki_root: Path, path: str) -> FileResponse:
     try:
         target.relative_to(root)
     except ValueError:
-        raise HTTPException(status_code=403, detail=f"Path escapes wiki root: {path}") from None
+        raise HTTPException(
+            status_code=403, detail=f"Path escapes wiki root: {path}"
+        ) from None
     if not target.exists() or not target.is_file():
         raise HTTPException(status_code=404, detail=f"File not found: {path}")
     media_type, _ = mimetypes.guess_type(str(target))
     # RFC 5987: filename*=UTF-8''<percent-encoded> for non-ASCII filenames
-    ascii_name = target.name.encode('ascii', 'replace').decode('ascii')
-    encoded_name = quote(target.name, safe='')
-    content_disp = f'inline; filename="{ascii_name}"; filename*=UTF-8\'\'{encoded_name}'
+    ascii_name = target.name.encode("ascii", "replace").decode("ascii")
+    encoded_name = quote(target.name, safe="")
+    content_disp = f"inline; filename=\"{ascii_name}\"; filename*=UTF-8''{encoded_name}"
     return FileResponse(
         target,
         media_type=media_type or "application/octet-stream",
@@ -65,7 +67,9 @@ def create_wiki_dependency(registry: WikiRegistry) -> Any:
     def get_wiki_by_id(wiki_id: str) -> Wiki:
         instance = registry.get_wiki_instance(wiki_id)
         if instance.wiki_type == WikiType.REMOTE:
-            raise HTTPException(status_code=400, detail="Cannot access remote wiki directly")
+            raise HTTPException(
+                status_code=400, detail="Cannot access remote wiki directly"
+            )
         return registry.get_wiki(wiki_id)
 
     def get_wiki() -> Wiki:

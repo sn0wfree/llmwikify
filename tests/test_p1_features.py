@@ -16,13 +16,13 @@ def test_wiki():
     tmp = Path(tempfile.mkdtemp())
 
     wiki = Wiki(tmp)
-    wiki.init(agent='generic')
+    wiki.init(agent="generic")
 
     # Create raw sources
-    raw_dir = tmp / 'raw'
+    raw_dir = tmp / "raw"
     raw_dir.mkdir(exist_ok=True)
 
-    (raw_dir / 'source1.md').write_text("""
+    (raw_dir / "source1.md").write_text("""
 # AI in Healthcare Part 1
 
 ## Summary
@@ -47,7 +47,7 @@ AI is transforming healthcare diagnostics.
 - [Source: AI in Healthcare Part 1](raw/source1.md)
 """)
 
-    (raw_dir / 'source2.md').write_text("""
+    (raw_dir / "source2.md").write_text("""
 # AI in Healthcare Part 2
 
 ## Summary
@@ -81,10 +81,10 @@ New study confirms AI diagnostic accuracy but notes demographic bias.
 """)
 
     # Create wiki source pages
-    sources_dir = tmp / 'wiki' / 'sources'
+    sources_dir = tmp / "wiki" / "sources"
     sources_dir.mkdir(parents=True, exist_ok=True)
 
-    (sources_dir / 'ai-healthcare-1.md').write_text("""
+    (sources_dir / "ai-healthcare-1.md").write_text("""
 ---
 title: AI in Healthcare Part 1
 type: source
@@ -120,7 +120,7 @@ AI is transforming healthcare diagnostics.
 - [Source: AI in Healthcare Part 1](raw/source1.md)
 """)
 
-    (sources_dir / 'ai-healthcare-2.md').write_text("""
+    (sources_dir / "ai-healthcare-2.md").write_text("""
 ---
 title: AI in Healthcare Part 2
 type: source
@@ -165,10 +165,10 @@ New study confirms AI diagnostic accuracy but notes demographic bias.
 """)
 
     # Create a concept page
-    concepts_dir = tmp / 'wiki' / 'concepts'
+    concepts_dir = tmp / "wiki" / "concepts"
     concepts_dir.mkdir(parents=True, exist_ok=True)
 
-    (concepts_dir / 'Artificial Intelligence.md').write_text("""
+    (concepts_dir / "Artificial Intelligence.md").write_text("""
 ---
 title: Artificial Intelligence
 type: concept
@@ -200,7 +200,10 @@ class TestSynthesisEngine:
         # Simulate new analysis with same claim
         new_analysis = {
             "claims": [
-                {"statement": "AI outperforms radiologists in detecting cancer", "confidence": "high"}
+                {
+                    "statement": "AI outperforms radiologists in detecting cancer",
+                    "confidence": "high",
+                }
             ],
             "entities": [],
             "topics": [],
@@ -219,7 +222,11 @@ class TestSynthesisEngine:
         new_analysis = {
             "entities": [
                 {"name": "NewEntity1", "type": "organization", "attributes": {}},
-                {"name": "DeepMind", "type": "organization", "attributes": {}},  # Already exists
+                {
+                    "name": "DeepMind",
+                    "type": "organization",
+                    "attributes": {},
+                },  # Already exists
             ],
         }
 
@@ -240,7 +247,7 @@ class TestSynthesisEngine:
         new_analysis = {
             "data_gaps": [
                 "Limited information on AI adoption in developing countries",
-                "No long-term studies on AI diagnostic accuracy"
+                "No long-term studies on AI diagnostic accuracy",
             ],
             "topics": ["NewTopic1"],
         }
@@ -309,7 +316,7 @@ class TestSmartLint:
         wiki, tmp = test_wiki
         result = wiki.lint(generate_investigations=False)
 
-        investigations = result.get('investigations', {})
+        investigations = result.get("investigations", {})
 
         # Check new fields exist
         assert "outdated_pages" in investigations
@@ -356,11 +363,13 @@ class TestCLICommands:
     def test_suggest_synthesis_command_exists(self):
         """Test that suggest-synthesis command is registered."""
         from llmwikify.interfaces.cli.commands import WikiCLI
+
         cli = WikiCLI.__new__(WikiCLI)
-        assert hasattr(cli, 'suggest_synthesis')
+        assert hasattr(cli, "suggest_synthesis")
 
     def test_knowledge_gaps_command_exists(self):
         """Test that knowledge-gaps command is registered."""
         from llmwikify.interfaces.cli.commands import WikiCLI
+
         cli = WikiCLI.__new__(WikiCLI)
-        assert hasattr(cli, 'knowledge_gaps')
+        assert hasattr(cli, "knowledge_gaps")

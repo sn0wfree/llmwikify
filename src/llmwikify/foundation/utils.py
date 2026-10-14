@@ -1,4 +1,5 @@
 """Shared utility functions for the foundation layer."""
+
 from __future__ import annotations
 
 import copy
@@ -92,10 +93,15 @@ def _load_ssrf_config() -> dict[str, Any]:
         # singleton (same pattern as the middleware trusted_proxies fix,
         # commit dd63e70).
         from .config import config as _llmwikify_config
+
         ssrf_config = _llmwikify_config.get("ssrf_protection", {})
         return {
-            "blocked_networks": ssrf_config.get("blocked_networks", _DEFAULT_BLOCKED_NETWORKS),
-            "blocked_hostnames": ssrf_config.get("blocked_hostnames", _DEFAULT_BLOCKED_HOSTNAMES),
+            "blocked_networks": ssrf_config.get(
+                "blocked_networks", _DEFAULT_BLOCKED_NETWORKS
+            ),
+            "blocked_hostnames": ssrf_config.get(
+                "blocked_hostnames", _DEFAULT_BLOCKED_HOSTNAMES
+            ),
             "enabled": ssrf_config.get("enabled", False),
         }
     except Exception as e:
@@ -107,7 +113,9 @@ def _load_ssrf_config() -> dict[str, Any]:
         }
 
 
-def _parse_network(network_str: str) -> ipaddress.IPv4Network | ipaddress.IPv6Network | None:
+def _parse_network(
+    network_str: str,
+) -> ipaddress.IPv4Network | ipaddress.IPv6Network | None:
     """Parse a network string (e.g., '10.0.0.0/8') into an IP network object."""
     try:
         return ipaddress.ip_network(network_str, strict=False)

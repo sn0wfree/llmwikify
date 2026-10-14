@@ -48,6 +48,7 @@ class QualityGate(BaseQualityGate):
             )
         # Lazy import to avoid circular
         from .source_filter import SourceFilter
+
         sf = SourceFilter()
         scored = []
         for s in sources:
@@ -87,6 +88,7 @@ class QualityGate(BaseQualityGate):
         aggregate. A failed gate forces the engine to return to plan stage.
         """
         from llmwikify.apps.chat.reasoning_checker import ReasoningChecker
+
         checker = ReasoningChecker()
         result = checker.check(
             synthesis=synthesis,
@@ -126,6 +128,7 @@ class QualityGate(BaseQualityGate):
         section completeness, internal consistency).
         """
         from .structure_validator import StructureValidator
+
         validator = StructureValidator()
         result = validator.validate(
             report=report,
@@ -182,7 +185,9 @@ class QualityGate(BaseQualityGate):
                 else f"Framework incomplete: {'; '.join(issues)}"
             ),
             details={
-                "has_clarification": bool(clarification and clarification.get("context")),
+                "has_clarification": bool(
+                    clarification and clarification.get("context")
+                ),
                 "has_reasoning_check": bool(reasoning_check),
                 "has_structure_check": bool(structure_check),
             },

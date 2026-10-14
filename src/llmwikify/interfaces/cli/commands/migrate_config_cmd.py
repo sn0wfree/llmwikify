@@ -19,6 +19,7 @@ Usage:
     llmwikify migrate-config --auto-wiki          # always prefer wiki (no prompt)
     llmwikify migrate-config --wiki-root /path    # specific wiki directory
 """
+
 from __future__ import annotations
 
 import logging
@@ -34,7 +35,9 @@ def _format_plan(result: Any) -> str:
     """Format a MigrationResult as a human-readable plan."""
     lines: list[str] = []
     lines.append(f"Wiki root: {result.wiki_root}")
-    lines.append(f"Status:    {result.reason or ('migrated' if result.migrated else 'skipped')}")
+    lines.append(
+        f"Status:    {result.reason or ('migrated' if result.migrated else 'skipped')}"
+    )
     if result.backup_path:
         lines.append(f"Backup:    {result.backup_path}")
     if result.changes:
@@ -119,27 +122,38 @@ class MigrateConfigCommand(Command):
 
     def setup_parser(self, subparsers: Any) -> None:
         from argparse import _SubParsersAction
+
         if not isinstance(subparsers, _SubParsersAction):
             raise TypeError("setup_parser requires an argparse subparsers action")
         p = subparsers.add_parser(self.name, help=self.help)
         p.add_argument(
-            "--wiki-root", dest="wiki_root", default=None,
+            "--wiki-root",
+            dest="wiki_root",
+            default=None,
             help="Path to wiki directory (default: current wiki_root)",
         )
         p.add_argument(
-            "--dry-run", dest="dry_run", action="store_true",
+            "--dry-run",
+            dest="dry_run",
+            action="store_true",
             help="Show the migration plan without writing any files",
         )
         p.add_argument(
-            "--strict", dest="strict", action="store_true",
+            "--strict",
+            dest="strict",
+            action="store_true",
             help="Fail on conflicts instead of auto-resolving",
         )
         p.add_argument(
-            "--auto-global", dest="auto_global", action="store_true",
+            "--auto-global",
+            dest="auto_global",
+            action="store_true",
             help="Always prefer existing global config values (no prompt)",
         )
         p.add_argument(
-            "--auto-wiki", dest="auto_wiki", action="store_true",
+            "--auto-wiki",
+            dest="auto_wiki",
+            action="store_true",
             help="Always prefer wiki config values (no prompt)",
         )
 
@@ -147,11 +161,14 @@ class MigrateConfigCommand(Command):
         custom_root = getattr(args, "wiki_root", None)
         if custom_root:
             from llmwikify.kernel import Wiki as _Wiki
+
             try:
                 wiki_root = Path(custom_root).resolve()
                 wiki = _Wiki(wiki_root, config=config)
             except (OSError, RuntimeError):
                 pass
         return run_migrate_config(
-            wiki, wiki.root if hasattr(wiki, "root") else Path.cwd(), args,
+            wiki,
+            wiki.root if hasattr(wiki, "root") else Path.cwd(),
+            args,
         )

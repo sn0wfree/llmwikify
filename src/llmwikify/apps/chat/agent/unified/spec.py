@@ -15,6 +15,7 @@ ChatSpec 保留在本文件 (chat-specific, 继承 BaseSpec)。
     )
     from llmwikify.apps.chat.agent.unified.spec import ChatSpec
 """
+
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -51,9 +52,17 @@ class ChatSpec(BaseSpec):
     microcompact: bool = True
     microcompact_keep_chars: int = 1000
     microcompact_compactable_tools: frozenset[str] = field(
-        default_factory=lambda: frozenset({
-            "read_file", "exec", "grep", "find_files", "web_search", "web_fetch", "list_dir",
-        }),
+        default_factory=lambda: frozenset(
+            {
+                "read_file",
+                "exec",
+                "grep",
+                "find_files",
+                "web_search",
+                "web_fetch",
+                "list_dir",
+            }
+        ),
     )
     hook: Any | None = None  # AgentHook
     goal_active_predicate: Callable[[], bool] | None = None

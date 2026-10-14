@@ -4,6 +4,7 @@ These tests use ChatDatabase to seed data because AdminStats reads
 across multiple tables (chat_sessions, dream_proposals, etc.).
 Direct inserts via the individual repos would also work.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -34,9 +35,13 @@ def seeded_db(tmp_path: Path) -> AutoResearchDatabase:
     """AutoResearchDatabase seeded with chat data."""
     db = AutoResearchDatabase(tmp_path)
     sid = db.create_chat_session(wiki_id="wiki-A")
-    db.save_chat_message({
-        "session_id": sid, "role": "user", "content": "hi",
-    })
+    db.save_chat_message(
+        {
+            "session_id": sid,
+            "role": "user",
+            "content": "hi",
+        }
+    )
     db.log_tool_call(sid, "echo", {"x": 1})
     return db
 
@@ -46,7 +51,8 @@ def seeded_db(tmp_path: Path) -> AutoResearchDatabase:
 
 class TestGetWikiStats:
     def test_empty_wiki_returns_zero_counts(
-        self, admin: AdminStatsRepository,
+        self,
+        admin: AdminStatsRepository,
     ) -> None:
         stats = admin.get_wiki_stats("nonexistent-wiki")
         assert stats["wiki_id"] == "nonexistent-wiki"
@@ -55,7 +61,8 @@ class TestGetWikiStats:
             assert count == 0, f"{_table} should be 0"
 
     def test_counts_chat_sessions(
-        self, seeded_db: AutoResearchDatabase,
+        self,
+        seeded_db: AutoResearchDatabase,
     ) -> None:
         stats = seeded_db.get_wiki_stats("wiki-A")
         assert stats["counts"]["chat_sessions"] == 1
@@ -67,12 +74,14 @@ class TestGetWikiStats:
 
 class TestListAllWikis:
     def test_empty_returns_empty_list(
-        self, admin: AdminStatsRepository,
+        self,
+        admin: AdminStatsRepository,
     ) -> None:
         assert admin.list_all_wikis() == []
 
     def test_returns_seeded_wiki(
-        self, seeded_db: AutoResearchDatabase,
+        self,
+        seeded_db: AutoResearchDatabase,
     ) -> None:
         wikis = seeded_db.list_all_wikis()
         assert {"wiki_id": "wiki-A"} in wikis
@@ -83,7 +92,8 @@ class TestListAllWikis:
 
 class TestDeleteWikiData:
     def test_returns_zero_for_unknown_wiki(
-        self, admin: AdminStatsRepository,
+        self,
+        admin: AdminStatsRepository,
     ) -> None:
         result = admin.delete_wiki_data("nonexistent")
         assert result["wiki_id"] == "nonexistent"
@@ -91,7 +101,8 @@ class TestDeleteWikiData:
             assert count == 0
 
     def test_deletes_chat_sessions_for_wiki(
-        self, seeded_db: AutoResearchDatabase,
+        self,
+        seeded_db: AutoResearchDatabase,
     ) -> None:
         # Capture the session id before deletion
         sessions_before = seeded_db.list_chat_sessions()
@@ -117,7 +128,8 @@ class TestExportWikiData:
         assert data["notifications"] == []
 
     def test_export_includes_seeded_sessions(
-        self, seeded_db: AutoResearchDatabase,
+        self,
+        seeded_db: AutoResearchDatabase,
     ) -> None:
         data = seeded_db.export_wiki_data("wiki-A")
         assert len(data["chat_sessions"]) == 1
@@ -129,7 +141,8 @@ class TestExportWikiData:
 
 class TestGetDbStats:
     def test_returns_table_counts_and_size(
-        self, seeded_db: AutoResearchDatabase,
+        self,
+        seeded_db: AutoResearchDatabase,
     ) -> None:
         stats = seeded_db.get_db_stats()
         assert "tables" in stats
@@ -146,7 +159,8 @@ class TestGetDbStats:
         assert stats["size_mb"] >= 0
 
     def test_empty_db_returns_all_zeros(
-        self, admin: AdminStatsRepository,
+        self,
+        admin: AdminStatsRepository,
     ) -> None:
         stats = admin.get_db_stats()
         for table, count in stats["tables"].items():

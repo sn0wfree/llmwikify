@@ -6,13 +6,38 @@ from pathlib import Path
 from typing import Any
 
 SUPPORTED_EXTENSIONS: set[str] = {
-    ".pdf", ".md", ".txt", ".html", ".htm",
-    ".docx", ".doc", ".xlsx", ".xls", ".pptx", ".ppt",
-    ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff", ".tif", ".webp", ".svg",
-    ".mp3", ".wav", ".m4a",
-    ".csv", ".json", ".xml",
-    ".epub", ".zip", ".msg",
-    ".mp4", ".avi", ".mov",
+    ".pdf",
+    ".md",
+    ".txt",
+    ".html",
+    ".htm",
+    ".docx",
+    ".doc",
+    ".xlsx",
+    ".xls",
+    ".pptx",
+    ".ppt",
+    ".jpg",
+    ".jpeg",
+    ".png",
+    ".gif",
+    ".bmp",
+    ".tiff",
+    ".tif",
+    ".webp",
+    ".svg",
+    ".mp3",
+    ".wav",
+    ".m4a",
+    ".csv",
+    ".json",
+    ".xml",
+    ".epub",
+    ".zip",
+    ".msg",
+    ".mp4",
+    ".avi",
+    ".mov",
 }
 
 
@@ -73,8 +98,7 @@ class FileSystemWatcher:
             from watchdog.observers import Observer
         except ImportError:
             raise ImportError(
-                "watchdog package is required. "
-                "Install with: pip install watchdog"
+                "watchdog package is required. " "Install with: pip install watchdog"
             ) from None
 
         self._on_event = on_event
@@ -162,7 +186,9 @@ class FileSystemWatcher:
             }.get(event_type, "change detected")
             print(f"  [{event_type}] {path.name} - {action}")
             if self.self_create:
-                print(f"    Tip: run 'llmwikify ingest {path.name} --self-create' to process with LLM")
+                print(
+                    f"    Tip: run 'llmwikify ingest {path.name} --self-create' to process with LLM"
+                )
             else:
                 print(f"    Tip: run 'llmwikify ingest {path.name}' to process")
             print("    Or start with --auto-ingest to process automatically")

@@ -5,6 +5,7 @@ AgentHook 通过 AgentHookAdapter 桥接到此接口。
 
 历史: 从 apps/chat/agent/unified/core.py 搬迁。
 """
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
@@ -53,10 +54,14 @@ class UnifiedHook:
     def on_act_end(self, ctx: UnifiedContext, result: Any) -> None:
         pass
 
-    def after_tool_executed(self, ctx: UnifiedContext, tool_call: Any, result: Any) -> None:
+    def after_tool_executed(
+        self, ctx: UnifiedContext, tool_call: Any, result: Any
+    ) -> None:
         pass
 
-    def on_tool_error(self, ctx: UnifiedContext, tool_call: Any, error: BaseException) -> None:
+    def on_tool_error(
+        self, ctx: UnifiedContext, tool_call: Any, error: BaseException
+    ) -> None:
         pass
 
     def on_confirmation(self, ctx: UnifiedContext, tool_call: Any) -> None:

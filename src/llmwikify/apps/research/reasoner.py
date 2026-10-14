@@ -41,8 +41,14 @@ logger = logging.getLogger(__name__)
 # Set of actions the reasoner is allowed to return. Anything
 # outside this set falls back to ``done`` (safe default).
 VALID_ACTIONS: set[str] = {
-    "plan", "gather", "analyze", "synthesize",
-    "report", "review", "revise", "done",
+    "plan",
+    "gather",
+    "analyze",
+    "synthesize",
+    "report",
+    "review",
+    "revise",
+    "done",
 }
 
 
@@ -87,9 +93,7 @@ class ResearchReasoner:
         try:
             return await self._llm_reason(state)
         except Exception as e:
-            logger.warning(
-                "LLM reasoning failed: %s, using rule-based fallback", e
-            )
+            logger.warning("LLM reasoning failed: %s, using rule-based fallback", e)
             return self.rule_based(state) or "done"
 
     def rule_based(self, state: ResearchState) -> str | None:
@@ -127,8 +131,8 @@ class ResearchReasoner:
         # ─── 6-step framework: if no clarification yet, redo clarify ───
         if state.clarification is None:
             return "plan"  # In the new flow this path is unreachable
-                           # (clarify runs before the loop) but keep
-                           # for resume safety
+            # (clarify runs before the loop) but keep
+            # for resume safety
 
         # No sub-queries yet → plan
         if not state.sub_queries:
@@ -137,7 +141,8 @@ class ResearchReasoner:
         # Not all gathered → gather (skip failed sub-queries)
         gathered_ids = {s.get("sub_query_id") for s in state.sources}
         ungathered = [
-            sq for sq in state.sub_queries
+            sq
+            for sq in state.sub_queries
             if sq["id"] not in gathered_ids and sq.get("status") != "failed"
         ]
         if ungathered:
@@ -185,18 +190,21 @@ class ResearchReasoner:
         # this guard the engine burns through max_rounds on
         # synthesize→plan→gather→analyze→synthesize cycles.
         consecutive_plan = getattr(state, "_consecutive_plan", 0)
-        if (state.knowledge_gaps
-                and state.synthesis is None
-                and state.budget_remaining > 0.15
-                and state.round < self._max_replan + 1
-                and state.report_md is None
-                and consecutive_plan < self._max_replan):
+        if (
+            state.knowledge_gaps
+            and state.synthesis is None
+            and state.budget_remaining > 0.15
+            and state.round < self._max_replan + 1
+            and state.report_md is None
+            and consecutive_plan < self._max_replan
+        ):
             return "plan"
         if consecutive_plan >= self._max_replan and state.report_md is None:
             logger.info(
                 "Plan anti-spin: %d consecutive plan rounds (limit=%d); "
                 "falling through to 'report'",
-                consecutive_plan, self._max_replan,
+                consecutive_plan,
+                self._max_replan,
             )
 
         # No report yet → report
@@ -227,9 +235,7 @@ class ResearchReasoner:
         from llmwikify.apps.chat.prompts import _reason_fallback
 
         analyzed_count = sum(1 for s in state.sources if s.get("analysis"))
-        failed_sq = sum(
-            1 for sq in state.sub_queries if sq.get("status") == "failed"
-        )
+        failed_sq = sum(1 for sq in state.sub_queries if sq.get("status") == "failed")
 
         # Build observation context from interpreted observations
         obs_text = (

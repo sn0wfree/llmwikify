@@ -6,6 +6,7 @@ the `ssrf_protection` section of ~/.llmwikify/llmwikify.json was never
 applied and `is_safe_url` allowed every URL. These tests pin the fixed
 behavior end-to-end (file → Config → is_safe_url).
 """
+
 from __future__ import annotations
 
 import json
@@ -32,7 +33,8 @@ def _write_config(tmp_path: Path, ssrf: dict) -> None:
     home = tmp_path / ".llmwikify"
     home.mkdir(exist_ok=True)
     (home / "llmwikify.json").write_text(
-        json.dumps({"ssrf_protection": ssrf}), encoding="utf-8",
+        json.dumps({"ssrf_protection": ssrf}),
+        encoding="utf-8",
     )
 
 
@@ -40,11 +42,14 @@ class TestSsrfConfigLoading:
     """Regression: the config file must actually reach _load_ssrf_config."""
 
     def test_config_file_is_read(self, tmp_path: Path) -> None:
-        _write_config(tmp_path, {
-            "enabled": True,
-            "blocked_networks": ["10.0.0.0/8"],
-            "blocked_hostnames": ["localhost"],
-        })
+        _write_config(
+            tmp_path,
+            {
+                "enabled": True,
+                "blocked_networks": ["10.0.0.0/8"],
+                "blocked_hostnames": ["localhost"],
+            },
+        )
         cfg = _load_ssrf_config()
         assert cfg["enabled"] is True
         assert cfg["blocked_networks"] == ["10.0.0.0/8"]
@@ -62,20 +67,26 @@ class TestIsSafeUrlWithEnabledConfig:
         assert is_safe_url("http://127.0.0.1/") is True
 
     def test_blocks_private_ip_literals(self, tmp_path: Path) -> None:
-        _write_config(tmp_path, {
-            "enabled": True,
-            "blocked_networks": ["127.0.0.0/8", "10.0.0.0/8", "169.254.0.0/16"],
-        })
+        _write_config(
+            tmp_path,
+            {
+                "enabled": True,
+                "blocked_networks": ["127.0.0.0/8", "10.0.0.0/8", "169.254.0.0/16"],
+            },
+        )
         assert is_safe_url("http://127.0.0.1/") is False
         assert is_safe_url("http://10.1.2.3/service") is False
         assert is_safe_url("http://169.254.169.254/latest/meta-data/") is False
         assert is_safe_url("https://example.com/") is True
 
     def test_blocks_configured_hostnames(self, tmp_path: Path) -> None:
-        _write_config(tmp_path, {
-            "enabled": True,
-            "blocked_hostnames": ["metadata.google.internal", "localhost"],
-        })
+        _write_config(
+            tmp_path,
+            {
+                "enabled": True,
+                "blocked_hostnames": ["metadata.google.internal", "localhost"],
+            },
+        )
         assert is_safe_url("http://metadata.google.internal/") is False
         assert is_safe_url("http://LOCALHOST/") is False
         assert is_safe_url("https://example.com/") is True

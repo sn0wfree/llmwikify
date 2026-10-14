@@ -28,4 +28,7 @@ async def ingest_changes(ingest_id: str) -> Any:
 
 @router.post("/ingest/log/{ingest_id}/revert")
 async def revert_ingest(ingest_id: str) -> dict[str, Any]:
-    return {"status": "error", "error": "Revert not implemented - ingest is append-only"}
+    return {
+        "status": "error",
+        "error": "Revert not implemented - ingest is append-only",
+    }

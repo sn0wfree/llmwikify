@@ -24,6 +24,7 @@ DEPRECATED: New code should use ``apps.wiki.db.WikiDatabase`` directly.
 These delegates are kept for back-compat with 32 production callers
 identified in the 2026-06-19 audit.
 """
+
 from __future__ import annotations
 
 import logging
@@ -47,6 +48,7 @@ class WikiDelegate:
         """Lazy WikiDatabase instance."""
         if not hasattr(self, "_wiki_db"):
             from llmwikify.apps.wiki.db import WikiDatabase
+
             self._wiki_db = WikiDatabase(self._data_dir)
         return self._wiki_db
 
@@ -64,7 +66,9 @@ class WikiDelegate:
         return self._wiki.get_dream_proposals(wiki_id, status, limit)
 
     def update_dream_proposal_status(
-        self, proposal_id: str, status: str,
+        self,
+        proposal_id: str,
+        status: str,
     ) -> None:
         return self._wiki.update_dream_proposal_status(proposal_id, status)
 
@@ -77,7 +81,9 @@ class WikiDelegate:
         return self._wiki.save_notification(n)
 
     def list_notifications(
-        self, wiki_id: str, unread_only: bool = False,
+        self,
+        wiki_id: str,
+        unread_only: bool = False,
     ) -> list[dict]:
         return self._wiki.list_notifications(wiki_id, unread_only)
 
@@ -93,22 +99,30 @@ class WikiDelegate:
         return self._wiki.save_confirmation(c)
 
     def get_confirmations(
-        self, wiki_id: str, status: str | None = None,
+        self,
+        wiki_id: str,
+        status: str | None = None,
     ) -> list[dict]:
         return self._wiki.get_confirmations(wiki_id, status)
 
     def update_confirmation_status(
-        self, confirmation_id: str, status: str,
+        self,
+        confirmation_id: str,
+        status: str,
     ) -> None:
         return self._wiki.update_confirmation_status(
-            confirmation_id, status,
+            confirmation_id,
+            status,
         )
 
     def update_confirmation_arguments(
-        self, confirmation_id: str, arguments: dict,
+        self,
+        confirmation_id: str,
+        arguments: dict,
     ) -> None:
         return self._wiki.update_confirmation_arguments(
-            confirmation_id, arguments,
+            confirmation_id,
+            arguments,
         )
 
     def get_confirmation(self, confirmation_id: str) -> dict | None:
@@ -123,7 +137,9 @@ class WikiDelegate:
         return self._wiki.log_ingest(entry)
 
     def get_ingest_log(
-        self, wiki_id: str, limit: int = 20,
+        self,
+        wiki_id: str,
+        limit: int = 20,
     ) -> list[dict]:
         return self._wiki.get_ingest_log(wiki_id, limit)
 

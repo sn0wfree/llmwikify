@@ -62,7 +62,9 @@ def _get_wiki(wiki_id: str | None = None) -> Any:
             return _WIKI_REGISTRY.get_wiki(wiki_id)
         return _WIKI_REGISTRY.get_default_wiki()
     except (ValueError, KeyError) as e:
-        raise ValueError(f"No wiki available: {e}. Configure a wiki in ~/.llmwikify/llmwikify.json or pass wiki_id.") from e
+        raise ValueError(
+            f"No wiki available: {e}. Configure a wiki in ~/.llmwikify/llmwikify.json or pass wiki_id."
+        ) from e
 
 
 def _get_tool_registry(wiki_id: str | None = None) -> Any:
@@ -122,6 +124,7 @@ async def stream_autoresearch(session_id: str) -> Any:
     framework_compliance, structure_check, etc.
     """
     from sse_starlette import EventSourceResponse
+
     db = _get_db()
     session = db.get_research_session(session_id)
     if not session:
@@ -196,7 +199,21 @@ async def resume_autoresearch(session_id: str) -> dict[str, Any]:
     session = db.get_research_session(session_id)
     if not session:
         return {"error": f"Session {session_id} not found"}
-    if session["status"] not in ("paused", "pausing", "gathering", "planning", "analyzing", "synthesizing", "report", "reviewing", "clarifying", "incomplete", "error", "timeout", "done"):
+    if session["status"] not in (
+        "paused",
+        "pausing",
+        "gathering",
+        "planning",
+        "analyzing",
+        "synthesizing",
+        "report",
+        "reviewing",
+        "clarifying",
+        "incomplete",
+        "error",
+        "timeout",
+        "done",
+    ):
         return {"error": f"Cannot resume from status: {session['status']}"}
 
     engine = _get_engine(session.get("wiki_id"))
@@ -209,7 +226,9 @@ async def resume_autoresearch(session_id: str) -> dict[str, Any]:
 
 
 @router.get("/list")
-async def list_autoresearch(wiki_id: str | None = None, limit: int = 50) -> dict[str, Any]:
+async def list_autoresearch(
+    wiki_id: str | None = None, limit: int = 50
+) -> dict[str, Any]:
     """List autoresearch sessions (most recent first, capped by `limit`)."""
     db = _get_db()
     sessions = db.list_research_sessions(wiki_id, limit=limit)
@@ -285,7 +304,15 @@ async def pause_autoresearch(session_id: str) -> dict[str, Any]:
     session = db.get_research_session(session_id)
     if not session:
         return {"error": f"Session {session_id} not found"}
-    if session["status"] not in ("planning", "gathering", "analyzing", "synthesizing", "report", "reviewing", "clarifying"):
+    if session["status"] not in (
+        "planning",
+        "gathering",
+        "analyzing",
+        "synthesizing",
+        "report",
+        "reviewing",
+        "clarifying",
+    ):
         return {"error": f"Cannot pause from status: {session['status']}"}
     db.update_research_status(session_id, "pausing", session.get("current_step"))
     tm = get_task_manager()
@@ -330,19 +357,27 @@ async def save_to_wiki(session_id: str, request: Request) -> Any:
     if session["status"] != "done":
         return JSONResponse({"error": "Session not done yet"}, status_code=400)
     if session.get("wiki_page_name"):
-        return JSONResponse({"error": f"Already saved to wiki as: {session['wiki_page_name']}"}, status_code=409)
+        return JSONResponse(
+            {"error": f"Already saved to wiki as: {session['wiki_page_name']}"},
+            status_code=409,
+        )
 
     try:
         wiki_id = session.get("wiki_id")
         registry = _get_tool_registry(wiki_id)
     except Exception as e:
-        return JSONResponse({"error": f"Cannot access tool registry: {e}"}, status_code=500)
+        return JSONResponse(
+            {"error": f"Cannot access tool registry: {e}"}, status_code=500
+        )
 
-    result = await registry.execute("research_save_to_wiki", {
-        "session_id": session_id,
-        "page_name": page_name,
-        "include_sources": body.get("include_sources", True),
-    })
+    result = await registry.execute(
+        "research_save_to_wiki",
+        {
+            "session_id": session_id,
+            "page_name": page_name,
+            "include_sources": body.get("include_sources", True),
+        },
+    )
 
     return result
 
@@ -369,4 +404,9 @@ async def rate_research(session_id: str, request: Request) -> dict[str, Any]:
         except Exception as e:
             logger.warning("Failed to rate source %s: %s", source_id, e)
 
-    return {"rated": True, "session_id": session_id, "rating": rating, "feedback": feedback}
+    return {
+        "rated": True,
+        "session_id": session_id,
+        "rating": rating,
+        "feedback": feedback,
+    }

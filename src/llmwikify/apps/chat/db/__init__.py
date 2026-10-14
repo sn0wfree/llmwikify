@@ -17,6 +17,7 @@ Backward compat re-exports:
   - ``get_chat_db_path()`` — path helper
   - ``DB_SIZE_WARNING_MB`` — re-exported from apps.db_base
 """
+
 from ._facade import (
     DB_SIZE_WARNING_MB,
     AutoResearchDatabase,

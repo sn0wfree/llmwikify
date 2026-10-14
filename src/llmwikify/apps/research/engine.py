@@ -40,6 +40,7 @@ from .resume import ResearchResumeLoader
 
 logger = logging.getLogger(__name__)
 
+
 # ─── State Transition Table (DR-14) ──────────────────────────────────────
 # Explicit valid transitions: from_phase → list of allowed to_phases
 class ResearchEngine:
@@ -88,7 +89,9 @@ class ResearchEngine:
         # AutoResearchDatabase.__init__ runs the schema bootstrap once.
 
         # Action-level components (used by action functions in actions.py)
-        self.gatherer = SourceGatherer(self.wiki, self.db, self.session_manager, self.config)
+        self.gatherer = SourceGatherer(
+            self.wiki, self.db, self.session_manager, self.config
+        )
         self.analyzer = SourceAnalyzer(self.wiki, self.session_manager, self.config)
         self.synthesizer = ResearchSynthesizer(self.wiki, self.config)
         self.report = ReportGenerator(self.wiki, self._report_llm, self.config)
@@ -160,7 +163,9 @@ class ResearchEngine:
         if self._start_time > 0:
             elapsed = time.monotonic() - self._start_time
             if elapsed > self._timeout_seconds:
-                raise TimeoutError(f"Research timed out after {elapsed:.0f}s (limit: {self._timeout_seconds}s)")
+                raise TimeoutError(
+                    f"Research timed out after {elapsed:.0f}s (limit: {self._timeout_seconds}s)"
+                )
 
     async def run(
         self,
@@ -191,15 +196,15 @@ class ResearchEngine:
         self.reviewer.metrics = self._metrics
         self.revisor.metrics = self._metrics
         self._action_dispatch = {
-            "clarify":    partial(actions.action_clarify, self._action_ctx),
-            "plan":       partial(actions.action_plan, self._action_ctx),
-            "gather":     partial(actions.action_gather, self._action_ctx),
-            "analyze":    partial(actions.action_analyze, self._action_ctx),
+            "clarify": partial(actions.action_clarify, self._action_ctx),
+            "plan": partial(actions.action_plan, self._action_ctx),
+            "gather": partial(actions.action_gather, self._action_ctx),
+            "analyze": partial(actions.action_analyze, self._action_ctx),
             "synthesize": partial(actions.action_synthesize, self._action_ctx),
-            "report":     partial(actions.action_report, self._action_ctx),
-            "review":     partial(actions.action_review, self._action_ctx),
-            "revise":     partial(actions.action_revise, self._action_ctx),
-            "done":       partial(actions.action_done, self._action_ctx),
+            "report": partial(actions.action_report, self._action_ctx),
+            "review": partial(actions.action_review, self._action_ctx),
+            "revise": partial(actions.action_revise, self._action_ctx),
+            "done": partial(actions.action_done, self._action_ctx),
         }
 
         # Build initial state
@@ -246,8 +251,12 @@ class ResearchEngine:
             ):
                 yield event
         except Exception as e:
-            logger.error("ReAct loop error for session %s: %s", session_id, e, exc_info=True)
-            self.session_manager.update_status(session_id, "error", state.phase or "unknown", -1)
+            logger.error(
+                "ReAct loop error for session %s: %s", session_id, e, exc_info=True
+            )
+            self.session_manager.update_status(
+                session_id, "error", state.phase or "unknown", -1
+            )
             yield {"type": "error", "error": str(e)}
         finally:
             if self._metrics:
@@ -278,6 +287,7 @@ class ResearchEngine:
                     if emit_cb is not None:
                         try:
                             import inspect
+
                             if inspect.iscoroutinefunction(emit_cb):
                                 await emit_cb(ev)
                             else:
@@ -285,14 +295,22 @@ class ResearchEngine:
                         except Exception as e:  # noqa: BLE001
                             logger.warning(
                                 "emit callback failed for action %s: %s",
-                                action_name, e,
+                                action_name,
+                                e,
                             )
                 return SkillResult.ok({"_events": events, "action": action_name})
+
             return handler
 
         action_names = [
-            "plan", "gather", "analyze", "synthesize",
-            "report", "review", "revise", "done",
+            "plan",
+            "gather",
+            "analyze",
+            "synthesize",
+            "report",
+            "review",
+            "revise",
+            "done",
         ]
         skill_actions = [
             SkillAction(
@@ -330,7 +348,9 @@ class ResearchEngine:
             if action == "gather":
                 prev_count = getattr(state, "_prev_source_count", len(state.sources))
                 if len(state.sources) <= prev_count:
-                    state._stale_gather_rounds = getattr(state, "_stale_gather_rounds", 0) + 1
+                    state._stale_gather_rounds = (
+                        getattr(state, "_stale_gather_rounds", 0) + 1
+                    )
                 else:
                     state._stale_gather_rounds = 0
                 state._prev_source_count = len(state.sources)
@@ -350,13 +370,18 @@ class ResearchEngine:
                     if engine_ref._can_replan(state):
                         logger.info(
                             "%s: %s → redirecting done→%s",
-                            gate_label, non_compliant["reason"], non_compliant["missing"],
+                            gate_label,
+                            non_compliant["reason"],
+                            non_compliant["missing"],
                         )
                         action = non_compliant["missing"]
                     else:
                         # No budget: mark incomplete and signal done
                         state.phase = "incomplete"
-                        return {"action": "done", "thought": f"{gate_label} failed: {non_compliant['reason']}"}
+                        return {
+                            "action": "done",
+                            "thought": f"{gate_label} failed: {non_compliant['reason']}",
+                        }
 
             return {"action": action, "thought": thought}
 
@@ -378,7 +403,9 @@ class ResearchEngine:
 
         # Done condition: check phase + special states
         def done_condition(s) -> Any:
-            phase = getattr(s, "phase", "") if hasattr(s, "phase") else s.get("phase", "")
+            phase = (
+                getattr(s, "phase", "") if hasattr(s, "phase") else s.get("phase", "")
+            )
             return (
                 phase == "done"
                 or phase == "incomplete"
@@ -444,7 +471,9 @@ class ResearchEngine:
         return ResearchGates.synthesis_to_text(synthesis)
 
     async def _action_incomplete(
-        self, state: ResearchState, reason: str,
+        self,
+        state: ResearchState,
+        reason: str,
     ):
         """Async-gen wrapper around actions.action_incomplete."""
         async for ev in actions.action_incomplete(self._action_ctx, state, reason):
@@ -457,4 +486,3 @@ class ResearchEngine:
     def _load_resume_state(self, state: ResearchState) -> None:
         """Load existing session state for resume."""
         self.resume_loader.load(state)
-

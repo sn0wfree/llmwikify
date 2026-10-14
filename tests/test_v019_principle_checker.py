@@ -1,6 +1,5 @@
 """Tests for Principle Compliance Checker (Phase 4c)."""
 
-
 import pytest
 import yaml
 
@@ -35,20 +34,28 @@ class TestPrincipleCheckResult:
     def test_is_pass_with_info_violation(self):
         result = PrincipleCheckResult(
             prompt_name="test",
-            violations=[PrincipleViolation(
-                principle="test", prompt_name="test",
-                severity="info", message="info",
-            )],
+            violations=[
+                PrincipleViolation(
+                    principle="test",
+                    prompt_name="test",
+                    severity="info",
+                    message="info",
+                )
+            ],
         )
         assert result.is_pass is True
 
     def test_is_fail_with_error_violation(self):
         result = PrincipleCheckResult(
             prompt_name="test",
-            violations=[PrincipleViolation(
-                principle="test", prompt_name="test",
-                severity="error", message="error",
-            )],
+            violations=[
+                PrincipleViolation(
+                    principle="test",
+                    prompt_name="test",
+                    severity="error",
+                    message="error",
+                )
+            ],
         )
         assert result.is_pass is False
 
@@ -101,6 +108,7 @@ class TestPrincipleCheckerCheckTemplate:
 
     def test_analyze_source_passes(self, checker):
         from llmwikify.kernel.wiki.prompt_registry import PromptRegistry
+
         registry = PromptRegistry()
         template = registry._load_template("analyze_source")
         data = {
@@ -115,6 +123,7 @@ class TestPrincipleCheckerCheckTemplate:
 
     def test_generate_wiki_ops_passes(self, checker):
         from llmwikify.kernel.wiki.prompt_registry import PromptRegistry
+
         registry = PromptRegistry()
         template = registry._load_template("generate_wiki_ops")
         data = {
@@ -136,7 +145,9 @@ class TestPrincipleCheckerCheckTemplate:
             "user": "Do something.",
         }
         result = checker.check_template("analyze_source", data)
-        fabric_violations = [v for v in result.violations if v.principle == "fabrication_warning"]
+        fabric_violations = [
+            v for v in result.violations if v.principle == "fabrication_warning"
+        ]
         assert len(fabric_violations) == 1
 
     def test_detects_missing_contradiction(self, checker):
@@ -148,7 +159,9 @@ class TestPrincipleCheckerCheckTemplate:
             "user": "Do something.",
         }
         result = checker.check_template("analyze_source", data)
-        contradiction_violations = [v for v in result.violations if v.principle == "contradiction_detection"]
+        contradiction_violations = [
+            v for v in result.violations if v.principle == "contradiction_detection"
+        ]
         assert len(contradiction_violations) == 1
 
     def test_detects_missing_wikilink(self, checker):
@@ -160,7 +173,9 @@ class TestPrincipleCheckerCheckTemplate:
             "user": "Do something.",
         }
         result = checker.check_template("generate_wiki_ops", data)
-        wikilink_violations = [v for v in result.violations if v.principle == "wikilink_usage"]
+        wikilink_violations = [
+            v for v in result.violations if v.principle == "wikilink_usage"
+        ]
         assert len(wikilink_violations) == 1
 
     def test_detects_missing_data_gap(self, checker):
@@ -172,7 +187,9 @@ class TestPrincipleCheckerCheckTemplate:
             "user": "Do something.",
         }
         result = checker.check_template("analyze_source", data)
-        gap_violations = [v for v in result.violations if v.principle == "data_gap_detection"]
+        gap_violations = [
+            v for v in result.violations if v.principle == "data_gap_detection"
+        ]
         assert len(gap_violations) == 1
 
     def test_does_not_check_principles_for_unrelated_prompts(self, checker):
@@ -184,7 +201,9 @@ class TestPrincipleCheckerCheckTemplate:
             "user": "Do something.",
         }
         result = checker.check_template("ingest_instructions", data)
-        wikilink_violations = [v for v in result.violations if v.principle == "wikilink_usage"]
+        wikilink_violations = [
+            v for v in result.violations if v.principle == "wikilink_usage"
+        ]
         assert len(wikilink_violations) == 0
 
     def test_structural_check_missing_name(self, checker):
@@ -206,7 +225,9 @@ class TestPrincipleCheckerCheckTemplate:
             "trigger": {"type": "api_call", "when": "test"},
         }
         result = checker.check_template("test", data)
-        content_violations = [v for v in result.violations if v.principle == "content_field"]
+        content_violations = [
+            v for v in result.violations if v.principle == "content_field"
+        ]
         assert len(content_violations) == 1
         assert content_violations[0].severity == "error"
 
@@ -220,20 +241,26 @@ class TestPrincipleCheckerCheckTemplate:
             "post_process": {"retry_on_failure": {"max_attempts": 2}},
         }
         result = checker.check_template("test", data)
-        pp_violations = [v for v in result.violations if v.principle == "post_process_schema"]
+        pp_violations = [
+            v for v in result.violations if v.principle == "post_process_schema"
+        ]
         assert len(pp_violations) == 1
 
 
 class TestPrincipleCheckerCheckAllTemplates:
     def test_all_builtin_templates_checked(self, tmp_path):
         defaults_dir = tmp_path
-        (defaults_dir / "test_prompt.yaml").write_text(yaml.dump({
-            "name": "test_prompt",
-            "version": "1.0",
-            "trigger": {"type": "api_call", "when": "test"},
-            "system": "System content with contradict and fabricate and [[wikilink]].",
-            "user": "User content with observational and log.",
-        }))
+        (defaults_dir / "test_prompt.yaml").write_text(
+            yaml.dump(
+                {
+                    "name": "test_prompt",
+                    "version": "1.0",
+                    "trigger": {"type": "api_call", "when": "test"},
+                    "system": "System content with contradict and fabricate and [[wikilink]].",
+                    "user": "User content with observational and log.",
+                }
+            )
+        )
 
         checker = PrincipleChecker(defaults_dir=defaults_dir)
         results = checker.check_all_templates()
@@ -274,7 +301,7 @@ class TestPrincipleCheckerCheckAllTemplates:
             "investigate_lint",
             "research_clarify",  # Phase 1 #5
             "research_plan",
-            "research_reason",   # Phase 1 #5
+            "research_reason",  # Phase 1 #5
             "research_replan",
             "research_report",
             "research_review",
@@ -289,17 +316,21 @@ class TestPrincipleCheckerCheckAllTemplates:
 class TestPrincipleCheckerContextInjection:
     def test_valid_context_injection_no_issues(self, tmp_path):
         defaults_dir = tmp_path
-        (defaults_dir / "test.yaml").write_text(yaml.dump({
-            "name": "test",
-            "version": "1.0",
-            "trigger": {"type": "api_call", "when": "test"},
-            "system": "Content.",
-            "user": "Test.",
-            "context_injection": {
-                "wiki_index": "_get_index_summary",
-                "page_count": "_get_page_count",
-            },
-        }))
+        (defaults_dir / "test.yaml").write_text(
+            yaml.dump(
+                {
+                    "name": "test",
+                    "version": "1.0",
+                    "trigger": {"type": "api_call", "when": "test"},
+                    "system": "Content.",
+                    "user": "Test.",
+                    "context_injection": {
+                        "wiki_index": "_get_index_summary",
+                        "page_count": "_get_page_count",
+                    },
+                }
+            )
+        )
 
         checker = PrincipleChecker(defaults_dir=defaults_dir)
         issues = checker.check_context_injection()
@@ -307,16 +338,20 @@ class TestPrincipleCheckerContextInjection:
 
     def test_invalid_context_injection_reported(self, tmp_path):
         defaults_dir = tmp_path
-        (defaults_dir / "test.yaml").write_text(yaml.dump({
-            "name": "test",
-            "version": "1.0",
-            "trigger": {"type": "api_call", "when": "test"},
-            "system": "Content.",
-            "user": "Test.",
-            "context_injection": {
-                "invalid_key": "_nonexistent_method",
-            },
-        }))
+        (defaults_dir / "test.yaml").write_text(
+            yaml.dump(
+                {
+                    "name": "test",
+                    "version": "1.0",
+                    "trigger": {"type": "api_call", "when": "test"},
+                    "system": "Content.",
+                    "user": "Test.",
+                    "context_injection": {
+                        "invalid_key": "_nonexistent_method",
+                    },
+                }
+            )
+        )
 
         checker = PrincipleChecker(defaults_dir=defaults_dir)
         issues = checker.check_context_injection()
@@ -327,14 +362,18 @@ class TestPrincipleCheckerContextInjection:
 class TestPrincipleCheckerSchemaCoverage:
     def test_known_schemas_no_issues(self, tmp_path):
         defaults_dir = tmp_path
-        (defaults_dir / "test.yaml").write_text(yaml.dump({
-            "name": "test",
-            "version": "1.0",
-            "trigger": {"type": "api_call", "when": "test"},
-            "system": "Content.",
-            "user": "Test.",
-            "post_process": {"validate_schema": "operations_array"},
-        }))
+        (defaults_dir / "test.yaml").write_text(
+            yaml.dump(
+                {
+                    "name": "test",
+                    "version": "1.0",
+                    "trigger": {"type": "api_call", "when": "test"},
+                    "system": "Content.",
+                    "user": "Test.",
+                    "post_process": {"validate_schema": "operations_array"},
+                }
+            )
+        )
 
         checker = PrincipleChecker(defaults_dir=defaults_dir)
         issues = checker.check_schema_coverage()
@@ -342,14 +381,18 @@ class TestPrincipleCheckerSchemaCoverage:
 
     def test_unknown_schema_reported(self, tmp_path):
         defaults_dir = tmp_path
-        (defaults_dir / "test.yaml").write_text(yaml.dump({
-            "name": "test",
-            "version": "1.0",
-            "trigger": {"type": "api_call", "when": "test"},
-            "system": "Content.",
-            "user": "Test.",
-            "post_process": {"validate_schema": "unknown_schema"},
-        }))
+        (defaults_dir / "test.yaml").write_text(
+            yaml.dump(
+                {
+                    "name": "test",
+                    "version": "1.0",
+                    "trigger": {"type": "api_call", "when": "test"},
+                    "system": "Content.",
+                    "user": "Test.",
+                    "post_process": {"validate_schema": "unknown_schema"},
+                }
+            )
+        )
 
         checker = PrincipleChecker(defaults_dir=defaults_dir)
         issues = checker.check_schema_coverage()
@@ -394,7 +437,8 @@ class TestPrincipleCheckerBuiltins:
         results = checker.check_all_templates()
         assert results["analyze_source"].is_pass is True
         contradiction_violations = [
-            v for v in results["analyze_source"].violations
+            v
+            for v in results["analyze_source"].violations
             if v.principle == "contradiction_detection"
         ]
         assert len(contradiction_violations) == 0
@@ -403,7 +447,8 @@ class TestPrincipleCheckerBuiltins:
         checker = PrincipleChecker()
         results = checker.check_all_templates()
         fabrication_violations = [
-            v for v in results["analyze_source"].violations
+            v
+            for v in results["analyze_source"].violations
             if v.principle == "fabrication_warning"
         ]
         assert len(fabrication_violations) == 0
@@ -412,7 +457,8 @@ class TestPrincipleCheckerBuiltins:
         checker = PrincipleChecker()
         results = checker.check_all_templates()
         obs_violations = [
-            v for v in results["wiki_synthesize"].violations
+            v
+            for v in results["wiki_synthesize"].violations
             if v.principle == "observational_language"
         ]
         assert len(obs_violations) == 0

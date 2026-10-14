@@ -166,7 +166,8 @@ class MaintenanceManager:
         )
         logger.info(
             "maintenance: started (%d auto_ingest watchers, %d gap fillers)",
-            len(self.auto_ingest_services), len(self.gap_fillers),
+            len(self.auto_ingest_services),
+            len(self.gap_fillers),
         )
 
     async def stop(self) -> None:
@@ -197,7 +198,8 @@ class MaintenanceManager:
         try:
             if self.config.auto_ingest.enabled:
                 service = AutoIngestService(
-                    wiki=wiki, wiki_id=wiki_id,
+                    wiki=wiki,
+                    wiki_id=wiki_id,
                     config=self.config.auto_ingest,
                     llm_semaphore=self.llm_semaphore,
                     loop=loop,
@@ -208,7 +210,8 @@ class MaintenanceManager:
                     self.auto_ingest_services[wiki_id] = service
             if self.config.gap_filler.enabled:
                 self.gap_fillers[wiki_id] = GapFiller(
-                    wiki=wiki, wiki_id=wiki_id,
+                    wiki=wiki,
+                    wiki_id=wiki_id,
                     config=self.config.gap_filler,
                     llm_semaphore=self.llm_semaphore,
                     proposal_manager=self._make_proposal_manager(wiki_id),
@@ -225,7 +228,9 @@ class MaintenanceManager:
                 await svc.stop()
             except Exception:
                 logger.warning(
-                    "maintenance: stop failed for wiki %s", wiki_id, exc_info=True,
+                    "maintenance: stop failed for wiki %s",
+                    wiki_id,
+                    exc_info=True,
                 )
         self.gap_fillers.pop(wiki_id, None)
 
@@ -281,20 +286,27 @@ class MaintenanceManager:
         for wiki_id, filler in list(self.gap_fillers.items()):
             try:
                 result = await filler.run_cycle()
-                self._health_history.append({
-                    "timestamp": time.time(),
-                    "type": "gaps",
-                    "wiki_id": wiki_id,
-                    **{
-                        k: getattr(result, k)
-                        for k in (
-                            "detected", "processed", "mechanical_fixes",
-                            "proposals_created", "errors",
-                        )
-                    },
-                })
+                self._health_history.append(
+                    {
+                        "timestamp": time.time(),
+                        "type": "gaps",
+                        "wiki_id": wiki_id,
+                        **{
+                            k: getattr(result, k)
+                            for k in (
+                                "detected",
+                                "processed",
+                                "mechanical_fixes",
+                                "proposals_created",
+                                "errors",
+                            )
+                        },
+                    }
+                )
             except Exception:
-                logger.warning("maintenance: gaps tick failed for %s", wiki_id, exc_info=True)
+                logger.warning(
+                    "maintenance: gaps tick failed for %s", wiki_id, exc_info=True
+                )
         self._trim_history()
 
     async def _lint_tick(self) -> None:
@@ -303,21 +315,25 @@ class MaintenanceManager:
         for wiki_id, wiki in self._local_wikis():
             try:
                 result = await asyncio.to_thread(
-                    wiki.lint, mode="check", limit=10,
+                    wiki.lint,
+                    mode="check",
+                    limit=10,
                 )
                 issue_count = result.get("issue_count", len(result.get("issues", [])))
-                hint_count = sum(
-                    len(v) for v in (result.get("hints") or {}).values()
+                hint_count = sum(len(v) for v in (result.get("hints") or {}).values())
+                self._health_history.append(
+                    {
+                        "timestamp": time.time(),
+                        "type": "lint",
+                        "wiki_id": wiki_id,
+                        "issue_count": issue_count,
+                        "hint_count": hint_count,
+                    }
                 )
-                self._health_history.append({
-                    "timestamp": time.time(),
-                    "type": "lint",
-                    "wiki_id": wiki_id,
-                    "issue_count": issue_count,
-                    "hint_count": hint_count,
-                })
             except Exception:
-                logger.warning("maintenance: lint tick failed for %s", wiki_id, exc_info=True)
+                logger.warning(
+                    "maintenance: lint tick failed for %s", wiki_id, exc_info=True
+                )
         self._trim_history()
 
     async def _db_tick(self) -> None:
@@ -326,7 +342,9 @@ class MaintenanceManager:
             try:
                 await asyncio.to_thread(self._maintain_db, wiki.db_path)
             except Exception:
-                logger.warning("maintenance: db tick failed for %s", wiki_id, exc_info=True)
+                logger.warning(
+                    "maintenance: db tick failed for %s", wiki_id, exc_info=True
+                )
         self._last_db_maintenance_at = time.time()
 
     @staticmethod
@@ -369,7 +387,8 @@ class MaintenanceManager:
             for wiki_id, wiki in self._local_wikis():
                 try:
                     db_results[wiki_id] = await asyncio.to_thread(
-                        self._maintain_db, wiki.db_path,
+                        self._maintain_db,
+                        wiki.db_path,
                     )
                 except Exception as exc:
                     db_results[wiki_id] = {"status": "error", "reason": str(exc)}
@@ -392,7 +411,8 @@ class MaintenanceManager:
                     wiki = self.registry.get_wiki(instance.wiki_id)
                 except Exception:
                     logger.warning(
-                        "maintenance: failed to load wiki %s", instance.wiki_id,
+                        "maintenance: failed to load wiki %s",
+                        instance.wiki_id,
                         exc_info=True,
                     )
                     continue
@@ -409,13 +429,28 @@ class MaintenanceManager:
 
     def status(self) -> dict[str, Any]:
         # Aggregate performance metrics from all auto_ingest services
-        total_ingested = sum(s.stats.get("ingested", 0) for s in self.auto_ingest_services.values())
-        total_written = sum(s.stats.get("pages_written", 0) for s in self.auto_ingest_services.values())
-        total_fallback = sum(s.stats.get("fallback_proposals", 0) for s in self.auto_ingest_services.values())
-        total_failed = sum(s.stats.get("failed", 0) for s in self.auto_ingest_services.values())
+        total_ingested = sum(
+            s.stats.get("ingested", 0) for s in self.auto_ingest_services.values()
+        )
+        total_written = sum(
+            s.stats.get("pages_written", 0) for s in self.auto_ingest_services.values()
+        )
+        total_fallback = sum(
+            s.stats.get("fallback_proposals", 0)
+            for s in self.auto_ingest_services.values()
+        )
+        total_failed = sum(
+            s.stats.get("failed", 0) for s in self.auto_ingest_services.values()
+        )
         llm_success_rate = (
-            round(total_written / max(total_written + total_fallback + total_failed, 1) * 100, 1)
-            if (total_written + total_fallback + total_failed) > 0 else None
+            round(
+                total_written
+                / max(total_written + total_fallback + total_failed, 1)
+                * 100,
+                1,
+            )
+            if (total_written + total_fallback + total_failed) > 0
+            else None
         )
         return {
             "running": self._running,

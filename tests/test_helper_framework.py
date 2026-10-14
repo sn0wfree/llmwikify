@@ -33,6 +33,7 @@ from llmwikify.interfaces.server.http._helpers import Helper, HelperContext
 
 # ─── Fixtures ──────────────────────────────────────────────────
 
+
 class SampleModel(BaseModel):
     message: str
     count: int = 0
@@ -54,6 +55,7 @@ def ctx(mock_request):
 
 
 # ─── __slots__ verification ────────────────────────────────────
+
 
 class TestSlots:
     """Verify __slots__ are defined on all framework classes."""
@@ -83,6 +85,7 @@ class TestSlots:
 
 # ─── ReadBodyHandler ───────────────────────────────────────────
 
+
 class TestReadBodyHandler:
 
     async def test_reads_body(self, ctx):
@@ -93,7 +96,9 @@ class TestReadBodyHandler:
     async def test_sets_metadata(self, ctx):
         handler = ReadBodyHandler()
         await handler.execute(ctx)
-        assert ctx.metadata["content_length"] == 33  # len(b'{"message": "hello", "count": 42}')
+        assert (
+            ctx.metadata["content_length"] == 33
+        )  # len(b'{"message": "hello", "count": 42}')
         assert ctx.metadata["content_type"] == "application/json"
 
     async def test_max_bytes_exceeded(self, ctx):
@@ -109,6 +114,7 @@ class TestReadBodyHandler:
 
 
 # ─── ParseJsonHandler ──────────────────────────────────────────
+
 
 class TestParseJsonHandler:
 
@@ -137,11 +143,14 @@ class TestParseJsonHandler:
 
 # ─── ParseFormHandler ──────────────────────────────────────────
 
+
 class TestParseFormHandler:
 
     async def test_parses_form(self, mock_request):
         # Mock form data
-        mock_request.form = AsyncMock(return_value={"field1": "value1", "field2": "value2"})
+        mock_request.form = AsyncMock(
+            return_value={"field1": "value1", "field2": "value2"}
+        )
         ctx = HelperContext(request=mock_request, model=SampleModel)
         handler = ParseFormHandler()
         await handler.execute(ctx)
@@ -149,6 +158,7 @@ class TestParseFormHandler:
 
 
 # ─── ValidateModelHandler ──────────────────────────────────────
+
 
 class TestValidateModelHandler:
 
@@ -170,6 +180,7 @@ class TestValidateModelHandler:
 
 # ─── LogHandler ────────────────────────────────────────────────
 
+
 class TestLogHandler:
 
     async def test_logs_parsed_info(self, ctx, caplog):
@@ -184,6 +195,7 @@ class TestLogHandler:
 
 
 # ─── Helper (full pipeline) ────────────────────────────────────
+
 
 class TestHelper:
 
@@ -250,11 +262,7 @@ class TestHelper:
 
     async def test_debug_disabled_by_default(self, mock_request, caplog):
         """debug=False (default) emits no debug logs."""
-        helper = (
-            Helper()
-            .add_handler(ReadBodyHandler())
-            .add_handler(ParseJsonHandler())
-        )
+        helper = Helper().add_handler(ReadBodyHandler()).add_handler(ParseJsonHandler())
         with caplog.at_level(logging.DEBUG):
             await helper.execute(mock_request, SampleModel)
         # No debug logs from Helper
@@ -275,6 +283,7 @@ class TestHelper:
 
 
 # ─── JsonBodyHelper (assembled in chat_sse.py) ─────────────────
+
 
 class TestJsonBodyHelper:
     """Test the assembled JsonBodyHelper (same as in chat_sse.py)."""

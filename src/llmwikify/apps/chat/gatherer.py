@@ -21,9 +21,11 @@ logger = logging.getLogger(__name__)
 # Shared context passed to every strategy
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class GatherContext:
     """Shared state for a single sub-query gather operation."""
+
     sq: dict[str, Any]
     seen_urls: set[str]
     session_id: str
@@ -33,6 +35,7 @@ class GatherContext:
 # ---------------------------------------------------------------------------
 # Strategy base class + 4 implementations
 # ---------------------------------------------------------------------------
+
 
 class SourceStrategy(ABC):
     """Base class for source-type gathering strategies."""
@@ -75,7 +78,9 @@ class WikiStrategy(SourceStrategy):
                 logger.warning("Wiki page read failed for %s: %s", page.get("name"), e)
 
         if ctx.events:
-            gatherer.session_manager.complete_sub_query(sq_id, {"sources_count": len(ctx.events)})
+            gatherer.session_manager.complete_sub_query(
+                sq_id, {"sources_count": len(ctx.events)}
+            )
         else:
             raise ValueError(f"No wiki pages found for: {query}")
 
@@ -97,12 +102,13 @@ class WebSearchStrategy(SourceStrategy):
         num_results = gatherer.config.get("web_search_results_per_query", 5)
 
         # Search for URLs
-        urls_to_fetch = await self._search_urls(gatherer, sq_id, source_type, query, num_results, ctx.seen_urls)
+        urls_to_fetch = await self._search_urls(
+            gatherer, sq_id, source_type, query, num_results, ctx.seen_urls
+        )
 
         # Parallel wiki search (web only)
-        do_parallel = (
-            source_type == "web"
-            and gatherer.config.get("parallel_wiki_search", True)
+        do_parallel = source_type == "web" and gatherer.config.get(
+            "parallel_wiki_search", True
         )
         wiki_pages: list[dict] = []
         if do_parallel:
@@ -113,14 +119,18 @@ class WebSearchStrategy(SourceStrategy):
 
         # Fetch web content
         if urls_to_fetch:
-            await self._fetch_web_content(gatherer, ctx, sq_id, source_type, query, urls_to_fetch)
+            await self._fetch_web_content(
+                gatherer, ctx, sq_id, source_type, query, urls_to_fetch
+            )
 
         # Gather local wiki results (parallel path)
         if do_parallel and wiki_pages:
             self._gather_wiki_pages(gatherer, ctx, sq_id, wiki_pages, query)
 
         if ctx.events:
-            gatherer.session_manager.complete_sub_query(sq_id, {"sources_count": len(ctx.events)})
+            gatherer.session_manager.complete_sub_query(
+                sq_id, {"sources_count": len(ctx.events)}
+            )
         else:
             raise ValueError(f"No results found for: {query}")
 
@@ -137,19 +147,30 @@ class WebSearchStrategy(SourceStrategy):
         from llmwikify.apps.research.web_search import WebSearch
 
         searcher = WebSearch(gatherer.config)
-        search_query = f"site:youtube.com {query}" if source_type == "youtube" else query
+        search_query = (
+            f"site:youtube.com {query}" if source_type == "youtube" else query
+        )
         logger.info(
             "Gather sub_query %s (%s): invoking WebSearch for %r (num_results=%d)",
-            sq_id, source_type, query, num_results,
+            sq_id,
+            source_type,
+            query,
+            num_results,
         )
         try:
             search_results = await asyncio.wait_for(
                 searcher.search(search_query, num_results=num_results),
                 timeout=15,
             )
-            logger.info("Gather sub_query %s: WebSearch returned %d results", sq_id, len(search_results))
+            logger.info(
+                "Gather sub_query %s: WebSearch returned %d results",
+                sq_id,
+                len(search_results),
+            )
         except asyncio.TimeoutError:
-            logger.warning("Gather sub_query %s: WebSearch timed out for %r", sq_id, query)
+            logger.warning(
+                "Gather sub_query %s: WebSearch timed out for %r", sq_id, query
+            )
             raise ValueError(f"Search timed out for: {query}") from None
 
         urls = []
@@ -159,7 +180,8 @@ class WebSearchStrategy(SourceStrategy):
         if not urls:
             logger.warning(
                 "Gather sub_query %s: WebSearch returned 0 new URLs for %r",
-                sq_id, query,
+                sq_id,
+                query,
             )
             raise ValueError(f"No new search results for: {query}")
         return urls
@@ -187,8 +209,10 @@ class WebSearchStrategy(SourceStrategy):
             content = str(content)[: gatherer._max_content]
             # Apply source filter
             source_candidate = {
-                "url": fetch_url, "content": content,
-                "source_type": source_type, "title": fetch_url,
+                "url": fetch_url,
+                "content": content,
+                "source_type": source_type,
+                "title": fetch_url,
             }
             kept, _ = gatherer._source_filter.filter_sources([source_candidate], query)
             if not kept:
@@ -218,7 +242,11 @@ class WebSearchStrategy(SourceStrategy):
                 content = content[: gatherer._max_content]
                 gatherer._add_source(ctx, sq_id, "wiki", wiki_url, page_name, content)
             except Exception as e:
-                logger.warning("Parallel wiki page read failed for %s: %s", page.get("page_name"), e)
+                logger.warning(
+                    "Parallel wiki page read failed for %s: %s",
+                    page.get("page_name"),
+                    e,
+                )
 
 
 class WebFetchStrategy(SourceStrategy):
@@ -258,19 +286,27 @@ class WebFetchStrategy(SourceStrategy):
                     continue
                 # Apply source filter
                 source_candidate = {
-                    "url": fetch_url, "content": content,
-                    "source_type": source_type, "title": fetch_url,
+                    "url": fetch_url,
+                    "content": content,
+                    "source_type": source_type,
+                    "title": fetch_url,
                 }
-                kept, _ = gatherer._source_filter.filter_sources([source_candidate], query)
+                kept, _ = gatherer._source_filter.filter_sources(
+                    [source_candidate], query
+                )
                 if not kept:
                     logger.debug("Source filtered out: %s", fetch_url)
                     continue
-                gatherer._add_source(ctx, sq_id, source_type, fetch_url, fetch_url, content)
+                gatherer._add_source(
+                    ctx, sq_id, source_type, fetch_url, fetch_url, content
+                )
             except Exception as e:
                 logger.warning("Fetch failed for %s: %s", fetch_url, e)
 
         if ctx.events:
-            gatherer.session_manager.complete_sub_query(sq_id, {"sources_count": len(ctx.events)})
+            gatherer.session_manager.complete_sub_query(
+                sq_id, {"sources_count": len(ctx.events)}
+            )
         else:
             raise ValueError(f"All fetches failed for: {query}")
 
@@ -286,6 +322,7 @@ _STRATEGIES: list[SourceStrategy] = [
 # ---------------------------------------------------------------------------
 # Main gatherer (orchestrator)
 # ---------------------------------------------------------------------------
+
 
 class SourceGatherer:
     """Gathers content from multiple sources in parallel."""
@@ -310,7 +347,7 @@ class SourceGatherer:
         url = url.rstrip("/").lower()
         for prefix in ("http://", "https://", "www."):
             if url.startswith(prefix):
-                url = url[len(prefix):]
+                url = url[len(prefix) :]
         return url
 
     def _add_source(
@@ -380,11 +417,24 @@ class SourceGatherer:
                     )
                 except asyncio.TimeoutError:
                     sq_id = sq.get("id", "?")
-                    logger.warning("Sub-query %s timed out after %ds", sq_id, per_query_timeout)
-                    self.session_manager.fail_sub_query(sq_id, f"Gathering timed out after {per_query_timeout}s")
-                    return [{"type": "sub_query_failed", "sub_query_id": sq_id, "error": f"Gathering timed out after {per_query_timeout}s"}]
+                    logger.warning(
+                        "Sub-query %s timed out after %ds", sq_id, per_query_timeout
+                    )
+                    self.session_manager.fail_sub_query(
+                        sq_id, f"Gathering timed out after {per_query_timeout}s"
+                    )
+                    return [
+                        {
+                            "type": "sub_query_failed",
+                            "sub_query_id": sq_id,
+                            "error": f"Gathering timed out after {per_query_timeout}s",
+                        }
+                    ]
 
-        tasks = {asyncio.create_task(process_one(sq), name=f"gather-{i}"): sq for i, sq in enumerate(sub_queries)}
+        tasks = {
+            asyncio.create_task(process_one(sq), name=f"gather-{i}"): sq
+            for i, sq in enumerate(sub_queries)
+        }
         total = len(tasks)
         done_count = 0
         threshold_reached = False
@@ -401,7 +451,10 @@ class SourceGatherer:
                 )
 
                 if not done:
-                    logger.warning("No tasks completed within timeout, cancelling %d remaining", len(pending))
+                    logger.warning(
+                        "No tasks completed within timeout, cancelling %d remaining",
+                        len(pending),
+                    )
                     for t in pending:
                         if not t.done():
                             t.exception()
@@ -416,7 +469,13 @@ class SourceGatherer:
                             events.extend(result)
                         done_count += 1
                     except Exception as e:
-                        events.append({"type": "sub_query_failed", "sub_query_id": sq.get("id", "?"), "error": str(e)})
+                        events.append(
+                            {
+                                "type": "sub_query_failed",
+                                "sub_query_id": sq.get("id", "?"),
+                                "error": str(e),
+                            }
+                        )
                         done_count += 1
 
                 progress_frac = done_count / total
@@ -427,39 +486,48 @@ class SourceGatherer:
                     last_grace_progress_ts = now
                     logger.info(
                         "Gathering threshold reached: %d/%d done (%.0f%%), grace %ds",
-                        done_count, total, progress_frac * 100, early_exit_grace,
+                        done_count,
+                        total,
+                        progress_frac * 100,
+                        early_exit_grace,
                     )
-                    events.append({
-                        "type": "progress",
-                        "phase": "gathering",
-                        "completed": done_count,
-                        "total": total,
-                        "in_grace": True,
-                        "grace_remaining_s": early_exit_grace,
-                        "message": (
-                            f"Threshold reached ({done_count}/{total}), "
-                            f"waiting up to {early_exit_grace}s for stragglers"
-                        ),
-                    })
-
-                if threshold_reached and pending:
-                    if now - last_grace_progress_ts >= GRACE_PROGRESS_INTERVAL:
-                        last_grace_progress_ts = now
-                        remaining = max(0.0, grace_deadline - now)
-                        events.append({
+                    events.append(
+                        {
                             "type": "progress",
                             "phase": "gathering",
                             "completed": done_count,
                             "total": total,
                             "in_grace": True,
-                            "grace_remaining_s": int(remaining),
+                            "grace_remaining_s": early_exit_grace,
                             "message": (
-                                f"Waiting for {len(pending)} straggler(s) — "
-                                f"{int(remaining)}s left"
+                                f"Threshold reached ({done_count}/{total}), "
+                                f"waiting up to {early_exit_grace}s for stragglers"
                             ),
-                        })
+                        }
+                    )
+
+                if threshold_reached and pending:
+                    if now - last_grace_progress_ts >= GRACE_PROGRESS_INTERVAL:
+                        last_grace_progress_ts = now
+                        remaining = max(0.0, grace_deadline - now)
+                        events.append(
+                            {
+                                "type": "progress",
+                                "phase": "gathering",
+                                "completed": done_count,
+                                "total": total,
+                                "in_grace": True,
+                                "grace_remaining_s": int(remaining),
+                                "message": (
+                                    f"Waiting for {len(pending)} straggler(s) — "
+                                    f"{int(remaining)}s left"
+                                ),
+                            }
+                        )
                     if now >= grace_deadline:
-                        logger.info("Grace expired, cancelling %d remaining tasks", len(pending))
+                        logger.info(
+                            "Grace expired, cancelling %d remaining tasks", len(pending)
+                        )
                         for t in pending:
                             if not t.done():
                                 t.exception()
@@ -482,7 +550,9 @@ class SourceGatherer:
 
         return events
 
-    async def _gather_one(self, sub_query: dict[str, Any], seen_urls: set[str]) -> list[dict[str, Any]]:
+    async def _gather_one(
+        self, sub_query: dict[str, Any], seen_urls: set[str]
+    ) -> list[dict[str, Any]]:
         """Gather content for a single sub-query using the selected strategy."""
         sq_id = sub_query["id"]
         session_id = self.session_manager.session_id
@@ -494,27 +564,33 @@ class SourceGatherer:
         except ValueError as e:
             logger.info("Sub-query %s: %s", sq_id, e)
             self.session_manager.fail_sub_query(sq_id, str(e))
-            ctx.events.append({
-                "type": "sub_query_failed",
-                "sub_query_id": sq_id,
-                "error": str(e),
-            })
+            ctx.events.append(
+                {
+                    "type": "sub_query_failed",
+                    "sub_query_id": sq_id,
+                    "error": str(e),
+                }
+            )
         except (OSError, ConnectionError) as e:
             logger.warning("Gather network error for %s: %s", sq_id, e)
             self.session_manager.fail_sub_query(sq_id, str(e))
-            ctx.events.append({
-                "type": "sub_query_failed",
-                "sub_query_id": sq_id,
-                "error": str(e),
-            })
+            ctx.events.append(
+                {
+                    "type": "sub_query_failed",
+                    "sub_query_id": sq_id,
+                    "error": str(e),
+                }
+            )
         except Exception:
             logger.exception("Unexpected error in gather for %s", sq_id)
             self.session_manager.fail_sub_query(sq_id, "internal error")
-            ctx.events.append({
-                "type": "sub_query_failed",
-                "sub_query_id": sq_id,
-                "error": "internal error",
-            })
+            ctx.events.append(
+                {
+                    "type": "sub_query_failed",
+                    "sub_query_id": sq_id,
+                    "error": "internal error",
+                }
+            )
 
         return ctx.events
 
@@ -527,26 +603,35 @@ class SourceGatherer:
             if source_type == "youtube":
                 result = extract_youtube(url)
                 if result.source_type == "error":
-                    raise ValueError(result.metadata.get("error", "YouTube extraction failed"))
+                    raise ValueError(
+                        result.metadata.get("error", "YouTube extraction failed")
+                    )
                 return result.text
             elif source_type == "pdf":
                 if url.startswith(("http://", "https://")):
                     result = extract_url(url)
                     if result.source_type == "error":
-                        raise ValueError(result.metadata.get("error", "PDF URL extraction failed"))
+                        raise ValueError(
+                            result.metadata.get("error", "PDF URL extraction failed")
+                        )
                     return result.text
                 else:
                     from pathlib import Path
 
                     from llmwikify.foundation.extractors.pdf import extract_pdf
+
                     result = extract_pdf(Path(url))
                 if result.source_type == "error":
-                    raise ValueError(result.metadata.get("error", "PDF extraction failed"))
+                    raise ValueError(
+                        result.metadata.get("error", "PDF extraction failed")
+                    )
                 return result.text
             elif source_type == "web":
                 result = extract_url(url)
                 if result.source_type == "error":
-                    raise ValueError(result.metadata.get("error", "Web extraction failed"))
+                    raise ValueError(
+                        result.metadata.get("error", "Web extraction failed")
+                    )
                 return result.text
             else:
                 raise ValueError(f"Unsupported source_type: {source_type}")
@@ -560,9 +645,15 @@ class SourceGatherer:
                 )
             except asyncio.TimeoutError:
                 last_error = f"Fetch timed out after {hard_timeout}s: {url}"
-                logger.debug("Attempt %d/%d timed out for %s", attempt + 1, max_attempts, url)
+                logger.debug(
+                    "Attempt %d/%d timed out for %s", attempt + 1, max_attempts, url
+                )
             except (ValueError, ConnectionError, OSError) as e:
                 last_error = str(e)
-                logger.debug("Attempt %d/%d failed for %s: %s", attempt + 1, max_attempts, url, e)
+                logger.debug(
+                    "Attempt %d/%d failed for %s: %s", attempt + 1, max_attempts, url, e
+                )
 
-        raise ValueError(last_error or f"Fetch failed after {max_attempts} attempts: {url}")
+        raise ValueError(
+            last_error or f"Fetch failed after {max_attempts} attempts: {url}"
+        )

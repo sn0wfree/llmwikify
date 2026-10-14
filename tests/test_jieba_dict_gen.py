@@ -4,7 +4,6 @@ import sqlite3
 import sys
 from pathlib import Path
 
-
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from llmwikify.kernel.storage.index import WikiIndex
@@ -31,11 +30,14 @@ class TestGenerateFastDict:
         db = temp_wiki / ".llm-wiki-kit.db"
         index = WikiIndex(db)
         index.initialize()
-        _seed_cjk_pages(index, [
-            ("p1", "# 资产配置\n\n资产配置原则与方法。", "p1.md"),
-            ("p2", "# 风险管理\n\n风险管理的重要性。", "p2.md"),
-            ("p3", "# 行业配置\n\n行业配置策略。", "p3.md"),
-        ])
+        _seed_cjk_pages(
+            index,
+            [
+                ("p1", "# 资产配置\n\n资产配置原则与方法。", "p1.md"),
+                ("p2", "# 风险管理\n\n风险管理的重要性。", "p2.md"),
+                ("p3", "# 行业配置\n\n行业配置策略。", "p3.md"),
+            ],
+        )
         index.close()
 
         out = temp_wiki / "test_dict.txt"
@@ -78,10 +80,13 @@ class TestGenerateSlowDict:
         db = temp_wiki / ".llm-wiki-kit.db"
         index = WikiIndex(db)
         index.initialize()
-        _seed_cjk_pages(index, [
-            ("a", "# 量化配置\n\n量化配置是资产配置的一种。", "a.md"),
-            ("b", "# 行业配置\n\n行业配置与量化配置相关。", "b.md"),
-        ])
+        _seed_cjk_pages(
+            index,
+            [
+                ("a", "# 量化配置\n\n量化配置是资产配置的一种。", "a.md"),
+                ("b", "# 行业配置\n\n行业配置与量化配置相关。", "b.md"),
+            ],
+        )
         index.close()
 
         out = temp_wiki / "test_pmi.txt"
@@ -96,10 +101,13 @@ class TestGenerateUserDict:
         db = temp_wiki / ".llm-wiki-kit.db"
         index = WikiIndex(db)
         index.initialize()
-        _seed_cjk_pages(index, [
-            ("p1", "# 量化配置\n\n资产配置与风险管理方法。", "p1.md"),
-            ("p2", "# 行业配置\n\n从风格到配置的演变。", "p2.md"),
-        ])
+        _seed_cjk_pages(
+            index,
+            [
+                ("p1", "# 量化配置\n\n资产配置与风险管理方法。", "p1.md"),
+                ("p2", "# 行业配置\n\n从风格到配置的演变。", "p2.md"),
+            ],
+        )
         index.close()
 
         result = generate_user_dict(db, temp_wiki)
@@ -128,6 +136,7 @@ class TestMergeCandidates:
 
     def test_merges_scored_terms(self):
         from collections import Counter
+
         freq = Counter({"测试": 10, "量化": 8, "配置": 3})
         tfidf = Counter({"量化": 5, "配置": 2})
         merged = _merge_candidates(freq, tfidf, top_n=10)
@@ -140,6 +149,7 @@ class TestMergeCandidates:
 
     def test_filters_short_words(self):
         from collections import Counter
+
         freq = Counter({"的": 100, "量": 5})
         tfidf = Counter()
         merged = _merge_candidates(freq, tfidf, top_n=10)

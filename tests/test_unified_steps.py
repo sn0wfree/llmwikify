@@ -1,4 +1,5 @@
 """Tests for unified/steps/ — 15 个预置 Steps 逐个测试。"""
+
 from __future__ import annotations
 
 import pytest
@@ -201,7 +202,9 @@ async def test_build_feedback_step_success():
 @pytest.mark.asyncio
 async def test_build_feedback_step_failure():
     step = BuildFeedbackStep()
-    cr = CodeExecResult(success=False, code="bad code", error="SyntaxError", error_kind="syntax_error")
+    cr = CodeExecResult(
+        success=False, code="bad code", error="SyntaxError", error_kind="syntax_error"
+    )
     result = await step.handle(cr, None, None)
     assert result.success is True
     assert isinstance(result.output, dict)

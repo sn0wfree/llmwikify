@@ -77,7 +77,9 @@ class TestResearchSkillMetadata:
 
     def test_3_actions(self) -> None:
         assert set(research_skill.actions.keys()) == {
-            "run_research", "resume_research", "cancel_research",
+            "run_research",
+            "resume_research",
+            "cancel_research",
         }
 
     def test_action_descriptions_non_empty(self) -> None:
@@ -86,8 +88,16 @@ class TestResearchSkillMetadata:
             assert a.input_schema["type"] == "object"
 
     def test_research_reason_prompt_mentions_actions(self) -> None:
-        for action in ("plan", "gather", "analyze", "synthesize",
-                       "score", "revise", "report", "done"):
+        for action in (
+            "plan",
+            "gather",
+            "analyze",
+            "synthesize",
+            "score",
+            "revise",
+            "report",
+            "done",
+        ):
             assert action in RESEARCH_REASON_PROMPT
 
 
@@ -97,7 +107,8 @@ class TestResearchSkillMetadata:
 class TestMakeResearchConfig:
     def test_returns_react_config(self, ctx: SkillContext) -> None:
         cfg = _make_research_config(
-            {"session_id": "s1", "query": "q"}, ctx,
+            {"session_id": "s1", "query": "q"},
+            ctx,
         )
         assert isinstance(cfg, ReactConfig)
 
@@ -106,37 +117,59 @@ class TestMakeResearchConfig:
         assert len(cfg.actions) == 7
         names = sorted(a.name for a in cfg.actions)
         assert names == [
-            "analyze", "gather", "plan", "report",
-            "revise", "score", "synthesize",
+            "analyze",
+            "gather",
+            "plan",
+            "report",
+            "revise",
+            "score",
+            "synthesize",
         ]
 
     def test_initial_state_has_15_plus_fields(self, ctx: SkillContext) -> None:
         cfg = _make_research_config(
-            {"session_id": "s1", "query": "test"}, ctx,
+            {"session_id": "s1", "query": "test"},
+            ctx,
         )
         state = cfg.initial_state
         # 15+ ResearchState fields (per design spec)
         expected_fields = {
-            "session_id", "query", "round", "max_rounds", "max_replan",
-            "phase", "sub_queries", "sources", "synthesis", "report_md",
-            "review", "knowledge_gaps", "contradictions", "issues",
-            "observations", "cancelled", "paused", "budget_remaining",
+            "session_id",
+            "query",
+            "round",
+            "max_rounds",
+            "max_replan",
+            "phase",
+            "sub_queries",
+            "sources",
+            "synthesis",
+            "report_md",
+            "review",
+            "knowledge_gaps",
+            "contradictions",
+            "issues",
+            "observations",
+            "cancelled",
+            "paused",
+            "budget_remaining",
             "_last_thought",
         }
-        assert expected_fields.issubset(set(state.keys())), (
-            f"missing: {expected_fields - set(state.keys())}"
-        )
+        assert expected_fields.issubset(
+            set(state.keys())
+        ), f"missing: {expected_fields - set(state.keys())}"
 
     def test_max_rounds_override(self, ctx: SkillContext) -> None:
         cfg = _make_research_config(
-            {"session_id": "s1", "query": "q", "max_rounds": 3}, ctx,
+            {"session_id": "s1", "query": "q", "max_rounds": 3},
+            ctx,
         )
         assert cfg.max_rounds == 3
         assert cfg.initial_state["max_rounds"] == 3
 
     def test_gate_min_sources_override(self, ctx: SkillContext) -> None:
         cfg = _make_research_config(
-            {"session_id": "s1", "query": "q", "gate_min_sources": 5}, ctx,
+            {"session_id": "s1", "query": "q", "gate_min_sources": 5},
+            ctx,
         )
         # Verify the override is captured in the initial state via gate config
         assert cfg.initial_state["max_replan"] == 2  # default
@@ -215,11 +248,13 @@ class TestHookFactories:
 
     def test_persist_state_with_mock_db(self) -> None:
         saved: list[tuple] = []
+
         def _save(*args, **kwargs):
             sid = kwargs.get("session_id", args[0] if args else None)
             step = kwargs.get("step_num", args[1] if len(args) > 1 else None)
             state = kwargs.get("state", args[2] if len(args) > 2 else None)
             saved.append((sid, step, state))
+
         mock_db = _make_mock_db(save_research_state=_save)
         hook = _make_persist_state(mock_db)
         state = {"session_id": "x", "phase": "gathering"}
@@ -266,15 +301,19 @@ def _make_mock_db(**methods):
     methods via a proper class with ``*args, **kwargs`` avoids
     both pitfalls.
     """
+
     class _Mock:
         pass
+
     for name, fn in methods.items():
         # Wrap in a normal method (no self-binding surprise,
         # accepts both positional and keyword args).
         def make_handler(_fn):
             def handler(self, *args, **kwargs):
                 return _fn(*args, **kwargs)
+
             return handler
+
         setattr(_Mock, name, make_handler(fn))
     return _Mock()
 
@@ -321,18 +360,26 @@ class TestActHandlers:
         assert state["analysis"]["_source_count"] == 0
 
     def test_analyze_with_synthetic_source(self, ctx: SkillContext) -> None:
-        state: dict = {"sources": [
-            {"url": "https://x", "title": "x", "source_type": "web"},
-        ]}
+        state: dict = {
+            "sources": [
+                {"url": "https://x", "title": "x", "source_type": "web"},
+            ]
+        }
         r = asyncio.run(_act_analyze(state, ctx))
         assert r.status == "ok"
         assert state["sources"][0]["analysis"]["entities"] == []
 
     def test_synthesize_uses_summarize_skill(self, ctx: SkillContext) -> None:
-        state: dict = {"sources": [
-            {"url": "x", "title": "x", "source_type": "web",
-             "analysis": {"entities": ["e1"]}},
-        ]}
+        state: dict = {
+            "sources": [
+                {
+                    "url": "x",
+                    "title": "x",
+                    "source_type": "web",
+                    "analysis": {"entities": ["e1"]},
+                },
+            ]
+        }
         r = asyncio.run(_act_synthesize(state, ctx))
         assert r.status == "ok"
         assert state["synthesis"]["claims"]
@@ -352,7 +399,8 @@ class TestActHandlers:
 
     def test_revise_skipped_for_high_score(self, ctx: SkillContext) -> None:
         state: dict = {
-            "score": 0.9, "synthesis": {"narrative": "good"},
+            "score": 0.9,
+            "synthesis": {"narrative": "good"},
         }
         r = asyncio.run(_act_revise(state, ctx))
         assert r.status == "ok"
@@ -360,7 +408,8 @@ class TestActHandlers:
 
     def test_revise_applied_for_low_score(self, ctx: SkillContext) -> None:
         state: dict = {
-            "score": 0.3, "synthesis": {"narrative": "raw"},
+            "score": 0.3,
+            "synthesis": {"narrative": "raw"},
         }
         r = asyncio.run(_act_revise(state, ctx))
         assert r.status == "ok"
@@ -371,9 +420,13 @@ class TestActHandlers:
         state: dict = {
             "query": "Test Q",
             "sources": [{"url": "u1", "title": "T1"}],
-            "synthesis": {"narrative": "syn-text", "claims": [
-                {"text": "claim-1"}, {"text": "claim-2"},
-            ]},
+            "synthesis": {
+                "narrative": "syn-text",
+                "claims": [
+                    {"text": "claim-1"},
+                    {"text": "claim-2"},
+                ],
+            },
             "knowledge_gaps": ["gap1"],
         }
         r = asyncio.run(_act_report(state, ctx))
@@ -396,7 +449,8 @@ class TestRunResearch:
         self, ctx: SkillContext, populated_registry: SkillRegistry
     ) -> None:
         r = await run_research(
-            {"session_id": "s1", "query": "What is X?"}, ctx,
+            {"session_id": "s1", "query": "What is X?"},
+            ctx,
         )
         assert r.status == "ok"
         d = r.data
@@ -411,7 +465,8 @@ class TestRunResearch:
         self, ctx: SkillContext, populated_registry: SkillRegistry
     ) -> None:
         r = await run_research(
-            {"session_id": "s1", "query": "What is X?"}, ctx,
+            {"session_id": "s1", "query": "What is X?"},
+            ctx,
         )
         # We expect 5 reasoning events: plan, gather, analyze,
         # synthesize, report (then done)
@@ -428,7 +483,8 @@ class TestRunResearch:
         self, ctx: SkillContext, populated_registry: SkillRegistry
     ) -> None:
         r = await run_research(
-            {"session_id": "s1", "query": "What is X?"}, ctx,
+            {"session_id": "s1", "query": "What is X?"},
+            ctx,
         )
         report = r.data["report_md"] or ""
         assert len(report) > 50
@@ -440,7 +496,8 @@ class TestRunResearch:
         self, ctx: SkillContext, populated_registry: SkillRegistry
     ) -> None:
         r = await run_research(
-            {"session_id": "s1", "query": "What is X?"}, ctx,
+            {"session_id": "s1", "query": "What is X?"},
+            ctx,
         )
         phase_events = [e for e in r.data["events"] if e["type"] == EVENT_PHASE]
         assert len(phase_events) >= 1
@@ -455,6 +512,7 @@ class TestPersistenceIntegration:
     async def test_run_research_persists_steps(self) -> None:
         """Every round persists the state via db.save_research_state."""
         from llmwikify.apps.chat.db import ChatDatabase
+
         with tempfile.TemporaryDirectory() as tmp:
             db = ChatDatabase(tmp)
             sid = db.create_research_session("wiki-1", "test q")
@@ -463,7 +521,8 @@ class TestPersistenceIntegration:
             register_all_actions(reg)
             reg.register(research_skill)
             r = await run_research(
-                {"session_id": sid, "query": "test q"}, ctx,
+                {"session_id": sid, "query": "test q"},
+                ctx,
             )
             assert r.status == "ok"
             # Verify steps were persisted
@@ -478,6 +537,7 @@ class TestPersistenceIntegration:
     @pytest.mark.asyncio
     async def test_resume_loads_last_step(self) -> None:
         from llmwikify.apps.chat.db import ChatDatabase
+
         with tempfile.TemporaryDirectory() as tmp:
             db = ChatDatabase(tmp)
             sid = db.create_research_session("wiki-1", "test q")
@@ -487,13 +547,15 @@ class TestPersistenceIntegration:
             reg.register(research_skill)
             # First run
             r1 = await run_research(
-                {"session_id": sid, "query": "test q"}, ctx,
+                {"session_id": sid, "query": "test q"},
+                ctx,
             )
             assert r1.status == "ok"
             steps_before = len(db.list_steps(sid))
             # Resume (no-op in offline mode, but should not crash)
             r2 = await resume_research(
-                {"session_id": sid, "query": "test q"}, ctx,
+                {"session_id": sid, "query": "test q"},
+                ctx,
             )
             assert r2.status == "ok"
 
@@ -510,6 +572,7 @@ class TestCancelResearch:
     @pytest.mark.asyncio
     async def test_cancel_no_session_id(self, ctx: SkillContext) -> None:
         from llmwikify.apps.chat.db import ChatDatabase
+
         with tempfile.TemporaryDirectory() as tmp:
             db = ChatDatabase(tmp)
             ctx = SkillContext(db=db)
@@ -519,6 +582,7 @@ class TestCancelResearch:
     @pytest.mark.asyncio
     async def test_cancel_marks_session_cancelling(self) -> None:
         from llmwikify.apps.chat.db import ChatDatabase
+
         with tempfile.TemporaryDirectory() as tmp:
             db = ChatDatabase(tmp)
             sid = db.create_research_session("wiki-1", "q")
@@ -534,6 +598,7 @@ class TestCancelResearch:
         """Integration: cancel + run_research should set
         state['cancelled'] = True (via on_before_act hook)."""
         from llmwikify.apps.chat.db import ChatDatabase
+
         with tempfile.TemporaryDirectory() as tmp:
             db = ChatDatabase(tmp)
             sid = db.create_research_session("wiki-1", "q")
@@ -543,7 +608,8 @@ class TestCancelResearch:
             register_all_actions(reg)
             reg.register(research_skill)
             r = await run_research(
-                {"session_id": sid, "query": "q"}, ctx,
+                {"session_id": sid, "query": "q"},
+                ctx,
             )
             assert r.data["cancelled"] is True
 
@@ -565,20 +631,23 @@ class TestEdgeCases:
         to subsequent tests (Skill class actions are shared).
         """
         from llmwikify.apps.chat.skills.actions import plan_skill
+
         original_handler = plan_skill.actions["plan"].handler
         try:
+
             async def broken_handler(args, c):
                 raise ValueError("simulated LLM failure")
+
             # Mutate the SHARED class-level actions dict briefly.
             plan_skill.actions["plan"].handler = broken_handler
             r = await run_research(
-                {"session_id": "s1", "query": "q"}, ctx,
+                {"session_id": "s1", "query": "q"},
+                ctx,
             )
             # The loop should still complete (max_rounds=5)
             assert r.status == "ok"
             # An action_error event was emitted
-            errs = [e for e in r.data["events"]
-                    if e["type"] == EVENT_ACTION_ERROR]
+            errs = [e for e in r.data["events"] if e["type"] == EVENT_ACTION_ERROR]
             assert len(errs) >= 1
             assert "simulated LLM failure" in errs[0]["error"]
         finally:
@@ -591,7 +660,8 @@ class TestEdgeCases:
         self, ctx: SkillContext, populated_registry: SkillRegistry
     ) -> None:
         r = await run_research(
-            {"session_id": "s1", "query": ""}, ctx,
+            {"session_id": "s1", "query": ""},
+            ctx,
         )
         # The plan step will fail (missing query), but the
         # loop should still complete via max_rounds.
@@ -602,7 +672,8 @@ class TestEdgeCases:
         self, ctx: SkillContext, populated_registry: SkillRegistry
     ) -> None:
         r = await run_research(
-            {"session_id": "s1", "query": "q", "max_rounds": 2}, ctx,
+            {"session_id": "s1", "query": "q", "max_rounds": 2},
+            ctx,
         )
         # At most 2 round_complete events
         rc = [e for e in r.data["events"] if e["type"] == EVENT_ROUND_COMPLETE]
@@ -621,10 +692,13 @@ class TestResearchSkillActionHandlers:
         self, ctx: SkillContext, populated_registry: SkillRegistry
     ) -> None:
         from llmwikify.apps.chat.skills import SkillRuntime
+
         rt = SkillRuntime(populated_registry)
         r = await rt.execute(
-            "research", "run_research",
-            {"session_id": "s1", "query": "q"}, ctx,
+            "research",
+            "run_research",
+            {"session_id": "s1", "query": "q"},
+            ctx,
         )
         assert r.status == "ok"
         assert r.data["report_md"]
@@ -634,10 +708,13 @@ class TestResearchSkillActionHandlers:
         self, ctx: SkillContext, populated_registry: SkillRegistry
     ) -> None:
         from llmwikify.apps.chat.skills import SkillRuntime
+
         rt = SkillRuntime(populated_registry)
         r = await rt.execute(
-            "research", "resume_research",
-            {"session_id": "s1", "query": "q"}, ctx,
+            "research",
+            "resume_research",
+            {"session_id": "s1", "query": "q"},
+            ctx,
         )
         assert r.status == "ok"
 
@@ -647,14 +724,17 @@ class TestResearchSkillActionHandlers:
     ) -> None:
         from llmwikify.apps.chat.db import ChatDatabase
         from llmwikify.apps.chat.skills import SkillRuntime
+
         with tempfile.TemporaryDirectory() as tmp:
             db = ChatDatabase(tmp)
             sid = db.create_research_session("w1", "q")
             ctx = SkillContext(db=db)
             rt = SkillRuntime(populated_registry)
             r = await rt.execute(
-                "research", "cancel_research",
-                {"session_id": sid}, ctx,
+                "research",
+                "cancel_research",
+                {"session_id": sid},
+                ctx,
             )
             assert r.status == "ok"
             assert db.get_research_session(sid)["status"] == "cancelling"

@@ -30,7 +30,9 @@ class TestSectionAnchors:
         The target page must have named sections (## headings) for
         section-level linking to work.
         """
-        wiki.write_page("python-style", """
+        wiki.write_page(
+            "python-style",
+            """
 # Python Style Guide
 
 ## Overview
@@ -38,7 +40,8 @@ Python emphasizes code readability.
 
 ## Naming
 Use `snake_case` for functions.
-""")
+""",
+        )
 
         result = wiki.read_page("python-style")
         assert "Naming" in result.get("content", "")
@@ -58,12 +61,15 @@ Use `snake_case` for functions.
         Returns list of links pointing to this page, including which
         section is targeted.
         """
-        wiki.write_page("python-style", """
+        wiki.write_page(
+            "python-style",
+            """
 # Python Style
 
 ## Naming
 Use snake_case.
-""")
+""",
+        )
         wiki.write_page("notes", "# Notes\n\nSee [[python-style#Naming]].")
         wiki.build_index()
 
@@ -75,12 +81,15 @@ Use snake_case.
 
         Returns list of links FROM this page, including target section.
         """
-        wiki.write_page("python-style", """
+        wiki.write_page(
+            "python-style",
+            """
 # Python Style
 
 ## Naming
 Use snake_case.
-""")
+""",
+        )
         wiki.write_page("notes", "# Notes\n\nSee [[python-style#Naming]].")
         wiki.build_index()
 
@@ -94,12 +103,15 @@ Use snake_case.
         include_context=True returns the sentence/paragraph around
         each link for disambiguation.
         """
-        wiki.write_page("python-style", """
+        wiki.write_page(
+            "python-style",
+            """
 # Python Style
 
 ## Naming
 Use snake_case.
-""")
+""",
+        )
         wiki.write_page(
             "notes",
             "# Notes\n\nFor variable names, follow [[python-style#Naming]] rules.",

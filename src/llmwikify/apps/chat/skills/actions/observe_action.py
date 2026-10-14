@@ -43,18 +43,18 @@ def _observe_research_state(state: dict) -> list[str]:
     # 1. Source count by type
     if sources:
         type_counts = Counter(s.get("source_type", "unknown") for s in sources)
-        type_summary = ", ".join(
-            f"{t}={c}" for t, c in sorted(type_counts.items())
-        )
+        type_summary = ", ".join(f"{t}={c}" for t, c in sorted(type_counts.items()))
         observations.append(f"Source types: {type_summary} (total {len(sources)})")
 
     # 2. Failed sub-queries
-    failed = [sq for sq in sub_queries if isinstance(sq, dict) and sq.get("status") == "failed"]
+    failed = [
+        sq
+        for sq in sub_queries
+        if isinstance(sq, dict) and sq.get("status") == "failed"
+    ]
     if failed:
         titles = [sq.get("query", "?")[:40] for sq in failed[:3]]
-        observations.append(
-            f"⚠ {len(failed)} sub-queries failed: {titles}"
-        )
+        observations.append(f"⚠ {len(failed)} sub-queries failed: {titles}")
 
     # 3. Wiki vs web ratio
     wiki_count = sum(1 for s in sources if s.get("source_type") == "wiki")

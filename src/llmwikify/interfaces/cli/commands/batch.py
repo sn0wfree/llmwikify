@@ -68,14 +68,18 @@ def run_batch(wiki: Any, args: Any) -> int:
             stderr_print("\n[DRY RUN] LLM self-create mode requested.")
             stderr_print("Remove --dry-run to execute LLM processing.")
         else:
-            stderr_print("\nNo pages will be created. Use --self-create for LLM-assisted processing.")
+            stderr_print(
+                "\nNo pages will be created. Use --self-create for LLM-assisted processing."
+            )
         batch_results = []
         for source in sources:
-            batch_results.append({
-                "source": str(source),
-                "status": "dry_run",
-                "title": source.stem,
-            })
+            batch_results.append(
+                {
+                    "source": str(source),
+                    "status": "dry_run",
+                    "title": source.stem,
+                }
+            )
         output = {
             "batch_summary": {
                 "total": len(sources),
@@ -102,64 +106,78 @@ def run_batch(wiki: Any, args: Any) -> int:
         if "error" in result:
             print_error_stderr(f"Error: {result['error']}")
             failed += 1
-            batch_results.append({
-                "source": str(source),
-                "status": "error",
-                "error": result["error"],
-            })
+            batch_results.append(
+                {
+                    "source": str(source),
+                    "status": "error",
+                    "error": result["error"],
+                }
+            )
         else:
-            print_success_stderr(result['title'])
+            print_success_stderr(result["title"])
             if self_create:
                 try:
                     ops_result = wiki._llm_process_source(result)
                     ops = ops_result.get("operations", [])
                     if ops:
                         exec_result = wiki.execute_operations(ops)
-                        stderr_print(f"    → {exec_result['operations_executed']} operations executed")
-                        batch_results.append({
-                            "source": str(source),
-                            "status": "processed",
-                            "title": result.get("title", ""),
-                            "source_name": result.get("source_name", ""),
-                            "operations_executed": exec_result.get("operations_executed", 0),
-                        })
+                        stderr_print(
+                            f"    → {exec_result['operations_executed']} operations executed"
+                        )
+                        batch_results.append(
+                            {
+                                "source": str(source),
+                                "status": "processed",
+                                "title": result.get("title", ""),
+                                "source_name": result.get("source_name", ""),
+                                "operations_executed": exec_result.get(
+                                    "operations_executed", 0
+                                ),
+                            }
+                        )
                     else:
                         stderr_print("    → No operations planned by LLM")
-                        batch_results.append({
-                            "source": str(source),
-                            "status": "no_operations",
-                            "title": result.get("title", ""),
-                            "source_name": result.get("source_name", ""),
-                        })
+                        batch_results.append(
+                            {
+                                "source": str(source),
+                                "status": "no_operations",
+                                "title": result.get("title", ""),
+                                "source_name": result.get("source_name", ""),
+                            }
+                        )
                 except (ConnectionError, TimeoutError, RuntimeError, OSError) as e:
                     print_warning_stderr(f"LLM processing skipped: {e}")
-                    batch_results.append({
-                        "source": str(source),
-                        "status": "llm_failed",
-                        "title": result.get("title", ""),
-                        "source_name": result.get("source_name", ""),
-                        "error": str(e),
-                    })
+                    batch_results.append(
+                        {
+                            "source": str(source),
+                            "status": "llm_failed",
+                            "title": result.get("title", ""),
+                            "source_name": result.get("source_name", ""),
+                            "error": str(e),
+                        }
+                    )
             else:
-                batch_results.append({
-                    "source_name": result.get("source_name", ""),
-                    "source_raw_path": result.get("source_raw_path", ""),
-                    "source_type": result.get("source_type", ""),
-                    "file_type": result.get("file_type", ""),
-                    "title": result.get("title", ""),
-                    "content": result.get("content", ""),
-                    "content_length": result.get("content_length", 0),
-                    "content_preview": result.get("content_preview", ""),
-                    "word_count": result.get("word_count", 0),
-                    "file_size": result.get("file_size", 0),
-                    "has_images": result.get("has_images", False),
-                    "image_count": result.get("image_count", 0),
-                    "saved_to_raw": result.get("saved_to_raw", False),
-                    "already_exists": result.get("already_exists", False),
-                    "hint": result.get("hint", ""),
-                    "instructions": result.get("instructions", ""),
-                    "status": "extracted",
-                })
+                batch_results.append(
+                    {
+                        "source_name": result.get("source_name", ""),
+                        "source_raw_path": result.get("source_raw_path", ""),
+                        "source_type": result.get("source_type", ""),
+                        "file_type": result.get("file_type", ""),
+                        "title": result.get("title", ""),
+                        "content": result.get("content", ""),
+                        "content_length": result.get("content_length", 0),
+                        "content_preview": result.get("content_preview", ""),
+                        "word_count": result.get("word_count", 0),
+                        "file_size": result.get("file_size", 0),
+                        "has_images": result.get("has_images", False),
+                        "image_count": result.get("image_count", 0),
+                        "saved_to_raw": result.get("saved_to_raw", False),
+                        "already_exists": result.get("already_exists", False),
+                        "hint": result.get("hint", ""),
+                        "instructions": result.get("instructions", ""),
+                        "status": "extracted",
+                    }
+                )
             success += 1
 
     if not self_create:
@@ -193,10 +211,24 @@ class BatchCommand(Command):
             raise TypeError("setup_parser requires an argparse subparsers action")
         p = subparsers.add_parser(self.name, help=self.help)
         p.add_argument("source", help="Directory or glob pattern")
-        p.add_argument("--limit", "-l", type=int, default=0, help="Limit number of sources")
-        p.add_argument("--self-create", "-s", action="store_true", help="CLI uses LLM API to automatically process content and create wiki pages")
-        p.add_argument("--smart", action="store_true", help="[Deprecated] Alias for --self-create")
-        p.add_argument("--dry-run", "-n", action="store_true", help="Preview extraction without creating pages")
+        p.add_argument(
+            "--limit", "-l", type=int, default=0, help="Limit number of sources"
+        )
+        p.add_argument(
+            "--self-create",
+            "-s",
+            action="store_true",
+            help="CLI uses LLM API to automatically process content and create wiki pages",
+        )
+        p.add_argument(
+            "--smart", action="store_true", help="[Deprecated] Alias for --self-create"
+        )
+        p.add_argument(
+            "--dry-run",
+            "-n",
+            action="store_true",
+            help="Preview extraction without creating pages",
+        )
 
     def run(self, args: Any, wiki: Any, config: dict) -> int:
         return run_batch(wiki, args)

@@ -72,11 +72,13 @@ def chat_client(tmp_path, monkeypatch):
     wiki.init()
     monkeypatch.setenv("HOME", str(tmp_path))
     mock_provider = MagicMock()
+
     # Provide an async astream_chat so the chat loop can stream
     # something instead of hitting the real provider.
     async def _fake_astream(*args, **kwargs):
         yield {"type": "content", "text": "Hello from mock LLM!"}
         yield {"type": "done", "content": "Hello from mock LLM!"}
+
     mock_provider.astream_chat = _fake_astream
     monkeypatch.setattr(
         "llmwikify.apps.wiki.service.WikiService.get_llm",
@@ -133,9 +135,7 @@ def test_chat_persists_messages_to_db(chat_client):
         ev["session_id"] for ev in events if ev.get("type") == "session_created"
     )
 
-    msgs_resp = chat_client.get(
-        f"/api/agent/sessions/{session_id}/messages"
-    )
+    msgs_resp = chat_client.get(f"/api/agent/sessions/{session_id}/messages")
     msgs = msgs_resp.json().get("messages", [])
 
     assert len(msgs) >= 2, f"Expected >=2 messages, got {len(msgs)}"
@@ -165,9 +165,9 @@ def test_chat_calls_llm(chat_client):
 
     events = _parse_sse(body)
     deltas = [ev for ev in events if ev.get("type") == "message_delta"]
-    assert any("mock LLM" in ev.get("content", "") for ev in deltas), (
-        f"No message_delta contained mock LLM content; got: {deltas}"
-    )
+    assert any(
+        "mock LLM" in ev.get("content", "") for ev in deltas
+    ), f"No message_delta contained mock LLM content; got: {deltas}"
 
 
 def test_chat_handles_follow_up_message(chat_client):
@@ -194,9 +194,7 @@ def test_chat_handles_follow_up_message(chat_client):
     assert "message_delta" in types2
     assert "done" in types2
 
-    msgs_resp = chat_client.get(
-        f"/api/agent/sessions/{session_id}/messages"
-    )
+    msgs_resp = chat_client.get(f"/api/agent/sessions/{session_id}/messages")
     msgs = msgs_resp.json().get("messages", [])
     assert len(msgs) >= 4  # 2 user + 2 assistant
     contents = [m["content"] for m in msgs if m["role"] == "user"]

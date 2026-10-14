@@ -58,15 +58,19 @@ def test_config_defaults_when_file_missing(tmp_path: Path):
 
 def test_config_parses_full_section(tmp_path: Path):
     path = tmp_path / "llmwikify.json"
-    path.write_text(json.dumps({
-        "llm": {"provider": "x"},
-        "maintenance": {
-            "enabled": False,
-            "auto_ingest": {"enabled": False, "write_mode": "proposal"},
-            "gap_filler": {"max_per_cycle": 2, "min_priority": 50},
-            "gaps_interval_seconds": 3600,
-        },
-    }))
+    path.write_text(
+        json.dumps(
+            {
+                "llm": {"provider": "x"},
+                "maintenance": {
+                    "enabled": False,
+                    "auto_ingest": {"enabled": False, "write_mode": "proposal"},
+                    "gap_filler": {"max_per_cycle": 2, "min_priority": 50},
+                    "gaps_interval_seconds": 3600,
+                },
+            }
+        )
+    )
     cfg = load_maintenance_config(path)
     assert cfg.enabled is False
     assert cfg.auto_ingest.enabled is False
@@ -164,10 +168,20 @@ def test_trigger_unknown_task():
 
 
 def test_sync_wikis_adds_new_wiki():
-    instances = [WikiInstance(wiki_id="a", name="a", wiki_type=WikiType.LOCAL, root=Path("/tmp/a"))]
-    wikis = {"a": SimpleNamespace(root=Path("/tmp/a"), raw_dir=Path("/tmp/a/raw"),
-            db_path=Path("/tmp/a/.llmwikify.db"), lint=lambda **kw: {"issue_count": 0},
-            config={"llm": {"enabled": False}})}
+    instances = [
+        WikiInstance(
+            wiki_id="a", name="a", wiki_type=WikiType.LOCAL, root=Path("/tmp/a")
+        )
+    ]
+    wikis = {
+        "a": SimpleNamespace(
+            root=Path("/tmp/a"),
+            raw_dir=Path("/tmp/a/raw"),
+            db_path=Path("/tmp/a/.llmwikify.db"),
+            lint=lambda **kw: {"issue_count": 0},
+            config={"llm": {"enabled": False}},
+        )
+    }
 
     def list_wikis():
         return instances
@@ -185,10 +199,18 @@ def test_sync_wikis_adds_new_wiki():
         await mgr.start()
         assert "a" not in mgr.gap_fillers  # gap disabled, so nothing to add
         # now add a new wiki to the registry
-        instances.append(WikiInstance(wiki_id="b", name="b", wiki_type=WikiType.LOCAL, root=Path("/tmp/b")))
-        wikis["b"] = SimpleNamespace(root=Path("/tmp/b"), raw_dir=Path("/tmp/b/raw"),
-                db_path=Path("/tmp/b/.llmwikify.db"), lint=lambda **kw: {"issue_count": 0},
-                config={"llm": {"enabled": False}})
+        instances.append(
+            WikiInstance(
+                wiki_id="b", name="b", wiki_type=WikiType.LOCAL, root=Path("/tmp/b")
+            )
+        )
+        wikis["b"] = SimpleNamespace(
+            root=Path("/tmp/b"),
+            raw_dir=Path("/tmp/b/raw"),
+            db_path=Path("/tmp/b/.llmwikify.db"),
+            lint=lambda **kw: {"issue_count": 0},
+            config={"llm": {"enabled": False}},
+        )
         cfg.gap_filler.enabled = True
         await mgr._sync_wikis()
         assert "b" in mgr.gap_fillers  # discovered and added
@@ -201,19 +223,32 @@ def test_sync_wikis_removes_vanished_wiki():
     from llmwikify.kernel.multi_wiki.instance import WikiInstance, WikiType
 
     instances = [
-        WikiInstance(wiki_id="a", name="a", wiki_type=WikiType.LOCAL, root=Path("/tmp/a")),
-        WikiInstance(wiki_id="b", name="b", wiki_type=WikiType.LOCAL, root=Path("/tmp/b")),
+        WikiInstance(
+            wiki_id="a", name="a", wiki_type=WikiType.LOCAL, root=Path("/tmp/a")
+        ),
+        WikiInstance(
+            wiki_id="b", name="b", wiki_type=WikiType.LOCAL, root=Path("/tmp/b")
+        ),
     ]
     wikis = {
-        "a": SimpleNamespace(root=Path("/tmp/a"), raw_dir=Path("/tmp/a/raw"),
-            db_path=Path("/tmp/a/.llmwikify.db"), lint=lambda **kw: {"issue_count": 0},
-            config={"llm": {"enabled": False}}),
-        "b": SimpleNamespace(root=Path("/tmp/b"), raw_dir=Path("/tmp/b/raw"),
-            db_path=Path("/tmp/b/.llmwikify.db"), lint=lambda **kw: {"issue_count": 0},
-            config={"llm": {"enabled": False}}),
+        "a": SimpleNamespace(
+            root=Path("/tmp/a"),
+            raw_dir=Path("/tmp/a/raw"),
+            db_path=Path("/tmp/a/.llmwikify.db"),
+            lint=lambda **kw: {"issue_count": 0},
+            config={"llm": {"enabled": False}},
+        ),
+        "b": SimpleNamespace(
+            root=Path("/tmp/b"),
+            raw_dir=Path("/tmp/b/raw"),
+            db_path=Path("/tmp/b/.llmwikify.db"),
+            lint=lambda **kw: {"issue_count": 0},
+            config={"llm": {"enabled": False}},
+        ),
     }
     registry = SimpleNamespace(
-        list_wikis=lambda: instances, get_wiki=lambda wid: wikis.get(wid))
+        list_wikis=lambda: instances, get_wiki=lambda wid: wikis.get(wid)
+    )
     cfg = MaintenanceConfig()
     cfg.auto_ingest.enabled = False
     mgr = MaintenanceManager(registry=registry, config=cfg)
@@ -234,13 +269,21 @@ def test_lint_tick_records_to_health_history():
     from llmwikify.kernel.multi_wiki.instance import WikiInstance, WikiType
 
     wiki = SimpleNamespace(
-        root=Path("/tmp/x"), raw_dir=Path("/tmp/x/raw"),
+        root=Path("/tmp/x"),
+        raw_dir=Path("/tmp/x/raw"),
         db_path=Path("/tmp/x/.llmwikify.db"),
         config={"llm": {"enabled": False}},
-        lint=lambda **kw: {"issue_count": 2, "hints": {"critical": ["a"], "informational": ["b"]}},
+        lint=lambda **kw: {
+            "issue_count": 2,
+            "hints": {"critical": ["a"], "informational": ["b"]},
+        },
     )
     registry = SimpleNamespace(
-        list_wikis=lambda: [WikiInstance(wiki_id="x", name="x", wiki_type=WikiType.LOCAL, root=Path("/tmp/x"))],
+        list_wikis=lambda: [
+            WikiInstance(
+                wiki_id="x", name="x", wiki_type=WikiType.LOCAL, root=Path("/tmp/x")
+            )
+        ],
         get_wiki=lambda wid: wiki,
     )
     cfg = MaintenanceConfig()

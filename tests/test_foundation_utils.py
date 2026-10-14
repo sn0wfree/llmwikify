@@ -1,4 +1,5 @@
 """Tests for foundation.utils — shared utility functions."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -117,7 +118,11 @@ class TestMaskApiKey:
 
     def test_preserves_other_fields(self) -> None:
         """Other fields are preserved."""
-        config = {"api_key": "sk-1234567890abcdef", "provider": "openai", "model": "gpt-4"}
+        config = {
+            "api_key": "sk-1234567890abcdef",
+            "provider": "openai",
+            "model": "gpt-4",
+        }
         result = mask_api_key(config)
         assert result["provider"] == "openai"
         assert result["model"] == "gpt-4"

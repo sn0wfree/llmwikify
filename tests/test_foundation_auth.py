@@ -146,7 +146,9 @@ class TestPAT:
 class TestJWT:
     def test_basic_roundtrip(self):
         secret = b"x" * 32
-        c = TokenClaims.new(sub="user:abc", scope="write", wikis=["main"], ttl_seconds=60)
+        c = TokenClaims.new(
+            sub="user:abc", scope="write", wikis=["main"], ttl_seconds=60
+        )
         token = encode(c, secret)
         c2 = decode(token, secret)
         assert c2.sub == "user:abc"
@@ -169,7 +171,9 @@ class TestJWT:
         import jwt as pyjwt
 
         secret = b"x" * 32
-        c = TokenClaims(sub="user:abc", scope="read", wikis=["*"], exp=int(time.time()) - 1, iat=0)
+        c = TokenClaims(
+            sub="user:abc", scope="read", wikis=["*"], exp=int(time.time()) - 1, iat=0
+        )
         token = encode(c, secret)
         with pytest.raises(pyjwt.ExpiredSignatureError):
             decode(token, secret)
@@ -406,6 +410,7 @@ class TestJWTSecretFilePermissions:
         from llmwikify.foundation.auth._keyring import (
             _check_secret_file_permissions,
         )
+
         p = self._create_file(tmp_path, 0o600)
         assert _check_secret_file_permissions(p) is True
 
@@ -417,6 +422,7 @@ class TestJWTSecretFilePermissions:
         from llmwikify.foundation.auth._keyring import (
             _check_secret_file_permissions,
         )
+
         p = self._create_file(tmp_path, 0o400)
         assert _check_secret_file_permissions(p) is True
 
@@ -428,6 +434,7 @@ class TestJWTSecretFilePermissions:
         from llmwikify.foundation.auth._keyring import (
             _check_secret_file_permissions,
         )
+
         monkeypatch.delenv("LLMWIKIFY_SECRET_STRICT", raising=False)
         p = self._create_file(tmp_path, 0o644)
         assert _check_secret_file_permissions(p) is False
@@ -440,6 +447,7 @@ class TestJWTSecretFilePermissions:
         from llmwikify.foundation.auth._keyring import (
             _check_secret_file_permissions,
         )
+
         monkeypatch.delenv("LLMWIKIFY_SECRET_STRICT", raising=False)
         p = self._create_file(tmp_path, 0o640)
         assert _check_secret_file_permissions(p) is False
@@ -452,6 +460,7 @@ class TestJWTSecretFilePermissions:
         from llmwikify.foundation.auth._keyring import (
             _check_secret_file_permissions,
         )
+
         monkeypatch.delenv("LLMWIKIFY_SECRET_STRICT", raising=False)
         p = self._create_file(tmp_path, 0o660)
         assert _check_secret_file_permissions(p) is False
@@ -465,6 +474,7 @@ class TestJWTSecretFilePermissions:
         from llmwikify.foundation.auth._keyring import (
             _check_secret_file_permissions,
         )
+
         monkeypatch.setenv("LLMWIKIFY_SECRET_STRICT", "1")
         p = self._create_file(tmp_path, 0o644)
         with pytest.raises(AuthError) as exc_info:
@@ -479,6 +489,7 @@ class TestJWTSecretFilePermissions:
         from llmwikify.foundation.auth._keyring import (
             _check_secret_file_permissions,
         )
+
         monkeypatch.setenv("LLMWIKIFY_SECRET_STRICT", "1")
         p = self._create_file(tmp_path, 0o600)
         assert _check_secret_file_permissions(p) is True
@@ -504,6 +515,7 @@ class TestJWTSecretFilePermissions:
     )
     def test_strict_mode_env_parsing(self, monkeypatch, val, expected):
         from llmwikify.foundation.auth._keyring import _strict_mode_enabled
+
         if val == "":
             monkeypatch.delenv("LLMWIKIFY_SECRET_STRICT", raising=False)
         else:
@@ -518,6 +530,7 @@ class TestJWTSecretFilePermissions:
     )
     def test_write_file_applies_strict_perms(self, tmp_path, monkeypatch):
         import llmwikify.foundation.auth._keyring as _keyring
+
         secret_file = tmp_path / "jwt_secret"
         original = _keyring._SECRET_FILE
         try:
@@ -543,6 +556,7 @@ class TestJWTSecretFilePermissions:
         import logging
 
         import llmwikify.foundation.auth._keyring as _keyring
+
         secret_file = tmp_path / "jwt_secret"
         # write valid hex content matching a 32-byte secret
         secret_file.write_text((b"\xaa" * 32).hex(), encoding="utf-8")
@@ -551,7 +565,9 @@ class TestJWTSecretFilePermissions:
         original = _keyring._SECRET_FILE
         try:
             _keyring._SECRET_FILE = secret_file
-            with caplog.at_level(logging.WARNING, logger="llmwikify.foundation.auth._keyring"):
+            with caplog.at_level(
+                logging.WARNING, logger="llmwikify.foundation.auth._keyring"
+            ):
                 secret = _keyring._read_file_secret()
             assert secret == b"\xaa" * 32
             assert any(
@@ -571,6 +587,7 @@ class TestJWTSecretFilePermissions:
     ):
         import llmwikify.foundation.auth._keyring as _keyring
         from llmwikify.foundation.auth._errors import AuthError
+
         secret_file = tmp_path / "jwt_secret"
         secret_file.write_text((b"\xaa" * 32).hex(), encoding="utf-8")
         os.chmod(secret_file, 0o644)

@@ -48,9 +48,11 @@ def __getattr__(name: str):
     """
     if name == "LLMClient":
         from ..llm_client import LLMClient
+
         return LLMClient
     if name == "StreamableLLMClient":
         from .streamable import StreamableLLMClient
+
         return StreamableLLMClient
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 

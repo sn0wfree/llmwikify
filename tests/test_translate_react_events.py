@@ -17,11 +17,15 @@ from llmwikify.apps.chat.agent.research_bridge import translate_react_events
 def _make_state(**overrides):
     """Minimal mock state object with get-attr and get-item access."""
     data = {"round": 4, "max_rounds": 15, "phase": "synthesizing", **overrides}
-    return type("State", (), {
-        "__getattr__": lambda self, k: data.get(k, 0),
-        "__getitem__": lambda self, k: data[k],
-        "get": lambda self, k, d=None: data.get(k, d),
-    })()
+    return type(
+        "State",
+        (),
+        {
+            "__getattr__": lambda self, k: data.get(k, 0),
+            "__getitem__": lambda self, k: data[k],
+            "get": lambda self, k, d=None: data.get(k, d),
+        },
+    )()
 
 
 async def _collect(ait):

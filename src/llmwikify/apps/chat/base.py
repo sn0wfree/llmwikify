@@ -47,6 +47,7 @@ an ``AsyncIterator[str]`` of the assistant's reply.
 The class makes it trivial for tests to swap in a fake LLM
 client.
 """
+
 from __future__ import annotations
 
 import json
@@ -133,11 +134,11 @@ class ChatBase:
         self._default_system_prompt = system_prompt
         # Phase 10: skill integration
         self.skill_registry = (
-            skill_registry if skill_registry is not None
-            else default_registry()
+            skill_registry if skill_registry is not None else default_registry()
         )
         self.skill_runtime = (
-            skill_runtime if skill_runtime is not None
+            skill_runtime
+            if skill_runtime is not None
             else SkillRuntime(self.skill_registry)
         )
 
@@ -164,7 +165,9 @@ class ChatBase:
             count += len(skill.actions)
         return count
 
-    def tools_schema(self, *, registry: SkillRegistry | None = None) -> list[dict[str, Any]]:
+    def tools_schema(
+        self, *, registry: SkillRegistry | None = None
+    ) -> list[dict[str, Any]]:
         """Generate the OpenAI function-calling schema for all skills.
 
         Returns a list of tool descriptors in the OpenAI
@@ -176,18 +179,23 @@ class ChatBase:
         out: list[dict[str, Any]] = []
         for skill in reg:
             for action in skill.actions.values():
-                out.append({
-                    "type": "function",
-                    "function": {
-                        "name": f"{skill.name}.{action.name}",
-                        "description": action.description,
-                        "parameters": action.input_schema,
-                    },
-                })
+                out.append(
+                    {
+                        "type": "function",
+                        "function": {
+                            "name": f"{skill.name}.{action.name}",
+                            "description": action.description,
+                            "parameters": action.input_schema,
+                        },
+                    }
+                )
         return out
 
     async def ainvoke_tool(
-        self, tool_name: str, args: dict[str, Any], ctx: SkillContext | None = None,
+        self,
+        tool_name: str,
+        args: dict[str, Any],
+        ctx: SkillContext | None = None,
     ) -> SkillResult:
         """Async variant of ``invoke_tool``. Use this from within
         an async context (e.g. ``astream``)."""
@@ -205,7 +213,10 @@ class ChatBase:
                 f"Action {action_name!r} not found on skill {skill_name!r}"
             )
         return await self.skill_runtime.execute(
-            skill_name, action_name, args, ctx,
+            skill_name,
+            action_name,
+            args,
+            ctx,
         )
 
     async def astream(
@@ -333,9 +344,12 @@ class ChatBase:
                             args = {"raw": raw_args}
                     else:
                         args = raw_args
-                    iter_tool_calls.append({
-                        "name": tool_name, "args": args,
-                    })
+                    iter_tool_calls.append(
+                        {
+                            "name": tool_name,
+                            "args": args,
+                        }
+                    )
                     # If a custom invoke_tool callback was
                     # provided, it's expected to emit
                     # ``tool_call_start`` itself. Only emit from
@@ -347,11 +361,13 @@ class ChatBase:
                             "tool": tool_name,
                             "args": args,
                         }
-                    await emit({
-                        "type": "tool_call_start",
-                        "tool": tool_name,
-                        "args": args,
-                    })
+                    await emit(
+                        {
+                            "type": "tool_call_start",
+                            "tool": tool_name,
+                            "args": args,
+                        }
+                    )
                 elif kind == "done":
                     final = ev.get("content", accumulated)
                     break
@@ -367,9 +383,12 @@ class ChatBase:
                 for call in iter_tool_calls:
                     name = call["name"]
                     args = call["args"]
-                    invocations.append({
-                        "tool": name, "args": args,
-                    })
+                    invocations.append(
+                        {
+                            "tool": name,
+                            "args": args,
+                        }
+                    )
                     try:
                         result = await tool_caller(name, args)
                     except Exception as exc:  # noqa: BLE001
@@ -379,13 +398,17 @@ class ChatBase:
                     invocations[-1]["status"] = "done"
                     # Append a tool result message so the LLM
                     # sees it on the next iteration.
-                    messages.append({
-                        "role": "tool",
-                        "name": name,
-                        "content": json.dumps(
-                            result, ensure_ascii=False, default=str,
-                        ),
-                    })
+                    messages.append(
+                        {
+                            "role": "tool",
+                            "name": name,
+                            "content": json.dumps(
+                                result,
+                                ensure_ascii=False,
+                                default=str,
+                            ),
+                        }
+                    )
                     # If a custom invoke_tool was provided, it's
                     # expected to emit ``tool_call_end`` itself.
                     if invoke_tool is None:
@@ -394,11 +417,13 @@ class ChatBase:
                             "tool": name,
                             "result": result,
                         }
-                    await emit({
-                        "type": "tool_call_end",
-                        "tool": name,
-                        "result": result,
-                    })
+                    await emit(
+                        {
+                            "type": "tool_call_end",
+                            "tool": name,
+                            "result": result,
+                        }
+                    )
 
                 # If a tool returned confirmation_required, stop
                 # the loop — the caller will resume via
@@ -406,8 +431,7 @@ class ChatBase:
                 last = invocations[-1]
                 if (
                     isinstance(last.get("result"), dict)
-                    and last["result"].get("status")
-                    == "confirmation_required"
+                    and last["result"].get("status") == "confirmation_required"
                 ):
                     return
 
@@ -461,7 +485,8 @@ class ChatBase:
         """
         if hasattr(self.llm_client, "astream_chat"):
             async for ev in self.llm_client.astream_chat(
-                messages, tools=tools,
+                messages,
+                tools=tools,
             ):
                 async for transformed in self._stream_preprocess(ev):
                     yield transformed
@@ -480,11 +505,13 @@ class ChatBase:
                 yield transformed
         for call in tool_calls:
             fn = call.get("function", {}) if isinstance(call, dict) else {}
-            async for transformed in self._stream_preprocess({
-                "type": "tool_call",
-                "tool": fn.get("name", ""),
-                "args": fn.get("arguments", "{}"),
-            }):
+            async for transformed in self._stream_preprocess(
+                {
+                    "type": "tool_call",
+                    "tool": fn.get("name", ""),
+                    "args": fn.get("arguments", "{}"),
+                }
+            ):
                 yield transformed
         async for transformed in self._stream_preprocess(
             {"type": "done", "content": content}
@@ -540,14 +567,16 @@ class ChatBase:
             else:
                 fn = getattr(tc, "function", None)
                 if fn is not None:
-                    out_calls.append({
-                        "id": getattr(tc, "id", ""),
-                        "type": "function",
-                        "function": {
-                            "name": getattr(fn, "name", ""),
-                            "arguments": getattr(fn, "arguments", "{}"),
-                        },
-                    })
+                    out_calls.append(
+                        {
+                            "id": getattr(tc, "id", ""),
+                            "type": "function",
+                            "function": {
+                                "name": getattr(fn, "name", ""),
+                                "arguments": getattr(fn, "arguments", "{}"),
+                            },
+                        }
+                    )
         return str(content), out_calls
 
 

@@ -34,7 +34,7 @@ class QueryPageOverlapRule(Rule):
 
         query_pages = []
         for page in wiki.wiki_dir.rglob("*.md"):
-            if '.sink' in str(page):
+            if ".sink" in str(page):
                 continue
             if is_path_excluded(page):
                 continue
@@ -49,11 +49,13 @@ class QueryPageOverlapRule(Rule):
             }
 
             if keywords:
-                query_pages.append({
-                    "page_name": page_name,
-                    "keywords": keywords,
-                    "file": str(page),
-                })
+                query_pages.append(
+                    {
+                        "page_name": page_name,
+                        "keywords": keywords,
+                        "file": str(page),
+                    }
+                )
 
         results: list[dict[str, Any]] = []
         seen_pairs = set()
@@ -74,17 +76,21 @@ class QueryPageOverlapRule(Rule):
                     pair_key = tuple(sorted([p1["page_name"], p2["page_name"]]))
                     if pair_key not in seen_pairs:
                         seen_pairs.add(pair_key)
-                        results.append({
-                            "type": self.name,
-                            "page_a": p1["page_name"],
-                            "page_b": p2["page_name"],
-                            "jaccard_score": round(jaccard, 3),
-                            "shared_keywords": sorted(p1["keywords"] & p2["keywords"]),
-                            "observation": (
-                                f"'{p1['page_name']}' and '{p2['page_name']}' share {len(p1['keywords'] & p2['keywords'])} keywords "
-                                f"(Jaccard: {jaccard:.0%}). They may cover overlapping topics."
-                            ),
-                        })
+                        results.append(
+                            {
+                                "type": self.name,
+                                "page_a": p1["page_name"],
+                                "page_b": p2["page_name"],
+                                "jaccard_score": round(jaccard, 3),
+                                "shared_keywords": sorted(
+                                    p1["keywords"] & p2["keywords"]
+                                ),
+                                "observation": (
+                                    f"'{p1['page_name']}' and '{p2['page_name']}' share {len(p1['keywords'] & p2['keywords'])} keywords "
+                                    f"(Jaccard: {jaccard:.0%}). They may cover overlapping topics."
+                                ),
+                            }
+                        )
 
             if len(results) >= self.max_results:
                 break

@@ -14,7 +14,9 @@ def _extract_pdf(path: Path) -> ExtractedContent:
             text="",
             source_type="error",
             title=path.stem,
-            metadata={"error": "pymupdf not installed. Install with: pip install pymupdf"}
+            metadata={
+                "error": "pymupdf not installed. Install with: pip install pymupdf"
+            },
         )
 
     with pymupdf.open(path) as doc:
@@ -31,9 +33,9 @@ def _extract_pdf(path: Path) -> ExtractedContent:
     # Try to extract title from first page
     first_page_title = ""
     if pages:
-        first_lines = pages[0].split('\n')[:5]
+        first_lines = pages[0].split("\n")[:5]
         for line in first_lines:
-            if line.strip() and not line.startswith('---'):
+            if line.strip() and not line.startswith("---"):
                 first_page_title = line.strip()
                 break
 

@@ -37,15 +37,20 @@ async def _extract(args: dict, ctx: SkillContext) -> SkillResult:
     # YouTube
     if "youtube.com" in url_or_path or "youtu.be" in url_or_path:
         from llmwikify.foundation.extractors.youtube import extract_youtube
-        return safe_call(extract_youtube, url_or_path, error_prefix="youtube extract failed")
+
+        return safe_call(
+            extract_youtube, url_or_path, error_prefix="youtube extract failed"
+        )
 
     # HTTP(S) URL
     if url_or_path.startswith(("http://", "https://")):
         from llmwikify.foundation.extractors.web import extract_web
+
         return safe_call(extract_web, url_or_path, error_prefix="web extract failed")
 
     # Local file
     from llmwikify.foundation.extractors.file import extract_file
+
     return safe_call(extract_file, url_or_path, error_prefix="file extract failed")
 
 

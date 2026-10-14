@@ -9,6 +9,7 @@ Covers:
   - codegen_pipeline: CodegenReasoner / CodeActor / generate_factor_code (async + sync)
   - steps: 15 Step classes instantiate and have handle()
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -104,6 +105,7 @@ class TestUnifiedContext:
     def test_elapsed_sec(self):
         ctx = UnifiedContext(spec=BaseSpec(messages=[]))
         import time
+
         time.sleep(0.01)
         assert ctx.elapsed_sec >= 0.01
 
@@ -137,6 +139,7 @@ class TestPipeline:
             class DoubleStep(StepHandler):
                 async def handle(self, input, spec, ctx):
                     return StepResult.ok(input * 2)
+
             p = Pipeline(DoubleStep(), DoubleStep())
             return await p.handle(3, None, None)
 
@@ -149,6 +152,7 @@ class TestPipeline:
             class FailStep(StepHandler):
                 async def handle(self, input, spec, ctx):
                     return StepResult.fail("boom")
+
             p = Pipeline(FailStep(), FailStep())
             return await p.handle(0, None, None)
 
@@ -161,18 +165,22 @@ class TestMaybeAwait:
     def test_sync_callable(self):
         async def run():
             return await _maybe_await(lambda x: x * 2, 3)
+
         assert asyncio.run(run()) == 6
 
     def test_async_callable(self):
         async def afn(x):
             return x + 1
+
         async def run():
             return await _maybe_await(afn, 5)
+
         assert asyncio.run(run()) == 6
 
     def test_value(self):
         async def run():
             return await _maybe_await(42)
+
         assert asyncio.run(run()) == 42
 
 
@@ -186,13 +194,17 @@ class TestSpec:
         assert spec.temperature == 0.3
 
     def test_codegen_spec(self):
-        spec = CodegenSpec(messages=[], factor_name="alpha-001", formula_brief="rank(volume)")
+        spec = CodegenSpec(
+            messages=[], factor_name="alpha-001", formula_brief="rank(volume)"
+        )
         assert spec.df is None
         assert spec.factor_name == "alpha-001"
         assert spec.max_repair_rounds == 3
 
     def test_unified_result_to_dict(self):
-        r = UnifiedResult(code="x = 1", stop_reason="completed", iterations=2, elapsed_sec=1.5)
+        r = UnifiedResult(
+            code="x = 1", stop_reason="completed", iterations=2, elapsed_sec=1.5
+        )
         d = r.to_dict()
         assert d["code"] == "x = 1"
         assert d["is_valid"] is True
@@ -242,7 +254,9 @@ class TestUnifiedAgentLoop:
         async def run():
             class AlwaysEmptyReasoner(StepHandler):
                 async def handle(self, input, spec, ctx):
-                    return StepResult.ok(ReasonResponse(raw_content="", code=None, is_valid=False))
+                    return StepResult.ok(
+                        ReasonResponse(raw_content="", code=None, is_valid=False)
+                    )
 
             class AlwaysFailActor(StepHandler):
                 async def handle(self, input, spec, ctx):
@@ -252,7 +266,9 @@ class TestUnifiedAgentLoop:
                 reasoner=AlwaysEmptyReasoner(),
                 actor=AlwaysFailActor(),
             )
-            return await loop.run_to_completion(CodegenSpec(messages=[], max_iterations=2))
+            return await loop.run_to_completion(
+                CodegenSpec(messages=[], max_iterations=2)
+            )
 
         result = asyncio.run(run())
         # Loop runs max_iterations=2 times then breaks
@@ -263,23 +279,26 @@ class TestUnifiedAgentLoop:
 
 
 class TestSteps:
-    @pytest.mark.parametrize("cls,args", [
-        (CheckFieldStep, {"field": "success"}),
-        (CheckEmptyStep, {"field": "tool_calls"}),
-        (CheckSuccessStep, {}),
-        (CheckToolCallsStep, {}),
-        (ExtractCodeStep, {}),
-        (ValidateSyntaxStep, {}),
-        (ValidateSafetyStep, {}),
-        (ExecuteCodeStep, {}),
-        (ValidateAndExecuteStep, {}),
-        (LLMCallStep, {"llm_client": None}),
-        (ExtractJSONStep, {}),
-        (BuildFeedbackStep, {}),
-        (TruncateStep, {}),
-        (MapStep, {"fn": lambda x: x}),
-        (WrapStep, {"cls": dict}),
-    ])
+    @pytest.mark.parametrize(
+        "cls,args",
+        [
+            (CheckFieldStep, {"field": "success"}),
+            (CheckEmptyStep, {"field": "tool_calls"}),
+            (CheckSuccessStep, {}),
+            (CheckToolCallsStep, {}),
+            (ExtractCodeStep, {}),
+            (ValidateSyntaxStep, {}),
+            (ValidateSafetyStep, {}),
+            (ExecuteCodeStep, {}),
+            (ValidateAndExecuteStep, {}),
+            (LLMCallStep, {"llm_client": None}),
+            (ExtractJSONStep, {}),
+            (BuildFeedbackStep, {}),
+            (TruncateStep, {}),
+            (MapStep, {"fn": lambda x: x}),
+            (WrapStep, {"cls": dict}),
+        ],
+    )
     def test_step_has_handle(self, cls, args):
         step = cls(**args)
         assert hasattr(step, "handle")
@@ -289,12 +308,14 @@ class TestSteps:
     def test_extract_code_step_no_fence(self):
         async def run():
             return await ExtractCodeStep().handle("no code here", None, None)
+
         result = asyncio.run(run())
         assert not result.success
 
     def test_extract_code_step_with_fence(self):
         async def run():
             return await ExtractCodeStep().handle("```python\nx = 1\n```", None, None)
+
         result = asyncio.run(run())
         assert result.success
         assert "x = 1" in result.output
@@ -312,12 +333,14 @@ class TestSteps:
     def test_check_success_step(self):
         async def run():
             return await CheckSuccessStep().handle(ActResult(success=True), None, None)
+
         result = asyncio.run(run())
         assert result.output == (True, "success")
 
     def test_map_step(self):
         async def run():
             return await MapStep(lambda x: x * 2).handle(5, None, None)
+
         assert asyncio.run(run()).output == 10
 
 
@@ -337,21 +360,28 @@ class TestCodegenPipeline:
 
     def test_generate_factor_code_sync(self):
         import polars as pl
+
         df = pl.DataFrame({"x": [1, 2, 3]})
         result = generate_factor_code_sync(
-            "test-factor", "return df['x'] * 2", df,
+            "test-factor",
+            "return df['x'] * 2",
+            df,
         )
         # Without LLM, it should fail gracefully
         assert result.stop_reason in ("error", "completed", "success")
 
     def test_generate_factor_code_async(self):
         import polars as pl
+
         df = pl.DataFrame({"x": [1, 2, 3]})
 
         async def run():
             return await generate_factor_code(
-                "test-factor", "return df['x'] * 2", df,
+                "test-factor",
+                "return df['x'] * 2",
+                df,
             )
+
         result = asyncio.run(run())
         assert result.stop_reason in ("error", "completed", "success")
 
@@ -378,9 +408,27 @@ def test_all_15_steps_exported():
         ValidateSyntaxStep,
         WrapStep,
     )
-    assert len([
-        BuildFeedbackStep, CheckEmptyStep, CheckFieldStep, CheckSuccessStep,
-        CheckToolCallsStep, CodeExecResult, ExecuteCodeStep, ExtractCodeStep,
-        ExtractJSONStep, LLMCallStep, MapStep, TruncateStep,
-        ValidateAndExecuteStep, ValidateSafetyStep, ValidateSyntaxStep, WrapStep,
-    ]) == 16  # 15 Step classes + 1 dataclass (CodeExecResult)
+
+    assert (
+        len(
+            [
+                BuildFeedbackStep,
+                CheckEmptyStep,
+                CheckFieldStep,
+                CheckSuccessStep,
+                CheckToolCallsStep,
+                CodeExecResult,
+                ExecuteCodeStep,
+                ExtractCodeStep,
+                ExtractJSONStep,
+                LLMCallStep,
+                MapStep,
+                TruncateStep,
+                ValidateAndExecuteStep,
+                ValidateSafetyStep,
+                ValidateSyntaxStep,
+                WrapStep,
+            ]
+        )
+        == 16
+    )  # 15 Step classes + 1 dataclass (CodeExecResult)

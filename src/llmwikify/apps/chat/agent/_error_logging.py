@@ -56,8 +56,10 @@ def log_exception_returning(
         def _get_items(self):
             ...
     """
+
     def decorator(fn: F) -> F:
         if inspect.iscoroutinefunction(fn):
+
             @functools.wraps(fn)
             async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
                 try:
@@ -65,8 +67,10 @@ def log_exception_returning(
                 except Exception as e:
                     _log(fn, msg, e, log_level)
                     return default
+
             return async_wrapper  # type: ignore[return-value]
         else:
+
             @functools.wraps(fn)
             def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
                 try:
@@ -74,7 +78,9 @@ def log_exception_returning(
                 except Exception as e:
                     _log(fn, msg, e, log_level)
                     return default
+
             return sync_wrapper  # type: ignore[return-value]
+
     return decorator
 
 
@@ -84,4 +90,3 @@ def _log(fn: Callable, msg: str | None, exc: Exception, level: int) -> None:
         logger.log(level, "%s: %s", msg, exc, exc_info=True)
     else:
         logger.log(level, "%s: %s", fn.__name__, exc, exc_info=True)
-

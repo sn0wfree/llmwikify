@@ -1,6 +1,5 @@
 """Tests for multi-wiki management system (Phase 1)."""
 
-
 import pytest
 
 from llmwikify.kernel.multi_wiki.discovery import WikiDiscovery

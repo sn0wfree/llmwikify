@@ -20,7 +20,7 @@ from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
-sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from llmwikify.interfaces.cli import WikiCLI
 
@@ -44,9 +44,9 @@ class TestInitCommand:
 
         result = cli.init(args)
         assert result == 0
-        assert (temp_wiki / 'wiki.md').exists()
-        assert (temp_wiki / 'wiki').exists()
-        assert (temp_wiki / 'raw').exists()
+        assert (temp_wiki / "wiki.md").exists()
+        assert (temp_wiki / "wiki").exists()
+        assert (temp_wiki / "raw").exists()
 
     def test_init_already_exists(self, temp_wiki):
         """init should handle already initialized wiki."""
@@ -60,10 +60,10 @@ class TestInitCommand:
         cli.init(args)
 
         stdout = StringIO()
-        with patch('sys.stdout', stdout):
+        with patch("sys.stdout", stdout):
             result = cli.init(args)
         assert result == 0
-        assert 'already' in stdout.getvalue().lower()
+        assert "already" in stdout.getvalue().lower()
 
     def test_init_with_overwrite(self, temp_wiki):
         """init --overwrite should recreate wiki."""
@@ -86,8 +86,8 @@ class TestInitCommand:
 class TestIngestCommand:
     def test_ingest_without_self_create_outputs_json(self, temp_wiki):
         """ingest without --self-create should output JSON."""
-        (temp_wiki / 'raw').mkdir(exist_ok=True)
-        test_file = temp_wiki / 'raw' / 'test.md'
+        (temp_wiki / "raw").mkdir(exist_ok=True)
+        test_file = temp_wiki / "raw" / "test.md"
         test_file.write_text("# Test Document\n\nContent here")
 
         cli = WikiCLI(temp_wiki)
@@ -101,20 +101,20 @@ class TestIngestCommand:
 
         stdout = StringIO()
         stderr = StringIO()
-        with patch('sys.stdout', stdout), patch('sys.stderr', stderr):
+        with patch("sys.stdout", stdout), patch("sys.stderr", stderr):
             result = cli.ingest(args)
 
         assert result == 0
         stdout_content = stdout.getvalue()
         parsed = json.loads(stdout_content)
-        assert 'content' in parsed
-        assert 'instructions' in parsed
-        assert 'source_name' in parsed
+        assert "content" in parsed
+        assert "instructions" in parsed
+        assert "source_name" in parsed
 
     def test_ingest_dry_run(self, temp_wiki):
         """ingest --dry-run should not create pages."""
-        (temp_wiki / 'raw').mkdir(exist_ok=True)
-        test_file = temp_wiki / 'raw' / 'test.md'
+        (temp_wiki / "raw").mkdir(exist_ok=True)
+        test_file = temp_wiki / "raw" / "test.md"
         test_file.write_text("# Test Document")
 
         cli = WikiCLI(temp_wiki)
@@ -127,12 +127,12 @@ class TestIngestCommand:
         args.dry_run = True
 
         stderr = StringIO()
-        with patch('sys.stdout', StringIO()), patch('sys.stderr', stderr):
+        with patch("sys.stdout", StringIO()), patch("sys.stderr", stderr):
             result = cli.ingest(args)
 
         assert result == 0
         stderr_content = stderr.getvalue()
-        assert 'No pages created' in stderr_content or 'DRY RUN' in stderr_content
+        assert "No pages created" in stderr_content or "DRY RUN" in stderr_content
 
 
 # ============================================================
@@ -150,11 +150,11 @@ class TestSearchCommand:
         args.limit = 10
 
         stdout = StringIO()
-        with patch('sys.stdout', stdout):
+        with patch("sys.stdout", stdout):
             result = cli.search(args)
 
         assert result == 0
-        assert 'No results' in stdout.getvalue()
+        assert "No results" in stdout.getvalue()
 
     def test_search_with_results(self, temp_wiki):
         """search should find content."""
@@ -168,11 +168,11 @@ class TestSearchCommand:
         args.limit = 10
 
         stdout = StringIO()
-        with patch('sys.stdout', stdout):
+        with patch("sys.stdout", stdout):
             result = cli.search(args)
 
         assert result == 0
-        assert 'Test' in stdout.getvalue()
+        assert "Test" in stdout.getvalue()
 
 
 # ============================================================
@@ -197,11 +197,11 @@ class TestReferencesCommand:
         args.top = 10
 
         stdout = StringIO()
-        with patch('sys.stdout', stdout):
+        with patch("sys.stdout", stdout):
             result = cli.references(args)
 
         assert result == 0
-        assert 'Inbound' in stdout.getvalue()
+        assert "Inbound" in stdout.getvalue()
 
     def test_references_outbound_only(self, temp_wiki):
         """references --outbound should show only outbound links."""
@@ -220,13 +220,13 @@ class TestReferencesCommand:
         args.top = 10
 
         stdout = StringIO()
-        with patch('sys.stdout', stdout):
+        with patch("sys.stdout", stdout):
             result = cli.references(args)
 
         assert result == 0
         output = stdout.getvalue()
-        assert 'Outbound' in output
-        assert 'Inbound' not in output  # Should not show inbound when --outbound is set
+        assert "Outbound" in output
+        assert "Inbound" not in output  # Should not show inbound when --outbound is set
 
     def test_references_stats(self, temp_wiki):
         """references --stats should show reference statistics."""
@@ -246,11 +246,11 @@ class TestReferencesCommand:
         args.top = 10
 
         stdout = StringIO()
-        with patch('sys.stdout', stdout):
+        with patch("sys.stdout", stdout):
             result = cli.references(args)
 
         assert result == 0
-        assert 'Reference Statistics' in stdout.getvalue()
+        assert "Reference Statistics" in stdout.getvalue()
 
     def test_references_broken(self, temp_wiki):
         """references --broken should detect broken links."""
@@ -268,11 +268,11 @@ class TestReferencesCommand:
         args.top = 10
 
         stdout = StringIO()
-        with patch('sys.stdout', stdout):
+        with patch("sys.stdout", stdout):
             result = cli.references(args)
 
         assert result == 0
-        assert 'Broken' in stdout.getvalue()
+        assert "Broken" in stdout.getvalue()
 
 
 # ============================================================
@@ -286,7 +286,7 @@ class TestSinkStatusCommand:
 
         args = Args()
         stdout = StringIO()
-        with patch('sys.stdout', stdout):
+        with patch("sys.stdout", stdout):
             result = cli.sink_status(args)
 
         assert result == 0
@@ -309,10 +309,10 @@ class TestSynthesizeCommand:
         args.raw_sources = []
         args.no_auto_link = False
         args.no_auto_log = False
-        args.mode = 'sink'
+        args.mode = "sink"
 
         stdout = StringIO()
-        with patch('sys.stdout', stdout):
+        with patch("sys.stdout", stdout):
             result = cli.synthesize(args)
 
         assert result == 0
@@ -324,7 +324,7 @@ class TestSynthesizeCommand:
 class TestWatchCommand:
     def test_watch_dry_run(self, temp_wiki):
         """watch --dry-run should print status without starting watcher."""
-        (temp_wiki / 'raw').mkdir(exist_ok=True)
+        (temp_wiki / "raw").mkdir(exist_ok=True)
 
         cli = WikiCLI(temp_wiki)
 
@@ -339,11 +339,11 @@ class TestWatchCommand:
         args.uninstall_hook = False
 
         stdout = StringIO()
-        with patch('sys.stdout', stdout):
+        with patch("sys.stdout", stdout):
             result = cli.watch(args)
 
         assert result == 0
-        assert 'DRY RUN' in stdout.getvalue()
+        assert "DRY RUN" in stdout.getvalue()
 
 
 # ============================================================
@@ -359,17 +359,17 @@ class TestCommunityDetectCommand:
         cli.wiki.build_index()
 
         args = Args()
-        args.algorithm = 'leiden'
+        args.algorithm = "leiden"
         args.resolution = 1.0
         args.json = False
         args.dry_run = True
 
         stdout = StringIO()
-        with patch('sys.stdout', stdout):
+        with patch("sys.stdout", stdout):
             result = cli.community_detect(args)
 
         assert result == 0
-        assert 'Community Detection' in stdout.getvalue()
+        assert "Community Detection" in stdout.getvalue()
 
 
 # ============================================================
@@ -389,7 +389,7 @@ class TestReportCommand:
         args.output = None
 
         stdout = StringIO()
-        with patch('sys.stdout', stdout):
+        with patch("sys.stdout", stdout):
             result = cli.report(args)
 
         assert result == 0
@@ -408,19 +408,22 @@ class TestExportGraphCommand:
         cli.wiki.build_index()
 
         args = Args()
-        args.format = 'html'
-        args.output = str(temp_wiki / 'graph.html')
+        args.format = "html"
+        args.output = str(temp_wiki / "graph.html")
         args.min_degree = 0
 
         stdout = StringIO()
-        with patch('sys.stdout', stdout):
+        with patch("sys.stdout", stdout):
             try:
                 result = cli.export_graph(args)
                 # May fail if networkx not installed
                 if result != 0:
-                    assert 'Missing dependency' in stdout.getvalue() or 'Export failed' in stdout.getvalue()
+                    assert (
+                        "Missing dependency" in stdout.getvalue()
+                        or "Export failed" in stdout.getvalue()
+                    )
                 else:
-                    assert 'Exported' in stdout.getvalue()
+                    assert "Exported" in stdout.getvalue()
             except ImportError:
                 pass  # networkx not installed, skip
 
@@ -431,10 +434,10 @@ class TestExportGraphCommand:
 class TestBatchIntegration:
     def test_batch_with_multiple_sources(self, temp_wiki):
         """batch should handle multiple sources."""
-        raw = temp_wiki / 'raw'
+        raw = temp_wiki / "raw"
         raw.mkdir(exist_ok=True)
-        (raw / 'doc1.md').write_text("# Doc 1\n\nContent 1")
-        (raw / 'doc2.md').write_text("# Doc 2\n\nContent 2")
+        (raw / "doc1.md").write_text("# Doc 1\n\nContent 1")
+        (raw / "doc2.md").write_text("# Doc 2\n\nContent 2")
 
         cli = WikiCLI(temp_wiki)
         cli.wiki.init()
@@ -448,13 +451,13 @@ class TestBatchIntegration:
 
         stdout = StringIO()
         stderr = StringIO()
-        with patch('sys.stdout', stdout), patch('sys.stderr', stderr):
+        with patch("sys.stdout", stdout), patch("sys.stderr", stderr):
             result = cli.batch(args)
 
         assert result == 0
         parsed = json.loads(stdout.getvalue())
-        assert parsed['batch_summary']['total'] == 2
-        assert parsed['batch_summary']['success'] == 2
+        assert parsed["batch_summary"]["total"] == 2
+        assert parsed["batch_summary"]["success"] == 2
 
 
 # ============================================================
@@ -463,8 +466,8 @@ class TestBatchIntegration:
 class TestSmartDeprecation:
     def test_ingest_smart_deprecation_warning(self, temp_wiki):
         """ingest --smart should emit deprecation warning."""
-        (temp_wiki / 'raw').mkdir(exist_ok=True)
-        test_file = temp_wiki / 'raw' / 'test.md'
+        (temp_wiki / "raw").mkdir(exist_ok=True)
+        test_file = temp_wiki / "raw" / "test.md"
         test_file.write_text("# Test")
 
         cli = WikiCLI(temp_wiki)
@@ -477,14 +480,17 @@ class TestSmartDeprecation:
         args.dry_run = True
 
         stderr = StringIO()
-        with patch('sys.stdout', StringIO()), patch('sys.stderr', stderr):
+        with patch("sys.stdout", StringIO()), patch("sys.stderr", stderr):
             import warnings
+
             with warnings.catch_warnings(record=True) as w:
                 warnings.simplefilter("always")
                 cli.ingest(args)
-                deprecation_warnings = [x for x in w if issubclass(x.category, DeprecationWarning)]
+                deprecation_warnings = [
+                    x for x in w if issubclass(x.category, DeprecationWarning)
+                ]
                 assert len(deprecation_warnings) >= 1
-                assert 'deprecated' in str(deprecation_warnings[0].message).lower()
+                assert "deprecated" in str(deprecation_warnings[0].message).lower()
 
 
 # ============================================================
@@ -503,7 +509,7 @@ class TestCLIErrorHandling:
         args.details = None
 
         stdout = StringIO()
-        with patch('sys.stdout', stdout):
+        with patch("sys.stdout", stdout):
             result = cli.log(args)
 
         assert result == 1
@@ -517,7 +523,7 @@ class TestCLIErrorHandling:
         args.name = "NonExistentPage"
 
         stdout = StringIO()
-        with patch('sys.stdout', stdout):
+        with patch("sys.stdout", stdout):
             result = cli.read_page(args)
 
         assert result == 1
@@ -533,7 +539,7 @@ class TestCLIErrorHandling:
         args.content = None
 
         stdout = StringIO()
-        with patch('sys.stdout', stdout), patch('sys.stdin', StringIO('')):
+        with patch("sys.stdout", stdout), patch("sys.stdin", StringIO("")):
             result = cli.write_page(args)
 
         assert result == 1

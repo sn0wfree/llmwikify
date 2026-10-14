@@ -30,7 +30,9 @@ async def agent_status(request: Request) -> Any:
             "unread_notifications": 0,
         }
 
+
 # --- LLM metrics endpoint (Pass7, Phase 8, 2026-06-22) ---
+
 
 @router.get("/llm-metrics")
 async def llm_metrics() -> Any:
@@ -49,10 +51,12 @@ async def llm_metrics() -> Any:
     from llmwikify.apps.chat.agent.llm_metrics import (
         get_llm_metrics_collector,
     )
+
     return get_llm_metrics_collector().summary()
 
 
 # --- Research run endpoints ---
+
 
 @router.get("/research-runs/{run_id}")
 async def get_research_run(run_id: str) -> Any:
@@ -61,6 +65,7 @@ async def get_research_run(run_id: str) -> Any:
 
 
 # --- Tools endpoint ---
+
 
 @router.get("/tools")
 async def list_tools(request: Request) -> dict[str, Any]:

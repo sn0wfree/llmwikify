@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from llmwikify.kernel import Wiki
 
@@ -48,7 +48,9 @@ class TestFindSourceSummaryPage:
         wiki.init()
 
         (temp_wiki / "wiki" / "sources").mkdir(parents=True, exist_ok=True)
-        (temp_wiki / "wiki" / "sources" / "nvidia-article.md").write_text("# NVIDIA Article\n")
+        (temp_wiki / "wiki" / "sources" / "nvidia-article.md").write_text(
+            "# NVIDIA Article\n"
+        )
 
         result = wiki._find_source_summary_page("raw/nvidia-article.md")
 
@@ -99,8 +101,8 @@ class TestCacheSourceAnalysis:
         cached = wiki._get_cached_source_analysis(page)
 
         assert cached is not None
-        assert cached['hash'] == 'abc123'
-        assert cached['data']['entities'][0]['name'] == 'NVIDIA'
+        assert cached["hash"] == "abc123"
+        assert cached["data"]["entities"][0]["name"] == "NVIDIA"
 
         wiki.close()
 
@@ -119,7 +121,7 @@ class TestCacheSourceAnalysis:
         wiki._cache_source_analysis(page, "hash2", analysis2)
 
         cached = wiki._get_cached_source_analysis(page)
-        assert cached['data']['entities'][0]['name'] == 'B'
+        assert cached["data"]["entities"][0]["name"] == "B"
 
         wiki.close()
 
@@ -153,7 +155,7 @@ class TestAnalyzeSource:
 
         wiki.close()
 
-    @patch('llmwikify.foundation.llm_client.LLMClient')
+    @patch("llmwikify.foundation.llm_client.LLMClient")
     def test_calls_llm_and_caches(self, mock_client_class, temp_wiki):
         wiki = Wiki(temp_wiki)
         wiki.init()
@@ -177,11 +179,11 @@ class TestAnalyzeSource:
         # Verify cached
         source_page = wiki._find_source_summary_page("raw/test.md")
         cached = wiki._get_cached_source_analysis(source_page)
-        assert cached['data']['entities'][0]['name'] == 'NVIDIA'
+        assert cached["data"]["entities"][0]["name"] == "NVIDIA"
 
         wiki.close()
 
-    @patch('llmwikify.foundation.llm_client.LLMClient')
+    @patch("llmwikify.foundation.llm_client.LLMClient")
     def test_force_reanalysis(self, mock_client_class, temp_wiki):
         wiki = Wiki(temp_wiki)
         wiki.init()

@@ -53,20 +53,24 @@ class TestAppDatabaseOperations:
         assert session["query"] == "test query"
 
     def test_wiki_operations(self, app_db: AppDatabase) -> None:
-        app_db.wiki.save_notification({
-            "wiki_id": "wiki-1",
-            "type": "info",
-            "message": "test",
-        })
+        app_db.wiki.save_notification(
+            {
+                "wiki_id": "wiki-1",
+                "type": "info",
+                "message": "test",
+            }
+        )
         notifs = app_db.wiki.list_notifications("wiki-1")
         assert len(notifs) == 1
 
     def test_cross_facade_independence(self, app_db: AppDatabase) -> None:
         """Each facade only sees its own domain tables."""
         import sqlite3
+
         with sqlite3.connect(app_db.db_path) as conn:
             tables = {
-                r[0] for r in conn.execute(
+                r[0]
+                for r in conn.execute(
                     "SELECT name FROM sqlite_master WHERE type='table'"
                 ).fetchall()
             }
@@ -100,40 +104,48 @@ class TestWikiDatabaseGetConfirmationDecoded:
         assert app_db.wiki.get_confirmation_with_decoded_args("nope") is None
 
     def test_decodes_arguments_from_json_string(self, app_db: AppDatabase) -> None:
-        app_db.wiki.save_confirmation({
-            "id": "abc12345",
-            "wiki_id": "wiki-1",
-            "tool": "wiki_page_update",
-            "arguments": {"page_name": "test", "expires_at": 9999999999.0},
-            "status": "pending",
-        })
+        app_db.wiki.save_confirmation(
+            {
+                "id": "abc12345",
+                "wiki_id": "wiki-1",
+                "tool": "wiki_page_update",
+                "arguments": {"page_name": "test", "expires_at": 9999999999.0},
+                "status": "pending",
+            }
+        )
         conf = app_db.wiki.get_confirmation_with_decoded_args("abc12345")
         assert conf is not None
         assert conf["arguments"] == {"page_name": "test", "expires_at": 9999999999.0}
         assert isinstance(conf["arguments"], dict)
 
     def test_returns_copy_not_mutation(self, app_db: AppDatabase) -> None:
-        app_db.wiki.save_confirmation({
-            "id": "abc12345",
-            "wiki_id": "wiki-1",
-            "tool": "wiki_page_update",
-            "arguments": {"page_name": "test"},
-            "status": "pending",
-        })
+        app_db.wiki.save_confirmation(
+            {
+                "id": "abc12345",
+                "wiki_id": "wiki-1",
+                "tool": "wiki_page_update",
+                "arguments": {"page_name": "test"},
+                "status": "pending",
+            }
+        )
         conf = app_db.wiki.get_confirmation_with_decoded_args("abc12345")
         assert conf["arguments"]["page_name"] == "test"
         conf["arguments"]["page_name"] = "mutated"
         raw = app_db.wiki.get_confirmation("abc12345")
         assert isinstance(raw["arguments"], str)
 
-    def test_returns_dict_unchanged_when_already_decoded(self, app_db: AppDatabase) -> None:
-        app_db.wiki.save_confirmation({
-            "id": "abc12345",
-            "wiki_id": "wiki-1",
-            "tool": "wiki_page_update",
-            "arguments": {"page_name": "test"},
-            "status": "pending",
-        })
+    def test_returns_dict_unchanged_when_already_decoded(
+        self, app_db: AppDatabase
+    ) -> None:
+        app_db.wiki.save_confirmation(
+            {
+                "id": "abc12345",
+                "wiki_id": "wiki-1",
+                "tool": "wiki_page_update",
+                "arguments": {"page_name": "test"},
+                "status": "pending",
+            }
+        )
         conf = app_db.wiki.get_confirmation_with_decoded_args("abc12345")
         assert isinstance(conf["arguments"], dict)
         assert conf["arguments"]["page_name"] == "test"
@@ -163,46 +175,63 @@ class TestWikiDatabaseDeleteExpiredConfirmations:
     def test_deletes_only_expired_pending(self, app_db: AppDatabase) -> None:
         now = time.time()
         # Expired pending → DELETE
-        app_db.wiki.save_confirmation({
-            "id": "exp1", "wiki_id": "w1", "tool": "wiki_page_update",
-            "arguments": {"page_name": "p1", "expires_at": now - 10},
-            "status": "pending",
-        })
+        app_db.wiki.save_confirmation(
+            {
+                "id": "exp1",
+                "wiki_id": "w1",
+                "tool": "wiki_page_update",
+                "arguments": {"page_name": "p1", "expires_at": now - 10},
+                "status": "pending",
+            }
+        )
         # Future expires_at pending → keep
-        app_db.wiki.save_confirmation({
-            "id": "fut1", "wiki_id": "w1", "tool": "wiki_page_update",
-            "arguments": {"page_name": "p2", "expires_at": now + 9999},
-            "status": "pending",
-        })
+        app_db.wiki.save_confirmation(
+            {
+                "id": "fut1",
+                "wiki_id": "w1",
+                "tool": "wiki_page_update",
+                "arguments": {"page_name": "p2", "expires_at": now + 9999},
+                "status": "pending",
+            }
+        )
         # Expired but approved → keep
-        app_db.wiki.save_confirmation({
-            "id": "app1", "wiki_id": "w1", "tool": "wiki_page_update",
-            "arguments": {"page_name": "p3", "expires_at": now - 10},
-            "status": "approved",
-        })
+        app_db.wiki.save_confirmation(
+            {
+                "id": "app1",
+                "wiki_id": "w1",
+                "tool": "wiki_page_update",
+                "arguments": {"page_name": "p3", "expires_at": now - 10},
+                "status": "approved",
+            }
+        )
         # Pending without expires_at (legacy agent-layer) → keep
-        app_db.wiki.save_confirmation({
-            "id": "leg1", "wiki_id": "w1", "tool": "x",
-            "arguments": {"page_name": "p4"},
-            "status": "pending",
-        })
+        app_db.wiki.save_confirmation(
+            {
+                "id": "leg1",
+                "wiki_id": "w1",
+                "tool": "x",
+                "arguments": {"page_name": "p4"},
+                "status": "pending",
+            }
+        )
 
         deleted = app_db.wiki.delete_expired_confirmations()
         assert deleted == 1
 
-        remaining_ids = {
-            c["id"]
-            for c in app_db.wiki.get_confirmations("w1")
-        }
+        remaining_ids = {c["id"] for c in app_db.wiki.get_confirmations("w1")}
         assert remaining_ids == {"fut1", "app1", "leg1"}
 
     def test_accepts_explicit_now_argument(self, app_db: AppDatabase) -> None:
         """Caller can supply a custom cutoff timestamp."""
-        app_db.wiki.save_confirmation({
-            "id": "exp1", "wiki_id": "w1", "tool": "x",
-            "arguments": {"expires_at": 100.0},
-            "status": "pending",
-        })
+        app_db.wiki.save_confirmation(
+            {
+                "id": "exp1",
+                "wiki_id": "w1",
+                "tool": "x",
+                "arguments": {"expires_at": 100.0},
+                "status": "pending",
+            }
+        )
         deleted = app_db.wiki.delete_expired_confirmations(now=200.0)
         assert deleted == 1
         deleted_again = app_db.wiki.delete_expired_confirmations(now=50.0)
@@ -231,26 +260,28 @@ class TestWikiDatabaseMakeConfirmationId:
 
     def test_returns_8_char_string(self) -> None:
         from llmwikify.apps.wiki.db import WikiDatabase
+
         cid = WikiDatabase.make_confirmation_id()
         assert isinstance(cid, str)
         assert len(cid) == 8
 
     def test_only_lowercase_hex(self) -> None:
         from llmwikify.apps.wiki.db import WikiDatabase
+
         cid = WikiDatabase.make_confirmation_id()
-        assert all(c in "0123456789abcdef" for c in cid), (
-            f"non-hex char in {cid!r}"
-        )
+        assert all(c in "0123456789abcdef" for c in cid), f"non-hex char in {cid!r}"
 
     def test_unique_across_many_calls(self) -> None:
         """16M id space; sampling 10K should yield zero collisions."""
         from llmwikify.apps.wiki.db import WikiDatabase
+
         seen = {WikiDatabase.make_confirmation_id() for _ in range(10_000)}
         assert len(seen) == 10_000
 
     def test_callable_without_instance(self) -> None:
         """Static method — usable from non-DB code paths."""
         from llmwikify.apps.wiki.db import WikiDatabase
+
         cid = WikiDatabase.make_confirmation_id()
         assert len(cid) == 8
 
@@ -259,15 +290,18 @@ class TestWikiDatabaseMakeConfirmationId:
         VARCHAR / TEXT). The save_confirmation idempotency check
         below also verifies the row is inserted."""
         from llmwikify.apps.wiki.db import WikiDatabase
+
         cid = WikiDatabase.make_confirmation_id()
-        app_db.wiki.save_confirmation({
-            "id": cid,
-            "wiki_id": "w1",
-            "tool": "wiki_page_update",
-            "arguments": {"page_name": "p", "expires_at": 9_999_999_999.0},
-            "action_type": "write",
-            "status": "pending",
-        })
+        app_db.wiki.save_confirmation(
+            {
+                "id": cid,
+                "wiki_id": "w1",
+                "tool": "wiki_page_update",
+                "arguments": {"page_name": "p", "expires_at": 9_999_999_999.0},
+                "action_type": "write",
+                "status": "pending",
+            }
+        )
         loaded = app_db.wiki.get_confirmation_with_decoded_args(cid)
         assert loaded is not None
         assert loaded["id"] == cid

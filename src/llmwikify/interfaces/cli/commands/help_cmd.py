@@ -31,12 +31,12 @@ class HelpCommand(Command):
         from argparse import _SubParsersAction
 
         if not isinstance(subparsers, _SubParsersAction):
-            raise TypeError(
-                "setup_parser requires an argparse subparsers action"
-            )
+            raise TypeError("setup_parser requires an argparse subparsers action")
         p = subparsers.add_parser(self.name, help=self.help)
         p.add_argument(
-            "--aliases", "-a", action="store_true",
+            "--aliases",
+            "-a",
+            action="store_true",
             help="Show only subcommand aliases",
         )
 

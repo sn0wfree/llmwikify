@@ -64,12 +64,16 @@ def test_memory_config_loads_confirmations_cleanup_section(
     )
 
     cfg_path = tmp_path / DEFAULT_CONFIG_FILENAME
-    cfg_path.write_text(json.dumps({
-        "confirmations_cleanup": {
-            "enabled": False,
-            "interval_seconds": 60.0,
-        },
-    }))
+    cfg_path.write_text(
+        json.dumps(
+            {
+                "confirmations_cleanup": {
+                    "enabled": False,
+                    "interval_seconds": 60.0,
+                },
+            }
+        )
+    )
     cfg = load_memory_config(tmp_path)
     assert cfg.confirmations_cleanup["enabled"] is False
     assert cfg.confirmations_cleanup["interval_seconds"] == 60.0
@@ -114,9 +118,7 @@ async def test_lifespan_startup_invokes_start_confirmations_cleanup(
         pass
     assert server._agent_service.start_confirmations_cleanup.await_count == 1
     # Default interval=300.0 must be passed through
-    call_kwargs = (
-        server._agent_service.start_confirmations_cleanup.await_args.kwargs
-    )
+    call_kwargs = server._agent_service.start_confirmations_cleanup.await_args.kwargs
     assert call_kwargs["interval_seconds"] == 300.0
     assert call_kwargs["enabled"] is True
     assert server._agent_service.stop_confirmations_cleanup.await_count == 1
@@ -140,9 +142,13 @@ async def test_lifespan_reads_interval_from_memory_config(
     )
     server._agent_service = MagicMock()
     server._agent_service.data_dir = tmp_path
-    (tmp_path / DEFAULT_CONFIG_FILENAME).write_text(json.dumps({
-        "confirmations_cleanup": {"enabled": True, "interval_seconds": 42.0},
-    }))
+    (tmp_path / DEFAULT_CONFIG_FILENAME).write_text(
+        json.dumps(
+            {
+                "confirmations_cleanup": {"enabled": True, "interval_seconds": 42.0},
+            }
+        )
+    )
     server._agent_service.start_confirmations_cleanup = AsyncMock(
         return_value=MagicMock(),
     )
@@ -153,9 +159,7 @@ async def test_lifespan_reads_interval_from_memory_config(
     server._agent_service.stop_dream_scheduler = AsyncMock()
     async with server.app.router.lifespan_context(server.app):
         pass
-    call_kwargs = (
-        server._agent_service.start_confirmations_cleanup.await_args.kwargs
-    )
+    call_kwargs = server._agent_service.start_confirmations_cleanup.await_args.kwargs
     assert call_kwargs["interval_seconds"] == 42.0
 
 
@@ -203,9 +207,13 @@ async def test_lifespan_respects_config_disable(tmp_path: Path) -> None:
     )
     server._agent_service = MagicMock()
     server._agent_service.data_dir = tmp_path
-    (tmp_path / DEFAULT_CONFIG_FILENAME).write_text(json.dumps({
-        "confirmations_cleanup": {"enabled": False},
-    }))
+    (tmp_path / DEFAULT_CONFIG_FILENAME).write_text(
+        json.dumps(
+            {
+                "confirmations_cleanup": {"enabled": False},
+            }
+        )
+    )
     server._agent_service.start_confirmations_cleanup = AsyncMock()
     server._agent_service.stop_confirmations_cleanup = AsyncMock()
     server._agent_service.start_auto_compact = AsyncMock()

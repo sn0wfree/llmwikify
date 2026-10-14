@@ -23,7 +23,6 @@ graph LR
 - save_warning frequent: by design (human-in-loop), set posthoc mode
 """
 
-
 import json
 from pathlib import Path
 
@@ -38,9 +37,7 @@ def _get_real_jwt(server_url: str) -> str:
     Unit tests (with ``MockTransport``) do not call this.
     """
     pat_path = Path.home() / ".llmwikify" / "pat"
-    assert pat_path.exists(), (
-        f"No PAT at {pat_path}. Run `llmwikify pat` first."
-    )
+    assert pat_path.exists(), f"No PAT at {pat_path}. Run `llmwikify pat` first."
     pat = pat_path.read_text().strip()
     resp = httpx.post(
         f"{server_url}/api/auth/verify",
@@ -130,7 +127,9 @@ class TestChatReAct:
             headers={"Authorization": "Bearer unit-test-jwt"},
         ) as response:
             assert response.status_code == 200
-            events = [line for line in response.iter_lines() if line.startswith("data:")]
+            events = [
+                line for line in response.iter_lines() if line.startswith("data:")
+            ]
             assert len(events) == 2
 
         # Verify request shape (the stream was opened so body was sent)
@@ -170,9 +169,7 @@ class TestChatReAct:
                 200,
                 json={
                     "session_id": "unit-wiki",
-                    "tool_calls": [
-                        {"name": "wiki_search", "args": {"q": "python"}}
-                    ],
+                    "tool_calls": [{"name": "wiki_search", "args": {"q": "python"}}],
                     "response": "Wikipedia: Python is a programming language...",
                 },
             )
@@ -180,7 +177,10 @@ class TestChatReAct:
         unit_client = _mock_client(client.base_url, httpx.MockTransport(mock_transport))
         response = unit_client.post(
             "/api/agent/chat",
-            json={"session_id": "unit-wiki", "message": "Search for Python in the wiki"},
+            json={
+                "session_id": "unit-wiki",
+                "message": "Search for Python in the wiki",
+            },
             headers={"Authorization": "Bearer unit-test-jwt"},
         )
         assert response.status_code == 200

@@ -178,9 +178,7 @@ class WebSocketManager:
     def total_connections(self) -> int:
         return len(self._conn_chats)
 
-    async def send_to_chat(
-        self, chat_id: str, msg: dict[str, Any]
-    ) -> int:
+    async def send_to_chat(self, chat_id: str, msg: dict[str, Any]) -> int:
         """Send a message to all connections subscribed to ``chat_id``.
 
         Returns the number of connections the message was enqueued for.
@@ -199,7 +197,8 @@ class WebSocketManager:
                 # but don't crash the whole fan-out.
                 logger.warning(
                     "WebSocket peer %s queue full, dropping msg to chat %s",
-                    conn.peer, chat_id,
+                    conn.peer,
+                    chat_id,
                 )
         return count
 
@@ -226,6 +225,7 @@ def _get_default_lock() -> Any:
     global _default_lock
     if _default_lock is None:
         import threading
+
         _default_lock = threading.Lock()
     return _default_lock
 
@@ -322,7 +322,10 @@ def reset_default_ws_session_map() -> WsSessionMap:
 
 
 def _register_websocket_routes(
-    app: FastAPI, *, api_key: str = "", chat_service: Any = None,
+    app: FastAPI,
+    *,
+    api_key: str = "",
+    chat_service: Any = None,
 ) -> None:
     """Mount the WebSocket routes onto ``app``.
 
@@ -384,9 +387,7 @@ def _register_websocket_routes(
             return
         await websocket.accept()
         client = websocket.client
-        peer = (
-            f"{client.host}:{client.port}" if client else "unknown"
-        )
+        peer = f"{client.host}:{client.port}" if client else "unknown"
         conn = _Connection(
             ws=websocket,
             peer=peer,
@@ -395,11 +396,13 @@ def _register_websocket_routes(
         manager = get_default_ws_manager()
         session_map = get_default_ws_session_map()
         # Greet the client
-        await conn.out_queue.put({
-            "type": WSServerMsg.READY,
-            "peer": peer,
-            "server_time": time.time(),
-        })
+        await conn.out_queue.put(
+            {
+                "type": WSServerMsg.READY,
+                "peer": peer,
+                "server_time": time.time(),
+            }
+        )
         # Spawn the writer task (drains out_queue → ws.send_json)
         writer_task = asyncio.create_task(_writer_loop(conn), name="ws_writer")
         try:
@@ -408,13 +411,17 @@ def _register_websocket_routes(
                 try:
                     msg = json.loads(raw)
                 except json.JSONDecodeError as e:
-                    await conn.out_queue.put({
-                        "type": WSServerMsg.ERROR,
-                        "error": f"Invalid JSON: {e}",
-                    })
+                    await conn.out_queue.put(
+                        {
+                            "type": WSServerMsg.ERROR,
+                            "error": f"Invalid JSON: {e}",
+                        }
+                    )
                     continue
                 await _handle_client_msg(
-                    conn, manager, msg,
+                    conn,
+                    manager,
+                    msg,
                     orchestrator=orchestrator,
                     session_map=session_map,
                 )
@@ -431,7 +438,9 @@ def _register_websocket_routes(
             try:
                 await writer_task
             except (asyncio.CancelledError, Exception):
-                logger.debug("Writer task cancellation settled for peer %s", peer, exc_info=True)
+                logger.debug(
+                    "Writer task cancellation settled for peer %s", peer, exc_info=True
+                )
 
     @router.post("/api/ws/token")
     async def issue_token(
@@ -498,7 +507,8 @@ async def _run_ws_chat(
     bus_adapter = BusAdapter()
     try:
         async for event in orchestrator.chat(
-            message=content, session_id=session_id,
+            message=content,
+            session_id=session_id,
         ):
             # Mirror to bus (target_id=chat_id so future per-chat
             # consumers can filter; channel='websocket' marks the
@@ -521,16 +531,22 @@ async def _run_ws_chat(
     except Exception:
         logger.exception(
             "WS chat route failed for chat_id=%s peer=%s",
-            chat_id, conn.peer,
+            chat_id,
+            conn.peer,
         )
         # Best-effort error fan-out so subscribers see something.
         try:
-            await manager.send_to_chat(chat_id, {
-                "type": WSServerMsg.ERROR,
-                "error": "Internal error while streaming chat response",
-            })
+            await manager.send_to_chat(
+                chat_id,
+                {
+                    "type": WSServerMsg.ERROR,
+                    "error": "Internal error while streaming chat response",
+                },
+            )
         except Exception:
-            logger.debug("Failed to send error fan-out to chat %s", chat_id, exc_info=True)
+            logger.debug(
+                "Failed to send error fan-out to chat %s", chat_id, exc_info=True
+            )
 
 
 async def _handle_client_msg(
@@ -562,72 +578,91 @@ async def _handle_client_msg(
     if mtype == WSClientMsg.NEW_CHAT:
         chat_id = msg.get("chat_id") or f"chat::{uuid.uuid4().hex[:8]}"
         manager.attach(conn, chat_id)
-        await conn.out_queue.put({
-            "type": WSServerMsg.CHAT_CREATED,
-            "chat_id": chat_id,
-        })
+        await conn.out_queue.put(
+            {
+                "type": WSServerMsg.CHAT_CREATED,
+                "chat_id": chat_id,
+            }
+        )
         return
 
     if mtype == WSClientMsg.ATTACH:
         chat_id = msg.get("chat_id", "")
         if not chat_id:
-            await conn.out_queue.put({
-                "type": WSServerMsg.ERROR,
-                "error": "attach requires chat_id",
-            })
+            await conn.out_queue.put(
+                {
+                    "type": WSServerMsg.ERROR,
+                    "error": "attach requires chat_id",
+                }
+            )
             return
         manager.attach(conn, chat_id)
-        await conn.out_queue.put({
-            "type": WSServerMsg.ATTACHED,
-            "chat_id": chat_id,
-            "subscribed_count": manager.subscribed_count(chat_id),
-        })
+        await conn.out_queue.put(
+            {
+                "type": WSServerMsg.ATTACHED,
+                "chat_id": chat_id,
+                "subscribed_count": manager.subscribed_count(chat_id),
+            }
+        )
         return
 
     if mtype == WSClientMsg.MESSAGE:
         chat_id = msg.get("chat_id", "")
         content = msg.get("content", "")
         if not chat_id or chat_id not in conn.subscribed_chats:
-            await conn.out_queue.put({
-                "type": WSServerMsg.ERROR,
-                "error": "message requires chat_id (must be attached first)",
-            })
+            await conn.out_queue.put(
+                {
+                    "type": WSServerMsg.ERROR,
+                    "error": "message requires chat_id (must be attached first)",
+                }
+            )
             return
 
         # Phase 19-B: real ChatOrchestrator route when an
         # orchestrator has been injected. We spawn a task so the
         # receive loop is never blocked by a slow LLM stream.
         if orchestrator is not None:
-            asyncio.create_task(_run_ws_chat(
-                conn=conn,
-                manager=manager,
-                chat_id=chat_id,
-                content=content,
-                orchestrator=orchestrator,
-                session_map=session_map or get_default_ws_session_map(),
-            ), name=f"ws_chat-{chat_id}")
+            asyncio.create_task(
+                _run_ws_chat(
+                    conn=conn,
+                    manager=manager,
+                    chat_id=chat_id,
+                    content=content,
+                    orchestrator=orchestrator,
+                    session_map=session_map or get_default_ws_session_map(),
+                ),
+                name=f"ws_chat-{chat_id}",
+            )
             return
 
         # Fallback: Phase 14 echo. Used when no chat_service is
         # wired (dev mode / unit tests).
-        await manager.send_to_chat(chat_id, {
-            "type": WSServerMsg.DELTA,
-            "chat_id": chat_id,
-            "content": f"[echo] {content}",
-            "ts": time.time(),
-        })
-        await manager.send_to_chat(chat_id, {
-            "type": WSServerMsg.STREAM_END,
-            "chat_id": chat_id,
-            "ts": time.time(),
-        })
+        await manager.send_to_chat(
+            chat_id,
+            {
+                "type": WSServerMsg.DELTA,
+                "chat_id": chat_id,
+                "content": f"[echo] {content}",
+                "ts": time.time(),
+            },
+        )
+        await manager.send_to_chat(
+            chat_id,
+            {
+                "type": WSServerMsg.STREAM_END,
+                "chat_id": chat_id,
+                "ts": time.time(),
+            },
+        )
         return
 
     # Unknown message type — error back
-    await conn.out_queue.put({
-        "type": WSServerMsg.ERROR,
-        "error": f"Unknown message type: {mtype!r}",
-    })
+    await conn.out_queue.put(
+        {
+            "type": WSServerMsg.ERROR,
+            "error": f"Unknown message type: {mtype!r}",
+        }
+    )
 
 
 async def _writer_loop(conn: _Connection) -> None:

@@ -37,7 +37,7 @@ def _parse_sse_payloads(body: bytes) -> list[dict[str, Any]]:
         line = raw_line.strip()
         if not line.startswith(b"data:"):
             continue
-        data = line[len(b"data:"):].strip()
+        data = line[len(b"data:") :].strip()
         if data == b"[DONE]":
             continue
         if data:
@@ -103,7 +103,7 @@ class TestOpenAIResponseHelpers:
 
         chunk = openai_sse_chunk("hi", "m", "chatcmpl-abc")
         assert chunk.startswith(b"data: ")
-        payload = json.loads(chunk[len(b"data: "):].rstrip(b"\n\n"))
+        payload = json.loads(chunk[len(b"data: ") :].rstrip(b"\n\n"))
         assert payload["choices"][0]["delta"] == {"content": "hi"}
         assert payload["choices"][0]["finish_reason"] is None
         assert payload["model"] == "m"
@@ -112,7 +112,7 @@ class TestOpenAIResponseHelpers:
         from llmwikify.apps.api.openai_server import openai_sse_chunk
 
         chunk = openai_sse_chunk("", "m", "chatcmpl-abc")
-        payload = json.loads(chunk[len(b"data: "):].rstrip(b"\n\n"))
+        payload = json.loads(chunk[len(b"data: ") :].rstrip(b"\n\n"))
         # Empty content + no finish_reason → first-chunk role signal.
         assert payload["choices"][0]["delta"] == {"role": "assistant", "content": ""}
 
@@ -120,7 +120,7 @@ class TestOpenAIResponseHelpers:
         from llmwikify.apps.api.openai_server import openai_sse_chunk
 
         chunk = openai_sse_chunk("", "m", "chatcmpl-abc", finish_reason="stop")
-        payload = json.loads(chunk[len(b"data: "):].rstrip(b"\n\n"))
+        payload = json.loads(chunk[len(b"data: ") :].rstrip(b"\n\n"))
         assert payload["choices"][0]["delta"] == {}
         assert payload["choices"][0]["finish_reason"] == "stop"
 
@@ -137,7 +137,7 @@ class TestOpenAIStreamTranslator:
         t = OpenAIStreamTranslator(model="m", chunk_id="chatcmpl-1")
         chunk = t.translate({"type": "message_delta", "content": "hi"})
         assert chunk is not None
-        payload = json.loads(chunk[len(b"data: "):].rstrip(b"\n\n"))
+        payload = json.loads(chunk[len(b"data: ") :].rstrip(b"\n\n"))
         assert payload["choices"][0]["delta"] == {"content": "hi"}
         assert t.emitted_content is True
 
@@ -198,7 +198,7 @@ class TestOpenAIStreamTranslator:
 
         t = OpenAIStreamTranslator(model="m", chunk_id="chatcmpl-1")
         chunk = t.final_chunk()
-        payload = json.loads(chunk[len(b"data: "):].rstrip(b"\n\n"))
+        payload = json.loads(chunk[len(b"data: ") :].rstrip(b"\n\n"))
         assert payload["choices"][0]["finish_reason"] == "stop"
 
     def test_final_sentinel(self):
@@ -223,11 +223,13 @@ class TestParseUserMessage:
     def test_simple_string(self):
         from llmwikify.apps.api.openai_server import _parse_user_message
 
-        text, sid, stream = _parse_user_message({
-            "messages": [{"role": "user", "content": "hello"}],
-            "stream": True,
-            "session_id": "abc",
-        })
+        text, sid, stream = _parse_user_message(
+            {
+                "messages": [{"role": "user", "content": "hello"}],
+                "stream": True,
+                "session_id": "abc",
+            }
+        )
         assert text == "hello"
         assert sid == "abc"
         assert stream is True
@@ -235,69 +237,83 @@ class TestParseUserMessage:
     def test_vision_format_extracts_text(self):
         from llmwikify.apps.api.openai_server import _parse_user_message
 
-        text, _, _ = _parse_user_message({
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": "describe"},
-                        {"type": "image_url", "image_url": {"url": "data:..."}},
-                        {"type": "text", "text": "this"},
-                    ],
-                }
-            ],
-        })
+        text, _, _ = _parse_user_message(
+            {
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": "describe"},
+                            {"type": "image_url", "image_url": {"url": "data:..."}},
+                            {"type": "text", "text": "this"},
+                        ],
+                    }
+                ],
+            }
+        )
         assert text == "describe this"
 
     def test_multi_message_rejected(self):
         from llmwikify.apps.api.openai_server import _parse_user_message
 
         with pytest.raises(ValueError, match="single user message"):
-            _parse_user_message({
-                "messages": [
-                    {"role": "user", "content": "a"},
-                    {"role": "user", "content": "b"},
-                ],
-            })
+            _parse_user_message(
+                {
+                    "messages": [
+                        {"role": "user", "content": "a"},
+                        {"role": "user", "content": "b"},
+                    ],
+                }
+            )
 
     def test_non_user_role_rejected(self):
         from llmwikify.apps.api.openai_server import _parse_user_message
 
         with pytest.raises(ValueError, match="single user message"):
-            _parse_user_message({
-                "messages": [{"role": "system", "content": "x"}],
-            })
+            _parse_user_message(
+                {
+                    "messages": [{"role": "system", "content": "x"}],
+                }
+            )
 
     def test_empty_content_rejected(self):
         from llmwikify.apps.api.openai_server import _parse_user_message
 
         with pytest.raises(ValueError, match="Empty message"):
-            _parse_user_message({
-                "messages": [{"role": "user", "content": "   "}],
-            })
+            _parse_user_message(
+                {
+                    "messages": [{"role": "user", "content": "   "}],
+                }
+            )
 
     def test_invalid_content_type_rejected(self):
         from llmwikify.apps.api.openai_server import _parse_user_message
 
         with pytest.raises(ValueError, match="Invalid content"):
-            _parse_user_message({
-                "messages": [{"role": "user", "content": 42}],
-            })
+            _parse_user_message(
+                {
+                    "messages": [{"role": "user", "content": 42}],
+                }
+            )
 
     def test_stream_defaults_false(self):
         from llmwikify.apps.api.openai_server import _parse_user_message
 
-        _, _, stream = _parse_user_message({
-            "messages": [{"role": "user", "content": "x"}],
-        })
+        _, _, stream = _parse_user_message(
+            {
+                "messages": [{"role": "user", "content": "x"}],
+            }
+        )
         assert stream is False
 
     def test_session_id_optional(self):
         from llmwikify.apps.api.openai_server import _parse_user_message
 
-        text, sid, _ = _parse_user_message({
-            "messages": [{"role": "user", "content": "x"}],
-        })
+        text, sid, _ = _parse_user_message(
+            {
+                "messages": [{"role": "user", "content": "x"}],
+            }
+        )
         assert text == "x"
         assert sid is None
 
@@ -360,6 +376,7 @@ def app_with_mock_service(monkeypatch):
     mock_service.chat = lambda **_: _async_iter(events)
 
     import llmwikify.apps.api.openai_server as openai_mod
+
     monkeypatch.setattr(openai_mod, "_AGENT_SERVICE", mock_service)
     monkeypatch.setattr(openai_mod, "get_agent_service", lambda: mock_service)
 
@@ -485,10 +502,12 @@ class TestOpenAIE2E:
         app, mock_service = app_with_mock_service
         # Replace the lambda with a MagicMock so we can inspect call_args.
         chat_mock = MagicMock(name="chat")
-        chat_mock.side_effect = lambda **_: _async_iter([
-            {"type": "message_delta", "content": "ok"},
-            {"type": "done", "final_response": "ok"},
-        ])
+        chat_mock.side_effect = lambda **_: _async_iter(
+            [
+                {"type": "message_delta", "content": "ok"},
+                {"type": "done", "final_response": "ok"},
+            ]
+        )
         mock_service.chat = chat_mock
 
         client = TestClient(app)

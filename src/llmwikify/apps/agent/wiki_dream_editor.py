@@ -27,7 +27,9 @@ class WikiDreamProposalManager:
 
     AUTO_APPROVE_THRESHOLD = 100
 
-    def __init__(self, max_size: int = 200, db: Any = None, wiki_id: str | None = None) -> None:
+    def __init__(
+        self, max_size: int = 200, db: Any = None, wiki_id: str | None = None
+    ) -> None:
         self._proposals: list[dict[str, Any]] = []
         self._max_size = max_size
         self.db = db
@@ -43,7 +45,7 @@ class WikiDreamProposalManager:
     def _add_proposal(self, proposal: dict) -> dict:
         self._proposals.append(proposal)
         if len(self._proposals) > self._max_size:
-            self._proposals = self._proposals[-self._max_size:]
+            self._proposals = self._proposals[-self._max_size :]
         return proposal
 
     def create_proposal(
@@ -75,8 +77,10 @@ class WikiDreamProposalManager:
         for p in self._proposals:
             if p["status"] != "pending":
                 continue
-            if (p["edit_type"] == "append"
-                    and p["content_length"] < self.AUTO_APPROVE_THRESHOLD):
+            if (
+                p["edit_type"] == "append"
+                and p["content_length"] < self.AUTO_APPROVE_THRESHOLD
+            ):
                 p["status"] = "auto_approved"
                 p["reviewed_at"] = datetime.now(timezone.utc).isoformat()
                 self._sync_to_db(p)
@@ -126,7 +130,13 @@ class WikiDreamProposalManager:
     def get_stats(self) -> dict:
         if self.db and self.wiki_id:
             return self.db.get_dream_proposal_stats(self.wiki_id)
-        stats = {"pending": 0, "approved": 0, "rejected": 0, "auto_approved": 0, "applied": 0}
+        stats = {
+            "pending": 0,
+            "approved": 0,
+            "rejected": 0,
+            "auto_approved": 0,
+            "applied": 0,
+        }
         for p in self._proposals:
             status = p.get("status", "pending")
             if status in stats:
@@ -162,7 +172,13 @@ class WikiDreamEditor:
     4. Log all edits for reversibility
     """
 
-    def __init__(self, wiki: Any, data_dir: Path | None = None, db: Any = None, wiki_id: str | None = None) -> None:
+    def __init__(
+        self,
+        wiki: Any,
+        data_dir: Path | None = None,
+        db: Any = None,
+        wiki_id: str | None = None,
+    ) -> None:
         self.wiki = wiki
         self.data_dir = data_dir or wiki.root / ".llmwikify" / "agent"
         self.data_dir.mkdir(parents=True, exist_ok=True)
@@ -254,7 +270,9 @@ class WikiDreamEditor:
                     source_entries=[entry],
                 )
 
-    def _propose_create_page_from_sink(self, page_name: str, entries: list[dict]) -> None:
+    def _propose_create_page_from_sink(
+        self, page_name: str, entries: list[dict]
+    ) -> None:
         """Generate proposal for creating a new wiki page from sink entries."""
         non_dup_entries = [e for e in entries if e.get("note") != "duplicate"]
         if not non_dup_entries:
@@ -280,12 +298,14 @@ class WikiDreamEditor:
             query = entry.get("query", "").strip()
             answer = entry.get("answer", "").strip()
             if query and answer:
-                content_parts.extend([
-                    f"## {query}",
-                    "",
-                    f"{answer}",
-                    "",
-                ])
+                content_parts.extend(
+                    [
+                        f"## {query}",
+                        "",
+                        f"{answer}",
+                        "",
+                    ]
+                )
 
         content = "\n".join(content_parts)
         self.proposal_manager.create_proposal(
@@ -313,7 +333,8 @@ class WikiDreamEditor:
         if proposal_ids is None:
             # Apply all approved and auto_approved
             to_apply = [
-                p for p in self.proposal_manager._proposals
+                p
+                for p in self.proposal_manager._proposals
                 if p["status"] in ("approved", "auto_approved")
             ]
         else:
@@ -331,11 +352,13 @@ class WikiDreamEditor:
                 results["applied"] += 1
             except Exception as e:
                 logger.error(f"Failed to apply proposal {proposal['id']}: {e}")
-                results["errors"].append({
-                    "proposal_id": proposal["id"],
-                    "page": proposal["page_name"],
-                    "error": str(e),
-                })
+                results["errors"].append(
+                    {
+                        "proposal_id": proposal["id"],
+                        "page": proposal["page_name"],
+                        "error": str(e),
+                    }
+                )
 
         return results
 
@@ -365,7 +388,9 @@ class WikiDreamEditor:
         page_path = self.wiki.wiki_dir / f"{page_name}.md"
         page_path.parent.mkdir(parents=True, exist_ok=True)
         page_path.write_text(content)
-        self.wiki.index.upsert_page(page_name, content, str(page_path.relative_to(self.wiki.wiki_dir)))
+        self.wiki.index.upsert_page(
+            page_name, content, str(page_path.relative_to(self.wiki.wiki_dir))
+        )
         self.wiki.append_log("dream_create", f"Created {page_name} from Dream proposal")
 
     def _apply_append(self, page_name: str, content: str) -> None:
@@ -377,10 +402,16 @@ class WikiDreamEditor:
         existing = page_path.read_text()
         new_content = existing.rstrip() + "\n\n" + content + "\n"
         page_path.write_text(new_content)
-        self.wiki.index.upsert_page(page_name, new_content, str(page_path.relative_to(self.wiki.wiki_dir)))
-        self.wiki.append_log("dream_edit", f"Appended to {page_name} from Dream proposal")
+        self.wiki.index.upsert_page(
+            page_name, new_content, str(page_path.relative_to(self.wiki.wiki_dir))
+        )
+        self.wiki.append_log(
+            "dream_edit", f"Appended to {page_name} from Dream proposal"
+        )
 
-    def _apply_insert(self, page_name: str, content: str, marker: str, position: str) -> None:
+    def _apply_insert(
+        self, page_name: str, content: str, marker: str, position: str
+    ) -> None:
         """Insert content before or after a marker."""
         page_path = self.wiki.wiki_dir / f"{page_name}.md"
         if not page_path.exists():
@@ -396,10 +427,16 @@ class WikiDreamEditor:
             new_content = existing.replace(marker, marker + "\n\n" + content, 1)
 
         page_path.write_text(new_content)
-        self.wiki.index.upsert_page(page_name, new_content, str(page_path.relative_to(self.wiki.wiki_dir)))
-        self.wiki.append_log("dream_edit", f"Inserted into {page_name} from Dream proposal")
+        self.wiki.index.upsert_page(
+            page_name, new_content, str(page_path.relative_to(self.wiki.wiki_dir))
+        )
+        self.wiki.append_log(
+            "dream_edit", f"Inserted into {page_name} from Dream proposal"
+        )
 
-    def _apply_replace(self, page_name: str, content: str, start_marker: str, end_marker: str) -> None:
+    def _apply_replace(
+        self, page_name: str, content: str, start_marker: str, end_marker: str
+    ) -> None:
         """Replace content between markers."""
         page_path = self.wiki.wiki_dir / f"{page_name}.md"
         if not page_path.exists():
@@ -414,8 +451,12 @@ class WikiDreamEditor:
         new_content = existing[:start_idx] + content + existing[end_idx:]
 
         page_path.write_text(new_content)
-        self.wiki.index.upsert_page(page_name, new_content, str(page_path.relative_to(self.wiki.wiki_dir)))
-        self.wiki.append_log("dream_edit", f"Replaced section in {page_name} from Dream proposal")
+        self.wiki.index.upsert_page(
+            page_name, new_content, str(page_path.relative_to(self.wiki.wiki_dir))
+        )
+        self.wiki.append_log(
+            "dream_edit", f"Replaced section in {page_name} from Dream proposal"
+        )
 
     def _apply_surgical_edit(self, page: str, edit: dict) -> bool:
         """Apply a single surgical edit operation. Legacy method, use apply_wiki_dream_proposals instead."""
@@ -431,13 +472,17 @@ class WikiDreamEditor:
         elif edit_type == "insert_before":
             marker = edit.get("marker", "")
             if marker in content:
-                new_content = content.replace(marker, edit.get("content", "") + "\n\n" + marker, 1)
+                new_content = content.replace(
+                    marker, edit.get("content", "") + "\n\n" + marker, 1
+                )
             else:
                 return False
         elif edit_type == "insert_after":
             marker = edit.get("marker", "")
             if marker in content:
-                new_content = content.replace(marker, marker + "\n\n" + edit.get("content", ""), 1)
+                new_content = content.replace(
+                    marker, marker + "\n\n" + edit.get("content", ""), 1
+                )
             else:
                 return False
         elif edit_type == "replace_section":
@@ -446,7 +491,9 @@ class WikiDreamEditor:
             if start in content and end in content:
                 start_idx = content.index(start)
                 end_idx = content.index(end) + len(end)
-                new_content = content[:start_idx] + edit.get("content", "") + content[end_idx:]
+                new_content = (
+                    content[:start_idx] + edit.get("content", "") + content[end_idx:]
+                )
             else:
                 return False
         else:
@@ -461,7 +508,9 @@ class WikiDreamEditor:
         Note: This is a best-effort restore. Full backup/restore requires
         git or external version control.
         """
-        logger.warning(f"Restore for {timestamp} requested - requires git integration for full support")
+        logger.warning(
+            f"Restore for {timestamp} requested - requires git integration for full support"
+        )
         return False
 
     def _log_wiki_dream_run(self, results: dict) -> None:

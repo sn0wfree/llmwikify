@@ -99,8 +99,7 @@ class ContextStore:
         """Remove all expired entries (full sweep)."""
         now = time.monotonic()
         expired = [
-            k for k, (_, ts) in self._data.items()
-            if (now - ts) > self._ttl_seconds
+            k for k, (_, ts) in self._data.items() if (now - ts) > self._ttl_seconds
         ]
         for k in expired:
             del self._data[k]

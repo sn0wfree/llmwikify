@@ -45,8 +45,10 @@ async def approve_confirmation(confirmation_id: str, request: Request) -> Any:
     if response not in ("once", "always", "reject"):
         response = "once"
     return await service.approve_confirmation(
-        confirmation_id, wiki_id,
-        arguments=arguments, response=response,
+        confirmation_id,
+        wiki_id,
+        arguments=arguments,
+        response=response,
     )
 
 

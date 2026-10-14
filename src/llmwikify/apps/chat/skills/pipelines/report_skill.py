@@ -87,19 +87,23 @@ async def _generate_report(args: dict, ctx: SkillContext) -> SkillResult:
         lines.append(f"- [{title}]({url})")
 
     if knowledge_gaps:
-        lines.extend([
-            "",
-            "## Knowledge Gaps",
-            "",
-            *[f"- {g}" for g in knowledge_gaps],
-        ])
+        lines.extend(
+            [
+                "",
+                "## Knowledge Gaps",
+                "",
+                *[f"- {g}" for g in knowledge_gaps],
+            ]
+        )
 
     report_md = "\n".join(lines)
 
-    return SkillResult.ok({
-        "report_md": report_md,
-        "report_length": len(report_md),
-    })
+    return SkillResult.ok(
+        {
+            "report_md": report_md,
+            "report_length": len(report_md),
+        }
+    )
 
 
 # ─── Skill declaration ─────────────────────────────────────────

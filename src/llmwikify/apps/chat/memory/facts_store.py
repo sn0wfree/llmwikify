@@ -179,9 +179,7 @@ class MemoryFactsStore:
 
     def count(self) -> int:
         """Total fact count."""
-        row = self._mgr.select_one(
-            "SELECT COUNT(*) as cnt FROM memory_facts"
-        )
+        row = self._mgr.select_one("SELECT COUNT(*) as cnt FROM memory_facts")
         return row["cnt"] if row else 0
 
     def list_stale(self, threshold_days: int = 14) -> list[Fact]:

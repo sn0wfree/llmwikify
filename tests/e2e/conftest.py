@@ -89,6 +89,7 @@ def start_server(test_wiki, server_port):
     for _ in range(30):
         try:
             import urllib.request
+
             urllib.request.urlopen(f"{url}/api/wiki/status", timeout=1)
             break
         except Exception:

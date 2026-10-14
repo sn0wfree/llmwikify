@@ -94,20 +94,14 @@ class WikiService:
             )
 
             if self._config_manager is None:
-                self._config_manager = get_global_config_manager(
-                    lambda: self
-                )
+                self._config_manager = get_global_config_manager(lambda: self)
             default_id = self.get_default_wiki_id()
             wiki_root = None
             if default_id:
-                wiki_instance = self.wiki_registry.get_wiki_instance(
-                    default_id
-                )
+                wiki_instance = self.wiki_registry.get_wiki_instance(default_id)
                 if wiki_instance and wiki_instance.root:
                     wiki_root = wiki_instance.root
-            config = self._config_manager.load_effective_llm_config(
-                wiki_root
-            )
+            config = self._config_manager.load_effective_llm_config(wiki_root)
             from llmwikify.apps.chat.providers.registry import create_llm
 
             self._llm = create_llm(config)
@@ -126,20 +120,14 @@ class WikiService:
                 get_global_config_manager,
             )
 
-            self._config_manager = get_global_config_manager(
-                lambda: self
-            )
+            self._config_manager = get_global_config_manager(lambda: self)
         default_id = self.get_default_wiki_id()
         wiki_root = None
         if default_id:
-            wiki_instance = self.wiki_registry.get_wiki_instance(
-                default_id
-            )
+            wiki_instance = self.wiki_registry.get_wiki_instance(default_id)
             if wiki_instance and wiki_instance.root:
                 wiki_root = wiki_instance.root
-        config = self._config_manager.load_effective_llm_config(
-            wiki_root
-        )
+        config = self._config_manager.load_effective_llm_config(wiki_root)
         return resolve_chat_llm({"llm": config})
 
     # ─── Factory methods ─────────────────────────────────────────
@@ -148,9 +136,7 @@ class WikiService:
         """Get or create WikiDreamEditor for the given wiki."""
         return self._get_wiki_dream_editor(wiki_id)
 
-    def get_notification_manager(
-        self, wiki_id: str | None = None
-    ) -> Any:
+    def get_notification_manager(self, wiki_id: str | None = None) -> Any:
         """Get or create NotificationManager for the given wiki."""
         return self._get_notification_manager(wiki_id)
 
@@ -174,9 +160,7 @@ class WikiService:
             )
         return self._wiki_dream_editors[wiki_id]
 
-    def _get_notification_manager(
-        self, wiki_id: str | None = None
-    ) -> Any:
+    def _get_notification_manager(self, wiki_id: str | None = None) -> Any:
         wiki_id = wiki_id or self.get_default_wiki_id()
         if not wiki_id:
             raise ValueError("No wiki_id available")
@@ -249,9 +233,7 @@ class WikiService:
         editor = self._get_wiki_dream_editor(wiki_id)
         return editor.get_wiki_dream_edit_log(limit)
 
-    def get_wiki_dream_proposals(
-        self, wiki_id: str | None = None
-    ) -> dict:
+    def get_wiki_dream_proposals(self, wiki_id: str | None = None) -> dict:
         wiki_id = wiki_id or self.get_default_wiki_id()
         if not wiki_id:
             return {"proposals": {}, "stats": {}}
@@ -322,9 +304,7 @@ class WikiService:
 
     # ─── Confirmations (5 methods) ───────────────────────────────
 
-    def list_confirmations(
-        self, wiki_id: str | None = None
-    ) -> dict[str, list[dict]]:
+    def list_confirmations(self, wiki_id: str | None = None) -> dict[str, list[dict]]:
         wiki_id = wiki_id or self.get_default_wiki_id()
         if not wiki_id:
             return {}
@@ -348,11 +328,11 @@ class WikiService:
             if conf:
                 tool_name = conf.get("tool")
         except Exception:
-            logger.debug("Failed to fetch confirmation %s", confirmation_id, exc_info=True)
+            logger.debug(
+                "Failed to fetch confirmation %s", confirmation_id, exc_info=True
+            )
         registry = self.get_tool_registry(wiki_id)
-        result = registry.confirm_execution(
-            confirmation_id, arguments=arguments
-        )
+        result = registry.confirm_execution(confirmation_id, arguments=arguments)
         # v0.40: if response="always", save permission for future auto-approval
         if response == "always" and tool_name and result.get("status") != "error":
             self.db.save_permission(
@@ -386,9 +366,7 @@ class WikiService:
 
     # ─── Ingest audit (2 methods) ────────────────────────────────
 
-    def get_ingest_log(
-        self, wiki_id: str | None = None, limit: int = 20
-    ) -> list[dict]:
+    def get_ingest_log(self, wiki_id: str | None = None, limit: int = 20) -> list[dict]:
         wiki_id = wiki_id or self.get_default_wiki_id()
         if not wiki_id:
             return []
@@ -399,9 +377,7 @@ class WikiService:
 
     # ─── Status (1 method) ───────────────────────────────────────
 
-    def get_agent_status(
-        self, wiki_id: str | None = None
-    ) -> dict:
+    def get_agent_status(self, wiki_id: str | None = None) -> dict:
         wiki_id = wiki_id or self.get_default_wiki_id()
         if not wiki_id:
             return {
@@ -486,9 +462,7 @@ class WikiService:
         except KeyError:
             return {"error": f"Wiki not found: {wiki_id}"}
 
-    def scan_wikis(
-        self, scan_paths: str = ".", scan_depth: int = 2
-    ) -> dict:
+    def scan_wikis(self, scan_paths: str = ".", scan_depth: int = 2) -> dict:
         paths = [p.strip() for p in scan_paths.split(",")]
         new_wikis = self.wiki_registry.scan_directories(paths, scan_depth)
         return {

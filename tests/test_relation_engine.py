@@ -77,7 +77,9 @@ class TestRelationEngineAddRelation:
         """Test adding relation with invalid confidence raises ValueError."""
         engine = RelationEngine(wiki_instance.index)
         with pytest.raises(ValueError, match="Unknown confidence"):
-            engine.add_relation(source="A", target="B", relation="uses", confidence="INVALID")
+            engine.add_relation(
+                source="A", target="B", relation="uses", confidence="INVALID"
+            )
 
     def test_add_relations_batch(self, wiki_instance):
         """Test batch adding relations."""
@@ -121,7 +123,9 @@ class TestRelationEngineNeighbors:
 
     def test_get_neighbors_with_confidence(self, populated_engine):
         """Test getting neighbors filtered by confidence."""
-        neighbors = populated_engine.get_neighbors("A", direction="both", confidence="EXTRACTED")
+        neighbors = populated_engine.get_neighbors(
+            "A", direction="both", confidence="EXTRACTED"
+        )
         assert len(neighbors) == 2  # A->B, A->D (both EXTRACTED)
 
     def test_get_neighbors_empty(self, populated_engine):

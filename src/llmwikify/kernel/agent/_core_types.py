@@ -8,6 +8,7 @@
 
 历史: 从 apps/chat/agent/unified/core.py 搬迁。
 """
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -34,7 +35,9 @@ class StepResult:
     error: str | None = None
 
     @staticmethod
-    def ok(output: Any = None, events: list[dict[str, Any]] | None = None) -> StepResult:
+    def ok(
+        output: Any = None, events: list[dict[str, Any]] | None = None
+    ) -> StepResult:
         return StepResult(output=output, events=events or [])
 
     @staticmethod
@@ -59,8 +62,7 @@ class StepHandler(ABC):
     """
 
     @abstractmethod
-    async def handle(self, input: Any, spec: Any, ctx: Any) -> StepResult:
-        ...
+    async def handle(self, input: Any, spec: Any, ctx: Any) -> StepResult: ...
 
 
 # ─── StreamingHandler — 有状态流式接口 ──────────────────
@@ -84,7 +86,10 @@ class StreamingHandler(ABC):
 
     @abstractmethod
     def stream(
-        self, input: Any, spec: Any, ctx: Any,
+        self,
+        input: Any,
+        spec: Any,
+        ctx: Any,
     ) -> AsyncIterator[dict[str, Any] | StepResult]:
         """yield SSE events，最后一个 yield StepResult(output=结果)。"""
         ...

@@ -19,6 +19,7 @@ here — those have their own tests in test_autoresearch.py.
 The point here is to confirm the new chat framework
 (ResearchAgent → Harness) hangs together.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -48,37 +49,55 @@ class StepLLM:
         self.call_index = 0
 
     def chat(self, messages, **kw) -> str:
-        self.calls.append([dict(m) if isinstance(m, dict) else {
-            "role": m.role, "content": m.content
-        } for m in messages])
+        self.calls.append(
+            [
+                (
+                    dict(m)
+                    if isinstance(m, dict)
+                    else {"role": m.role, "content": m.content}
+                )
+                for m in messages
+            ]
+        )
         idx = self.call_index
         self.call_index += 1
 
         # First call: plan (returns a list of sub-queries)
         if idx == 0:
-            return json.dumps({
-                "sub_queries": ["what is X?", "history of X"],
-                "rationale": "two complementary angles",
-            })
+            return json.dumps(
+                {
+                    "sub_queries": ["what is X?", "history of X"],
+                    "rationale": "two complementary angles",
+                }
+            )
         # Second call: clarification (returns empty clarifications)
         if idx == 1:
-            return json.dumps({
-                "clarifications": [],
-                "final_query": "Tell me about X",
-            })
+            return json.dumps(
+                {
+                    "clarifications": [],
+                    "final_query": "Tell me about X",
+                }
+            )
         # Third call: source analysis
         if idx == 2:
-            return json.dumps({
-                "sources": [
-                    {"url": "https://fake.example.com/a", "summary": "X is fake"},
-                    {"url": "https://fake.example.com/b", "summary": "More about X"},
-                ],
-            })
+            return json.dumps(
+                {
+                    "sources": [
+                        {"url": "https://fake.example.com/a", "summary": "X is fake"},
+                        {
+                            "url": "https://fake.example.com/b",
+                            "summary": "More about X",
+                        },
+                    ],
+                }
+            )
         # Fourth call: synthesis
         if idx == 3:
-            return json.dumps({
-                "synthesis": "X is a topic of great interest. Here is a fake report.",
-            })
+            return json.dumps(
+                {
+                    "synthesis": "X is a topic of great interest. Here is a fake report.",
+                }
+            )
         # Fifth call: final report
         if idx == 4:
             return (
@@ -130,11 +149,13 @@ class TestResearchAgentIntegration:
 
         # Now feed the report into the Harness.
         h = Harness()
-        h.add(GoldenCase(
-            name="report_mentions_fake",
-            inputs={"query": "X"},
-            expected_contains=["FAKE"],
-        ))
+        h.add(
+            GoldenCase(
+                name="report_mentions_fake",
+                inputs={"query": "X"},
+                expected_contains=["FAKE"],
+            )
+        )
 
         async def runner(inputs: dict) -> str:
             return report_text

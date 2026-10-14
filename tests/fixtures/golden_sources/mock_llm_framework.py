@@ -26,6 +26,7 @@ import yaml
 @dataclass
 class MockLLMConfig:
     """Configuration for mock LLM responses."""
+
     prompt_name: str
     response: dict[str, Any]
     call_count: int = 0
@@ -35,6 +36,7 @@ class MockLLMConfig:
 @dataclass
 class GoldenTestResult:
     """Result of running a golden test."""
+
     golden_id: str
     passed: bool
     checks_passed: int
@@ -55,7 +57,9 @@ class GoldenTestResult:
 class GoldenTestRunner:
     """Runs golden tests using mock LLM responses."""
 
-    def run_golden_test(self, golden_spec: dict[str, Any], wiki: Any) -> GoldenTestResult:
+    def run_golden_test(
+        self, golden_spec: dict[str, Any], wiki: Any
+    ) -> GoldenTestResult:
         """Run a single golden test with mock LLM.
 
         Args:
@@ -86,10 +90,11 @@ class GoldenTestRunner:
             result.passed = False
             return result
 
-    def _test_analyze_source(self, golden_spec: dict[str, Any], result: GoldenTestResult) -> GoldenTestResult:
+    def _test_analyze_source(
+        self, golden_spec: dict[str, Any], result: GoldenTestResult
+    ) -> GoldenTestResult:
         """Test analyze_source pipeline with mock LLM."""
         from unittest.mock import MagicMock, patch
-
 
         source = golden_spec.get("source", {})
         expected = golden_spec.get("expected", {})
@@ -144,12 +149,18 @@ class GoldenTestRunner:
         if "min_entities" in expected:
             entities = mock_response.get("entities", [])
             if len(entities) >= expected["min_entities"]:
-                result.add_pass(f"entities: {len(entities)} >= {expected['min_entities']}")
+                result.add_pass(
+                    f"entities: {len(entities)} >= {expected['min_entities']}"
+                )
             else:
-                result.add_fail(f"entities: {len(entities)} < {expected['min_entities']}")
+                result.add_fail(
+                    f"entities: {len(entities)} < {expected['min_entities']}"
+                )
 
         if "entity_names" in expected:
-            response_entities = [e.get("name", "") for e in mock_response.get("entities", [])]
+            response_entities = [
+                e.get("name", "") for e in mock_response.get("entities", [])
+            ]
             for entity_name in expected["entity_names"][:3]:  # Check first 3
                 if entity_name in response_entities:
                     result.add_pass(f"entity '{entity_name}' found")
@@ -158,14 +169,20 @@ class GoldenTestRunner:
         if "min_key_facts" in expected:
             facts = mock_response.get("key_facts", [])
             if len(facts) >= expected["min_key_facts"]:
-                result.add_pass(f"key_facts: {len(facts)} >= {expected['min_key_facts']}")
+                result.add_pass(
+                    f"key_facts: {len(facts)} >= {expected['min_key_facts']}"
+                )
             else:
-                result.add_fail(f"key_facts: {len(facts)} < {expected['min_key_facts']}")
+                result.add_fail(
+                    f"key_facts: {len(facts)} < {expected['min_key_facts']}"
+                )
 
         if "min_data_gaps" in expected:
             gaps = mock_response.get("data_gaps", [])
             if len(gaps) >= expected["min_data_gaps"]:
-                result.add_pass(f"data_gaps: {len(gaps)} >= {expected['min_data_gaps']}")
+                result.add_pass(
+                    f"data_gaps: {len(gaps)} >= {expected['min_data_gaps']}"
+                )
             else:
                 result.add_fail(f"data_gaps: {len(gaps)} < {expected['min_data_gaps']}")
 
@@ -173,8 +190,7 @@ class GoldenTestRunner:
             contradictions = mock_response.get("potential_contradictions", [])
             keywords = expected.get("contradiction_keywords", [])
             found = any(
-                any(kw.lower() in c.lower() for kw in keywords)
-                for c in contradictions
+                any(kw.lower() in c.lower() for kw in keywords) for c in contradictions
             )
             if contradictions and found:
                 result.add_pass(f"contradictions detected: {len(contradictions)}")
@@ -187,7 +203,9 @@ class GoldenTestRunner:
         result.passed = len(result.failures) == 0
         return result
 
-    def _test_generate_wiki_ops(self, golden_spec: dict[str, Any], result: GoldenTestResult) -> GoldenTestResult:
+    def _test_generate_wiki_ops(
+        self, golden_spec: dict[str, Any], result: GoldenTestResult
+    ) -> GoldenTestResult:
         """Test generate_wiki_ops pipeline with mock LLM."""
         analysis = golden_spec.get("analysis", {})
         expected = golden_spec.get("expected", {})
@@ -198,9 +216,13 @@ class GoldenTestRunner:
         if "min_write_page_ops" in expected:
             write_ops = [op for op in mock_ops if op.get("action") == "write_page"]
             if len(write_ops) >= expected["min_write_page_ops"]:
-                result.add_pass(f"write_page ops: {len(write_ops)} >= {expected['min_write_page_ops']}")
+                result.add_pass(
+                    f"write_page ops: {len(write_ops)} >= {expected['min_write_page_ops']}"
+                )
             else:
-                result.add_fail(f"write_page ops: {len(write_ops)} < {expected['min_write_page_ops']}")
+                result.add_fail(
+                    f"write_page ops: {len(write_ops)} < {expected['min_write_page_ops']}"
+                )
 
         if expected.get("must_include_log"):
             log_ops = [op for op in mock_ops if op.get("action") == "log"]
@@ -221,7 +243,11 @@ class GoldenTestRunner:
                 result.add_fail("no wikilinks found in write_page content")
 
         if "suggested_page_names" in expected:
-            page_names = [op.get("page_name", "") for op in mock_ops if op.get("action") == "write_page"]
+            page_names = [
+                op.get("page_name", "")
+                for op in mock_ops
+                if op.get("action") == "write_page"
+            ]
             for suggested in expected["suggested_page_names"]:
                 if suggested in page_names:
                     result.add_pass(f"page '{suggested}' created")
@@ -231,7 +257,9 @@ class GoldenTestRunner:
         result.passed = len(result.failures) == 0
         return result
 
-    def _test_synthesize(self, golden_spec: dict[str, Any], result: GoldenTestResult) -> GoldenTestResult:
+    def _test_synthesize(
+        self, golden_spec: dict[str, Any], result: GoldenTestResult
+    ) -> GoldenTestResult:
         """Test wiki_synthesize pipeline with mock LLM."""
         expected = golden_spec.get("expected", {})
 
@@ -257,14 +285,20 @@ class GoldenTestRunner:
         if "min_content_length" in expected:
             answer = mock_response.get("answer", "")
             if len(answer) >= expected["min_content_length"]:
-                result.add_pass(f"content length: {len(answer)} >= {expected['min_content_length']}")
+                result.add_pass(
+                    f"content length: {len(answer)} >= {expected['min_content_length']}"
+                )
             else:
-                result.add_fail(f"content length: {len(answer)} < {expected['min_content_length']}")
+                result.add_fail(
+                    f"content length: {len(answer)} < {expected['min_content_length']}"
+                )
 
         result.passed = len(result.failures) == 0
         return result
 
-    def _build_mock_analysis(self, source: dict[str, Any], expected: dict[str, Any]) -> dict[str, Any]:
+    def _build_mock_analysis(
+        self, source: dict[str, Any], expected: dict[str, Any]
+    ) -> dict[str, Any]:
         """Build a mock analyze_source response that satisfies expected output."""
         content = source.get("content", "")
         wiki_index = source.get("wiki_index", "")
@@ -315,7 +349,9 @@ class GoldenTestRunner:
 
         return response
 
-    def _build_mock_operations(self, analysis: dict[str, Any], expected: dict[str, Any]) -> list[dict[str, Any]]:
+    def _build_mock_operations(
+        self, analysis: dict[str, Any], expected: dict[str, Any]
+    ) -> list[dict[str, Any]]:
         """Build mock write_page operations from analysis."""
         ops = []
         suggested_pages = analysis.get("suggested_pages", [])
@@ -324,20 +360,26 @@ class GoldenTestRunner:
             content = f"# {page['name']}\n\n{page.get('summary', '')}\n\n"
             cross_refs = analysis.get("cross_refs", [])
             if cross_refs:
-                content += f"See also: {', '.join(f'[[{r}]]' for r in cross_refs[:3])}\n"
+                content += (
+                    f"See also: {', '.join(f'[[{r}]]' for r in cross_refs[:3])}\n"
+                )
 
-            ops.append({
-                "action": "write_page",
-                "page_name": page["name"],
-                "content": content,
-            })
+            ops.append(
+                {
+                    "action": "write_page",
+                    "page_name": page["name"],
+                    "content": content,
+                }
+            )
 
         # Add log operation
-        ops.append({
-            "action": "log",
-            "operation": "ingest",
-            "details": f"Processed analysis, created {len(suggested_pages)} pages",
-        })
+        ops.append(
+            {
+                "action": "log",
+                "operation": "ingest",
+                "details": f"Processed analysis, created {len(suggested_pages)} pages",
+            }
+        )
 
         return ops
 
@@ -351,7 +393,9 @@ class GoldenTestRunner:
 
         if source_pages:
             for page in source_pages:
-                answer += f"As noted in [[{page['name']}]], the topic is well-covered.\n\n"
+                answer += (
+                    f"As noted in [[{page['name']}]], the topic is well-covered.\n\n"
+                )
 
         answer += "## Summary\n\nThe key points have been addressed above.\n\n"
         answer += f"## Sources\n\n- Query: {query}\n"

@@ -33,7 +33,6 @@ from __future__ import annotations
 
 import inspect
 
-
 # ============================================================================
 # WikiAnalyzer is a thin aggregator
 # ============================================================================
@@ -72,7 +71,8 @@ def test_wiki_analyzer_does_not_define_inline_detection_rules():
         src = inspect.getsource(method)
         # Method body should ONLY contain a return statement
         body_lines = [
-            line.strip() for line in src.splitlines()
+            line.strip()
+            for line in src.splitlines()
             if line.strip()
             and not line.strip().startswith("def ")
             and not line.strip().startswith('"""')
@@ -102,7 +102,7 @@ def test_wiki_analyzer_lint_method_partitions_results_by_type():
     # Must use _run_all_rules
     assert "_run_all_rules()" in src
     # Must use list-comprehension partitioning by type
-    assert "r.get(\"type\")" in src or "r.get('type')" in src
+    assert 'r.get("type")' in src or "r.get('type')" in src
     # Must NOT call individual _detect_X
     old_calls = [
         "_detect_potential_contradictions()",
@@ -112,9 +112,7 @@ def test_wiki_analyzer_lint_method_partitions_results_by_type():
         "_detect_redundancy()",
     ]
     for old in old_calls:
-        assert old not in src, (
-            f"WikiAnalyzer.lint still has old call: {old}"
-        )
+        assert old not in src, f"WikiAnalyzer.lint still has old call: {old}"
 
 
 # ============================================================================
@@ -146,9 +144,9 @@ def test_wiki_mixin_lint_methods_all_delegate_to_wiki_analyzer():
         # ``WikiAnalyzer(self)`` or via the cached ``self._analyzer``
         # attribute — Phase 2 #4 accepts both as legitimate
         # delegator patterns).
-        assert "WikiAnalyzer" in src or "_analyzer" in src, (
-            f"WikiLintMixin.{name} should delegate to WikiAnalyzer"
-        )
+        assert (
+            "WikiAnalyzer" in src or "_analyzer" in src
+        ), f"WikiLintMixin.{name} should delegate to WikiAnalyzer"
 
 
 def test_wiki_mixin_lint_is_pure_delegation():
@@ -172,7 +170,9 @@ def test_wiki_mixin_lint_is_pure_delegation():
         method = getattr(WikiLintMixin, name)
         src = inspect.getsource(method)
         # Count "return" statements — should be exactly 1 per method
-        return_count = sum(1 for line in src.splitlines() if line.strip().startswith("return "))
+        return_count = sum(
+            1 for line in src.splitlines() if line.strip().startswith("return ")
+        )
         assert return_count == 1, (
             f"WikiLintMixin.{name} has {return_count} return statements — "
             f"expected exactly 1 (a single delegator). Inline logic was added."
@@ -180,7 +180,8 @@ def test_wiki_mixin_lint_is_pure_delegation():
         # And no inline assignments outside the return
         # (e.g., no `result = ...` followed by `print(result)`)
         non_return_stmts = [
-            line.strip() for line in src.splitlines()
+            line.strip()
+            for line in src.splitlines()
             if line.strip()
             and not line.strip().startswith("def ")
             and not line.strip().startswith('"""')
@@ -194,15 +195,17 @@ def test_wiki_mixin_lint_is_pure_delegation():
         # (only the signature, the return, and a closing)
         # For multi-line delegates (like lint) there may be no non-return stmts
         inline_logic = [
-            line for line in non_return_stmts
-            if not line.startswith("\"") and not line.startswith("'")
+            line
+            for line in non_return_stmts
+            if not line.startswith('"')
+            and not line.startswith("'")
             and " -> " not in line
             and not line.startswith("=")  # KW-only arg defaults
             and "import " not in line
         ]
-        assert len(inline_logic) <= 1, (
-            f"WikiLintMixin.{name} has inline logic: {inline_logic[:3]}"
-        )
+        assert (
+            len(inline_logic) <= 1
+        ), f"WikiLintMixin.{name} has inline logic: {inline_logic[:3]}"
 
 
 def test_wiki_mixin_lint_class_docstring_says_aggregator():
@@ -210,9 +213,9 @@ def test_wiki_mixin_lint_class_docstring_says_aggregator():
     from llmwikify.kernel.wiki.mixins.analysis.lint import WikiLintMixin
 
     docstring = inspect.getdoc(WikiLintMixin) or ""
-    assert "delegat" in docstring.lower(), (
-        "WikiLintMixin docstring should mention its delegation role"
-    )
+    assert (
+        "delegat" in docstring.lower()
+    ), "WikiLintMixin docstring should mention its delegation role"
 
 
 # ============================================================================
@@ -237,9 +240,9 @@ def test_eight_rule_files_exist_on_disk():
         "redundancy.py",
     }
     actual = {p.name for p in rules_dir.glob("*.py")}
-    assert expected.issubset(actual), (
-        f"missing rule files: {expected - actual}\n  actual: {actual}"
-    )
+    assert expected.issubset(
+        actual
+    ), f"missing rule files: {expected - actual}\n  actual: {actual}"
 
 
 # ============================================================================

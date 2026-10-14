@@ -47,15 +47,18 @@ def tracked(action_name: str) -> Any:
         async def action_clarify(ctx, state):
             ...  # body unchanged, no indentation bump
     """
+
     def decorator(fn) -> Any:
         async def wrapper(ctx: ActionContext, state: ResearchState) -> None:
             with ctx.metrics.record(action_name):
                 async for event in fn(ctx, state):
                     yield event
+
         wrapper.__name__ = fn.__name__
         wrapper.__doc__ = fn.__doc__
         wrapper.__wrapped__ = fn
         return wrapper
+
     return decorator
 
 
@@ -70,6 +73,7 @@ class ActionContext:
     This replaces the ``self.xxx`` access pattern: each action receives
     ``ctx`` as its first arg instead of being an instance method.
     """
+
     wiki: Any
     db: Any  # AutoResearchDatabase
     session_manager: ResearchSessionManager
@@ -85,7 +89,7 @@ class ActionContext:
     metrics: MetricsCollector | None
     planning_llm: StreamableLLMClient
     default_llm: StreamableLLMClient  # used by ResearchReviewer
-    report_llm: StreamableLLMClient   # used by ReportGenerator + ResearchRevisor
+    report_llm: StreamableLLMClient  # used by ReportGenerator + ResearchRevisor
 
 
 # ─── Helpers (extracted from engine.py) ─────────────────────────────────
@@ -111,7 +115,9 @@ def _warn_invalid_transition(from_phase: str, to_phase: str) -> None:
     if to_phase not in valid_targets:
         logger.warning(
             "Invalid state transition: %s → %s (valid: %s)",
-            from_phase, to_phase, valid_targets or "none",
+            from_phase,
+            to_phase,
+            valid_targets or "none",
         )
 
 
@@ -140,7 +146,8 @@ async def _plan_sub_queries(ctx: ActionContext, query: str) -> list[dict[str, An
 
     try:
         result = await run_prompt(
-            ctx, "research_plan",
+            ctx,
+            "research_plan",
             query=query,
             wiki_index=wiki_index[:2000] if wiki_index else "",
             local_wiki_matches=local_wiki_matches,
@@ -158,11 +165,13 @@ async def _plan_sub_queries(ctx: ActionContext, query: str) -> list[dict[str, An
         sq_type = item.get("source_type", "web")
         if sq_type not in ("web", "youtube", "wiki", "pdf"):
             sq_type = "web"
-        sub_queries.append({
-            "query": item.get("query", ""),
-            "source_type": sq_type,
-            "url": item.get("url"),
-        })
+        sub_queries.append(
+            {
+                "query": item.get("query", ""),
+                "source_type": sq_type,
+                "url": item.get("url"),
+            }
+        )
 
     if not sub_queries:
         sub_queries.append({"query": query, "source_type": "web", "url": ""})
@@ -171,7 +180,9 @@ async def _plan_sub_queries(ctx: ActionContext, query: str) -> list[dict[str, An
 
 
 async def _plan_for_gaps(
-    ctx: ActionContext, query: str, gaps: list[str],
+    ctx: ActionContext,
+    query: str,
+    gaps: list[str],
 ) -> list[dict[str, Any]]:
     """Generate sub-queries to fill knowledge gaps."""
     local_wiki_matches = ""
@@ -192,7 +203,7 @@ async def _plan_for_gaps(
     if local_wiki_matches:
         wiki_context = (
             f"\n\nExisting wiki articles that may help fill gaps:\n"
-            f"{local_wiki_matches}\nUse source_type \"wiki\" for these if relevant."
+            f'{local_wiki_matches}\nUse source_type "wiki" for these if relevant.'
         )
 
     try:
@@ -200,7 +211,8 @@ async def _plan_for_gaps(
         # the '- ' formatting). The [:5] slice limits to the top 5
         # gaps so the user message stays compact.
         result = await run_prompt(
-            ctx, "research_replan",
+            ctx,
+            "research_replan",
             query=query,
             gaps=gaps[:5],
             wiki_context=wiki_context,
@@ -216,11 +228,13 @@ async def _plan_for_gaps(
         sq_type = item.get("source_type", "web")
         if sq_type not in ("web", "youtube", "wiki", "pdf"):
             sq_type = "web"
-        sub_queries.append({
-            "query": item.get("query", ""),
-            "source_type": sq_type,
-            "url": item.get("url"),
-        })
+        sub_queries.append(
+            {
+                "query": item.get("query", ""),
+                "source_type": sq_type,
+                "url": item.get("url"),
+            }
+        )
 
     return sub_queries
 
@@ -292,7 +306,8 @@ def synthesis_to_text(synthesis: dict | None) -> str:
 
 @tracked("clarify")
 async def action_clarify(
-    ctx: ActionContext, state: ResearchState,
+    ctx: ActionContext,
+    state: ResearchState,
 ):
     """6-step step 1: clarify research context, boundaries, position, premises.
 
@@ -301,14 +316,21 @@ async def action_clarify(
     """
     # Skip if disabled
     if not ctx.config.get("clarify_enabled", True):
-        state.clarification = {"scope_check": True, "context": "skipped (clarify_enabled=False)"}
+        state.clarification = {
+            "scope_check": True,
+            "context": "skipped (clarify_enabled=False)",
+        }
         return
 
     _warn_invalid_transition(state.phase, "clarifying")
 
     state.phase = "clarifying"
-    ctx.session_manager.update_status(state.session_id, "clarifying", "clarifying", None)
-    yield _step_event(state.session_id, "clarifying", "Clarifying research scope and boundaries...")
+    ctx.session_manager.update_status(
+        state.session_id, "clarifying", "clarifying", None
+    )
+    yield _step_event(
+        state.session_id, "clarifying", "Clarifying research scope and boundaries..."
+    )
 
     # Build wiki context
     wiki_context = ""
@@ -337,13 +359,16 @@ async def action_clarify(
     # Persist to DB (independent autoresearch.db — no shared schema)
     try:
         ctx.db.update_research_status(
-            state.session_id, "clarifying", "clarifying",
+            state.session_id,
+            "clarifying",
+            "clarifying",
             iteration_round=state.round,
             synthesis_json=None,
             review_json=None,
         )
         ctx.db.update_six_step_fields(
-            state.session_id, clarification=clarification,
+            state.session_id,
+            clarification=clarification,
             self_loop_counts=state.self_loop_counts,
             self_loop_history=state.self_loop_history,
         )
@@ -368,25 +393,34 @@ async def action_clarify(
 
 @tracked("plan")
 async def action_plan(
-    ctx: ActionContext, state: ResearchState,
+    ctx: ActionContext,
+    state: ResearchState,
 ):
     """Plan sub-queries (initial or replanning for gaps)."""
     _warn_invalid_transition(state.phase, "planning")
 
     state.phase = "planning"
     ctx.session_manager.update_status(state.session_id, "planning", "planning", None)
-    yield _step_event(state.session_id, "planning", f"Planning sub-queries (round {state.round})...")
+    yield _step_event(
+        state.session_id, "planning", f"Planning sub-queries (round {state.round})..."
+    )
 
     # Decide: initial plan or gap-focused replan
     if state.knowledge_gaps and state.sub_queries:
-        yield {"type": "gap_detected", "gaps": state.knowledge_gaps, "round": state.round}
+        yield {
+            "type": "gap_detected",
+            "gaps": state.knowledge_gaps,
+            "round": state.round,
+        }
         sub_queries = await _plan_for_gaps(ctx, state.query, state.knowledge_gaps)
     else:
         sub_queries = await _plan_sub_queries(ctx, state.query)
 
     # Deduplicate against existing
     existing_queries = {sq["query"].lower().strip() for sq in state.sub_queries}
-    new_queries = [sq for sq in sub_queries if sq["query"].lower().strip() not in existing_queries]
+    new_queries = [
+        sq for sq in sub_queries if sq["query"].lower().strip() not in existing_queries
+    ]
 
     for sq in new_queries[:5]:  # Limit per round
         sq_id = ctx.session_manager.add_sub_query(
@@ -402,12 +436,17 @@ async def action_plan(
             "url": sq.get("url"),
         }
 
-    yield {"type": "progress", "progress": 0.1, "message": f"Round {state.round}: {len(new_queries)} new sub-queries"}
+    yield {
+        "type": "progress",
+        "progress": 0.1,
+        "message": f"Round {state.round}: {len(new_queries)} new sub-queries",
+    }
 
 
 @tracked("gather")
 async def action_gather(
-    ctx: ActionContext, state: ResearchState,
+    ctx: ActionContext,
+    state: ResearchState,
 ):
     """Gather sources for ungathered or failed sub-queries."""
     _warn_invalid_transition(state.phase, "gathering")
@@ -421,10 +460,7 @@ async def action_gather(
 
     # DR-2: Also retry failed sub-queries (max 1 retry per sub-query)
     failed = [sq for sq in state.sub_queries if sq.get("status") == "failed"]
-    retryable = [
-        sq for sq in failed
-        if sq.get("retry_count", 0) < 1
-    ]
+    retryable = [sq for sq in failed if sq.get("retry_count", 0) < 1]
     if retryable:
         yield {"type": "retrying_failed", "count": len(retryable)}
         for sq in retryable:
@@ -438,11 +474,16 @@ async def action_gather(
             yield event
 
     sources = ctx.db.get_sources(state.session_id) or []
-    yield {"type": "progress", "progress": 0.4, "message": f"Gathered {len(sources)} sources total"}
+    yield {
+        "type": "progress",
+        "progress": 0.4,
+        "message": f"Gathered {len(sources)} sources total",
+    }
 
     # ─── 6-step step 2: evidence scoring (run only when enabled) ───
     if ctx.config.get("evidence_scoring_enabled", True) and sources:
         from llmwikify.apps.chat.harness.source_filter import SourceFilter
+
         sf = SourceFilter(ctx.config)
         new_scores: dict[str, float] = {}
         for src in sources:
@@ -480,7 +521,8 @@ async def action_gather(
 
 @tracked("analyze")
 async def action_analyze(
-    ctx: ActionContext, state: ResearchState,
+    ctx: ActionContext,
+    state: ResearchState,
 ):
     """Analyze unanalyzed sources."""
     _warn_invalid_transition(state.phase, "analyzing")
@@ -511,14 +553,19 @@ async def action_analyze(
 
 @tracked("synthesize")
 async def action_synthesize(
-    ctx: ActionContext, state: ResearchState,
+    ctx: ActionContext,
+    state: ResearchState,
 ):
     """Synthesize findings from analyzed sources."""
     _warn_invalid_transition(state.phase, "synthesizing")
 
     state.phase = "synthesizing"
-    ctx.session_manager.update_status(state.session_id, "synthesizing", "synthesizing", None)
-    yield _step_event(state.session_id, "synthesizing", "Synthesizing cross-source findings...")
+    ctx.session_manager.update_status(
+        state.session_id, "synthesizing", "synthesizing", None
+    )
+    yield _step_event(
+        state.session_id, "synthesizing", "Synthesizing cross-source findings..."
+    )
 
     sources = ctx.db.get_sources(state.session_id) or []
     synthesizer = ctx.synthesizer
@@ -528,23 +575,30 @@ async def action_synthesize(
 
     # Persist synthesis for resume
     ctx.session_manager.update_status(
-        state.session_id, "synthesizing", "synthesizing", None,
+        state.session_id,
+        "synthesizing",
+        "synthesizing",
+        None,
         iteration_round=state.round,
         synthesis_json=__import__("json").dumps(state.synthesis),
     )
 
-    yield {"type": "synthesis_complete", "synthesis": {
-        "reinforced_claims": state.synthesis.get("reinforced_claims", []),
-        "contradictions": state.synthesis.get("contradictions", []),
-        "knowledge_gaps": state.synthesis.get("knowledge_gaps", []),
-        "new_entities": state.synthesis.get("new_entities", []),
-    }}
+    yield {
+        "type": "synthesis_complete",
+        "synthesis": {
+            "reinforced_claims": state.synthesis.get("reinforced_claims", []),
+            "contradictions": state.synthesis.get("contradictions", []),
+            "knowledge_gaps": state.synthesis.get("knowledge_gaps", []),
+            "new_entities": state.synthesis.get("new_entities", []),
+        },
+    }
     yield {"type": "progress", "progress": 0.65, "message": "Synthesis complete"}
 
     # ─── 6-step step 3: reasoning chain check ───
     if ctx.config.get("reasoning_check_enabled", True):
         try:
             from llmwikify.apps.chat.reasoning_checker import ReasoningChecker
+
             checker = ReasoningChecker()
             synth_text = synthesis_to_text(state.synthesis)
             result = checker.check(
@@ -566,7 +620,8 @@ async def action_synthesize(
 
 @tracked("report")
 async def action_report(
-    ctx: ActionContext, state: ResearchState,
+    ctx: ActionContext,
+    state: ResearchState,
 ):
     """Generate research report."""
     _warn_invalid_transition(state.phase, "reporting")
@@ -590,7 +645,9 @@ async def action_report(
 
     try:
         async for event in generator.generate_streaming(
-            state.query, sources, state.synthesis or {},
+            state.query,
+            sources,
+            state.synthesis or {},
             six_step_context=six_step_context,
         ):
             if event["type"] == "chunk":
@@ -621,16 +678,24 @@ async def action_report(
             state.report_md = "".join(report_chunks)
 
         # Persist report immediately so it survives pause/cancel/error
-        ctx.session_manager.persist_report(state.session_id, {
-            "markdown": state.report_md,
-            "query": state.query,
-            "quality_score": state.quality_score,
-            "rounds": state.round,
-            "sources": [
-                {"id": s["id"], "title": s.get("title", ""), "url": s.get("url", ""), "source_type": s.get("source_type", "")}
-                for s in sources
-            ],
-        })
+        ctx.session_manager.persist_report(
+            state.session_id,
+            {
+                "markdown": state.report_md,
+                "query": state.query,
+                "quality_score": state.quality_score,
+                "rounds": state.round,
+                "sources": [
+                    {
+                        "id": s["id"],
+                        "title": s.get("title", ""),
+                        "url": s.get("url", ""),
+                        "source_type": s.get("source_type", ""),
+                    }
+                    for s in sources
+                ],
+            },
+        )
         yield {"type": "progress", "progress": 0.75, "message": "Report generated"}
     except Exception as e:
         if not streaming_failed:
@@ -646,6 +711,7 @@ async def action_report(
             from llmwikify.apps.chat.harness.structure_validator import (
                 StructureValidator,
             )
+
             validator = StructureValidator()
             result = validator.validate(
                 report=state.report_md,
@@ -665,7 +731,8 @@ async def action_report(
 
 @tracked("review")
 async def action_review(
-    ctx: ActionContext, state: ResearchState,
+    ctx: ActionContext,
+    state: ResearchState,
 ):
     """Review report quality."""
     _warn_invalid_transition(state.phase, "reviewing")
@@ -679,7 +746,9 @@ async def action_review(
     try:
         six_step_context = _build_six_step_context(state)
         state.review = await reviewer.review(
-            state.query, state.report_md or "", sources,
+            state.query,
+            state.report_md or "",
+            sources,
             six_step_context=six_step_context,
         )
     except Exception as e:
@@ -704,7 +773,10 @@ async def action_review(
 
     # Persist review for resume
     ctx.session_manager.update_status(
-        state.session_id, "reviewing", "reviewing", None,
+        state.session_id,
+        "reviewing",
+        "reviewing",
+        None,
         iteration_round=state.round,
         review_json=__import__("json").dumps(state.review),
     )
@@ -727,7 +799,8 @@ async def action_review(
 
 @tracked("revise")
 async def action_revise(
-    ctx: ActionContext, state: ResearchState,
+    ctx: ActionContext,
+    state: ResearchState,
 ):
     """Revise report based on review feedback."""
     _warn_invalid_transition(state.phase, "revise")
@@ -737,20 +810,30 @@ async def action_revise(
     sources = ctx.db.get_sources(state.session_id) or []
     revisor = ctx.revisor
     try:
-        state.report_md = await revisor.revise(state.report_md or "", state.issues, sources)
+        state.report_md = await revisor.revise(
+            state.report_md or "", state.issues, sources
+        )
         # Reset review so it gets re-evaluated
         state.review = None
         # Persist revised report immediately so it survives pause/cancel/error
-        ctx.session_manager.persist_report(state.session_id, {
-            "markdown": state.report_md,
-            "query": state.query,
-            "quality_score": state.quality_score,
-            "rounds": state.round,
-            "sources": [
-                {"id": s["id"], "title": s.get("title", ""), "url": s.get("url", ""), "source_type": s.get("source_type", "")}
-                for s in sources
-            ],
-        })
+        ctx.session_manager.persist_report(
+            state.session_id,
+            {
+                "markdown": state.report_md,
+                "query": state.query,
+                "quality_score": state.quality_score,
+                "rounds": state.round,
+                "sources": [
+                    {
+                        "id": s["id"],
+                        "title": s.get("title", ""),
+                        "url": s.get("url", ""),
+                        "source_type": s.get("source_type", ""),
+                    }
+                    for s in sources
+                ],
+            },
+        )
         yield {"type": "progress", "progress": 0.85, "message": "Report revised"}
     except Exception as e:
         logger.error("Report revision failed: %s", e)
@@ -759,7 +842,8 @@ async def action_revise(
 
 @tracked("done")
 async def action_done(
-    ctx: ActionContext, state: ResearchState,
+    ctx: ActionContext,
+    state: ResearchState,
 ):
     """Finalize research session."""
     _warn_invalid_transition(state.phase, "done")
@@ -767,22 +851,36 @@ async def action_done(
     state.phase = "done"
     sources = ctx.db.get_sources(state.session_id) or []
 
-    ctx.session_manager.update_status(state.session_id, "done", "done", 1.0, iteration_round=state.round)
-    ctx.session_manager.finalize(state.session_id, {
-        "markdown": state.report_md,
-        "query": state.query,
-        "quality_score": state.quality_score,
-        "rounds": state.round,
-        "synthesis_summary": {
-            "reinforced_claims": len((state.synthesis or {}).get("reinforced_claims", [])),
-            "contradictions": len((state.synthesis or {}).get("contradictions", [])),
-            "knowledge_gaps": len(state.knowledge_gaps),
+    ctx.session_manager.update_status(
+        state.session_id, "done", "done", 1.0, iteration_round=state.round
+    )
+    ctx.session_manager.finalize(
+        state.session_id,
+        {
+            "markdown": state.report_md,
+            "query": state.query,
+            "quality_score": state.quality_score,
+            "rounds": state.round,
+            "synthesis_summary": {
+                "reinforced_claims": len(
+                    (state.synthesis or {}).get("reinforced_claims", [])
+                ),
+                "contradictions": len(
+                    (state.synthesis or {}).get("contradictions", [])
+                ),
+                "knowledge_gaps": len(state.knowledge_gaps),
+            },
+            "sources": [
+                {
+                    "id": s["id"],
+                    "title": s.get("title", ""),
+                    "url": s.get("url", ""),
+                    "source_type": s.get("source_type", ""),
+                }
+                for s in sources
+            ],
         },
-        "sources": [
-            {"id": s["id"], "title": s.get("title", ""), "url": s.get("url", ""), "source_type": s.get("source_type", "")}
-            for s in sources
-        ],
-    })
+    )
 
     yield {
         "type": "done",
@@ -790,12 +888,21 @@ async def action_done(
             "query": state.query,
             "markdown": state.report_md,
             "sources": [
-                {"id": s["id"], "title": s.get("title", ""), "url": s.get("url", ""), "source_type": s.get("source_type", "")}
+                {
+                    "id": s["id"],
+                    "title": s.get("title", ""),
+                    "url": s.get("url", ""),
+                    "source_type": s.get("source_type", ""),
+                }
                 for s in sources
             ],
             "synthesis_summary": {
-                "reinforced_claims": len((state.synthesis or {}).get("reinforced_claims", [])),
-                "contradictions": len((state.synthesis or {}).get("contradictions", [])),
+                "reinforced_claims": len(
+                    (state.synthesis or {}).get("reinforced_claims", [])
+                ),
+                "contradictions": len(
+                    (state.synthesis or {}).get("contradictions", [])
+                ),
                 "knowledge_gaps": len(state.knowledge_gaps),
             },
             "rounds": state.round,
@@ -805,7 +912,9 @@ async def action_done(
 
 
 async def _action_incomplete_impl(
-    ctx: ActionContext, state: ResearchState, reason: str = "",
+    ctx: ActionContext,
+    state: ResearchState,
+    reason: str = "",
 ):
     """Implementation of action_incomplete (no @tracked wrapper)."""
     _warn_invalid_transition(state.phase, "incomplete")
@@ -816,44 +925,69 @@ async def _action_incomplete_impl(
     # Compute progress based on how many framework steps completed.
     # Aligned one-line `if` form is intentional for readability.
     step_progress = 0
-    if state.clarification is not None: step_progress += 1  # noqa: E701
-    if state.evidence_scores:            step_progress += 1  # noqa: E701
-    if state.synthesis is not None:      step_progress += 1  # noqa: E701
-    if state.reasoning_check is not None: step_progress += 1  # noqa: E701
-    if state.report_md:                  step_progress += 1  # noqa: E701
-    if state.structure_check is not None: step_progress += 1  # noqa: E701
-    if state.review is not None:         step_progress += 1  # noqa: E701
+    if state.clarification is not None:
+        step_progress += 1  # noqa: E701
+    if state.evidence_scores:
+        step_progress += 1  # noqa: E701
+    if state.synthesis is not None:
+        step_progress += 1  # noqa: E701
+    if state.reasoning_check is not None:
+        step_progress += 1  # noqa: E701
+    if state.report_md:
+        step_progress += 1  # noqa: E701
+    if state.structure_check is not None:
+        step_progress += 1  # noqa: E701
+    if state.review is not None:
+        step_progress += 1  # noqa: E701
     # 7 step-progress points → map to 0..1 with 0.85 cap
     progress = min(0.85, step_progress / 7 * 0.85)
 
     ctx.session_manager.update_status(
-        state.session_id, "incomplete", "incomplete", progress,
+        state.session_id,
+        "incomplete",
+        "incomplete",
+        progress,
         iteration_round=state.round,
     )
     # Persist whatever we have; mark with incomplete_reason in result
     try:
-        ctx.session_manager.finalize(state.session_id, {
-            "markdown": state.report_md,
-            "query": state.query,
-            "quality_score": state.quality_score,
-            "rounds": state.round,
-            "incomplete_reason": reason or "framework compliance gate failed",
-            "framework_completed": step_progress,
-            "framework_total": 7,
-            "synthesis_summary": {
-                "reinforced_claims": len((state.synthesis or {}).get("reinforced_claims", [])),
-                "contradictions": len((state.synthesis or {}).get("contradictions", [])),
-                "knowledge_gaps": len(state.knowledge_gaps),
+        ctx.session_manager.finalize(
+            state.session_id,
+            {
+                "markdown": state.report_md,
+                "query": state.query,
+                "quality_score": state.quality_score,
+                "rounds": state.round,
+                "incomplete_reason": reason or "framework compliance gate failed",
+                "framework_completed": step_progress,
+                "framework_total": 7,
+                "synthesis_summary": {
+                    "reinforced_claims": len(
+                        (state.synthesis or {}).get("reinforced_claims", [])
+                    ),
+                    "contradictions": len(
+                        (state.synthesis or {}).get("contradictions", [])
+                    ),
+                    "knowledge_gaps": len(state.knowledge_gaps),
+                },
+                "sources": [
+                    {
+                        "id": s["id"],
+                        "title": s.get("title", ""),
+                        "url": s.get("url", ""),
+                        "source_type": s.get("source_type", ""),
+                    }
+                    for s in sources
+                ],
             },
-            "sources": [
-                {"id": s["id"], "title": s.get("title", ""), "url": s.get("url", ""), "source_type": s.get("source_type", "")}
-                for s in sources
-            ],
-        })
+        )
         # finalize() hardcodes status='done'; re-set to incomplete
         ctx.session_manager.update_status(
-            state.session_id, "incomplete", "incomplete",
-            progress, iteration_round=state.round,
+            state.session_id,
+            "incomplete",
+            "incomplete",
+            progress,
+            iteration_round=state.round,
         )
     except Exception as e:
         logger.warning("incomplete finalize: %s", e)
@@ -868,7 +1002,12 @@ async def _action_incomplete_impl(
             "query": state.query,
             "markdown": state.report_md,
             "sources": [
-                {"id": s["id"], "title": s.get("title", ""), "url": s.get("url", ""), "source_type": s.get("source_type", "")}
+                {
+                    "id": s["id"],
+                    "title": s.get("title", ""),
+                    "url": s.get("url", ""),
+                    "source_type": s.get("source_type", ""),
+                }
                 for s in sources
             ],
             "quality_score": state.quality_score,
@@ -877,7 +1016,9 @@ async def _action_incomplete_impl(
 
 
 async def action_incomplete(
-    ctx: ActionContext, state: ResearchState, reason: str = "",
+    ctx: ActionContext,
+    state: ResearchState,
+    reason: str = "",
 ):
     """Mark session as incomplete (framework compliance gate failed, no budget).
 
@@ -894,9 +1035,8 @@ async def action_incomplete(
     Metrics are recorded manually if ctx.metrics is available.
     """
     from contextlib import nullcontext
-    metrics_cm = (
-        ctx.metrics.record("incomplete") if ctx.metrics else nullcontext()
-    )
+
+    metrics_cm = ctx.metrics.record("incomplete") if ctx.metrics else nullcontext()
     with metrics_cm:
         async for ev in _action_incomplete_impl(ctx, state, reason):
             yield ev

@@ -53,8 +53,7 @@ def test_mcp_is_argparse_alias_of_serve():
         args = parser.parse_args([cmd, "--name", "test-wiki-merge"])
         # Both must parse the same flag set.
         assert args.name == "test-wiki-merge", (
-            f"--name should be parsed correctly for '{cmd}'. "
-            f"Got: {args.name}"
+            f"--name should be parsed correctly for '{cmd}'. " f"Got: {args.name}"
         )
         # argparse keeps the typed name in args.command.
         assert args.command == cmd, (
@@ -96,12 +95,9 @@ def test_mcp_accepts_serve_only_flags():
         "has --web). If args is None, argparse rejected --web."
     )
     assert args.command == "mcp", (
-        f"argparse should keep the typed 'mcp' in args.command. "
-        f"Got: {args.command}"
+        f"argparse should keep the typed 'mcp' in args.command. " f"Got: {args.command}"
     )
-    assert args.web is True, (
-        f"'mcp --web' should set args.web=True. Got: {args.web}"
-    )
+    assert args.web is True, f"'mcp --web' should set args.web=True. Got: {args.web}"
 
 
 def test_serve_command_is_only_registered_command():
@@ -114,17 +110,15 @@ def test_serve_command_is_only_registered_command():
     """
     from llmwikify.interfaces.cli._base import COMMAND_REGISTRY
 
-    assert "serve" in COMMAND_REGISTRY, (
-        "serve command must be in COMMAND_REGISTRY"
-    )
+    assert "serve" in COMMAND_REGISTRY, "serve command must be in COMMAND_REGISTRY"
     assert "mcp" not in COMMAND_REGISTRY, (
         "mcp must NOT be in COMMAND_REGISTRY (it's an argparse "
         "alias of serve, not a separate Command). If this fails, "
         "McpCommand was re-added to commands/__init__.py."
     )
-    assert "help" in COMMAND_REGISTRY, (
-        "help command must be in COMMAND_REGISTRY (Phase 3 #6 new)"
-    )
+    assert (
+        "help" in COMMAND_REGISTRY
+    ), "help command must be in COMMAND_REGISTRY (Phase 3 #6 new)"
 
 
 # ──────────────────────────────────────────────────────────────────
@@ -153,9 +147,9 @@ def test_help_command_lists_aliases():
         f"After _build_parser(), SUBCOMMAND_ALIASES should have 'mcp'. "
         f"Got: {dict(SUBCOMMAND_ALIASES)}"
     )
-    assert SUBCOMMAND_ALIASES["mcp"] == "serve", (
-        f"'mcp' should alias to 'serve'. Got: {SUBCOMMAND_ALIASES.get('mcp')!r}"
-    )
+    assert (
+        SUBCOMMAND_ALIASES["mcp"] == "serve"
+    ), f"'mcp' should alias to 'serve'. Got: {SUBCOMMAND_ALIASES.get('mcp')!r}"
 
     # And HelpCommand's run() prints the alias correctly.
     # We test the print path by capturing stdout.
@@ -169,15 +163,16 @@ def test_help_command_lists_aliases():
             # config from cwd which may not exist in tests).
             cmd = HelpCommand()
             from argparse import Namespace
+
             args = Namespace(aliases=True)
             cmd.run(args, wiki=None, config={})
     finally:
         sys.argv = saved_argv
 
     output = captured.getvalue()
-    assert "mcp" in output, (
-        f"'llmwikify help --aliases' should mention 'mcp'. Output: {output}"
-    )
+    assert (
+        "mcp" in output
+    ), f"'llmwikify help --aliases' should mention 'mcp'. Output: {output}"
     assert "serve" in output, (
         f"'llmwikify help --aliases' should mention 'serve' as target. "
         f"Output: {output}"
@@ -202,7 +197,9 @@ def test_init_writes_serve_command_in_mcp_config():
     import json
     from pathlib import Path
 
-    template_dir = Path(__file__).parent.parent / "src" / "llmwikify" / "foundation" / "templates"
+    template_dir = (
+        Path(__file__).parent.parent / "src" / "llmwikify" / "foundation" / "templates"
+    )
     claude_template = template_dir / "claude_mcp.json"
     codex_template = template_dir / "codex_mcp.json"
 
@@ -236,9 +233,9 @@ def test_init_writes_serve_command_in_mcp_config():
         f"'serve' must be a valid CLI command (forward compat "
         f"for v0.34.0+ rename). Got args.command={args.command}"
     )
-    assert args.name == "test-init-template", (
-        f"--name should be parsed correctly. Got: {args.name}"
-    )
+    assert (
+        args.name == "test-init-template"
+    ), f"--name should be parsed correctly. Got: {args.name}"
 
     # And 'mcp' should produce the same Namespace (verified
     # by test_mcp_is_argparse_alias_of_serve). Both 'mcp'
@@ -260,7 +257,9 @@ def test_serve_py_does_not_import_mcp_server():
     again, which would re-trigger 1 internal deprecation
     warning per CLI invocation.
     """
-    src = inspect.getsource(__import__("llmwikify.interfaces.cli.commands.serve", fromlist=["run_serve"]))
+    src = inspect.getsource(
+        __import__("llmwikify.interfaces.cli.commands.serve", fromlist=["run_serve"])
+    )
     assert "from llmwikify.interfaces.mcp.server import" not in src, (
         "cli/commands/serve.py should not import from "
         "llmwikify.interfaces.mcp.server (use llmwikify.mcp.adapter.MCPAdapter "

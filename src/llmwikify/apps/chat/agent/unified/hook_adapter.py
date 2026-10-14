@@ -10,6 +10,7 @@
     hook = AgentHookAdapter(agent_hook_instance)
     loop = UnifiedAgentLoop(reasoner=..., actor=..., deciders=..., hook=hook)
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -26,6 +27,7 @@ class AgentHookAdapter(UnifiedHook):
 
     def __init__(self, hook: Any) -> None:
         from llmwikify.foundation.callback.composite import NoOpHook
+
         self._hook = hook or NoOpHook()
 
     def wants_streaming(self) -> bool:
@@ -55,10 +57,14 @@ class AgentHookAdapter(UnifiedHook):
     def on_act_end(self, ctx: UnifiedContext, result: Any) -> None:
         pass  # after_tool_executed 由 ToolActor 内部调用
 
-    def after_tool_executed(self, ctx: UnifiedContext, tool_call: Any, result: Any) -> None:
+    def after_tool_executed(
+        self, ctx: UnifiedContext, tool_call: Any, result: Any
+    ) -> None:
         self._hook.after_tool_executed(self._to_hook_ctx(ctx), tool_call, result)
 
-    def on_tool_error(self, ctx: UnifiedContext, tool_call: Any, error: BaseException) -> None:
+    def on_tool_error(
+        self, ctx: UnifiedContext, tool_call: Any, error: BaseException
+    ) -> None:
         self._hook.on_tool_error(self._to_hook_ctx(ctx), tool_call, error)
 
     def on_confirmation(self, ctx: UnifiedContext, tool_call: Any) -> None:

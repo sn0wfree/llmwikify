@@ -41,7 +41,9 @@ def _mock_wiki_get_llm(monkeypatch):
         return MagicMock(name="mock_llm")
 
     monkeypatch.setattr(
-        wiki_service_mod.WikiService, "get_llm", fake_get_llm,
+        wiki_service_mod.WikiService,
+        "get_llm",
+        fake_get_llm,
     )
 
 
@@ -78,7 +80,9 @@ class TestAgentServiceCustomComponents:
         with tempfile.TemporaryDirectory() as tmp:
             custom_skill = SkillService()
             svc = AgentService(
-                wiki_registry, Path(tmp), skill_service=custom_skill,
+                wiki_registry,
+                Path(tmp),
+                skill_service=custom_skill,
             )
             assert svc.skill_service is custom_skill
 
@@ -86,7 +90,9 @@ class TestAgentServiceCustomComponents:
         with tempfile.TemporaryDirectory() as tmp:
             custom_mm = MemoryManager(AppDatabase(tmp))
             svc = AgentService(
-                wiki_registry, Path(tmp), memory_manager=custom_mm,
+                wiki_registry,
+                Path(tmp),
+                memory_manager=custom_mm,
             )
             assert svc.memory_manager is custom_mm
 
@@ -116,7 +122,9 @@ class TestAgentServiceDelegation:
         agent_service.chat_service.edit_message = MagicMock(return_value=True)
         agent_service.chat_service.abort_session = MagicMock(return_value=False)
         agent_service.chat_service.get_session_status = MagicMock(return_value="idle")
-        agent_service.chat_service.get_all_session_status = MagicMock(return_value={"s": "idle"})
+        agent_service.chat_service.get_all_session_status = MagicMock(
+            return_value={"s": "idle"}
+        )
 
         assert agent_service.revert_session("session-1", "message-1") == 2
         assert agent_service.edit_message("message-1", "updated") is True
@@ -134,7 +142,9 @@ class TestContextManager:
             return []
 
         ctx = await manager.get_or_create(
-            "session-1", "wiki-1", history_loader=load_history,
+            "session-1",
+            "wiki-1",
+            history_loader=load_history,
         )
 
         assert ctx.session_id == "session-1"

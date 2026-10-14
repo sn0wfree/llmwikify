@@ -390,11 +390,13 @@ class TestTruncationPreciseCallID:
             {
                 "role": "assistant",
                 "content": "",
-                "tool_calls": [{
-                    "id": "match_me",
-                    "type": "function",
-                    "function": {"name": "t", "arguments": "{}"},
-                }],
+                "tool_calls": [
+                    {
+                        "id": "match_me",
+                        "type": "function",
+                        "function": {"name": "t", "arguments": "{}"},
+                    }
+                ],
             },
             {
                 "role": "tool",
@@ -408,9 +410,9 @@ class TestTruncationPreciseCallID:
         # Find the tool message in the output
         tool_idx = next(
             (
-                i for i, m in enumerate(result)
-                if m.get("role") == "tool"
-                and m.get("tool_call_id") == "match_me"
+                i
+                for i, m in enumerate(result)
+                if m.get("role") == "tool" and m.get("tool_call_id") == "match_me"
             ),
             None,
         )
@@ -420,7 +422,4 @@ class TestTruncationPreciseCallID:
         # earlier assistant.
         preceding = result[tool_idx - 1]
         assert preceding.get("role") == "assistant"
-        assert any(
-            tc.get("id") == "match_me"
-            for tc in preceding.get("tool_calls", [])
-        )
+        assert any(tc.get("id") == "match_me" for tc in preceding.get("tool_calls", []))

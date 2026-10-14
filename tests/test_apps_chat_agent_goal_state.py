@@ -75,7 +75,8 @@ def test_runtime_lines_omits_summary_when_empty() -> None:
         },
     }
     assert goal_state_runtime_lines(metadata) == [
-        "Goal (active):", "Just an objective",
+        "Goal (active):",
+        "Just an objective",
     ]
 
 

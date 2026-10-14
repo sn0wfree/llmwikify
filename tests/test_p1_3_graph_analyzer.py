@@ -17,13 +17,13 @@ def graph_wiki():
     tmp = Path(tempfile.mkdtemp())
 
     wiki = Wiki(tmp)
-    wiki.init(agent='generic')
+    wiki.init(agent="generic")
 
     # Create some concept pages
-    concepts_dir = tmp / 'wiki' / 'concepts'
+    concepts_dir = tmp / "wiki" / "concepts"
     concepts_dir.mkdir(parents=True, exist_ok=True)
 
-    (concepts_dir / 'Artificial Intelligence.md').write_text("""
+    (concepts_dir / "Artificial Intelligence.md").write_text("""
 ---
 title: Artificial Intelligence
 type: concept
@@ -41,7 +41,7 @@ AI is a broad field.
 [[concepts/Deep Learning]]
 """)
 
-    (concepts_dir / 'Machine Learning.md').write_text("""
+    (concepts_dir / "Machine Learning.md").write_text("""
 ---
 title: Machine Learning
 type: concept
@@ -59,7 +59,7 @@ ML is a subset of AI.
 [[concepts/Deep Learning]]
 """)
 
-    (concepts_dir / 'Deep Learning.md').write_text("""
+    (concepts_dir / "Deep Learning.md").write_text("""
 ---
 title: Deep Learning
 type: concept
@@ -119,6 +119,7 @@ class TestGraphAnalyzer:
 
         # Test with empty graph data
         import networkx as nx
+
         empty_g = nx.MultiDiGraph()
         suggestions = analyzer._suggest_pages_for_concepts(empty_g)
         assert isinstance(suggestions, list)
@@ -139,6 +140,7 @@ class TestGraphAnalyzer:
 
         # Test with empty graph
         import networkx as nx
+
         empty_g = nx.MultiDiGraph()
         suggestions = analyzer._suggest_link_improvements(empty_g)
         assert isinstance(suggestions, list)
@@ -150,6 +152,7 @@ class TestGraphAnalyzer:
 
         # Test with empty graph
         import networkx as nx
+
         empty_g = nx.MultiDiGraph()
         suggestions = analyzer._generate_suggestions(empty_g, {})
         assert isinstance(suggestions, list)
@@ -171,19 +174,23 @@ class TestGraphAnalyzer:
         analyzer = GraphAnalyzer(wiki)
 
         # Test with concepts prefix
-        label = analyzer._label_community([
-            "concepts/AI",
-            "concepts/ML",
-            "concepts/DL",
-        ])
+        label = analyzer._label_community(
+            [
+                "concepts/AI",
+                "concepts/ML",
+                "concepts/DL",
+            ]
+        )
         assert "Concept" in label or "AI" in label
 
         # Test with mixed prefixes
-        label = analyzer._label_community([
-            "concepts/AI",
-            "entities/Company",
-            "concepts/ML",
-        ])
+        label = analyzer._label_community(
+            [
+                "concepts/AI",
+                "entities/Company",
+                "concepts/ML",
+            ]
+        )
         assert label  # Should return something
 
     def test_find_bridge_nodes(self, graph_wiki):
@@ -193,6 +200,7 @@ class TestGraphAnalyzer:
 
         # Test with empty graph
         import networkx as nx
+
         empty_g = nx.MultiDiGraph()
         bridges = analyzer._find_bridge_nodes(empty_g, {})
         assert isinstance(bridges, list)
@@ -234,5 +242,6 @@ class TestCLICommandExists:
     def test_graph_analyze_command_exists(self):
         """Test that graph_analyze method exists on CLI."""
         from llmwikify.interfaces.cli.commands import WikiCLI
+
         cli = WikiCLI.__new__(WikiCLI)
-        assert hasattr(cli, 'graph_analyze')
+        assert hasattr(cli, "graph_analyze")

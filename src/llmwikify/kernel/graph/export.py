@@ -10,7 +10,9 @@ from ..storage.index import WikiIndex
 logger = logging.getLogger(__name__)
 
 
-def build_graph(index: WikiIndex, include_wikilinks: bool = True, include_relations: bool = True) -> dict:
+def build_graph(
+    index: WikiIndex, include_wikilinks: bool = True, include_relations: bool = True
+) -> dict:
     """Build a combined graph from wikilinks and relations.
 
     Returns:
@@ -21,19 +23,28 @@ def build_graph(index: WikiIndex, include_wikilinks: bool = True, include_relati
 
     # Wikilinks
     if include_wikilinks:
-        cursor = index.conn.execute(
-            "SELECT source_page, target_page FROM page_links"
-        )
+        cursor = index.conn.execute("SELECT source_page, target_page FROM page_links")
         for row in cursor.fetchall():
             src, tgt = row["source_page"], row["target_page"]
             nodes[src] = {"id": src, "label": src, "source_type": "wiki_page"}
             nodes[tgt] = {"id": tgt, "label": tgt, "source_type": "wiki_page"}
 
-            existing = next((e for e in edges if e["source"] == src and e["target"] == tgt and e["type"] == "wikilink"), None)
+            existing = next(
+                (
+                    e
+                    for e in edges
+                    if e["source"] == src
+                    and e["target"] == tgt
+                    and e["type"] == "wikilink"
+                ),
+                None,
+            )
             if existing:
                 existing["weight"] += 1
             else:
-                edges.append({"source": src, "target": tgt, "type": "wikilink", "weight": 1})
+                edges.append(
+                    {"source": src, "target": tgt, "type": "wikilink", "weight": 1}
+                )
 
     # Relations
     if include_relations:
@@ -45,20 +56,29 @@ def build_graph(index: WikiIndex, include_wikilinks: bool = True, include_relati
                 src, tgt = row["source"], row["target"]
                 nodes[src] = {"id": src, "label": src, "source_type": "concept"}
                 nodes[tgt] = {"id": tgt, "label": tgt, "source_type": "concept"}
-                edges.append({
-                    "source": src,
-                    "target": tgt,
-                    "type": row["relation"],
-                    "confidence": row["confidence"],
-                    "weight": {"EXTRACTED": 3, "INFERRED": 2, "AMBIGUOUS": 1}.get(row["confidence"], 1),
-                })
+                edges.append(
+                    {
+                        "source": src,
+                        "target": tgt,
+                        "type": row["relation"],
+                        "confidence": row["confidence"],
+                        "weight": {"EXTRACTED": 3, "INFERRED": 2, "AMBIGUOUS": 1}.get(
+                            row["confidence"], 1
+                        ),
+                    }
+                )
         except Exception as e:
             logger.warning("Relations table query failed: %s", e)
 
     return {"nodes": list(nodes.values()), "edges": edges}
 
 
-def export_html(graph: dict, communities: dict[int, list[str]] | None, output_path: Path, min_degree: int = 0) -> dict:
+def export_html(
+    graph: dict,
+    communities: dict[int, list[str]] | None,
+    output_path: Path,
+    min_degree: int = 0,
+) -> dict:
     """Export graph to interactive HTML using pyvis.
 
     Nodes with corresponding entity pages are clickable.
@@ -67,7 +87,9 @@ def export_html(graph: dict, communities: dict[int, list[str]] | None, output_pa
         import networkx as nx  # noqa: F401  (used by _build_networkx)
         from pyvis.network import Network
     except ImportError:
-        raise ImportError("pyvis and networkx are required for HTML export. Install with: pip install pyvis networkx") from None
+        raise ImportError(
+            "pyvis and networkx are required for HTML export. Install with: pip install pyvis networkx"
+        ) from None
 
     G = _build_networkx(graph)
 
@@ -76,13 +98,33 @@ def export_html(graph: dict, communities: dict[int, list[str]] | None, output_pa
         degree = dict(G.degree())
         G = G.subgraph(n for n, d in degree.items() if d >= min_degree).copy()
 
-    net = Network(height="750px", width="100%", bgcolor="#0f0f1a", font_color="#e0e0e0", directed=True)
-    net.barnes_hut(gravity=-3000, central_gravity=0.3, spring_length=250, spring_strength=0.001, damping=0.09)
+    net = Network(
+        height="750px",
+        width="100%",
+        bgcolor="#0f0f1a",
+        font_color="#e0e0e0",
+        directed=True,
+    )
+    net.barnes_hut(
+        gravity=-3000,
+        central_gravity=0.3,
+        spring_length=250,
+        spring_strength=0.001,
+        damping=0.09,
+    )
 
     # Color nodes by community
     community_colors = [
-        "#4E79A7", "#F28E2B", "#E15759", "#76B7B2", "#59A14F",
-        "#EDC948", "#B07AA1", "#FF9DA7", "#9C755F", "#BAB0AC",
+        "#4E79A7",
+        "#F28E2B",
+        "#E15759",
+        "#76B7B2",
+        "#59A14F",
+        "#EDC948",
+        "#B07AA1",
+        "#FF9DA7",
+        "#9C755F",
+        "#BAB0AC",
     ]
     node_community = {}
     if communities:
@@ -103,8 +145,13 @@ def export_html(graph: dict, communities: dict[int, list[str]] | None, output_pa
         href = None
         if source_type == "wiki_page":
             # Strip directory prefix before slugifying (e.g., "entities/Gold" → "Gold")
-            base_name = node.rsplit('/', 1)[-1] if '/' in node else node
-            entity_path = output_path.parent.parent / "wiki" / "entities" / f"{_slugify(base_name)}.md"
+            base_name = node.rsplit("/", 1)[-1] if "/" in node else node
+            entity_path = (
+                output_path.parent.parent
+                / "wiki"
+                / "entities"
+                / f"{_slugify(base_name)}.md"
+            )
             if entity_path.exists():
                 href = f"../wiki/entities/{_slugify(base_name)}.md"
                 nodes_with_pages.add(node)
@@ -121,7 +168,13 @@ def export_html(graph: dict, communities: dict[int, list[str]] | None, output_pa
         edge_type = data.get("type", "unknown")
         confidence = data.get("confidence", "")
         is_dashed = confidence == "AMBIGUOUS"
-        net.add_edge(u, v, title=f"{edge_type} ({confidence})", dashes=is_dashed, width=data.get("weight", 1) * 0.5)
+        net.add_edge(
+            u,
+            v,
+            title=f"{edge_type} ({confidence})",
+            dashes=is_dashed,
+            width=data.get("weight", 1) * 0.5,
+        )
 
     net.show(str(output_path), notebook=False)
 
@@ -141,10 +194,11 @@ def export_html(graph: dict, communities: dict[int, list[str]] | None, output_pa
 def _slugify(name: str) -> str:
     """Convert a name to a filename-safe slug."""
     import re
+
     name = name.lower().strip()
-    name = re.sub(r'[^a-z0-9\s-]', '', name)
-    name = re.sub(r'[\s]+', '-', name)
-    return name.strip('-')
+    name = re.sub(r"[^a-z0-9\s-]", "", name)
+    name = re.sub(r"[\s]+", "-", name)
+    return name.strip("-")
 
 
 def _add_entity_click_handlers(html_path: Path, entity_nodes: set) -> None:
@@ -157,7 +211,7 @@ def _add_entity_click_handlers(html_path: Path, entity_nodes: set) -> None:
     # Build a map of node labels to their hrefs
     entity_map = {}
     for node in entity_nodes:
-        base_name = node.rsplit('/', 1)[-1] if '/' in node else node
+        base_name = node.rsplit("/", 1)[-1] if "/" in node else node
         slug = _slugify(base_name)
         entity_map[node] = f"../wiki/entities/{slug}.md"
 
@@ -230,7 +284,9 @@ def export_svg(graph: dict, output_path: Path) -> dict:
 
         from networkx.drawing.nx_agraph import write_dot
     except ImportError:
-        raise ImportError("pygraphviz is required for SVG export. Install with: pip install pygraphviz") from None
+        raise ImportError(
+            "pygraphviz is required for SVG export. Install with: pip install pygraphviz"
+        ) from None
 
     G = _build_networkx(graph)
     G_undirected = G.to_undirected()
@@ -241,7 +297,8 @@ def export_svg(graph: dict, output_path: Path) -> dict:
     # Convert DOT to SVG
     result = subprocess.run(  # noqa: S603 — dot is a well-known binary
         ["dot", "-Tsvg", dot_path, "-o", str(output_path)],
-        capture_output=True, text=True
+        capture_output=True,
+        text=True,
     )
     if result.returncode != 0:
         raise RuntimeError(f"graphviz dot failed: {result.stderr}")
@@ -257,7 +314,9 @@ def export_svg(graph: dict, output_path: Path) -> dict:
     }
 
 
-def detect_communities(index: WikiIndex, algorithm: str = "leiden", resolution: float = 1.0) -> dict:
+def detect_communities(
+    index: WikiIndex, algorithm: str = "leiden", resolution: float = 1.0
+) -> dict:
     """Detect communities in the knowledge graph.
 
     Args:
@@ -301,10 +360,16 @@ def detect_communities(index: WikiIndex, algorithm: str = "leiden", resolution: 
         try:
             import community as community_louvain
         except ImportError:
-            raise ImportError("python-louvain is required for Louvain algorithm") from None
+            raise ImportError(
+                "python-louvain is required for Louvain algorithm"
+            ) from None
 
-        partition = community_louvain.best_partition(G.to_undirected(), resolution=resolution, weight="weight")
-        modularity = community_louvain.modularity(partition, G.to_undirected(), weight="weight")
+        partition = community_louvain.best_partition(
+            G.to_undirected(), resolution=resolution, weight="weight"
+        )
+        modularity = community_louvain.modularity(
+            partition, G.to_undirected(), weight="weight"
+        )
     else:
         # Default: use a simple greedy modularity approach (no igraph dependency)
         try:
@@ -314,8 +379,12 @@ def detect_communities(index: WikiIndex, algorithm: str = "leiden", resolution: 
             partition = _greedy_modularity_communities(G)
             modularity = _compute_modularity(G, partition)
         else:
-            partition = community_louvain.best_partition(G.to_undirected(), resolution=resolution, weight="weight")
-            modularity = community_louvain.modularity(partition, G.to_undirected(), weight="weight")
+            partition = community_louvain.best_partition(
+                G.to_undirected(), resolution=resolution, weight="weight"
+            )
+            modularity = community_louvain.modularity(
+                partition, G.to_undirected(), weight="weight"
+            )
 
     # Invert partition: community_id -> [nodes]
     communities = {}
@@ -398,7 +467,9 @@ def compute_surprise_score(
     return score, reasons
 
 
-def generate_report(index: WikiIndex, communities: dict | None = None, top_n: int = 10) -> str:
+def generate_report(
+    index: WikiIndex, communities: dict | None = None, top_n: int = 10
+) -> str:
     """Generate a surprising connections report."""
     try:
         import networkx as nx  # noqa: F401  (used by _build_networkx)
@@ -418,14 +489,16 @@ def generate_report(index: WikiIndex, communities: dict | None = None, top_n: in
         if data.get("type") == "wikilink":
             continue  # Skip plain wikilinks
         score, reasons = compute_surprise_score(G, u, v, data, communities)
-        scored_edges.append({
-            "source": u,
-            "target": v,
-            "relation": data.get("type", "unknown"),
-            "confidence": data.get("confidence", ""),
-            "score": score,
-            "reasons": reasons,
-        })
+        scored_edges.append(
+            {
+                "source": u,
+                "target": v,
+                "relation": data.get("type", "unknown"),
+                "confidence": data.get("confidence", ""),
+                "score": score,
+                "reasons": reasons,
+            }
+        )
 
     # Sort by score descending
     scored_edges.sort(key=lambda x: -x["score"])
@@ -447,9 +520,9 @@ def generate_report(index: WikiIndex, communities: dict | None = None, top_n: in
         lines.append(f"### {i}. Surprise Score: {edge['score']}")
         lines.append(f"**{edge['source']}** → **{edge['target']}**")
         lines.append(f"- Relation: {edge['relation']}")
-        if edge['confidence']:
+        if edge["confidence"]:
             lines.append(f"- Confidence: {edge['confidence']}")
-        for reason in edge['reasons']:
+        for reason in edge["reasons"]:
             lines.append(f"- {reason}")
         lines.append("")
 
@@ -486,7 +559,10 @@ def _compute_modularity(G, partition) -> Any:
     """Compute modularity of a partition."""
     try:
         import community as community_louvain
-        return community_louvain.modularity(partition, G.to_undirected(), weight="weight")
+
+        return community_louvain.modularity(
+            partition, G.to_undirected(), weight="weight"
+        )
     except ImportError:
         # Fallback: return 0
         return 0.0

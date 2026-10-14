@@ -139,9 +139,7 @@ def _coerce_str_list(value: Any, field_name: str, warnings: list[str]) -> list[s
             if isinstance(item, str):
                 out.append(item)
             else:
-                warnings.append(
-                    f"{field_name}: non-string item {item!r} dropped"
-                )
+                warnings.append(f"{field_name}: non-string item {item!r} dropped")
         return out
     if isinstance(value, str):
         warnings.append(
@@ -184,7 +182,9 @@ def _coerce_str(value: Any, field_name: str, default: str, warnings: list[str]) 
     return default
 
 
-def _coerce_bool(value: Any, field_name: str, default: bool, warnings: list[str]) -> bool:
+def _coerce_bool(
+    value: Any, field_name: str, default: bool, warnings: list[str]
+) -> bool:
     """Best-effort coerce a value to ``bool`` with a warning if not."""
     if isinstance(value, bool):
         return value
@@ -232,7 +232,7 @@ def parse_skill_frontmatter(
         # body doesn't accidentally truncate it.
         parts = raw.split("\n---\n", 1)
         if len(parts) == 2:
-            header = parts[0][len("---"):].lstrip("\n")
+            header = parts[0][len("---") :].lstrip("\n")
             body = parts[1].strip()
             try:
                 parsed = yaml.safe_load(header)
@@ -252,33 +252,21 @@ def parse_skill_frontmatter(
             )
 
     fm = SkillFrontmatter(
-        name=_coerce_str(
-            meta.get("name"), "name", fallback_name, warnings
-        ),
+        name=_coerce_str(meta.get("name"), "name", fallback_name, warnings),
         description=_coerce_str(
             meta.get("description"),
             "description",
             f"Plugin skill: {fallback_name}",
             warnings,
         ),
-        version=_coerce_str(
-            meta.get("version"), "version", "0.1.0", warnings
-        ),
-        author=_coerce_str(
-            meta.get("author"), "author", "unknown", warnings
-        ),
-        triggers=_coerce_str_list(
-            meta.get("triggers", []), "triggers", warnings
-        ),
+        version=_coerce_str(meta.get("version"), "version", "0.1.0", warnings),
+        author=_coerce_str(meta.get("author"), "author", "unknown", warnings),
+        triggers=_coerce_str_list(meta.get("triggers", []), "triggers", warnings),
         allowed_tools=_coerce_str_list(
             meta.get("allowed-tools", []), "allowed_tools", warnings
         ),
-        tags=_coerce_str_list(
-            meta.get("tags", []), "tags", warnings
-        ),
-        license=_coerce_str(
-            meta.get("license"), "license", "", warnings
-        ),
+        tags=_coerce_str_list(meta.get("tags", []), "tags", warnings),
+        license=_coerce_str(meta.get("license"), "license", "", warnings),
         requires_config=_coerce_bool(
             meta.get("requires-config", False),
             "requires_config",

@@ -55,18 +55,19 @@ class TestSchema:
 class TestDefaultBehavior:
     @pytest.mark.asyncio
     async def test_wiki_results_only_no_web_search_called(
-        self, ctx: SkillContext,
+        self,
+        ctx: SkillContext,
     ) -> None:
         """Default behavior: web_search NOT invoked even if available."""
-        wiki = _make_wiki_mock([
-            {"url": "https://wiki/x", "title": "X"},
-            {"url": "https://wiki/y", "title": "Y"},
-        ])
+        wiki = _make_wiki_mock(
+            [
+                {"url": "https://wiki/x", "title": "X"},
+                {"url": "https://wiki/y", "title": "Y"},
+            ]
+        )
         ctx = ctx.with_overrides(wiki=wiki)
 
-        with patch(
-            "llmwikify.apps.research.web_search.WebSearch"
-        ) as MockSearch:
+        with patch("llmwikify.apps.research.web_search.WebSearch") as MockSearch:
             r = await _gather(
                 {"sub_queries": [{"q": "test"}], "enable_web_search": False},
                 ctx,
@@ -79,15 +80,14 @@ class TestDefaultBehavior:
 
     @pytest.mark.asyncio
     async def test_wiki_results_with_enable_flag_still_skips_web(
-        self, ctx: SkillContext,
+        self,
+        ctx: SkillContext,
     ) -> None:
         """When wiki has results, web_search is skipped even with flag=True."""
         wiki = _make_wiki_mock([{"url": "https://wiki/x", "title": "X"}])
         ctx = ctx.with_overrides(wiki=wiki)
 
-        with patch(
-            "llmwikify.apps.research.web_search.WebSearch"
-        ) as MockSearch:
+        with patch("llmwikify.apps.research.web_search.WebSearch") as MockSearch:
             r = await _gather(
                 {"sub_queries": [{"q": "test"}], "enable_web_search": True},
                 ctx,
@@ -105,20 +105,21 @@ class TestDefaultBehavior:
 class TestWebSearchFallback:
     @pytest.mark.asyncio
     async def test_wiki_empty_triggers_web_search(
-        self, ctx: SkillContext,
+        self,
+        ctx: SkillContext,
     ) -> None:
         """When wiki returns 0 results and flag is True, web_search is called."""
         wiki = _make_wiki_mock([])  # wiki returns nothing
         ctx = ctx.with_overrides(wiki=wiki)
 
-        with patch(
-            "llmwikify.apps.research.web_search.WebSearch"
-        ) as MockSearch:
+        with patch("llmwikify.apps.research.web_search.WebSearch") as MockSearch:
             instance = MagicMock()
-            instance.search = AsyncMock(return_value=[
-                SearchResult("Web1", "https://example.com/1", "snippet1"),
-                SearchResult("Web2", "https://example.com/2", "snippet2"),
-            ])
+            instance.search = AsyncMock(
+                return_value=[
+                    SearchResult("Web1", "https://example.com/1", "snippet1"),
+                    SearchResult("Web2", "https://example.com/2", "snippet2"),
+                ]
+            )
             MockSearch.return_value = instance
 
             r = await _gather(
@@ -135,7 +136,9 @@ class TestWebSearchFallback:
         # WebSearch was invoked with our query
         instance.search.assert_called_once()
         call_args = instance.search.call_args
-        query_arg = call_args.args[0] if call_args.args else call_args.kwargs.get("query", "")
+        query_arg = (
+            call_args.args[0] if call_args.args else call_args.kwargs.get("query", "")
+        )
         assert query_arg == "test"
         # Sources have source_type='web'
         web_sources = [s for s in r.data["sources"] if s.get("source_type") == "web"]
@@ -143,7 +146,8 @@ class TestWebSearchFallback:
 
     @pytest.mark.asyncio
     async def test_wiki_empty_no_flag_keeps_synthetic_offline_path(
-        self, ctx: SkillContext,
+        self,
+        ctx: SkillContext,
     ) -> None:
         """Wiki=None path: synthetic offline source (existing behavior preserved)."""
         ctx = ctx.with_overrides(wiki=None)
@@ -161,15 +165,14 @@ class TestWebSearchFallback:
 
     @pytest.mark.asyncio
     async def test_web_search_exception_is_swallowed(
-        self, ctx: SkillContext,
+        self,
+        ctx: SkillContext,
     ) -> None:
         """WebSearch exception does NOT fail the overall gather."""
         wiki = _make_wiki_mock([])  # wiki returns nothing
         ctx = ctx.with_overrides(wiki=wiki)
 
-        with patch(
-            "llmwikify.apps.research.web_search.WebSearch"
-        ) as MockSearch:
+        with patch("llmwikify.apps.research.web_search.WebSearch") as MockSearch:
             instance = MagicMock()
             instance.search = AsyncMock(
                 side_effect=RuntimeError("all providers failed"),
@@ -187,7 +190,8 @@ class TestWebSearchFallback:
 
     @pytest.mark.asyncio
     async def test_web_search_dedups_against_existing_sources(
-        self, ctx: SkillContext,
+        self,
+        ctx: SkillContext,
     ) -> None:
         """WebSearch URLs already in existing sources are skipped."""
         wiki = _make_wiki_mock([])
@@ -196,14 +200,14 @@ class TestWebSearchFallback:
         # Pre-existing source with URL that web_search will return
         existing_url = "https://example.com/already-there"
 
-        with patch(
-            "llmwikify.apps.research.web_search.WebSearch"
-        ) as MockSearch:
+        with patch("llmwikify.apps.research.web_search.WebSearch") as MockSearch:
             instance = MagicMock()
-            instance.search = AsyncMock(return_value=[
-                SearchResult("Dup", existing_url, "x"),
-                SearchResult("New", "https://example.com/new", "y"),
-            ])
+            instance.search = AsyncMock(
+                return_value=[
+                    SearchResult("Dup", existing_url, "x"),
+                    SearchResult("New", "https://example.com/new", "y"),
+                ]
+            )
             MockSearch.return_value = instance
 
             r = await _gather(

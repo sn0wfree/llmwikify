@@ -45,7 +45,9 @@ class WikiSourceAnalysisMixin(WikiProtocol):
 
         return None
 
-    def _cache_source_analysis(self, page_path: Path, content_hash: str, analysis: dict) -> None:
+    def _cache_source_analysis(
+        self, page_path: Path, content_hash: str, analysis: dict
+    ) -> None:
         """Embed analysis results as HTML comment in Source summary page.
 
         Delegates to the backend which handles the read/modify/write
@@ -70,7 +72,12 @@ class WikiSourceAnalysisMixin(WikiProtocol):
             logger.warning("Failed to parse cached analysis for %s: %s", page_path, e)
         return None
 
-    def analyze_source(self, source_path: str, force: bool = False, section_metadata: dict | None = None) -> dict:
+    def analyze_source(
+        self,
+        source_path: str,
+        force: bool = False,
+        section_metadata: dict | None = None,
+    ) -> dict:
         """Analyze a source file and cache structured extraction.
 
         Uses two-phase analysis:
@@ -90,6 +97,7 @@ class WikiSourceAnalysisMixin(WikiProtocol):
         """
         try:
             from .....foundation.llm import LLMClient
+
             client = LLMClient.from_config(self.config)
         except (ImportError, ValueError, OSError):
             return {"status": "skipped", "reason": "No LLM configured"}
@@ -100,8 +108,8 @@ class WikiSourceAnalysisMixin(WikiProtocol):
             cached = self._get_cached_source_analysis(source_page)
             if cached:
                 current_hash = self._compute_content_hash(source_path)
-                if cached.get('hash') == current_hash:
-                    return cached.get('data', {})
+                if cached.get("hash") == current_hash:
+                    return cached.get("data", {})
 
         full_path = self.root / source_path
         if not full_path.exists():

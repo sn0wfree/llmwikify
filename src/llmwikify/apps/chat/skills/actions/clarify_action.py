@@ -78,7 +78,10 @@ class ClarifySkill(Skill):
             input_schema={
                 "type": "object",
                 "properties": {
-                    "query": {"type": "string", "description": "Research query to clarify"},
+                    "query": {
+                        "type": "string",
+                        "description": "Research query to clarify",
+                    },
                     "wiki_context": {
                         "type": "string",
                         "description": "Optional wiki context (recent edits, gaps)",

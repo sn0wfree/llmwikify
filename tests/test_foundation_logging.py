@@ -3,6 +3,7 @@
 Covers idempotency, console-only mode, force-reconfigure, custom format,
 and the sync/async timing decorator.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -31,9 +32,7 @@ def clean_root():
 def test_console_only_adds_stream_handler(clean_root):
     setup_logging(log_file=None, console=True)
     assert any(isinstance(h, logging.StreamHandler) for h in clean_root.handlers)
-    assert not any(
-        isinstance(h, logging.FileHandler) for h in clean_root.handlers
-    )
+    assert not any(isinstance(h, logging.FileHandler) for h in clean_root.handlers)
 
 
 def test_idempotent_no_duplicate_handlers(clean_root):

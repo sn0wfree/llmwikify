@@ -23,8 +23,13 @@ class TestContradictionDetection:
 
     def test_detects_value_conflicts(self, temp_wiki):
         """Test detection of conflicting values across pages."""
-        temp_wiki.write_page("Company A", "# Company A\n\n- Revenue: $10M\n- Status: Active\n")
-        temp_wiki.write_page("Company A Financials", "# Company A Financials\n\n- Revenue: $15M\n- Status: Active\n")
+        temp_wiki.write_page(
+            "Company A", "# Company A\n\n- Revenue: $10M\n- Status: Active\n"
+        )
+        temp_wiki.write_page(
+            "Company A Financials",
+            "# Company A Financials\n\n- Revenue: $15M\n- Status: Active\n",
+        )
 
         result = temp_wiki._detect_potential_contradictions()
         assert len(result) > 0
@@ -41,7 +46,9 @@ class TestContradictionDetection:
     def test_detects_negation_patterns(self, temp_wiki):
         """Test detection of contradictory negation patterns."""
         temp_wiki.write_page("Status", "# Status\n\nThe company is active in mining.\n")
-        temp_wiki.write_page("Update", "# Update\n\nThe company is not active in mining.\n")
+        temp_wiki.write_page(
+            "Update", "# Update\n\nThe company is not active in mining.\n"
+        )
 
         result = temp_wiki._detect_potential_contradictions()
         assert any(c["type"] == "negation_pattern" for c in result)
@@ -114,7 +121,11 @@ class TestDataGapDetection:
         temp_wiki.write_page("Market Analysis", content)
 
         result = temp_wiki._detect_data_gaps()
-        unsourced = [g for g in result if g["type"] == "unsourced_claims" and g["page"] != "overview"]
+        unsourced = [
+            g
+            for g in result
+            if g["type"] == "unsourced_claims" and g["page"] != "overview"
+        ]
         assert len(unsourced) == 0
 
     def test_max_3_gaps(self, temp_wiki):
@@ -144,13 +155,16 @@ class TestDataGapDetection:
 class TestLLMInvestigations:
     """Test _llm_generate_investigations method."""
 
-    @patch('llmwikify.foundation.llm_client.LLMClient')
+    @patch("llmwikify.foundation.llm_client.LLMClient")
     def test_generates_suggestions(self, mock_client_class, temp_wiki):
         """Test LLM generates investigation suggestions."""
         # Mock LLM client
         mock_client = MagicMock()
         mock_client.chat_json.return_value = {
-            "suggested_questions": ["What is the actual revenue?", "When was the product launched?"],
+            "suggested_questions": [
+                "What is the actual revenue?",
+                "When was the product launched?",
+            ],
             "suggested_sources": ["Financial reports", "Press releases"],
         }
         mock_client_class.from_config.return_value = mock_client
@@ -195,7 +209,7 @@ class TestLintInvestigations:
         assert "suggested_questions" not in result["investigations"]
         assert "suggested_sources" not in result["investigations"]
 
-    @patch('llmwikify.foundation.llm_client.LLMClient')
+    @patch("llmwikify.foundation.llm_client.LLMClient")
     def test_lint_with_llm_suggestions(self, mock_client_class, temp_wiki):
         """Test lint() with LLM suggestions enabled."""
         mock_client = MagicMock()

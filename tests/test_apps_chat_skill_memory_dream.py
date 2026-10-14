@@ -172,9 +172,7 @@ class TestRunForSessionAction:
         assert result.data["consolidations_scanned"] == 1
 
     @pytest.mark.asyncio
-    async def test_run_for_session_falls_back_to_ctx(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_run_for_session_falls_back_to_ctx(self, tmp_path: Path) -> None:
         provider = MagicMock()
         provider.achat = AsyncMock(return_value={"content": "- Fact"})
         mm = MemoryManager(
@@ -195,9 +193,7 @@ class TestRunForSessionAction:
         assert result.data["consolidations_scanned"] == 1
 
     @pytest.mark.asyncio
-    async def test_run_for_session_empty_id_fails(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_run_for_session_empty_id_fails(self, tmp_path: Path) -> None:
         provider = MagicMock()
         mm = MemoryManager(
             app_db=_make_app_db_mock(tmp_path),
@@ -224,4 +220,5 @@ class TestMemoryDreamSkill:
         from llmwikify.apps.chat.skills.crud.memory_dream_skill import (
             memory_dream_skill,
         )
+
         assert memory_dream_skill.name == "memory_dream"

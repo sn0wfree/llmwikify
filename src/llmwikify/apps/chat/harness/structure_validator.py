@@ -63,7 +63,9 @@ class StructureValidator:
         scores: dict[str, float] = {}
         issues: list[dict[str, str]] = []
 
-        scores["hierarchical_support"] = self._check_hierarchy(report, synthesis, sources, issues)
+        scores["hierarchical_support"] = self._check_hierarchy(
+            report, synthesis, sources, issues
+        )
         scores["section_completeness"] = self._check_sections(report, issues)
         scores["internal_consistency"] = self._check_consistency(report, issues)
 
@@ -118,11 +120,13 @@ class StructureValidator:
         if n_unique >= 2:
             score += 0.4
         if not score:
-            issues.append({
-                "layer": "hierarchical_support",
-                "severity": "warning",
-                "message": "结构支撑不足：需要 ≥3 个声明 + ≥2 个引用 + ≥2 个不同来源",
-            })
+            issues.append(
+                {
+                    "layer": "hierarchical_support",
+                    "severity": "warning",
+                    "message": "结构支撑不足：需要 ≥3 个声明 + ≥2 个引用 + ≥2 个不同来源",
+                }
+            )
         return min(1.0, score)
 
     def _check_sections(
@@ -132,19 +136,22 @@ class StructureValidator:
     ) -> float:
         # Count how many expected sections are present
         present = sum(
-            1 for pattern in self.EXPECTED_SECTIONS
+            1
+            for pattern in self.EXPECTED_SECTIONS
             if re.search(pattern, report, re.MULTILINE | re.IGNORECASE)
         )
         coverage = present / len(self.EXPECTED_SECTIONS)
         if coverage < 0.5:
-            issues.append({
-                "layer": "section_completeness",
-                "severity": "info",
-                "message": (
-                    f"仅检测到 {present}/{len(self.EXPECTED_SECTIONS)} 必要章节，"
-                    "建议补充 背景/分析/证据/结论"
-                ),
-            })
+            issues.append(
+                {
+                    "layer": "section_completeness",
+                    "severity": "info",
+                    "message": (
+                        f"仅检测到 {present}/{len(self.EXPECTED_SECTIONS)} 必要章节，"
+                        "建议补充 背景/分析/证据/结论"
+                    ),
+                }
+            )
         return min(1.0, coverage * 1.25)  # 80% sections → 1.0
 
     def _check_consistency(
@@ -165,9 +172,11 @@ class StructureValidator:
         consistent = sum(1 for _, count in top if count >= 2)
         ratio = consistent / len(top)
         if ratio < 0.4:
-            issues.append({
-                "layer": "internal_consistency",
-                "severity": "info",
-                "message": "核心术语复用率较低，建议关键概念在多段重复出现",
-            })
+            issues.append(
+                {
+                    "layer": "internal_consistency",
+                    "severity": "info",
+                    "message": "核心术语复用率较低，建议关键概念在多段重复出现",
+                }
+            )
         return min(1.0, ratio * 1.5)

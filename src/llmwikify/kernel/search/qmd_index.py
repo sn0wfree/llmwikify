@@ -41,6 +41,7 @@ class QmdIndex:
         if self._client is None:
             try:
                 from .qmd_client import QmdClient
+
                 self._client = QmdClient(host=self.host, port=self.port)
             except ImportError:
                 pass
@@ -130,6 +131,7 @@ class QmdIndex:
         # Fallback if client not loaded
         try:
             from .qmd_client import QmdClient
+
             return QmdClient.get_install_guide(QmdClient)
         except Exception:
             return "Could not load QMD installation guide."

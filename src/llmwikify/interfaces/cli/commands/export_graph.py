@@ -77,9 +77,16 @@ class ExportGraphCommand(Command):
         if not isinstance(subparsers, _SubParsersAction):
             raise TypeError("setup_parser requires an argparse subparsers action")
         p = subparsers.add_parser(self.name, help=self.help)
-        p.add_argument("--format", choices=["html", "svg", "graphml"], default="html", help="Output format (default: html)")
+        p.add_argument(
+            "--format",
+            choices=["html", "svg", "graphml"],
+            default="html",
+            help="Output format (default: html)",
+        )
         p.add_argument("--output", "-o", default=None, help="Output file path")
-        p.add_argument("--min-degree", type=int, default=0, help="Filter nodes below this degree")
+        p.add_argument(
+            "--min-degree", type=int, default=0, help="Filter nodes below this degree"
+        )
 
     def run(self, args: Any, wiki: Any, config: dict) -> int:
         return run_export_graph(wiki, args)

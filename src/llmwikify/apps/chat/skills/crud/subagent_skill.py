@@ -64,9 +64,7 @@ def _resolve_tool_registry(ctx: SkillContext, drop_subagent: bool) -> Any:
         explicit = ctx.config.get("child_tool_registry")
         if explicit is not None:
             return explicit
-    parent_registry = (
-        ctx.config.get("tool_registry") if ctx.config else None
-    )
+    parent_registry = ctx.config.get("tool_registry") if ctx.config else None
     if parent_registry is None:
         return None
     if drop_subagent and hasattr(parent_registry, "without"):
@@ -150,9 +148,7 @@ class SubagentSkill(Skill):
     """LLM-facing wrapper around :class:`SubagentManager`."""
 
     name = "subagent"
-    description = (
-        "Spawn isolated in-process child assistants for sub-goals."
-    )
+    description = "Spawn isolated in-process child assistants for sub-goals."
     actions = {
         "spawn_subagent": SkillAction(
             name="spawn_subagent",
@@ -172,8 +168,7 @@ class SubagentSkill(Skill):
                     "max_iterations": {
                         "type": "integer",
                         "description": (
-                            "Child runner iteration cap. "
-                            "Default 5, hard cap 10."
+                            "Child runner iteration cap. " "Default 5, hard cap 10."
                         ),
                         "minimum": 1,
                         "maximum": _HARD_MAX_ITERATIONS,

@@ -77,10 +77,7 @@ class TestWikiServerFeatures:
     def test_feature_flags_stored(self, wiki_instance):
         """Test that feature flags are correctly stored."""
         server = WikiServer(
-            wiki_instance,
-            enable_mcp=True,
-            enable_rest=False,
-            enable_webui=False
+            wiki_instance, enable_mcp=True, enable_rest=False, enable_webui=False
         )
         assert server.enable_mcp is True
         assert server.enable_rest is False

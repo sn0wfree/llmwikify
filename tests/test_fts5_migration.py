@@ -10,7 +10,6 @@ import sqlite3
 import sys
 from pathlib import Path
 
-
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from llmwikify.kernel.storage.index import _FTS5_TOKENIZE, WikiIndex
@@ -81,10 +80,14 @@ class TestFTS5Migration:
             conn.close()
 
         # Sanity check: legacy schema is in place
-        schema_sql = sqlite3.connect(str(db_path)).execute(
-            "SELECT sql FROM sqlite_master "
-            "WHERE type='table' AND name='pages_fts'"
-        ).fetchone()[0]
+        schema_sql = (
+            sqlite3.connect(str(db_path))
+            .execute(
+                "SELECT sql FROM sqlite_master "
+                "WHERE type='table' AND name='pages_fts'"
+            )
+            .fetchone()[0]
+        )
         assert "porter" in schema_sql
         assert "categories" not in schema_sql
 
@@ -201,16 +204,18 @@ class TestFTS5Migration:
         )
         new_sql = (
             "CREATE VIRTUAL TABLE pages_fts USING fts5("
-            f"page_name, content, content_seg, tokenize=\"{_FTS5_TOKENIZE}\")"
+            f'page_name, content, content_seg, tokenize="{_FTS5_TOKENIZE}")'
         )
         bare_sql = (
             "CREATE VIRTUAL TABLE pages_fts USING fts5("
             "page_name, content, tokenize='unicode61')"
         )
 
-        assert index._needs_migration(legacy_sql) is True  # no categories, no content_seg
-        assert index._needs_migration(new_sql) is False     # has both
-        assert index._needs_migration(bare_sql) is True     # no content_seg
+        assert (
+            index._needs_migration(legacy_sql) is True
+        )  # no categories, no content_seg
+        assert index._needs_migration(new_sql) is False  # has both
+        assert index._needs_migration(bare_sql) is True  # no content_seg
 
         index.close()
 

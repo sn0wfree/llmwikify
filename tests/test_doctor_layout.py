@@ -11,6 +11,7 @@ Covers:
 because the v0.40+ parser must handle non-trivial wiki.md layouts
 (custom page types, missing optional subdirs, etc.).
 """
+
 from __future__ import annotations
 
 import json
@@ -27,11 +28,11 @@ from llmwikify.kernel import Wiki
 # ─────────────────────────────────────────────────────────────────
 
 FIXTURE_WIKIS = {
-    "DataTrackor":      "/home/ll/Public/DataTrackor",
+    "DataTrackor": "/home/ll/Public/DataTrackor",
     "AssetAllocationv2": "/home/ll/Public/AssetAllocationv2",
-    "strategy":         "/home/ll/Public/strategy",
-    "pe_monitor":       "/home/ll/Public/pe_monitor",
-    "comovement":       "/home/ll/Public/comovement",
+    "strategy": "/home/ll/Public/strategy",
+    "pe_monitor": "/home/ll/Public/pe_monitor",
+    "comovement": "/home/ll/Public/comovement",
 }
 
 
@@ -48,6 +49,7 @@ def fixture_wiki(request):
 # Wiki._extract_subdirs_from_wiki_md (regex parser)
 # ─────────────────────────────────────────────────────────────────
 
+
 class TestExtractSubdirsFromWikiMd:
     """The 5 fixture projects exercise the two parser sources
     (Directory Structure tree + Page Types table) and both
@@ -60,11 +62,18 @@ class TestExtractSubdirsFromWikiMd:
             pytest.skip("project-specific test")
         subdirs = wiki._extract_subdirs_from_wiki_md()
         # 6 default + .sink (auto-added by init)
-        expected = {"sources", "entities", "concepts",
-                    "comparisons", "synthesis", "claims", ".sink"}
-        assert expected.issubset(set(subdirs)), (
-            f"DataTrackor should contain all 7 default subdirs, got {subdirs}"
-        )
+        expected = {
+            "sources",
+            "entities",
+            "concepts",
+            "comparisons",
+            "synthesis",
+            "claims",
+            ".sink",
+        }
+        assert expected.issubset(
+            set(subdirs)
+        ), f"DataTrackor should contain all 7 default subdirs, got {subdirs}"
 
     def test_strategy_includes_8_custom_subdirs(self, fixture_wiki):
         name, wiki = fixture_wiki
@@ -73,11 +82,19 @@ class TestExtractSubdirsFromWikiMd:
         subdirs = set(wiki._extract_subdirs_from_wiki_md())
         # 6 default + 8 custom (factors, strategies, backtests, signals,
         # models, portfolios, execution, research) + .sink
-        custom = {"factors", "strategies", "backtests", "signals",
-                  "models", "portfolios", "execution", "research"}
-        assert custom.issubset(subdirs), (
-            f"strategy should declare 8 custom subdirs, missing: {custom - subdirs}"
-        )
+        custom = {
+            "factors",
+            "strategies",
+            "backtests",
+            "signals",
+            "models",
+            "portfolios",
+            "execution",
+            "research",
+        }
+        assert custom.issubset(
+            subdirs
+        ), f"strategy should declare 8 custom subdirs, missing: {custom - subdirs}"
 
     def test_pe_monitor_includes_pe_domain_subdirs(self, fixture_wiki):
         name, wiki = fixture_wiki
@@ -85,12 +102,19 @@ class TestExtractSubdirsFromWikiMd:
             pytest.skip("project-specific test")
         subdirs = set(wiki._extract_subdirs_from_wiki_md())
         # 4 standard + 9 PE domain (investments, valuation-methods, ...)
-        pe = {"investments", "valuation-methods", "cashflow-types",
-              "covenants", "risks", "industries", "entity-portfolios",
-              "fund-lp", "valuation-models"}
+        pe = {
+            "investments",
+            "valuation-methods",
+            "cashflow-types",
+            "covenants",
+            "risks",
+            "industries",
+            "entity-portfolios",
+            "fund-lp",
+            "valuation-models",
+        }
         assert pe.issubset(subdirs), (
-            f"pe_monitor should declare PE domain subdirs, "
-            f"missing: {pe - subdirs}"
+            f"pe_monitor should declare PE domain subdirs, " f"missing: {pe - subdirs}"
         )
 
     def test_comovement_includes_finance_research(self, fixture_wiki):
@@ -100,8 +124,14 @@ class TestExtractSubdirsFromWikiMd:
         subdirs = set(wiki._extract_subdirs_from_wiki_md())
         # 6 default + 8 custom (models, metrics, datasets, experiments,
         # papers, case_studies, ...) + .sink
-        custom = {"models", "metrics", "datasets", "experiments",
-                  "papers", "case_studies"}
+        custom = {
+            "models",
+            "metrics",
+            "datasets",
+            "experiments",
+            "papers",
+            "case_studies",
+        }
         assert custom.issubset(subdirs)
 
     def test_wiki_md_missing_returns_empty(self, tmp_path):
@@ -129,15 +159,15 @@ class TestExtractSubdirsFromWikiMd:
         (tmp_path / "wiki" / "sources").mkdir()
         (tmp_path / "wiki" / ".sink").mkdir()
         (tmp_path / "wiki" / ".ipynb_checkpoints").mkdir()  # jupyter noise
-        (tmp_path / "wiki" / "concepts").mkdir()              # undeclared
+        (tmp_path / "wiki" / "concepts").mkdir()  # undeclared
 
         w = Wiki(tmp_path)
         actual = w.actual_layout
         assert "wiki/sources/" in actual
         assert "wiki/.sink/" in actual
-        assert "wiki/.ipynb_checkpoints/" not in actual, (
-            ".ipynb_checkpoints should be filtered"
-        )
+        assert (
+            "wiki/.ipynb_checkpoints/" not in actual
+        ), ".ipynb_checkpoints should be filtered"
         # undeclared subdirs ARE recorded in actual (to surface drift)
         assert "wiki/concepts/" in actual
 
@@ -145,6 +175,7 @@ class TestExtractSubdirsFromWikiMd:
 # ─────────────────────────────────────────────────────────────────
 # Wiki.expected_layout / layout_diff
 # ─────────────────────────────────────────────────────────────────
+
 
 class TestWikiLayoutDiff:
     """The diff classifies each path into one of three buckets:
@@ -197,14 +228,15 @@ class TestWikiLayoutDiff:
         _, wiki = fixture_wiki
         diff = wiki.layout_diff()
         all_keys = diff["in_both"] + diff["declared_only"] + diff["actual_only"]
-        assert len(all_keys) == len(set(all_keys)), (
-            "diff sets must be pairwise disjoint"
-        )
+        assert len(all_keys) == len(
+            set(all_keys)
+        ), "diff sets must be pairwise disjoint"
 
 
 # ─────────────────────────────────────────────────────────────────
 # Doctor integration (--wiki-root flag must be honoured)
 # ─────────────────────────────────────────────────────────────────
+
 
 class TestDoctorWikiRootFlag:
     """Regression: in v0.40, doctor switched to consulting the Wiki
@@ -219,22 +251,31 @@ class TestDoctorWikiRootFlag:
         root. Pre-fix bug: path was /home/ll/llmwikify (package root).
         """
         result = subprocess.run(
-            [sys.executable, "-m", "llmwikify", "doctor",
-             "--skip-llm", "--wiki-root", "/home/ll/Public/DataTrackor",
-             "--json"],
-            capture_output=True, text=True, cwd="/home/ll/llmwikify",
+            [
+                sys.executable,
+                "-m",
+                "llmwikify",
+                "doctor",
+                "--skip-llm",
+                "--wiki-root",
+                "/home/ll/Public/DataTrackor",
+                "--json",
+            ],
+            capture_output=True,
+            text=True,
+            cwd="/home/ll/llmwikify",
         )
         assert result.returncode == 0, f"doctor failed: {result.stderr}"
         data = json.loads(result.stdout)
         wiki_check = next(c for c in data["checks"] if c["category"] == "wiki")
         # Pre-fix bug: path was the package root
-        assert wiki_check["path"] == "/home/ll/Public/DataTrackor", (
-            f"expected DataTrackor path, got {wiki_check['path']!r}"
-        )
+        assert (
+            wiki_check["path"] == "/home/ll/Public/DataTrackor"
+        ), f"expected DataTrackor path, got {wiki_check['path']!r}"
         # Pre-fix bug: wiki.md was reported as missing (path was wrong)
-        assert wiki_check["status"] == "ok", (
-            f"DataTrackor should pass wiki check, got {wiki_check}"
-        )
+        assert (
+            wiki_check["status"] == "ok"
+        ), f"DataTrackor should pass wiki check, got {wiki_check}"
 
     def test_5_fixture_wikis_all_pass_wiki_check(self):
         """Every fixture wiki has the 4 functional paths, so doctor
@@ -243,20 +284,31 @@ class TestDoctorWikiRootFlag:
         bug."""
         for name, path in FIXTURE_WIKIS.items():
             result = subprocess.run(
-                [sys.executable, "-m", "llmwikify", "doctor",
-                 "--skip-llm", "--wiki-root", path, "--json"],
-                capture_output=True, text=True, cwd="/home/ll/llmwikify",
+                [
+                    sys.executable,
+                    "-m",
+                    "llmwikify",
+                    "doctor",
+                    "--skip-llm",
+                    "--wiki-root",
+                    path,
+                    "--json",
+                ],
+                capture_output=True,
+                text=True,
+                cwd="/home/ll/llmwikify",
             )
             data = json.loads(result.stdout)
             wiki_check = next(c for c in data["checks"] if c["category"] == "wiki")
-            assert wiki_check["status"] == "ok", (
-                f"{name}: wiki check should pass, got {wiki_check}"
-            )
+            assert (
+                wiki_check["status"] == "ok"
+            ), f"{name}: wiki check should pass, got {wiki_check}"
 
 
 # ─────────────────────────────────────────────────────────────────
 # Fix dict on every fail / actionable warn
 # ─────────────────────────────────────────────────────────────────
+
 
 class TestFixDictPresent:
     """D5=A: every fail and every actionable warn must carry a fix
@@ -266,12 +318,23 @@ class TestFixDictPresent:
         """A wiki with no functional paths → wiki check fails → must
         have a fix that says ``llmwikify init``."""
         import tempfile
+
         with tempfile.TemporaryDirectory() as tmp:
             # tmp is empty: no raw/, no wiki/, no db, no wiki.md
             result = subprocess.run(
-                [sys.executable, "-m", "llmwikify", "doctor",
-                 "--skip-llm", "--wiki-root", tmp, "--json"],
-                capture_output=True, text=True, cwd="/home/ll/llmwikify",
+                [
+                    sys.executable,
+                    "-m",
+                    "llmwikify",
+                    "doctor",
+                    "--skip-llm",
+                    "--wiki-root",
+                    tmp,
+                    "--json",
+                ],
+                capture_output=True,
+                text=True,
+                cwd="/home/ll/llmwikify",
             )
             data = json.loads(result.stdout)
             wiki_check = next(c for c in data["checks"] if c["category"] == "wiki")
@@ -284,12 +347,15 @@ class TestFixDictPresent:
         """If ~/.llmwikify/llmwikify.json is missing, config check
         fails and must suggest ``llmwikify init-llm``."""
         import os
+
         # Force a missing config by pointing HOME to an empty dir.
         # monkeypatch only works in-process; subprocess needs env dict.
         env = {**os.environ, "HOME": str(tmp_path)}
         result = subprocess.run(
             [sys.executable, "-m", "llmwikify", "doctor", "--json"],
-            capture_output=True, text=True, cwd="/home/ll/llmwikify",
+            capture_output=True,
+            text=True,
+            cwd="/home/ll/llmwikify",
             env=env,
         )
         if result.stdout:
@@ -297,5 +363,4 @@ class TestFixDictPresent:
             config_check = data["checks"][0]
             if config_check.get("status") == "missing":
                 assert "fix" in config_check
-                assert any("init-llm" in c
-                           for c in config_check["fix"]["commands"])
+                assert any("init-llm" in c for c in config_check["fix"]["commands"])

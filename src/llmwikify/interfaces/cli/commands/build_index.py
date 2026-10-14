@@ -41,7 +41,9 @@ def run_build_index(wiki: Any, args: Any) -> int:
     # Auto-detect and migrate old index format
     if _detect_old_index_format(wiki):
         if not force:
-            print_warning("Old index format detected. Migrating to new format automatically.")
+            print_warning(
+                "Old index format detected. Migrating to new format automatically."
+            )
             print("    (Use --force to skip this message in the future)")
         print()
 
@@ -96,16 +98,19 @@ class BuildIndexCommand(Command):
             raise TypeError("setup_parser requires an argparse subparsers action")
         p = subparsers.add_parser(self.name, help=self.help)
         p.add_argument(
-            "--no-export", action="store_true",
+            "--no-export",
+            action="store_true",
             help="Skip JSON export",
         )
         p.add_argument("--output", "-o", help="JSON output path")
         p.add_argument(
-            "--export-only", action="store_true",
+            "--export-only",
+            action="store_true",
             help="Export existing index without rebuilding",
         )
         p.add_argument(
-            "--force", action="store_true",
+            "--force",
+            action="store_true",
             help="Force rebuild even if old format detected",
         )
 

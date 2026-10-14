@@ -89,7 +89,13 @@ class TestLoadLlmConfig:
         fake_home = _patch_home(monkeypatch, tmp_path)
         _write_global_config(
             fake_home,
-            {"llm": {"provider": "minimax", "api_key": "sk-cp-test", "base_url": "https://api.minimaxi.com/v1"}},
+            {
+                "llm": {
+                    "provider": "minimax",
+                    "api_key": "sk-cp-test",
+                    "base_url": "https://api.minimaxi.com/v1",
+                }
+            },
         )
         from llmwikify.interfaces.server.http.routes import _load_llm_config
 
@@ -177,9 +183,7 @@ class TestBuildResearchConfigOverrides:
         out = _build_research_config_overrides()
         assert out["minimax_api_key"] == "sk-cp-explicit"
 
-    def test_fallback_uses_search_provider_filter(
-        self, tmp_path, monkeypatch
-    ) -> None:
+    def test_fallback_uses_search_provider_filter(self, tmp_path, monkeypatch) -> None:
         """When user explicitly pins search_provider=tavily, do NOT inject
         minimax_api_key even if llm is minimax. Avoids surprising the user
         with a provider they didn't ask for.
@@ -246,7 +250,11 @@ class TestBuildResearchConfigOverrides:
         _write_global_config(
             fake_home,
             {
-                "llm": {"provider": "minimax", "api_key": "sk-cp-x", "base_url": "https://api.minimaxi.com/v1"},
+                "llm": {
+                    "provider": "minimax",
+                    "api_key": "sk-cp-x",
+                    "base_url": "https://api.minimaxi.com/v1",
+                },
                 "research": {"minimax_api_host": "https://api.custom.example.com"},
             },
         )
@@ -277,7 +285,12 @@ class TestBuildResearchConfigOverrides:
         fake_home = _patch_home(monkeypatch, tmp_path)
         _write_global_config(
             fake_home,
-            {"research": {"minimax_api_key": "sk-x", "totally_unknown_key": "ignored-by-merge"}},
+            {
+                "research": {
+                    "minimax_api_key": "sk-x",
+                    "totally_unknown_key": "ignored-by-merge",
+                }
+            },
         )
         from llmwikify.interfaces.server.http.routes import (
             _build_research_config_overrides,
@@ -295,7 +308,9 @@ class TestBuildResearchConfigOverrides:
 class TestOverridesFlowIntoMergeSixStepConfig:
     """Verify the actual merge produces a config with the new keys."""
 
-    def test_minimax_key_merged_into_six_step_config(self, tmp_path, monkeypatch) -> None:
+    def test_minimax_key_merged_into_six_step_config(
+        self, tmp_path, monkeypatch
+    ) -> None:
         fake_home = _patch_home(monkeypatch, tmp_path)
         _write_global_config(
             fake_home,

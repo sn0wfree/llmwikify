@@ -51,6 +51,7 @@ def _qmd_install(wiki: Any, args: Any) -> int:
         print(qmd.get_install_guide())
     else:
         from llmwikify.kernel.search.qmd_client import QmdClient
+
         client = QmdClient()
         print(client.get_install_guide())
     return 0
@@ -157,7 +158,9 @@ class QmdCommand(Command):
 
         # qmd mcp
         p = qmd_sub.add_parser("mcp", help="Start QMD MCP server")
-        p.add_argument("--port", "-p", type=int, default=8181, help="Port (default: 8181)")
+        p.add_argument(
+            "--port", "-p", type=int, default=8181, help="Port (default: 8181)"
+        )
         p.add_argument("--host", default="127.0.0.1", help="Bind address")
         p.add_argument("--collection", help="Collection name")
 

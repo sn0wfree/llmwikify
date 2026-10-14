@@ -7,6 +7,7 @@ for shared I/O patterns extracted from across the codebase
 Initial version is a placeholder. Concrete utilities will be
 added as they are identified during subsequent batches.
 """
+
 from __future__ import annotations
 
 import json
@@ -41,7 +42,9 @@ def write_json(path: Path, data: Any, indent: int = 2) -> None:
         indent: JSON indentation level.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, indent=indent, ensure_ascii=False), encoding="utf-8")
+    path.write_text(
+        json.dumps(data, indent=indent, ensure_ascii=False), encoding="utf-8"
+    )
 
 
 def safe_read_text(path: Path, default: str = "") -> str:

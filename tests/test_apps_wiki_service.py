@@ -62,10 +62,7 @@ class MockWikiRegistry:
         return inst
 
     def list_wikis(self) -> list:
-        return [
-            MagicMock(to_dict=lambda: {"wiki_id": wid})
-            for wid in self._wikis
-        ]
+        return [MagicMock(to_dict=lambda: {"wiki_id": wid}) for wid in self._wikis]
 
     def register_wiki(self, wiki_id: str, name: str, root: Path) -> Any:
         inst = MagicMock()
@@ -121,6 +118,7 @@ def wiki_service(
 class TestWikiServiceMetadata:
     def test_importable(self) -> None:
         from llmwikify.apps.wiki import WikiService as WS
+
         assert WS is WikiService
 
     def test_init(self, wiki_service: WikiService) -> None:
@@ -156,7 +154,9 @@ class TestWikiResolution:
 
 
 class TestToolRegistryFactory:
-    def test_get_tool_registry_creates_instance(self, wiki_service: WikiService) -> None:
+    def test_get_tool_registry_creates_instance(
+        self, wiki_service: WikiService
+    ) -> None:
         from llmwikify.apps.agent.tools import WikiToolRegistry
 
         reg = wiki_service.get_tool_registry("test_wiki")
@@ -168,7 +168,9 @@ class TestToolRegistryFactory:
         reg2 = wiki_service.get_tool_registry("test_wiki")
         assert reg1 is reg2
 
-    def test_get_tool_registry_no_wiki_id_raises(self, wiki_service: WikiService) -> None:
+    def test_get_tool_registry_no_wiki_id_raises(
+        self, wiki_service: WikiService
+    ) -> None:
         wiki_service.wiki_registry.default_id = None
         with pytest.raises(ValueError, match="No wiki_id"):
             wiki_service.get_tool_registry(None)
@@ -222,7 +224,9 @@ class TestNotifications:
         result = wiki_service.mark_notification_read("nonexistent")
         assert result["status"] == "error"
 
-    def test_mark_notification_read_returns_dict(self, wiki_service: WikiService) -> None:
+    def test_mark_notification_read_returns_dict(
+        self, wiki_service: WikiService
+    ) -> None:
         # Without any notification managers, should return error
         result = wiki_service.mark_notification_read("x")
         assert "status" in result
@@ -312,16 +316,12 @@ class TestMultiWikiRegistry:
         assert "wiki" in result
 
     def test_register_wiki_remote_no_url(self, wiki_service: WikiService) -> None:
-        result = wiki_service.register_wiki(
-            "remote_wiki", "Remote", wiki_type="remote"
-        )
+        result = wiki_service.register_wiki("remote_wiki", "Remote", wiki_type="remote")
         assert "error" in result
         assert "url required" in result["error"]
 
     def test_register_wiki_local_no_root(self, wiki_service: WikiService) -> None:
-        result = wiki_service.register_wiki(
-            "new_wiki", "New Wiki", wiki_type="local"
-        )
+        result = wiki_service.register_wiki("new_wiki", "New Wiki", wiki_type="local")
         assert "error" in result
         assert "root required" in result["error"]
 

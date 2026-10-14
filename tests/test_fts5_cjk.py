@@ -10,7 +10,6 @@ tokenizer correctly indexes each CJK character as an independent token.
 import sys
 from pathlib import Path
 
-
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from llmwikify.kernel.storage.index import WikiIndex

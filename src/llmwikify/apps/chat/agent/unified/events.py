@@ -10,6 +10,7 @@ research_runner.py 通过 re-export 保持旧 import 路径不变。
         REASONING, ACTION_ERROR, ROUND_COMPLETE,
     )
 """
+
 from __future__ import annotations
 
 # ── session lifecycle ──────────────────────────────────────────

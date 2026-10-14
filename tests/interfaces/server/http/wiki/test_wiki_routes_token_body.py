@@ -50,6 +50,7 @@ def _build_app(tmp_path: Path) -> FastAPI:
         is_default=True,
     )
     app.state.db = MagicMock()
+
     # Accept ANY non-empty token; reject empty / None.
     def _lookup(token):
         if not token:
@@ -60,6 +61,7 @@ def _build_app(tmp_path: Path) -> FastAPI:
             "status": "pending",
             "arguments": {"page_name": "test", "expires_at": time.time() + 300},
         }
+
     app.state.db.get_confirmation_with_decoded_args = MagicMock(side_effect=_lookup)
     app.state.db.save_confirmation = MagicMock()
     app.state.db.delete_confirmation = MagicMock()
@@ -68,7 +70,8 @@ def _build_app(tmp_path: Path) -> FastAPI:
     import llmwikify.interfaces.server.http.wiki.wiki_routes as wr
 
     wr._get_wiki_db_and_id = lambda registry, wiki_id=None: (
-        app.state.db, wiki_id or "w1",
+        app.state.db,
+        wiki_id or "w1",
     )
     wiki_routes.register_wiki_routes(app, registry)
     return app
@@ -92,7 +95,8 @@ class TestWikiWritePageTokenInBody:
             assert r2.status_code == 200, r2.text
 
     def test_query_string_token_accepted_fallback(
-        self, tmp_path: Path,
+        self,
+        tmp_path: Path,
     ) -> None:
         """Query string transport (v0.40 PRIMARY) is accepted as the
         canonical mechanism."""
@@ -144,7 +148,8 @@ class TestWikiWritePageTokenInBody:
             assert r2.status_code == 200, r2.text
 
     def test_query_string_wins_over_body_when_both_present(
-        self, tmp_path: Path,
+        self,
+        tmp_path: Path,
     ) -> None:
         """When body and query disagree, query wins (highest priority)."""
         app = _build_app(tmp_path)
@@ -176,7 +181,9 @@ class TestWikiWritePageTokenInBody:
             assert r.status_code == 200, r.text
 
     def test_query_wins_logs_info_on_disagreement(
-        self, tmp_path: Path, caplog: pytest.LogCaptureFixture,
+        self,
+        tmp_path: Path,
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
         """When both query and body are present and disagree, an INFO
         log records the override WITHOUT leaking either token value."""
@@ -197,9 +204,9 @@ class TestWikiWritePageTokenInBody:
         assert r.status_code == 200, r.text
         # Exactly one INFO line on the override event
         matching = [
-            rec for rec in caplog.records
-            if rec.levelno == logging.INFO
-            and "overriding body" in rec.getMessage()
+            rec
+            for rec in caplog.records
+            if rec.levelno == logging.INFO and "overriding body" in rec.getMessage()
         ]
         assert len(matching) == 1
         # The actual token strings must NOT appear in any log message

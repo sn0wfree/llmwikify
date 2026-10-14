@@ -22,9 +22,7 @@ class AutoIngestHook(AgentHook):
             return
         root = self.wiki.root
         self._known_files = {
-            str(f.relative_to(root))
-            for f in raw_dir.rglob("*")
-            if f.is_file()
+            str(f.relative_to(root)) for f in raw_dir.rglob("*") if f.is_file()
         }
 
     def check_new_files(self) -> list[str]:
@@ -33,9 +31,7 @@ class AutoIngestHook(AgentHook):
             return []
         root = self.wiki.root
         current_files = {
-            str(f.relative_to(root))
-            for f in raw_dir.rglob("*")
-            if f.is_file()
+            str(f.relative_to(root)) for f in raw_dir.rglob("*") if f.is_file()
         }
         new_files = current_files - self._known_files
         if new_files:

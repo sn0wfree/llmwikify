@@ -17,6 +17,7 @@ Why a separate base (not BaseDatabase)?
     schema runs (e.g. ChatDatabase.__init__ runs each repo's
     _init_schema in sequence).
 """
+
 from __future__ import annotations
 
 import logging
@@ -36,6 +37,7 @@ def get_chat_db_path(data_dir: Path | str) -> Path:
     Delegates to ``apps.db_base.get_app_db_path``.
     """
     from llmwikify.apps.db_base import get_app_db_path
+
     return get_app_db_path(data_dir)
 
 

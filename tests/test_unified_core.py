@@ -1,4 +1,5 @@
 """Tests for unified/core.py — StepResult, Pipeline, UnifiedContext, UnifiedHook."""
+
 from __future__ import annotations
 
 
@@ -125,7 +126,10 @@ def test_unified_hook_defaults():
     hook = UnifiedHook()
     assert hook.wants_streaming() is False
     assert hook.before_iteration(UnifiedContext(spec=BaseSpec(messages=[]))) is None
-    assert hook.finalize(UnifiedContext(spec=BaseSpec(messages=[])), "content") == "content"
+    assert (
+        hook.finalize(UnifiedContext(spec=BaseSpec(messages=[])), "content")
+        == "content"
+    )
 
 
 # ── _maybe_await ──────────────────────────────────────────
@@ -141,5 +145,6 @@ async def test_maybe_await_sync():
 async def test_maybe_await_async():
     async def double(x):
         return x * 2
+
     result = await _maybe_await(double, 5)
     assert result == 10

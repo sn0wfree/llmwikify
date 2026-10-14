@@ -19,9 +19,14 @@ def _make_service(tmp_path: Path, wiki=None, **cfg_overrides) -> AutoIngestServi
     wiki = wiki or SimpleNamespace(
         raw_dir=raw_dir,
         ingest_source=lambda p: {
-            "title": "t", "source_name": "s", "content": "hello", "error": None,
+            "title": "t",
+            "source_name": "s",
+            "content": "hello",
+            "error": None,
         },
-        _llm_process_source=lambda r: {"operations": [{"action": "create", "page_name": "x", "content": "c"}]},
+        _llm_process_source=lambda r: {
+            "operations": [{"action": "create", "page_name": "x", "content": "c"}]
+        },
         execute_operations=lambda ops: {"operations_executed": len(ops)},
     )
     return AutoIngestService(
@@ -57,7 +62,8 @@ def test_llm_failure_falls_back_to_proposal(tmp_path: Path):
     )
     (tmp_path / "raw").mkdir(exist_ok=True)
     svc = AutoIngestService(
-        wiki=wiki, wiki_id="test",
+        wiki=wiki,
+        wiki_id="test",
         config=AutoIngestConfig(debounce_seconds=0.05),
         llm_semaphore=asyncio.Semaphore(1),
     )
@@ -81,6 +87,7 @@ def test_write_mode_proposal_skips_llm(tmp_path: Path):
         return {"operations": []}
 
     from types import SimpleNamespace as NS
+
     wiki = NS(
         raw_dir=tmp_path / "raw",
         ingest_source=lambda p: {"title": "t", "source_name": "s", "content": "hi"},
@@ -88,7 +95,8 @@ def test_write_mode_proposal_skips_llm(tmp_path: Path):
     )
     (tmp_path / "raw").mkdir(exist_ok=True)
     svc = AutoIngestService(
-        wiki=wiki, wiki_id="test",
+        wiki=wiki,
+        wiki_id="test",
         config=AutoIngestConfig(write_mode="proposal", debounce_seconds=0.05),
         llm_semaphore=asyncio.Semaphore(1),
     )
@@ -110,7 +118,8 @@ def test_ingest_error_recorded_not_raised(tmp_path: Path):
     wiki = NS(raw_dir=tmp_path / "raw", ingest_source=bad_ingest)
     (tmp_path / "raw").mkdir(exist_ok=True)
     svc = AutoIngestService(
-        wiki=wiki, wiki_id="test",
+        wiki=wiki,
+        wiki_id="test",
         config=AutoIngestConfig(debounce_seconds=0.05),
         llm_semaphore=asyncio.Semaphore(1),
     )
@@ -161,11 +170,16 @@ async def _noop_start(svc: AutoIngestService) -> None:
 
 def _backlog_wiki(tmp_path: Path, calls: list):
     from types import SimpleNamespace as NS
+
     return NS(
         root=tmp_path,
         raw_dir=tmp_path / "raw",
-        ingest_source=lambda p: calls.append(p) or {
-            "title": "t", "source_name": "s", "content": "hello", "error": None,
+        ingest_source=lambda p: calls.append(p)
+        or {
+            "title": "t",
+            "source_name": "s",
+            "content": "hello",
+            "error": None,
         },
         _llm_process_source=lambda r: {"operations": [{"action": "create"}]},
         execute_operations=lambda ops: {"operations_executed": len(ops)},
@@ -218,6 +232,7 @@ def test_backlog_requeues_modified_file(tmp_path: Path):
 
     # simulate modification after processing (different content + mtime)
     import os
+
     f.write_text("v2 - changed")
     os.utime(f, (f.stat().st_atime + 10, f.stat().st_mtime + 10))
 
@@ -234,7 +249,9 @@ def test_backlog_respects_limit(tmp_path: Path):
     for i in range(3):
         (raw / f"f{i}.md").write_text(f"content {i}")
 
-    svc = _make_service(tmp_path, wiki=_backlog_wiki(tmp_path, calls), max_backlog_per_start=2)
+    svc = _make_service(
+        tmp_path, wiki=_backlog_wiki(tmp_path, calls), max_backlog_per_start=2
+    )
     asyncio.run(svc._scan_backlog())
 
     assert len(calls) == 2
@@ -255,7 +272,8 @@ def test_failed_ingest_not_marked_processed(tmp_path: Path):
     f.write_text("x")
 
     svc = AutoIngestService(
-        wiki=wiki, wiki_id="t",
+        wiki=wiki,
+        wiki_id="t",
         config=AutoIngestConfig(debounce_seconds=0.05),
         llm_semaphore=asyncio.Semaphore(1),
     )
@@ -280,15 +298,22 @@ def test_fallback_proposal_persists_to_db(tmp_path: Path):
         raise RuntimeError("llm down")
 
     from types import SimpleNamespace as NS
+
     wiki = NS(
         root=tmp_path,
         raw_dir=raw,
-        ingest_source=lambda p: ingest_calls.append(p) or {
-            "title": "Persisted", "source_name": "s", "content": "hello", "error": None,
+        ingest_source=lambda p: ingest_calls.append(p)
+        or {
+            "title": "Persisted",
+            "source_name": "s",
+            "content": "hello",
+            "error": None,
         },
         _llm_process_source=boom,
     )
-    instance = WikiInstance(wiki_id="w1", name="w1", wiki_type=WikiType.LOCAL, root=tmp_path)
+    instance = WikiInstance(
+        wiki_id="w1", name="w1", wiki_type=WikiType.LOCAL, root=tmp_path
+    )
     registry = NS(list_wikis=lambda: [instance], get_wiki=lambda wid: wiki)
 
     data_dir = tmp_path / "agent-data"
@@ -310,10 +335,7 @@ def test_fallback_proposal_persists_to_db(tmp_path: Path):
     # proposal visible through a fresh WikiDatabase on the same data_dir
     db = WikiDatabase(data_dir)
     rows = db.get_dream_proposals("w1", status=None)
-    assert any(
-        r["page_name"] == "Persisted" and r["status"] == "pending"
-        for r in rows
-    )
+    assert any(r["page_name"] == "Persisted" and r["status"] == "pending" for r in rows)
 
 
 # ── B1 fix: global LLM config fallback ───────────────────────────────
@@ -326,12 +348,15 @@ def test_ensure_llm_config_merges_global_when_local_off(tmp_path: Path, monkeypa
     import llmwikify.foundation.llm.client as llm_client_mod
 
     monkeypatch.setattr(
-        ai_mod, "load_llm_config", lambda: {"enabled": True, "provider": "minimax", "model": "m3", "api_key": "k"},
+        ai_mod,
+        "load_llm_config",
+        lambda: {"enabled": True, "provider": "minimax", "model": "m3", "api_key": "k"},
         raising=False,
     )
     # patch where it's imported: inside function via foundation module
     monkeypatch.setattr(
-        llm_client_mod, "load_llm_config",
+        llm_client_mod,
+        "load_llm_config",
         lambda: {"enabled": True, "provider": "minimax", "model": "m3", "api_key": "k"},
     )
 
@@ -343,7 +368,8 @@ def test_ensure_llm_config_merges_global_when_local_off(tmp_path: Path, monkeypa
     )
     (tmp_path / "raw").mkdir(exist_ok=True)
     svc = AutoIngestService(
-        wiki=wiki, wiki_id="t",
+        wiki=wiki,
+        wiki_id="t",
         config=AutoIngestConfig(),
         llm_semaphore=asyncio.Semaphore(1),
     )
@@ -363,7 +389,8 @@ def test_ensure_llm_config_keeps_local_when_enabled(tmp_path: Path):
     )
     (tmp_path / "raw").mkdir(exist_ok=True)
     svc = AutoIngestService(
-        wiki=wiki, wiki_id="t",
+        wiki=wiki,
+        wiki_id="t",
         config=AutoIngestConfig(),
         llm_semaphore=asyncio.Semaphore(1),
     )

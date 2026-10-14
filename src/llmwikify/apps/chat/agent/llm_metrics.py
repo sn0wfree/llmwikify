@@ -116,12 +116,15 @@ class LLMMetricsCollector:
         by_prompt: dict[str, dict[str, Any]] = {}
         for r in records:
             name = r["prompt_name"]
-            bucket = by_prompt.setdefault(name, {
-                "count": 0,
-                "total_latency_ms": 0,
-                "error_count": 0,
-                "total_chars_in": 0,
-            })
+            bucket = by_prompt.setdefault(
+                name,
+                {
+                    "count": 0,
+                    "total_latency_ms": 0,
+                    "error_count": 0,
+                    "total_chars_in": 0,
+                },
+            )
             bucket["count"] += 1
             bucket["total_latency_ms"] += r["latency_ms"]
             bucket["total_chars_in"] += r.get("chars_in", 0)
@@ -135,9 +138,7 @@ class LLMMetricsCollector:
 
         recent_count = min(20, len(records))
         recent = [
-            {
-                k: v for k, v in r.items() if k != "recorded_at"
-            }
+            {k: v for k, v in r.items() if k != "recorded_at"}
             for r in list(records)[-recent_count:]
         ]
 

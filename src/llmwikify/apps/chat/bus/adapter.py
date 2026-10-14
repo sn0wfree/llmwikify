@@ -160,7 +160,8 @@ def _tool_call_envelope(event: dict[str, Any], phase: str) -> dict[str, Any]:
 
 
 def _passthrough_envelope(
-    event: dict[str, Any], target_type: str,
+    event: dict[str, Any],
+    target_type: str,
 ) -> dict[str, Any]:
     out = dict(event)
     out["type"] = target_type
@@ -304,7 +305,7 @@ class BusAdapter:
             chat_events.TOOL_CALL_ERROR,
         ):
             # phase = "start" | "end" | "error" (strip the "tool_call_" prefix)
-            phase = etype[len("tool_call_"):]
+            phase = etype[len("tool_call_") :]
             return _tool_call_envelope(event, phase)
         # ── Passthrough (SSE wire name == WS wire name) ──
         if etype in (

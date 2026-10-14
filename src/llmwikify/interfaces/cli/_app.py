@@ -60,6 +60,7 @@ from .commands.write_page import run_write_page
 
 logger = logging.getLogger(__name__)
 
+
 class WikiCLI:
     """CLI command handler.
 
@@ -127,6 +128,7 @@ class WikiCLI:
         ``cli.commands.build_index._detect_old_index_format``.
         """
         from .commands.build_index import _detect_old_index_format
+
         return _detect_old_index_format(self.wiki)
 
     def fix_wikilinks(self, args: Any) -> int:
@@ -200,6 +202,7 @@ class WikiCLI:
     def db(self, args: Any) -> int:
         """Database management. → ``cli.commands.db.run_db``."""
         return run_db(self.wiki, args)
+
 
 def _build_parser() -> Any:
     """Build the llmwikify top-level ArgumentParser.
@@ -327,6 +330,7 @@ def main() -> int:
     # it's an alias of "serve"). We use SUBCOMMAND_ALIASES to
     # look up the canonical command name.
     from .commands.help_cmd import SUBCOMMAND_ALIASES  # noqa: E402
+
     canonical_command = SUBCOMMAND_ALIASES.get(args.command, args.command)
 
     cmd = get_command(canonical_command)

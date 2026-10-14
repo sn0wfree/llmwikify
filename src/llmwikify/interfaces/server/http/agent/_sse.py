@@ -27,6 +27,7 @@ _STUDY_TRIGGER = "/study"
 
 # ─── SSE 流 ────────────────────────────────────────────────────
 
+
 async def _sse_stream(
     source: AsyncIterator[dict],
     *,
@@ -64,12 +65,16 @@ async def _sse_stream(
                 "message": f"Stream timed out after {int(timeout // 60)} minutes",
             }
             bus_adapter.mirror_sse_event(
-                timeout_event, target_id="", session_key=session_key,
+                timeout_event,
+                target_id="",
+                session_key=session_key,
             )
             yield {"event": "message", "data": json.dumps(timeout_event)}
             return
         bus_adapter.mirror_sse_event(
-            event, target_id="", session_key=session_key,
+            event,
+            target_id="",
+            session_key=session_key,
         )
         yield {"event": "message", "data": json.dumps(event)}
 

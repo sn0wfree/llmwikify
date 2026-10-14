@@ -16,6 +16,7 @@ concern is now moot: ``research_agent.py`` uses a ``TYPE_CHECKING``
 guard plus a lazy local import in ``__init__``, so the eager
 ``from llmwikify.apps.research import engine`` below is safe.
 """
+
 import sys as _sys
 
 from llmwikify.apps.research import engine as _canonical  # noqa: F401

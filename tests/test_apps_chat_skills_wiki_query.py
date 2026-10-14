@@ -38,7 +38,13 @@ class MockWiki:
     def search(self, query: str, limit: int = 10, backend: str = "fts5") -> list[str]:
         return [f"result_{i}" for i in range(min(3, limit))]
 
-    def lint(self, mode: str = "check", limit: int = 10, force: bool = False, generate_investigations: bool = False) -> dict:
+    def lint(
+        self,
+        mode: str = "check",
+        limit: int = 10,
+        force: bool = False,
+        generate_investigations: bool = False,
+    ) -> dict:
         return {"hints": {}, "issue_count": 0, "total_pages": 5}
 
     def status(self) -> dict:
@@ -71,10 +77,14 @@ class MockWiki:
     def graph_analyze(self) -> dict:
         return {"pagerank": {}, "communities": []}
 
-    def get_inbound_links(self, page_name: str, include_context: bool = False) -> list[str]:
+    def get_inbound_links(
+        self, page_name: str, include_context: bool = False
+    ) -> list[str]:
         return ["inbound_page"]
 
-    def get_outbound_links(self, page_name: str, include_context: bool = False) -> list[str]:
+    def get_outbound_links(
+        self, page_name: str, include_context: bool = False
+    ) -> list[str]:
         return ["outbound_page"]
 
     class index:
@@ -103,15 +113,38 @@ class TestWikiQuerySkillMetadata:
 
     def test_action_names_sorted(self) -> None:
         names = sorted(wiki_query_skill.actions.keys())
-        assert names == sorted([
-            "init", "ingest", "write_page", "read_page", "search",
-            "lint", "analyze_source", "references", "status", "log",
-            "recommend", "build_index", "read_schema", "update_schema",
-            "synthesize", "sink_status", "suggest_synthesis",
-            "knowledge_gaps", "graph_analyze", "graph",
-            "wiki_list", "wiki_switch", "wiki_register", "wiki_unregister",
-            "wiki_status", "wiki_search", "wiki_search_cross", "wiki_scan",
-        ])
+        assert names == sorted(
+            [
+                "init",
+                "ingest",
+                "write_page",
+                "read_page",
+                "search",
+                "lint",
+                "analyze_source",
+                "references",
+                "status",
+                "log",
+                "recommend",
+                "build_index",
+                "read_schema",
+                "update_schema",
+                "synthesize",
+                "sink_status",
+                "suggest_synthesis",
+                "knowledge_gaps",
+                "graph_analyze",
+                "graph",
+                "wiki_list",
+                "wiki_switch",
+                "wiki_register",
+                "wiki_unregister",
+                "wiki_status",
+                "wiki_search",
+                "wiki_search_cross",
+                "wiki_scan",
+            ]
+        )
 
     def test_manifest_action_count(self) -> None:
         m = wiki_query_skill.manifest()
@@ -177,7 +210,9 @@ class TestCoreWikiActions:
     @pytest.mark.asyncio
     async def test_log(self, ctx_with_wiki: SkillContext) -> None:
         action = wiki_query_skill.actions["log"]
-        r = await action.handler({"operation": "edit", "details": "changed p"}, ctx_with_wiki)
+        r = await action.handler(
+            {"operation": "edit", "details": "changed p"}, ctx_with_wiki
+        )
         assert r.status == "ok"
 
     @pytest.mark.asyncio

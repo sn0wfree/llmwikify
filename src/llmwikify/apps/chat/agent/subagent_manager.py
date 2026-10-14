@@ -148,6 +148,7 @@ class SubagentManager:
             from llmwikify.apps.chat.agent.execution_context import (
                 AgentExecutionContext,
             )
+
             child_ctx = AgentExecutionContext(
                 chat_service=parent_ctx.chat_service,
                 tool_executor=parent_ctx.tool_executor,
@@ -171,8 +172,7 @@ class SubagentManager:
                 return SubagentResult(
                     status="timeout",
                     error=(
-                        f"subagent exceeded timeout_seconds="
-                        f"{spec.timeout_seconds}"
+                        f"subagent exceeded timeout_seconds=" f"{spec.timeout_seconds}"
                     ),
                     stop_reason="timeout",
                 )

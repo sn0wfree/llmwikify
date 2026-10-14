@@ -79,9 +79,7 @@ class WikiDiscovery:
 
         return found_wikis
 
-    def _find_db_files(
-        self, root: Path, depth: int, exclude: list[str]
-    ) -> list[Path]:
+    def _find_db_files(self, root: Path, depth: int, exclude: list[str]) -> list[Path]:
         """Recursively find .llmwikify.db files.
 
         Args:
@@ -113,9 +111,7 @@ class WikiDiscovery:
                     db_files.append(db_file)
                     continue
 
-                db_files.extend(
-                    self._find_db_files(item, depth - 1, exclude)
-                )
+                db_files.extend(self._find_db_files(item, depth - 1, exclude))
         except PermissionError:
             logger.warning(f"Permission denied: {root}")
         except OSError as e:

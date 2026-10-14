@@ -105,7 +105,9 @@ def load_maintenance_config(config_path: Path | None = None) -> MaintenanceConfi
     ai = section.get("auto_ingest", {})
     if isinstance(ai, dict):
         cfg.auto_ingest.enabled = bool(ai.get("enabled", cfg.auto_ingest.enabled))
-        cfg.auto_ingest.write_mode = str(ai.get("write_mode", cfg.auto_ingest.write_mode))
+        cfg.auto_ingest.write_mode = str(
+            ai.get("write_mode", cfg.auto_ingest.write_mode)
+        )
         cfg.auto_ingest.fallback_to_proposal = bool(
             ai.get("fallback_to_proposal", cfg.auto_ingest.fallback_to_proposal),
         )

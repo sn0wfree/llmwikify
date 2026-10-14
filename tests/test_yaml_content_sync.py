@@ -46,9 +46,14 @@ class TestResearchClarifyYAMLContent:
         """Run run_prompt with the real YAMLs and capture the messages
         sent to the LLM."""
         llm = MagicMock()
-        llm.chat = MagicMock(return_value=json.dumps({
-            "context": "C", "scope_check": True,
-        }))
+        llm.chat = MagicMock(
+            return_value=json.dumps(
+                {
+                    "context": "C",
+                    "scope_check": True,
+                }
+            )
+        )
         llm.provider = "openai"
         ctx = MagicMock()
         ctx.default_llm = llm
@@ -56,13 +61,16 @@ class TestResearchClarifyYAMLContent:
         ctx.report_llm = llm
         ctx.metrics = None
         ctx.config = {
-            "max_retry_attempts": 1, "llm_call_timeout_seconds": 30,
+            "max_retry_attempts": 1,
+            "llm_call_timeout_seconds": 30,
         }
 
         async def _run(query, wiki_context=""):
             await run_prompt(
-                ctx, "research_clarify",
-                query=query, wiki_context=wiki_context,
+                ctx,
+                "research_clarify",
+                query=query,
+                wiki_context=wiki_context,
             )
             return llm.chat.call_args[0][0]
 
@@ -70,10 +78,12 @@ class TestResearchClarifyYAMLContent:
 
     def test_system_prompt_is_chinese(self, rendered_messages):
         """Legacy was Chinese. YAML should also be Chinese."""
+
         async def _go():
             msgs = await rendered_messages("AI safety")
             assert msgs[0]["role"] == "system"
             return msgs[0]["content"]
+
         content = asyncio.new_event_loop().run_until_complete(_go())
         # The legacy prompt had these Chinese phrases
         assert "你是一个研究澄清助手" in content
@@ -84,9 +94,11 @@ class TestResearchClarifyYAMLContent:
 
     def test_system_prompt_contains_json_schema(self, rendered_messages):
         """The legacy prompt had an explicit JSON schema example."""
+
         async def _go():
             msgs = await rendered_messages("X")
             return msgs[0]["content"]
+
         content = asyncio.new_event_loop().run_until_complete(_go())
         assert '"context"' in content
         assert '"boundaries"' in content
@@ -94,11 +106,15 @@ class TestResearchClarifyYAMLContent:
         assert '"premises"' in content
         assert '"scope_check"' in content
 
-    def test_system_prompt_contains_scope_check_false_conditions(self, rendered_messages):
+    def test_system_prompt_contains_scope_check_false_conditions(
+        self, rendered_messages
+    ):
         """The legacy prompt listed when scope_check should be false."""
+
         async def _go():
             msgs = await rendered_messages("X")
             return msgs[0]["content"]
+
         content = asyncio.new_event_loop().run_until_complete(_go())
         assert "scope_check=false" in content
         # The three conditions
@@ -108,34 +124,42 @@ class TestResearchClarifyYAMLContent:
 
     def test_user_message_contains_query(self, rendered_messages):
         """The user message should start with '研究主题：{query}'."""
+
         async def _go():
             msgs = await rendered_messages("AI safety")
             return msgs[1]["content"]
+
         content = asyncio.new_event_loop().run_until_complete(_go())
         assert "研究主题：AI safety" in content
 
     def test_user_message_ends_with_concept_clarify_request(self, rendered_messages):
         """The legacy user message ended with '请进行概念澄清。'"""
+
         async def _go():
             msgs = await rendered_messages("X")
             return msgs[1]["content"]
+
         content = asyncio.new_event_loop().run_until_complete(_go())
         assert content.rstrip().endswith("请进行概念澄清。")
 
     def test_user_message_includes_wiki_context(self, rendered_messages):
         """When wiki_context is provided, it should be included."""
+
         async def _go():
             msgs = await rendered_messages("X", wiki_context="wiki text here")
             return msgs[1]["content"]
+
         content = asyncio.new_event_loop().run_until_complete(_go())
         assert "Existing wiki context:" in content
         assert "wiki text here" in content
 
     def test_user_message_omits_wiki_block_when_empty(self, rendered_messages):
         """When wiki_context is empty, no 'Existing wiki context' line."""
+
         async def _go():
             msgs = await rendered_messages("X", wiki_context="")
             return msgs[1]["content"]
+
         content = asyncio.new_event_loop().run_until_complete(_go())
         assert "Existing wiki context" not in content
 
@@ -153,9 +177,13 @@ class TestResearchReplanYAMLContent:
     def rendered_messages(self):
         """Run run_prompt with the real YAMLs and capture the messages."""
         llm = MagicMock()
-        llm.chat = MagicMock(return_value=json.dumps([
-            {"query": "q1", "source_type": "web", "url": ""},
-        ]))
+        llm.chat = MagicMock(
+            return_value=json.dumps(
+                [
+                    {"query": "q1", "source_type": "web", "url": ""},
+                ]
+            )
+        )
         llm.provider = "openai"
         ctx = MagicMock()
         ctx.default_llm = llm
@@ -163,12 +191,14 @@ class TestResearchReplanYAMLContent:
         ctx.report_llm = llm
         ctx.metrics = None
         ctx.config = {
-            "max_retry_attempts": 1, "llm_call_timeout_seconds": 30,
+            "max_retry_attempts": 1,
+            "llm_call_timeout_seconds": 30,
         }
 
         async def _run(query, gaps, wiki_context=""):
             await run_prompt(
-                ctx, "research_replan",
+                ctx,
+                "research_replan",
                 query=query,
                 gaps=gaps,
                 wiki_context=wiki_context,
@@ -179,9 +209,11 @@ class TestResearchReplanYAMLContent:
 
     def test_system_prompt_contains_required_rules(self, rendered_messages):
         """Legacy prompt specified JSON array shape, source_types, and limits."""
+
         async def _go():
             msgs = await rendered_messages("X", ["gap1"])
             return msgs[0]["content"]
+
         content = asyncio.new_event_loop().run_until_complete(_go())
         assert "You are a research planner" in content
         # Source types mentioned
@@ -196,11 +228,14 @@ class TestResearchReplanYAMLContent:
     def test_user_message_has_required_sections(self, rendered_messages):
         """Legacy user message had 3 sections: research topic, gaps,
         instructions."""
+
         async def _go():
             msgs = await rendered_messages(
-                "quantum computing", ["entanglement", "decoherence"],
+                "quantum computing",
+                ["entanglement", "decoherence"],
             )
             return msgs[1]["content"]
+
         content = asyncio.new_event_loop().run_until_complete(_go())
         assert "Research topic: quantum computing" in content
         assert "Knowledge gaps to fill:" in content
@@ -214,21 +249,26 @@ class TestResearchReplanYAMLContent:
         """When wiki_context is provided, the wiki block is appended
         to the gaps section (legacy behavior — the wiki_context kwarg
         already includes the 'Existing wiki articles...' header)."""
+
         async def _go():
             msgs = await rendered_messages(
-                "X", ["gap1"],
-                wiki_context="\n\nExisting wiki articles that may help fill gaps:\n- Bell inequality\nUse source_type \"wiki\" for these if relevant.",
+                "X",
+                ["gap1"],
+                wiki_context='\n\nExisting wiki articles that may help fill gaps:\n- Bell inequality\nUse source_type "wiki" for these if relevant.',
             )
             return msgs[1]["content"]
+
         content = asyncio.new_event_loop().run_until_complete(_go())
         assert "Existing wiki articles" in content
         assert "Bell inequality" in content
 
     def test_user_message_omits_wiki_when_empty(self, rendered_messages):
         """When wiki_context is empty, no wiki block."""
+
         async def _go():
             msgs = await rendered_messages("X", ["gap1"], wiki_context="")
             return msgs[1]["content"]
+
         content = asyncio.new_event_loop().run_until_complete(_go())
         assert "Existing wiki articles" not in content
 
@@ -243,6 +283,7 @@ class TestNoInlinePromptResidue:
 
     def test_clarifier_no_chinese_inline_prompt(self):
         from llmwikify.apps.chat import clarifier
+
         source = open(clarifier.__file__).read()
         # The legacy Chinese prompt text should not be in the source
         assert "你是一个研究澄清助手" not in source
@@ -251,12 +292,14 @@ class TestNoInlinePromptResidue:
 
     def test_actions_no_english_replan_prompt(self):
         from llmwikify.apps.chat import actions
+
         source = open(actions.__file__).read()
         # Legacy English replan system prompt
         assert "You are a research planner. Generate focused sub-queries" not in source
 
     def test_engine_no_reason_prompt(self):
         from llmwikify.apps.chat import engine
+
         source = open(engine.__file__).read()
         # Legacy English reason prompt
         assert "You are a research orchestrator using ReAct reasoning" not in source
@@ -266,10 +309,15 @@ class TestNoInlinePromptResidue:
         review, revise) should resolve via PromptRegistry without
         FileNotFoundError."""
         from llmwikify.kernel.wiki.prompt_registry import PromptRegistry
+
         registry = PromptRegistry(provider="openai")
         for name in (
-            "research_clarify", "research_plan", "research_replan",
-            "research_reason", "research_report", "research_review",
+            "research_clarify",
+            "research_plan",
+            "research_replan",
+            "research_reason",
+            "research_report",
+            "research_review",
             "research_revise",
         ):
             msgs = registry.get_messages(name, query="x")

@@ -36,9 +36,7 @@ def _is_server_available() -> bool:
     when no server is running (e.g. CI jobs that don't start the server).
     """
     try:
-        response = httpx.get(
-            f"{_server_base_url()}/api/health", timeout=2.0
-        )
+        response = httpx.get(f"{_server_base_url()}/api/health", timeout=2.0)
         return response.status_code == 200
     except (httpx.HTTPError, httpx.RequestError, OSError):
         return False
@@ -90,9 +88,7 @@ def llm_config():
         return {
             "provider": os.environ.get("LLM_PROVIDER", "minimax"),
             "model": os.environ.get("LLM_MODEL", "minimax-M3"),
-            "base_url": os.environ.get(
-                "LLM_BASE_URL", "https://api.minimaxi.com/v1"
-            ),
+            "base_url": os.environ.get("LLM_BASE_URL", "https://api.minimaxi.com/v1"),
             "api_key": os.environ.get("LLM_API_KEY"),
         }
     config_path = Path.home() / ".llmwikify" / "llmwikify.json"
@@ -110,6 +106,7 @@ def llm_config():
 def llm_client(llm_config):
     """LLM client for testing."""
     from llmwikify.foundation.llm import LLMClient
+
     return LLMClient.from_config({"llm": llm_config})
 
 

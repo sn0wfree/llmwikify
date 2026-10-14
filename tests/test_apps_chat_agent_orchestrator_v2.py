@@ -7,6 +7,7 @@ Verifies that:
   - V2PersistenceHook delegates to tool_executor.persist_tool_result
   - Errors in persistence are isolated (logged, not raised)
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -105,7 +106,9 @@ def test_v2_extract_finds_run_id_among_many() -> None:
         },
         {"tool": "wiki_write", "result": {"ok": True}},
     ]
-    assert ChatOrchestrator._extract_research_run_id_from_tools(tool_calls) == "wf_target"
+    assert (
+        ChatOrchestrator._extract_research_run_id_from_tools(tool_calls) == "wf_target"
+    )
 
 
 # ─── _save_assistant_message_v2 ────────────────────────────────
@@ -165,7 +168,10 @@ def test_v2_persistence_hook_calls_persist_tool_result() -> None:
     result = {"ok": True}
     asyncio.run(hook.after_tool_executed(MagicMock(), tc, result))
     executor.persist_tool_result.assert_awaited_once_with(
-        "s1", "read_file", {"path": "/x"}, {"ok": True},
+        "s1",
+        "read_file",
+        {"path": "/x"},
+        {"ok": True},
     )
 
 
@@ -184,7 +190,10 @@ def test_v2_persistence_hook_handles_non_dict_tool_call() -> None:
     hook = _V2PersistenceHook(executor, "s1")
     asyncio.run(hook.after_tool_executed(MagicMock(), "string_tool_call", {"ok": True}))
     executor.persist_tool_result.assert_awaited_once_with(
-        "s1", "", {}, {"ok": True},
+        "s1",
+        "",
+        {},
+        {"ok": True},
     )
 
 

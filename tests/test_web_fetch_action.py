@@ -91,7 +91,9 @@ class TestInventory:
 class TestInputValidation:
     @pytest.mark.asyncio
     async def test_missing_url(
-        self, runtime: SkillRuntime, ctx: SkillContext,
+        self,
+        runtime: SkillRuntime,
+        ctx: SkillContext,
     ) -> None:
         r = await runtime.execute("web_fetch", "fetch_url", {}, ctx)
         assert r.status == "error"
@@ -99,20 +101,28 @@ class TestInputValidation:
 
     @pytest.mark.asyncio
     async def test_empty_url(
-        self, runtime: SkillRuntime, ctx: SkillContext,
+        self,
+        runtime: SkillRuntime,
+        ctx: SkillContext,
     ) -> None:
         r = await runtime.execute(
-            "web_fetch", "fetch_url", {"url": "   "}, ctx,
+            "web_fetch",
+            "fetch_url",
+            {"url": "   "},
+            ctx,
         )
         assert r.status == "error"
         assert "url" in r.error.lower()
 
     @pytest.mark.asyncio
     async def test_bad_max_chars(
-        self, runtime: SkillRuntime, ctx: SkillContext,
+        self,
+        runtime: SkillRuntime,
+        ctx: SkillContext,
     ) -> None:
         r = await runtime.execute(
-            "web_fetch", "fetch_url",
+            "web_fetch",
+            "fetch_url",
             {"url": "https://example.com", "max_chars": "not-int"},
             ctx,
         )
@@ -121,10 +131,13 @@ class TestInputValidation:
 
     @pytest.mark.asyncio
     async def test_negative_max_chars(
-        self, runtime: SkillRuntime, ctx: SkillContext,
+        self,
+        runtime: SkillRuntime,
+        ctx: SkillContext,
     ) -> None:
         r = await runtime.execute(
-            "web_fetch", "fetch_url",
+            "web_fetch",
+            "fetch_url",
             {"url": "https://example.com", "max_chars": -1},
             ctx,
         )
@@ -133,7 +146,9 @@ class TestInputValidation:
 
     @pytest.mark.asyncio
     async def test_huge_max_chars_capped(
-        self, runtime: SkillRuntime, ctx: SkillContext,
+        self,
+        runtime: SkillRuntime,
+        ctx: SkillContext,
     ) -> None:
         """max_chars > MAX_HARD_CAP gets silently capped, not rejected."""
         # Mock httpx to return a short page
@@ -143,12 +158,15 @@ class TestInputValidation:
             client.__aexit__ = AsyncMock(return_value=None)
             resp = MagicMock()
             resp.status_code = 200
-            resp.text = "<html><head><title>T</title></head><body>Hello world.</body></html>"
+            resp.text = (
+                "<html><head><title>T</title></head><body>Hello world.</body></html>"
+            )
             client.get = AsyncMock(return_value=resp)
             mock_async_client.return_value = client
 
             r = await runtime.execute(
-                "web_fetch", "fetch_url",
+                "web_fetch",
+                "fetch_url",
                 {"url": "https://example.com", "max_chars": 100_000_000},
                 ctx,
             )
@@ -162,7 +180,10 @@ class TestInputValidation:
 
 class TestHtmlHelpers:
     def test_extract_title(self) -> None:
-        assert _extract_title("<html><head><title>Hello World</title></head></html>") == "Hello World"
+        assert (
+            _extract_title("<html><head><title>Hello World</title></head></html>")
+            == "Hello World"
+        )
 
     def test_extract_title_empty(self) -> None:
         assert _extract_title("<html><body>no title here</body></html>") == ""
@@ -175,17 +196,13 @@ class TestHtmlHelpers:
         assert _strip_html("<p>Hello <b>world</b></p>") == "Hello world"
 
     def test_strip_html_removes_script(self) -> None:
-        text = _strip_html(
-            "<div>visible<script>alert('x')</script></div>"
-        )
+        text = _strip_html("<div>visible<script>alert('x')</script></div>")
         assert "visible" in text
         assert "alert" not in text
         assert "script" not in text.lower()
 
     def test_strip_html_removes_style(self) -> None:
-        text = _strip_html(
-            "<div>visible<style>.x{color:red}</style></div>"
-        )
+        text = _strip_html("<div>visible<style>.x{color:red}</style></div>")
         assert "visible" in text
         assert "color" not in text
 
@@ -211,7 +228,9 @@ def _make_mock_httpx_response(
 class TestHappyPath:
     @pytest.mark.asyncio
     async def test_fetch_url_basic(
-        self, runtime: SkillRuntime, ctx: SkillContext,
+        self,
+        runtime: SkillRuntime,
+        ctx: SkillContext,
     ) -> None:
         with patch("httpx.AsyncClient") as mock_async_client:
             client = AsyncMock()
@@ -221,8 +240,10 @@ class TestHappyPath:
             mock_async_client.return_value = client
 
             r = await runtime.execute(
-                "web_fetch", "fetch_url",
-                {"url": "https://example.com"}, ctx,
+                "web_fetch",
+                "fetch_url",
+                {"url": "https://example.com"},
+                ctx,
             )
         assert r.status == "ok"
         d = r.data
@@ -235,7 +256,9 @@ class TestHappyPath:
 
     @pytest.mark.asyncio
     async def test_fetch_url_long_content_truncated(
-        self, runtime: SkillRuntime, ctx: SkillContext,
+        self,
+        runtime: SkillRuntime,
+        ctx: SkillContext,
     ) -> None:
         long_body = "<p>" + ("x" * 5000) + "</p>"
         with patch("httpx.AsyncClient") as mock_async_client:
@@ -246,8 +269,10 @@ class TestHappyPath:
             mock_async_client.return_value = client
 
             r = await runtime.execute(
-                "web_fetch", "fetch_url",
-                {"url": "https://example.com", "max_chars": 100}, ctx,
+                "web_fetch",
+                "fetch_url",
+                {"url": "https://example.com", "max_chars": 100},
+                ctx,
             )
         assert r.status == "ok"
         assert r.data["truncated"] is True
@@ -255,25 +280,33 @@ class TestHappyPath:
 
     @pytest.mark.asyncio
     async def test_fetch_url_404_returns_error(
-        self, runtime: SkillRuntime, ctx: SkillContext,
+        self,
+        runtime: SkillRuntime,
+        ctx: SkillContext,
     ) -> None:
         with patch("httpx.AsyncClient") as mock_async_client:
             client = AsyncMock()
             client.__aenter__ = AsyncMock(return_value=client)
             client.__aexit__ = AsyncMock(return_value=None)
-            client.get = AsyncMock(return_value=_make_mock_httpx_response("", status_code=404))
+            client.get = AsyncMock(
+                return_value=_make_mock_httpx_response("", status_code=404)
+            )
             mock_async_client.return_value = client
 
             r = await runtime.execute(
-                "web_fetch", "fetch_url",
-                {"url": "https://example.com/missing"}, ctx,
+                "web_fetch",
+                "fetch_url",
+                {"url": "https://example.com/missing"},
+                ctx,
             )
         assert r.status == "error"
         assert "404" in r.error
 
     @pytest.mark.asyncio
     async def test_fetch_url_network_failure(
-        self, runtime: SkillRuntime, ctx: SkillContext,
+        self,
+        runtime: SkillRuntime,
+        ctx: SkillContext,
     ) -> None:
         with patch("httpx.AsyncClient") as mock_async_client:
             client = AsyncMock()
@@ -283,8 +316,10 @@ class TestHappyPath:
             mock_async_client.return_value = client
 
             r = await runtime.execute(
-                "web_fetch", "fetch_url",
-                {"url": "https://no-such-host.example"}, ctx,
+                "web_fetch",
+                "fetch_url",
+                {"url": "https://no-such-host.example"},
+                ctx,
             )
         assert r.status == "error"
         assert "ConnectionError" in r.error or "dns failure" in r.error

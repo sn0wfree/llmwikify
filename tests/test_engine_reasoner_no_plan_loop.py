@@ -75,9 +75,9 @@ class TestConsecutivePlanField:
         state = ResearchState()
         state._consecutive_plan = 5
         r = repr(state)
-        assert "_consecutive_plan" not in r, (
-            f"_consecutive_plan should be excluded from repr, got {r!r}"
-        )
+        assert (
+            "_consecutive_plan" not in r
+        ), f"_consecutive_plan should be excluded from repr, got {r!r}"
 
 
 # ─── rule_based anti-spin: gather branch ───────────────────────────
@@ -133,9 +133,9 @@ class TestRuleBasedAntiSpinGather:
         r = ResearchReasoner(_FakeEngine(max_replan=2))
         state = self._build_state(consecutive_plan=1)
         result = r.rule_based(state)
-        assert result == "report", (
-            f"after synthesis, should go to report, got {result!r}"
-        )
+        assert (
+            result == "report"
+        ), f"after synthesis, should go to report, got {result!r}"
 
     def test_zero_consecutive_plans_still_replans(self) -> None:
         """After synthesis exists, even the first plan call is blocked."""
@@ -305,9 +305,9 @@ class TestLlmReasonAntiSpin:
         finally:
             reasoner_mod.run_prompt = original
 
-        assert result == "report", (
-            f"LLM 'plan' with synthesis should be blocked, got {result!r}"
-        )
+        assert (
+            result == "report"
+        ), f"LLM 'plan' with synthesis should be blocked, got {result!r}"
 
 
 # ─── Engine reason callback bookkeeping ────────────────────────────
@@ -330,11 +330,11 @@ class TestEngineReasonCallback:
             "_consecutive_plan on the state to break plan→plan loops"
         )
         # The increment path
-        assert "if action == \"plan\"" in src, (
-            "reason callback should branch on action == 'plan' for the counter"
-        )
+        assert (
+            'if action == "plan"' in src
+        ), "reason callback should branch on action == 'plan' for the counter"
         # The reset path
-        assert "else:\n                state._consecutive_plan = 0" in src or \
-               "state._consecutive_plan = 0" in src, (
-            "reason callback should reset _consecutive_plan on non-plan actions"
-        )
+        assert (
+            "else:\n                state._consecutive_plan = 0" in src
+            or "state._consecutive_plan = 0" in src
+        ), "reason callback should reset _consecutive_plan on non-plan actions"

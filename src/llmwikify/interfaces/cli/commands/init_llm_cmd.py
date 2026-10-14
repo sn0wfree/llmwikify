@@ -47,6 +47,7 @@ def _get_default_model(provider: str) -> str:
     except Exception:
         return ""
 
+
 CONFIG_DIR = Path.home() / ".llmwikify"
 CONFIG_PATH = CONFIG_DIR / "llmwikify.json"
 
@@ -95,7 +96,9 @@ def create_llm_config(
 
     if not provider:
         if not quiet:
-            print_warning("Cannot auto-detect provider. Use --provider or set OPENAI_API_KEY / ANTHROPIC_API_KEY / MINIMAX_API_KEY.")
+            print_warning(
+                "Cannot auto-detect provider. Use --provider or set OPENAI_API_KEY / ANTHROPIC_API_KEY / MINIMAX_API_KEY."
+            )
             print("  Supported providers: openai, anthropic, minimax, xiaomi")
             print("  Example: llmwikify init-llm --provider openai --api-key sk-...")
         return 1
@@ -131,7 +134,9 @@ def create_llm_config(
         return 1
 
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    CONFIG_PATH.write_text(json.dumps(config, indent=2, ensure_ascii=False), encoding="utf-8")
+    CONFIG_PATH.write_text(
+        json.dumps(config, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
 
     if not quiet:
         print_success(f"LLM config written to {CONFIG_PATH}")
@@ -164,6 +169,7 @@ class InitLlmCommand(Command):
 
     def setup_parser(self, subparsers: Any) -> None:
         from argparse import _SubParsersAction
+
         if not isinstance(subparsers, _SubParsersAction):
             raise TypeError("setup_parser requires an argparse subparsers action")
 
@@ -174,9 +180,13 @@ class InitLlmCommand(Command):
             help="LLM provider (auto-detected from env vars)",
         )
         p.add_argument("--model", help="Model name (default: provider-specific)")
-        p.add_argument("--api-key", dest="api_key", help="API key (default: from env var)")
+        p.add_argument(
+            "--api-key", dest="api_key", help="API key (default: from env var)"
+        )
         p.add_argument("--base-url", dest="base_url", help="Custom API base URL")
-        p.add_argument("--overwrite", action="store_true", help="Overwrite existing config")
+        p.add_argument(
+            "--overwrite", action="store_true", help="Overwrite existing config"
+        )
 
     def run(self, args: Any, wiki: Any, config: dict) -> int:
-        return run_init_llm(wiki, wiki.root if hasattr(wiki, 'root') else None, args)
+        return run_init_llm(wiki, wiki.root if hasattr(wiki, "root") else None, args)

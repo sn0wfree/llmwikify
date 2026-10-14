@@ -127,7 +127,7 @@ class CommandRouter:
                 # content retains its case. Falls back to ctx.raw if
                 # the orchestrator forgot to set text.
                 source = ctx.text if ctx.text else ctx.raw
-                ctx.args = source[len(pfx):]
+                ctx.args = source[len(pfx) :]
                 return await _call_handler(handler, ctx)
 
         return []

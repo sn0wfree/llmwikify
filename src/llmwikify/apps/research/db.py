@@ -93,8 +93,7 @@ class ResearchDatabase(BaseDatabase):
         construct.
         """
         with self._connect() as conn:
-            conn.execute(
-        """
+            conn.execute("""
         CREATE TABLE IF NOT EXISTS autoresearch_sessions (
             id TEXT PRIMARY KEY,
             wiki_id TEXT NOT NULL,
@@ -120,10 +119,8 @@ class ResearchDatabase(BaseDatabase):
             created_at TEXT DEFAULT (datetime('now')),
             updated_at TEXT DEFAULT (datetime('now'))
         )
-        """
-            )
-            conn.execute(
-        """
+        """)
+            conn.execute("""
         CREATE TABLE IF NOT EXISTS autoresearch_sub_queries (
             id TEXT PRIMARY KEY,
             session_id TEXT NOT NULL,
@@ -137,16 +134,12 @@ class ResearchDatabase(BaseDatabase):
             completed_at TEXT,
             FOREIGN KEY (session_id) REFERENCES autoresearch_sessions(id)
         )
-        """
-            )
-            conn.execute(
-        """
+        """)
+            conn.execute("""
         CREATE INDEX IF NOT EXISTS idx_ar_sub_queries_session
         ON autoresearch_sub_queries(session_id, status)
-        """
-            )
-            conn.execute(
-        """
+        """)
+            conn.execute("""
         CREATE TABLE IF NOT EXISTS autoresearch_sources (
             id TEXT PRIMARY KEY,
             session_id TEXT NOT NULL,
@@ -163,17 +156,13 @@ class ResearchDatabase(BaseDatabase):
             FOREIGN KEY (session_id) REFERENCES autoresearch_sessions(id),
             FOREIGN KEY (sub_query_id) REFERENCES autoresearch_sub_queries(id)
         )
-        """
-            )
-            conn.execute(
-        """
+        """)
+            conn.execute("""
         CREATE INDEX IF NOT EXISTS idx_ar_sources_session
         ON autoresearch_sources(session_id)
-        """
-            )
+        """)
             # ── NEW: research_steps table (Phase 3) ──
-            conn.execute(
-        """
+            conn.execute("""
         CREATE TABLE IF NOT EXISTS research_steps (
             id TEXT PRIMARY KEY,
             session_id TEXT NOT NULL,
@@ -187,22 +176,18 @@ class ResearchDatabase(BaseDatabase):
             FOREIGN KEY (session_id) REFERENCES autoresearch_sessions(id),
             UNIQUE (session_id, step_num)
         )
-        """
-            )
-            conn.execute(
-        """
+        """)
+            conn.execute("""
         CREATE INDEX IF NOT EXISTS idx_research_steps_session
         ON research_steps(session_id, step_num)
-        """
-            )
+        """)
 
             # ── Issue#5: autoresearch_events table (replaces events_json blob) ──
             # Each event is a row with the full payload as JSON + an index on
             # (session_id, ts) for O(log n) range queries and pagination.
             # The events_json column is kept for now (dual-write period)
             # as a fallback for sessions that haven't been migrated.
-            conn.execute(
-        """
+            conn.execute("""
         CREATE TABLE IF NOT EXISTS autoresearch_events (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             session_id TEXT NOT NULL,
@@ -211,22 +196,17 @@ class ResearchDatabase(BaseDatabase):
             payload_json TEXT NOT NULL,
             FOREIGN KEY (session_id) REFERENCES autoresearch_sessions(id)
         )
-        """
-            )
-            conn.execute(
-        """
+        """)
+            conn.execute("""
         CREATE INDEX IF NOT EXISTS idx_autoresearch_events_sid_ts
         ON autoresearch_events(session_id, ts)
-        """
-            )
+        """)
 
             # Index for wiki_id filtering (admin/CLI queries)
-            conn.execute(
-        """
+            conn.execute("""
         CREATE INDEX IF NOT EXISTS idx_autoresearch_sessions_wiki_id
         ON autoresearch_sessions(wiki_id)
-        """
-            )
+        """)
 
             conn.commit()
 
@@ -344,9 +324,7 @@ class ResearchDatabase(BaseDatabase):
                 )
             conn.commit()
 
-    def persist_report(
-        self, session_id: str, result: str | None = None
-    ) -> None:
+    def persist_report(self, session_id: str, result: str | None = None) -> None:
         """Persist report data without changing status."""
         with self._connect() as conn:
             conn.execute(
@@ -505,8 +483,15 @@ class ResearchDatabase(BaseDatabase):
                     content_length, content_preview, content)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
-                    source_id, session_id, sub_query_id, source_type, url,
-                    title, content_length, content_preview, content,
+                    source_id,
+                    session_id,
+                    sub_query_id,
+                    source_type,
+                    url,
+                    title,
+                    content_length,
+                    content_preview,
+                    content,
                 ),
             )
             conn.commit()
@@ -667,6 +652,7 @@ class ResearchDatabase(BaseDatabase):
         if not events:
             return 0
         import time as _time
+
         now_ts = _time.time()
         with self._connect() as conn:
             # New table: O(1) bulk insert
@@ -753,7 +739,11 @@ class ResearchDatabase(BaseDatabase):
             return []
 
     def get_events_since(
-        self, session_id: str, since_ts: float, *, limit: int = 500,
+        self,
+        session_id: str,
+        since_ts: float,
+        *,
+        limit: int = 500,
     ) -> list[dict]:
         """Return events for a session with ``ts > since_ts`` (Issue#15).
 
@@ -806,7 +796,10 @@ class ResearchDatabase(BaseDatabase):
         return int(row["c"]) if row else 0
 
     def migrate_session_events_to_table(
-        self, session_id: str, *, base_ts: float | None = None,
+        self,
+        session_id: str,
+        *,
+        base_ts: float | None = None,
     ) -> int:
         """One-shot migration: copy events_json blob → autoresearch_events.
 
@@ -819,6 +812,7 @@ class ResearchDatabase(BaseDatabase):
         no blob to migrate).
         """
         import time as _time
+
         if base_ts is None:
             base_ts = _time.time()
 
@@ -933,7 +927,9 @@ class ResearchDatabase(BaseDatabase):
             The new step's id (UUID4 hex).
         """
         step_id = uuid.uuid4().hex
-        result_json = json.dumps(result, ensure_ascii=False) if result is not None else None
+        result_json = (
+            json.dumps(result, ensure_ascii=False) if result is not None else None
+        )
         with self._connect() as conn:
             conn.execute(
                 """INSERT OR REPLACE INTO research_steps
@@ -941,8 +937,14 @@ class ResearchDatabase(BaseDatabase):
                     result_json, duration_ms)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
-                    step_id, session_id, step_num, action, thought, status,
-                    result_json, duration_ms,
+                    step_id,
+                    session_id,
+                    step_num,
+                    action,
+                    thought,
+                    status,
+                    result_json,
+                    duration_ms,
                 ),
             )
             conn.commit()
@@ -983,9 +985,7 @@ class ResearchDatabase(BaseDatabase):
             conn.commit()
             return cur.rowcount
 
-    def update_step_status(
-        self, session_id: str, step_num: int, status: str
-    ) -> None:
+    def update_step_status(self, session_id: str, step_num: int, status: str) -> None:
         with self._connect() as conn:
             conn.execute(
                 """UPDATE research_steps
@@ -1018,9 +1018,7 @@ class ResearchDatabase(BaseDatabase):
             result=state,
         )
 
-    def load_research_state(
-        self, session_id: str, step_num: int
-    ) -> dict | None:
+    def load_research_state(self, session_id: str, step_num: int) -> dict | None:
         """Load a previously saved ResearchState dict by step_num."""
         step = self.get_step(session_id, step_num)
         if not step:
@@ -1039,4 +1037,3 @@ def _row_to_step_dict(row: sqlite3.Row) -> dict:
     else:
         d["result"] = None
     return d
-

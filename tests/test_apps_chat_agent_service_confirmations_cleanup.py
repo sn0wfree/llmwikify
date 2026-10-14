@@ -90,11 +90,15 @@ class TestAgentServiceStartConfirmationsCleanup:
         )
         # Inject one expired token so delete returns 1
         wiki_db = svc.wiki_service._wiki_db
-        wiki_db.save_confirmation({
-            "id": "exptest", "wiki_id": "w1", "tool": "wiki_page_update",
-            "arguments": {"page_name": "p1", "expires_at": 0.0},
-            "status": "pending",
-        })
+        wiki_db.save_confirmation(
+            {
+                "id": "exptest",
+                "wiki_id": "w1",
+                "tool": "wiki_page_update",
+                "arguments": {"page_name": "p1", "expires_at": 0.0},
+                "status": "pending",
+            }
+        )
 
         # Patch the cleanup method to count invocations
         original_cleanup = wiki_db.delete_expired_confirmations
@@ -155,7 +159,9 @@ class TestAgentServiceStopConfirmationsCleanup:
 
     @pytest.mark.asyncio
     async def test_cleanup_tick_logs_on_deletion(
-        self, tmp_path: Path, caplog: pytest.LogCaptureFixture,
+        self,
+        tmp_path: Path,
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
         svc = AgentService(
             wiki_registry=_make_wiki_registry(),
@@ -163,11 +169,15 @@ class TestAgentServiceStopConfirmationsCleanup:
             provider=None,
         )
         wiki_db = svc.wiki_service._wiki_db
-        wiki_db.save_confirmation({
-            "id": "logexp", "wiki_id": "w1", "tool": "wiki_page_update",
-            "arguments": {"page_name": "p1", "expires_at": 0.0},
-            "status": "pending",
-        })
+        wiki_db.save_confirmation(
+            {
+                "id": "logexp",
+                "wiki_id": "w1",
+                "tool": "wiki_page_update",
+                "arguments": {"page_name": "p1", "expires_at": 0.0},
+                "status": "pending",
+            }
+        )
         try:
             with caplog.at_level(logging.INFO):
                 await svc.start_confirmations_cleanup(interval_seconds=0.05)

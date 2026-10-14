@@ -84,12 +84,14 @@ async def test_spawn_fails_on_overlong_goal() -> None:
 @pytest.mark.asyncio
 async def test_spawn_success_returns_ok() -> None:
     mgr = MagicMock()
-    mgr.run = AsyncMock(return_value=SubagentResult(
-        status="ok",
-        final_content="child answer",
-        tools_used=["search"],
-        usage={"prompt_tokens": 5},
-    ))
+    mgr.run = AsyncMock(
+        return_value=SubagentResult(
+            status="ok",
+            final_content="child answer",
+            tools_used=["search"],
+            usage={"prompt_tokens": 5},
+        )
+    )
     ctx = _make_ctx(manager=mgr)
     result = await _spawn_subagent({"goal": "investigate X"}, ctx)
     assert result.status == "ok"

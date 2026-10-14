@@ -151,12 +151,20 @@ async def fetch_url(
         return {"error": f"{type(e).__name__}: {e}", "url": url}
 
     if resp.status_code >= 400:
-        return {"error": f"HTTP {resp.status_code}", "url": url, "status": resp.status_code}
+        return {
+            "error": f"HTTP {resp.status_code}",
+            "url": url,
+            "status": resp.status_code,
+        }
 
     try:
         html = resp.text
     except Exception as e:  # noqa: BLE001
-        return {"error": f"decode failed: {e!r}", "url": url, "status": resp.status_code}
+        return {
+            "error": f"decode failed: {e!r}",
+            "url": url,
+            "status": resp.status_code,
+        }
 
     title = _extract_title(html)
     full_text = _strip_html(html)
@@ -190,6 +198,7 @@ def fetch_url_sync(
             # We're inside an already-running event loop.
             # Run the async code in a new thread to avoid conflicts.
             import concurrent.futures
+
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
                 future = executor.submit(
                     asyncio.run, fetch_url(url, max_chars, timeout)
@@ -223,7 +232,9 @@ async def _fetch_url_handler(args: dict, ctx: SkillContext) -> SkillResult:
     if max_chars > MAX_HARD_CAP:
         max_chars = MAX_HARD_CAP
 
-    timeout = float((ctx.config or {}).get("web_fetch_timeout_seconds", DEFAULT_TIMEOUT))
+    timeout = float(
+        (ctx.config or {}).get("web_fetch_timeout_seconds", DEFAULT_TIMEOUT)
+    )
 
     try:
         payload = await fetch_url(url, max_chars=max_chars, timeout=timeout)
@@ -232,9 +243,9 @@ async def _fetch_url_handler(args: dict, ctx: SkillContext) -> SkillResult:
         return SkillResult.fail(f"web_fetch failed: {e!r}")
 
     if "error" in payload:
-        return SkillResult.fail(payload["error"], **{
-            k: v for k, v in payload.items() if k != "error"
-        })
+        return SkillResult.fail(
+            payload["error"], **{k: v for k, v in payload.items() if k != "error"}
+        )
 
     return SkillResult.ok(payload)
 

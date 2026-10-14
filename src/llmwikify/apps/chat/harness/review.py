@@ -21,7 +21,9 @@ class _ReviewerCtx:
     """
 
     def __init__(
-        self, llm_client: Any, config: dict[str, Any],
+        self,
+        llm_client: Any,
+        config: dict[str, Any],
         metrics: Any = None,
     ):
         self.default_llm = llm_client
@@ -35,7 +37,10 @@ class ResearchReviewer:
     """Evaluates research report quality and provides feedback."""
 
     def __init__(
-        self, wiki: Any, llm_client: Any, config: dict[str, Any],
+        self,
+        wiki: Any,
+        llm_client: Any,
+        config: dict[str, Any],
         metrics: Any = None,
     ):
         self.wiki = wiki
@@ -48,8 +53,13 @@ class ResearchReviewer:
         """Build a ctx-like object for run_prompt."""
         return _ReviewerCtx(self.llm_client, self.config, metrics=self.metrics)
 
-    async def review(self, query: str, report: str, sources: list[dict[str, Any]],
-                    six_step_context: dict[str, Any] | None = None) -> dict[str, Any]:
+    async def review(
+        self,
+        query: str,
+        report: str,
+        sources: list[dict[str, Any]],
+        six_step_context: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         """Review a research report for quality.
 
         When six_step_context is provided, the review prompt is enriched
@@ -66,7 +76,8 @@ class ResearchReviewer:
         """
         try:
             result = await run_prompt(
-                self._as_ctx(), "research_review",
+                self._as_ctx(),
+                "research_review",
                 six_step_context=six_step_context,
                 query=query,
                 report=report,
@@ -88,7 +99,10 @@ class ResearchRevisor:
     """Revises a research report based on reviewer feedback."""
 
     def __init__(
-        self, wiki: Any, llm_client: Any, config: dict[str, Any],
+        self,
+        wiki: Any,
+        llm_client: Any,
+        config: dict[str, Any],
         metrics: Any = None,
     ):
         self.wiki = wiki
@@ -125,7 +139,8 @@ class ResearchRevisor:
             )
 
         return await run_prompt(
-            self._as_ctx(), "research_revise",
+            self._as_ctx(),
+            "research_revise",
             issues_text=issues_text,
             source_refs="\n".join(source_refs),
             report=report,

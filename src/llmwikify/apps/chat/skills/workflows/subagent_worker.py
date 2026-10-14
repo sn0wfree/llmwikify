@@ -29,6 +29,7 @@ The ``MockDriver`` is unaware of tools — tests assert on the final
 ``messages`` list to verify tool-loop behaviour. ``LlmClientDriver``
 owns the loop.
 """
+
 from __future__ import annotations
 
 import contextvars
@@ -69,8 +70,8 @@ _GLOB_MAX_FILES = 100
 # Context var so LlmClientDriver (called from within the
 # run_subagent request) can access the current request without
 # changing the AgentDriver.complete signature.
-_request_ctx: contextvars.ContextVar[SubagentRequest | None] = (
-    contextvars.ContextVar("subagent_request", default=None)
+_request_ctx: contextvars.ContextVar[SubagentRequest | None] = contextvars.ContextVar(
+    "subagent_request", default=None
 )
 
 
@@ -147,9 +148,7 @@ def _build_system_prompt(request: SubagentRequest) -> str:
         "the orchestrator can route it to the next phase."
     )
     if request.actor_permission_mode == "acceptEdits":
-        parts.append(
-            "You have acceptEdits mode: file writes do not need approval."
-        )
+        parts.append("You have acceptEdits mode: file writes do not need approval.")
     if request.worktree_path:
         parts.append(
             f"You are running in an isolated git worktree at "
@@ -324,7 +323,7 @@ class LlmClientDriver(AgentDriver):
                 # Only fall back to plain chat for non-fatal errors
                 # (e.g., tool-not-supported). For API/auth/rate-limit
                 # errors, propagate immediately.
-                if getattr(e, 'status_code', 0) in (401, 403, 429, 500, 502, 503):
+                if getattr(e, "status_code", 0) in (401, 403, 429, 500, 502, 503):
                     raise
                 result = client.chat(messages=messages)
                 content, total_tokens = _normalize_chat_result(result)
@@ -344,30 +343,34 @@ class LlmClientDriver(AgentDriver):
                 return content, total_tokens
 
             # Append the assistant message with tool_calls (OpenAI schema).
-            messages.append({
-                "role": "assistant",
-                "content": content,
-                "tool_calls": [
-                    {
-                        "id": tc.get("id", ""),
-                        "type": "function",
-                        "function": {
-                            "name": tc.get("name", ""),
-                            "arguments": tc.get("args", ""),
-                        },
-                    }
-                    for tc in tool_calls
-                ],
-            })
+            messages.append(
+                {
+                    "role": "assistant",
+                    "content": content,
+                    "tool_calls": [
+                        {
+                            "id": tc.get("id", ""),
+                            "type": "function",
+                            "function": {
+                                "name": tc.get("name", ""),
+                                "arguments": tc.get("args", ""),
+                            },
+                        }
+                        for tc in tool_calls
+                    ],
+                }
+            )
 
             # Execute each tool and append a tool-role message.
             for tc in tool_calls:
                 output = _dispatch_tool_call(tc, handlers)
-                messages.append({
-                    "role": "tool",
-                    "tool_call_id": tc.get("id", ""),
-                    "content": json.dumps(output, ensure_ascii=False),
-                })
+                messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": tc.get("id", ""),
+                        "content": json.dumps(output, ensure_ascii=False),
+                    }
+                )
 
         logger.warning(
             "subagent tool loop hit MAX_TOOL_ITER=%d; returning last content",
@@ -442,6 +445,7 @@ def resolver_enabled_subagent() -> bool:
     ``true`` (require inherited spec).
     """
     import os
+
     val = os.environ.get("LLM_SUBAGENT_INHERIT", "true").strip().lower()
     return val not in ("false", "0", "no", "off", "")
 
@@ -482,14 +486,20 @@ class MockDriver(AgentDriver):
         if "return a plan with phases" in sys_prompt.lower():
             payload = {
                 "phases": [
-                    {"id": "p1", "title": "Explore the topic",
-                     "sub_questions": ["what is X?", "who is affected by X?"],
-                     "expected_sources": ["web", "code"],
-                     "stop_condition": "two sources found"},
-                    {"id": "p2", "title": "Find concrete examples",
-                     "sub_questions": ["list 3 examples of X"],
-                     "expected_sources": ["web"],
-                     "stop_condition": "at least 3 examples"},
+                    {
+                        "id": "p1",
+                        "title": "Explore the topic",
+                        "sub_questions": ["what is X?", "who is affected by X?"],
+                        "expected_sources": ["web", "code"],
+                        "stop_condition": "two sources found",
+                    },
+                    {
+                        "id": "p2",
+                        "title": "Find concrete examples",
+                        "sub_questions": ["list 3 examples of X"],
+                        "expected_sources": ["web"],
+                        "stop_condition": "at least 3 examples",
+                    },
                 ],
                 "synthesis_criteria": [
                     "claim is supported by at least one source",
@@ -499,13 +509,25 @@ class MockDriver(AgentDriver):
         elif "verifier" in sys_prompt.lower():
             payload = {
                 "verdicts": [
-                    {"claim": "claim A", "verdict": "accept", "reason": "cited",
-                     "confidence": 0.9},
-                    {"claim": "claim B", "verdict": "downgrade",
-                     "reason": "single source", "confidence": 0.5},
+                    {
+                        "claim": "claim A",
+                        "verdict": "accept",
+                        "reason": "cited",
+                        "confidence": 0.9,
+                    },
+                    {
+                        "claim": "claim B",
+                        "verdict": "downgrade",
+                        "reason": "single source",
+                        "confidence": 0.5,
+                    },
                 ],
-                "summary": {"accepted": 1, "downgraded": 1, "rejected": 0,
-                            "overall": "partial"},
+                "summary": {
+                    "accepted": 1,
+                    "downgraded": 1,
+                    "rejected": 0,
+                    "overall": "partial",
+                },
             }
         elif "synthesizer" in sys_prompt.lower():
             payload = {
@@ -717,8 +739,7 @@ def _handle_web_search(
 
     return {
         "results": [
-            {"title": r.title, "url": r.url, "snippet": r.snippet}
-            for r in results
+            {"title": r.title, "url": r.url, "snippet": r.snippet} for r in results
         ],
         "count": len(results),
     }
@@ -754,7 +775,10 @@ def _handle_read(
     try:
         worktree_root = Path(worktree_path).resolve()
         target = (worktree_root / path).resolve()
-        if not str(target).startswith(str(worktree_root) + os.sep) and target != worktree_root:
+        if (
+            not str(target).startswith(str(worktree_root) + os.sep)
+            and target != worktree_root
+        ):
             return {"error": f"path outside worktree: {path}"}
         if not target.exists():
             return {"error": f"file not found: {path}"}
@@ -784,7 +808,10 @@ def _handle_grep(
     try:
         worktree_root = Path(worktree_path).resolve()
         target = (worktree_root / path).resolve()
-        if not str(target).startswith(str(worktree_root) + os.sep) and target != worktree_root:
+        if (
+            not str(target).startswith(str(worktree_root) + os.sep)
+            and target != worktree_root
+        ):
             return {"error": f"path outside worktree: {path}"}
     except Exception as e:  # noqa: BLE001
         return {"error": f"path resolve failed: {e!r}"}
@@ -807,10 +834,7 @@ def _handle_grep(
     truncated = len(all_lines) > max_results
     lines = all_lines[:max_results]
     # Strip worktree_root prefix to keep paths relative.
-    rel = [
-        line.replace(str(worktree_root) + os.sep, "", 1)
-        for line in lines
-    ]
+    rel = [line.replace(str(worktree_root) + os.sep, "", 1) for line in lines]
     return {
         "matches": "\n".join(rel),
         "match_count": len(rel),
@@ -838,15 +862,12 @@ def _handle_glob(
         # symlink / absolute path tricks that bypass the simple
         # textual check).
         files = sorted(
-            p for p in candidates
-            if p.is_file()
-            and str(p.resolve()).startswith(str(worktree_root) + os.sep)
+            p
+            for p in candidates
+            if p.is_file() and str(p.resolve()).startswith(str(worktree_root) + os.sep)
         )[:_GLOB_MAX_FILES]
         return {
-            "files": [
-                str(p.relative_to(worktree_root))
-                for p in files
-            ],
+            "files": [str(p.relative_to(worktree_root)) for p in files],
             "count": len(files),
             "truncated": len(files) >= _GLOB_MAX_FILES,
         }

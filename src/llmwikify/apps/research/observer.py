@@ -98,7 +98,9 @@ class ResearchObserver:
         analyzed = [s for s in state.sources if s.get("analysis")]
         if analyzed:
             scores = [
-                s.get("analysis", {}).get("quality_assessment", {}).get("credibility", 5)
+                s.get("analysis", {})
+                .get("quality_assessment", {})
+                .get("credibility", 5)
                 for s in analyzed
             ]
             avg = sum(scores) / len(scores) if scores else 0
@@ -135,22 +137,20 @@ class ResearchObserver:
         analyzed = [s for s in state.sources if s.get("analysis")]
         if analyzed:
             cred_scores = [
-                s.get("analysis", {}).get("quality_assessment", {}).get("credibility", 5)
+                s.get("analysis", {})
+                .get("quality_assessment", {})
+                .get("credibility", 5)
                 for s in analyzed
             ]
             avg_cred = sum(cred_scores) / len(cred_scores)
             if avg_cred < 5:
                 state.observations.append(
-                    f"⚠ 平均可信度偏低 ({avg_cred:.1f}/10)，"
-                    f"建议获取更高质量源"
+                    f"⚠ 平均可信度偏低 ({avg_cred:.1f}/10)，" f"建议获取更高质量源"
                 )
             elif avg_cred >= 7:
-                state.observations.append(
-                    f"✓ 源质量良好 (平均 {avg_cred:.1f}/10)"
-                )
+                state.observations.append(f"✓ 源质量良好 (平均 {avg_cred:.1f}/10)")
 
         if len(state.knowledge_gaps) > 3:
             state.observations.append(
-                f"⚠ {len(state.knowledge_gaps)} 个知识缺口，"
-                f"可能影响报告完整性"
+                f"⚠ {len(state.knowledge_gaps)} 个知识缺口，" f"可能影响报告完整性"
             )

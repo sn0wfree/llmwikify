@@ -20,26 +20,47 @@ class SourceFilter:
     """
 
     HIGH_QUALITY_DOMAINS: set[str] = {
-        "arxiv.org", "github.com", "nature.com", "science.org",
-        "ieee.org", "acm.org", "wikipedia.org", "docs.python.org",
-        "developer.mozilla.org", "stackoverflow.com",
-        "pubmed.ncbi.nlm.nih.gov", "scholar.google.com",
-        "en.wikipedia.org", "docs.rs", "pypi.org",
+        "arxiv.org",
+        "github.com",
+        "nature.com",
+        "science.org",
+        "ieee.org",
+        "acm.org",
+        "wikipedia.org",
+        "docs.python.org",
+        "developer.mozilla.org",
+        "stackoverflow.com",
+        "pubmed.ncbi.nlm.nih.gov",
+        "scholar.google.com",
+        "en.wikipedia.org",
+        "docs.rs",
+        "pypi.org",
     }
 
     LOW_QUALITY_PATTERNS: list[str] = [
-        "pinterest.com", "quora.com",
-        "medium.com/@", "substack.com",
+        "pinterest.com",
+        "quora.com",
+        "medium.com/@",
+        "substack.com",
     ]
 
     NAV_PAGE_PATTERNS: list[str] = [
-        "Home |", "Menu", "Skip to", "Loading...",
-        "404", "Page Not Found", "Access Denied",
+        "Home |",
+        "Menu",
+        "Skip to",
+        "Loading...",
+        "404",
+        "Page Not Found",
+        "Access Denied",
     ]
 
     NAV_CONTENT_KEYWORDS: list[str] = [
-        "home", "about us", "contact", "privacy policy",
-        "terms of service", "cookie policy",
+        "home",
+        "about us",
+        "contact",
+        "privacy policy",
+        "terms of service",
+        "cookie policy",
     ]
 
     def __init__(self, config: dict[str, Any] | None = None) -> None:
@@ -71,7 +92,9 @@ class SourceFilter:
             content = source.get("content") or source.get("content_preview") or ""
             if len(content) < self.min_content_length:
                 rejected.append(source)
-                logger.debug("Source rejected: content too short (%d chars)", len(content))
+                logger.debug(
+                    "Source rejected: content too short (%d chars)", len(content)
+                )
                 continue
 
             # Rule 2: Duplicate URL
@@ -94,7 +117,11 @@ class SourceFilter:
             source["_quality_score"] = score
             if score < self.min_quality_score:
                 rejected.append(source)
-                logger.debug("Source rejected: quality score %.2f < %.2f", score, self.min_quality_score)
+                logger.debug(
+                    "Source rejected: quality score %.2f < %.2f",
+                    score,
+                    self.min_quality_score,
+                )
                 continue
 
             if normalized:
@@ -103,7 +130,9 @@ class SourceFilter:
 
         logger.info(
             "Source filter: %d kept, %d rejected (of %d total)",
-            len(kept), len(rejected), len(sources),
+            len(kept),
+            len(rejected),
+            len(sources),
         )
         return kept, rejected
 
@@ -200,12 +229,13 @@ class SourceFilter:
             score = min(1.0, score + 0.1)
 
         return round(score, 3)
+
     def _normalize_url(self, url: str) -> str:
         """Normalize URL for deduplication."""
         url = url.rstrip("/").lower()
         for prefix in ("http://", "https://", "www."):
             if url.startswith(prefix):
-                url = url[len(prefix):]
+                url = url[len(prefix) :]
         for param in ("?utm_source", "?ref", "?source", "&utm_source", "&ref"):
             idx = url.find(param)
             if idx >= 0:

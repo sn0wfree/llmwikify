@@ -35,9 +35,9 @@ def test_engine_constructs_reasoner():
     import llmwikify.apps.chat.research_engine.engine as engine_mod
 
     src = inspect.getsource(engine_mod.ResearchEngine.__init__)
-    assert "self.reasoner = ResearchReasoner(self)" in src, (
-        "ResearchEngine.__init__ should construct a ResearchReasoner"
-    )
+    assert (
+        "self.reasoner = ResearchReasoner(self)" in src
+    ), "ResearchEngine.__init__ should construct a ResearchReasoner"
 
 
 def test_reasoner_holds_back_refs_to_engine_deps():
@@ -67,12 +67,13 @@ def test_engine_reason_delegates_to_reasoner():
 
     src = inspect.getsource(engine_mod.ResearchEngine._reason)
     # The body must reference self.reasoner.reason
-    assert "self.reasoner.reason" in src, (
-        "ResearchEngine._reason should delegate to self.reasoner.reason"
-    )
+    assert (
+        "self.reasoner.reason" in src
+    ), "ResearchEngine._reason should delegate to self.reasoner.reason"
     # And the body should be 1 line (return + self.reasoner.reason(state))
     body_lines = [
-        line.strip() for line in src.splitlines()
+        line.strip()
+        for line in src.splitlines()
         if line.strip()
         and not line.strip().startswith("def ")
         and not line.strip().startswith("'''")
@@ -103,8 +104,7 @@ def test_engine_llm_reason_delegates_to_reasoner():
 
     src = inspect.getsource(engine_mod.ResearchEngine._llm_reason)
     assert "self.reasoner._llm_reason" in src, (
-        "ResearchEngine._llm_reason should delegate to "
-        "self.reasoner._llm_reason"
+        "ResearchEngine._llm_reason should delegate to " "self.reasoner._llm_reason"
     )
 
 
@@ -207,9 +207,9 @@ def test_rule_based_does_not_replan_after_report():
     state.budget_remaining = 0.9  # plenty of budget
     # round=0 < _max_replan+1 (=3): pre-fix, this would return "plan"
     result = r.rule_based(state)
-    assert result != "plan", (
-        f"rule_based should not replan after report_md is set, got {result!r}"
-    )
+    assert (
+        result != "plan"
+    ), f"rule_based should not replan after report_md is set, got {result!r}"
     # Should fall through to the review branch (report exists, review missing)
     assert result == "review", f"expected 'review', got {result!r}"
 
@@ -315,9 +315,7 @@ def test_rule_based_does_not_replan_when_budget_low():
     state.knowledge_gaps = ["gap1"]
     state.budget_remaining = 0.05  # below 0.15 threshold
     result = r.rule_based(state)
-    assert result != "plan", (
-        f"low budget should suppress replan, got {result!r}"
-    )
+    assert result != "plan", f"low budget should suppress replan, got {result!r}"
     # No report yet → falls through to 'report'
     assert result == "report", f"expected 'report', got {result!r}"
 
@@ -330,12 +328,18 @@ def test_valid_actions_allowlist_matches_engine_legacy_set():
     #   valid = {"plan", "gather", "analyze", "synthesize",
     #            "report", "review", "revise", "done"}
     expected = {
-        "plan", "gather", "analyze", "synthesize",
-        "report", "review", "revise", "done",
+        "plan",
+        "gather",
+        "analyze",
+        "synthesize",
+        "report",
+        "review",
+        "revise",
+        "done",
     }
-    assert VALID_ACTIONS == expected, (
-        f"VALID_ACTIONS should be {expected}, got {VALID_ACTIONS}"
-    )
+    assert (
+        VALID_ACTIONS == expected
+    ), f"VALID_ACTIONS should be {expected}, got {VALID_ACTIONS}"
 
 
 def test_legacy_rule_based_block_not_in_engine():

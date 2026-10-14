@@ -11,6 +11,7 @@ related to on-disk persistence:
 - ``watcher``: a ``watchdog``-based filesystem watcher that
   invalidates the index when wiki files change.
 """
+
 from .backend import LocalFileBackend, WikiBackend
 from .index import WikiIndex
 from .query_sink import QuerySink

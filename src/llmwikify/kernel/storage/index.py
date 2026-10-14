@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 # for mixed Chinese+English content but does NOT solve pure 2-3-char Chinese
 # search. The LIKE fallback in `search()` is what actually rescues short CJK
 # queries — keep it.
-_FTS5_TOKENIZE = 'unicode61 categories \'L* N* Co Mn\' tokenchars \'_\''
+_FTS5_TOKENIZE = "unicode61 categories 'L* N* Co Mn' tokenchars '_'"
 
 # Legacy tokenizer schema string. Detected on startup for auto-migration.
 _LEGACY_FTS5_TOKENIZE_MARKERS = ("porter", "unicode61")
@@ -56,7 +56,9 @@ class WikiIndex:
         if self._conn is None:
             with self._lock:
                 if self._conn is None:
-                    self._conn = sqlite3.connect(str(self.db_path), check_same_thread=False)
+                    self._conn = sqlite3.connect(
+                        str(self.db_path), check_same_thread=False
+                    )
                     self._conn.row_factory = sqlite3.Row
                     self.initialize()
         return self._conn
@@ -109,8 +111,7 @@ class WikiIndex:
     def _get_fts_schema_sql(self) -> str | None:
         """Read the CREATE TABLE SQL for pages_fts from sqlite_master."""
         row = self.conn.execute(
-            "SELECT sql FROM sqlite_master "
-            "WHERE type='table' AND name='pages_fts'"
+            "SELECT sql FROM sqlite_master " "WHERE type='table' AND name='pages_fts'"
         ).fetchone()
         return row[0] if row else None
 
@@ -156,9 +157,7 @@ class WikiIndex:
             # .md files. Try a few common locations under the wiki root;
             # skip rows that we can't find; they will be picked up by the
             # next upsert or by running `llmwikify build-index`.
-            cursor = self.conn.execute(
-                "SELECT page_name, file_path FROM pages"
-            )
+            cursor = self.conn.execute("SELECT page_name, file_path FROM pages")
             migrated = 0
             skipped = 0
             wiki_root = self.db_path.parent
@@ -180,7 +179,9 @@ class WikiIndex:
                     skipped += 1
                     continue
                 content = md_file.read_text(errors="replace")
-                fts_content = self._segment(content) if self._should_segment(content) else content
+                fts_content = (
+                    self._segment(content) if self._should_segment(content) else content
+                )
                 self.conn.execute(
                     "INSERT INTO pages_fts (page_name, content, content_seg) "
                     "VALUES (?, ?, ?)",
@@ -243,8 +244,7 @@ class WikiIndex:
         if not text:
             return False
         cjk = sum(
-            1 for c in text
-            if '\u4e00' <= c <= '\u9fff' or '\u3000' <= c <= '\u303f'
+            1 for c in text if "\u4e00" <= c <= "\u9fff" or "\u3000" <= c <= "\u303f"
         )
         return cjk / len(text) >= 0.05
 
@@ -266,9 +266,7 @@ class WikiIndex:
         prefix = "..." if start > 0 else ""
         suffix = "..." if end < len(content) else ""
         snippet = content[start:end]
-        snippet = re.sub(
-            re.escape(query), r'**\g<0>**', snippet, flags=re.IGNORECASE
-        )
+        snippet = re.sub(re.escape(query), r"**\g<0>**", snippet, flags=re.IGNORECASE)
         return f"{prefix}{snippet}{suffix}"
 
     # ── Core operations ─────────────────────────────────────────────
@@ -279,10 +277,12 @@ class WikiIndex:
 
         # 1. Update FTS5 — raw in content, segmented in content_seg
         self._execute("DELETE FROM pages_fts WHERE page_name = ?", (page_name,))
-        fts_content = self._segment(content) if self._should_segment(content) else content
+        fts_content = (
+            self._segment(content) if self._should_segment(content) else content
+        )
         self._execute(
             "INSERT INTO pages_fts (page_name, content, content_seg) VALUES (?, ?, ?)",
-            (page_name, content, fts_content)
+            (page_name, content, fts_content),
         )
 
         # 2. Parse links from content
@@ -294,7 +294,16 @@ class WikiIndex:
             self._executemany(
                 """INSERT INTO page_links (source_page, target_page, section, display_text, file_path)
                    VALUES (?, ?, ?, ?, ?)""",
-                [(link['source_page'], link['target'], link['section'], link['display'], link['file_path']) for link in links]
+                [
+                    (
+                        link["source_page"],
+                        link["target"],
+                        link["section"],
+                        link["display"],
+                        link["file_path"],
+                    )
+                    for link in links
+                ],
             )
 
         # 4. Update metadata (ON CONFLICT preserves created_at)
@@ -307,7 +316,7 @@ class WikiIndex:
                    word_count = excluded.word_count,
                    link_count = excluded.link_count,
                    updated_at = CURRENT_TIMESTAMP""",
-            (page_name, file_path, len(content), len(content.split()), len(links))
+            (page_name, file_path, len(content), len(content.split()), len(links)),
         )
 
         self._commit()
@@ -356,7 +365,7 @@ class WikiIndex:
                    WHERE content_seg MATCH ?
                    ORDER BY score
                    LIMIT ?""",
-                (query_seg, limit)
+                (query_seg, limit),
             )
         except sqlite3.OperationalError:
             return self._like_search(query, limit, mode="fts5-syntax-fallback")
@@ -369,9 +378,9 @@ class WikiIndex:
 
         return [
             {
-                "page_name": row['page_name'],
-                "score": abs(row['score']),
-                "snippet": row['snippet'],
+                "page_name": row["page_name"],
+                "score": abs(row["score"]),
+                "snippet": row["snippet"],
                 "mode": "fts5",
             }
             for row in rows
@@ -385,22 +394,26 @@ class WikiIndex:
         """
         cursor = self.conn.execute(
             "SELECT page_name, content FROM pages_fts WHERE content LIKE ?",
-            (f"%{query}%",)
+            (f"%{query}%",),
         )
         scored = []
         for row in cursor.fetchall():
-            content = row['content']
+            content = row["content"]
             tf = content.count(query)
-            scored.append({
-                "page_name": row['page_name'],
-                "score": tf,
-                "snippet": self._extract_snippet(content, query),
-                "mode": mode,
-            })
-        scored.sort(key=lambda x: x['score'], reverse=True)
+            scored.append(
+                {
+                    "page_name": row["page_name"],
+                    "score": tf,
+                    "snippet": self._extract_snippet(content, query),
+                    "mode": mode,
+                }
+            )
+        scored.sort(key=lambda x: x["score"], reverse=True)
         return scored[:limit]
 
-    def _try_qmd_search(self, query: str, limit: int, mode: str = "hybrid") -> list[dict]:
+    def _try_qmd_search(
+        self, query: str, limit: int, mode: str = "hybrid"
+    ) -> list[dict]:
         """Attempt QMD search if the QMD module is available.
 
         Returns:
@@ -408,6 +421,7 @@ class WikiIndex:
         """
         try:
             from ..search.qmd_index import QmdIndex
+
             qmd = QmdIndex(self.db_path.parent, config=None)
             if qmd.is_available():
                 return qmd.search(query, limit=limit, mode=mode)
@@ -424,6 +438,7 @@ class WikiIndex:
         page_count = self.get_page_count()
         try:
             from ..search.qmd_index import QmdIndex
+
             qmd = QmdIndex(self.db_path.parent, config=None)
             return qmd.get_recommendation(page_count)
         except Exception:
@@ -440,14 +455,14 @@ class WikiIndex:
                FROM page_links
                WHERE target_page = ?
                ORDER BY created_at DESC""",
-            (page_name,)
+            (page_name,),
         )
 
         return [
             {
-                "source": row['source_page'],
-                "section": row['section'],
-                "file": row['file_path'],
+                "source": row["source_page"],
+                "section": row["section"],
+                "file": row["file_path"],
             }
             for row in cursor.fetchall()
         ]
@@ -475,15 +490,15 @@ class WikiIndex:
                FROM page_links
                WHERE source_page = ?
                ORDER BY created_at DESC""",
-            (page_name,)
+            (page_name,),
         )
 
         return [
             {
-                "target": row['target_page'],
-                "section": row['section'],
-                "display": row['display_text'],
-                "file": row['file_path'],
+                "target": row["target_page"],
+                "section": row["section"],
+                "display": row["display_text"],
+                "file": row["file_path"],
             }
             for row in cursor.fetchall()
         ]
@@ -500,15 +515,18 @@ class WikiIndex:
         result = cursor.fetchone()
         return int(result[0]) if result else 0
 
-    def _parse_links(self, content: str, source_page: str, file_path: str = "") -> list[dict]:
+    def _parse_links(
+        self, content: str, source_page: str, file_path: str = ""
+    ) -> list[dict]:
         """Parse [[wikilinks]] from content."""
         import re
-        pattern = r'\[\[([^\]]+)\]\]'
+
+        pattern = r"\[\[([^\]]+)\]\]"
         links = []
 
         for match in re.finditer(pattern, content):
             link_text = match.group(1)
-            parts = link_text.split('|')
+            parts = link_text.split("|")
 
             if len(parts) == 2:
                 # [[target|display]] or [[target#section|display]]
@@ -519,26 +537,29 @@ class WikiIndex:
                 display = target_part
 
             # Split target and section
-            if '#' in target_part:
-                target, section = target_part.split('#', 1)
-                section = '#' + section
+            if "#" in target_part:
+                target, section = target_part.split("#", 1)
+                section = "#" + section
             else:
                 target = target_part
-                section = ''
+                section = ""
 
-            links.append({
-                "source_page": source_page,
-                "target": target.strip(),
-                "section": section,
-                "display": display.strip(),
-                "file_path": file_path,
-            })
+            links.append(
+                {
+                    "source_page": source_page,
+                    "target": target.strip(),
+                    "section": section,
+                    "display": display.strip(),
+                    "file_path": file_path,
+                }
+            )
 
         return links
 
     def build_index_from_files(self, wiki_dir: Path, batch_size: int = 100) -> dict:
         """Build index from all wiki markdown files."""
         import time
+
         start_time = time.time()
 
         # Clear existing index
@@ -554,7 +575,11 @@ class WikiIndex:
             if (i + 1) % batch_size == 0 or (i + 1) == total:
                 elapsed = time.time() - start_time
                 speed = (i + 1) / elapsed if elapsed > 0 else 0
-                print(f"\r  Processing: {i+1}/{total} ({(i+1)/total*100:.1f}%) - {speed:.1f} files/sec", end='', flush=True)
+                print(
+                    f"\r  Processing: {i+1}/{total} ({(i+1)/total*100:.1f}%) - {speed:.1f} files/sec",
+                    end="",
+                    flush=True,
+                )
 
             content = md_file.read_text()
             rel_path = str(md_file.relative_to(wiki_dir))
@@ -592,9 +617,7 @@ class WikiIndex:
         }
 
         # Get all outbound links
-        cursor = self.conn.execute(
-            """SELECT DISTINCT source_page FROM page_links"""
-        )
+        cursor = self.conn.execute("""SELECT DISTINCT source_page FROM page_links""")
         pages_with_outbound = {row[0] for row in cursor.fetchall()}
         data["summary"]["pages_with_outbound"] = len(pages_with_outbound)
 
@@ -602,9 +625,7 @@ class WikiIndex:
             data["outbound_links"][page] = self.get_outbound_links(page)
 
         # Get all inbound links
-        cursor = self.conn.execute(
-            """SELECT DISTINCT target_page FROM page_links"""
-        )
+        cursor = self.conn.execute("""SELECT DISTINCT target_page FROM page_links""")
         pages_with_inbound = {row[0] for row in cursor.fetchall()}
         data["summary"]["pages_with_inbound"] = len(pages_with_inbound)
 
@@ -629,11 +650,10 @@ class WikiIndex:
             Relative file path (e.g., "concepts/Factor Investing.md") or None.
         """
         cursor = self.conn.execute(
-            "SELECT file_path FROM pages WHERE page_name = ? LIMIT 1",
-            (page_name,)
+            "SELECT file_path FROM pages WHERE page_name = ? LIMIT 1", (page_name,)
         )
         row = cursor.fetchone()
-        return row['file_path'] if row else None
+        return row["file_path"] if row else None
 
     def close(self) -> None:
         """Close database connection."""

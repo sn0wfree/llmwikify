@@ -25,7 +25,6 @@ outdated / missing / redundant
 - synthesize creates no wikilinks: source_pages names must match stems
 """
 
-
 import subprocess
 
 import pytest
@@ -101,7 +100,9 @@ class TestSynthesisWorkflow:
 
         Identifies most central pages by link topology.
         """
-        wiki.write_page("hub", "# Hub\n\nLinks to [[spoke-a]], [[spoke-b]], [[spoke-c]].")
+        wiki.write_page(
+            "hub", "# Hub\n\nLinks to [[spoke-a]], [[spoke-b]], [[spoke-c]]."
+        )
         wiki.write_page("spoke-a", "# Spoke A\n\nLinks to [[hub]].")
         wiki.write_page("spoke-b", "# Spoke B\n\nLinks to [[hub]].")
         wiki.write_page("spoke-c", "# Spoke C\n\nLinks to [[hub]].")
@@ -116,6 +117,7 @@ class TestSynthesisWorkflow:
         assert result.returncode == 0
 
         import json
+
         output = json.loads(result.stdout)
         assert isinstance(output, dict)
 
@@ -131,8 +133,14 @@ class TestSynthesisWorkflow:
         html_path = temp_dir / "graph.html"
         result_html = subprocess.run(
             [
-                "python3", "-m", "llmwikify", "export-graph",
-                "--format", "html", "--output", str(html_path),
+                "python3",
+                "-m",
+                "llmwikify",
+                "export-graph",
+                "--format",
+                "html",
+                "--output",
+                str(html_path),
             ],
             capture_output=True,
             text=True,

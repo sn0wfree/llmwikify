@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from llmwikify.kernel.graph.export import (
     _build_networkx,
@@ -30,23 +30,23 @@ def populated_index(temp_db):
     """Create an index with some pages and links."""
     temp_db.conn.execute(
         "INSERT INTO pages (page_name, file_path, content_length, word_count, link_count) VALUES (?, ?, ?, ?, ?)",
-        ("Attention", "attention.md", 100, 20, 2)
+        ("Attention", "attention.md", 100, 20, 2),
     )
     temp_db.conn.execute(
         "INSERT INTO pages (page_name, file_path, content_length, word_count, link_count) VALUES (?, ?, ?, ?, ?)",
-        ("Transformer", "transformer.md", 200, 40, 1)
+        ("Transformer", "transformer.md", 200, 40, 1),
     )
     temp_db.conn.execute(
         "INSERT INTO pages (page_name, file_path, content_length, word_count, link_count) VALUES (?, ?, ?, ?, ?)",
-        ("KVCache", "kv_cache.md", 150, 30, 0)
+        ("KVCache", "kv_cache.md", 150, 30, 0),
     )
     temp_db.conn.execute(
         "INSERT INTO page_links (source_page, target_page) VALUES (?, ?)",
-        ("Attention", "Transformer")
+        ("Attention", "Transformer"),
     )
     temp_db.conn.execute(
         "INSERT INTO page_links (source_page, target_page) VALUES (?, ?)",
-        ("Transformer", "KVCache")
+        ("Transformer", "KVCache"),
     )
     temp_db.conn.commit()
     return temp_db
@@ -61,7 +61,9 @@ class TestBuildGraph:
         assert len(graph["edges"]) == 0
 
     def test_build_with_wikilinks(self, populated_index):
-        graph = build_graph(populated_index, include_wikilinks=True, include_relations=False)
+        graph = build_graph(
+            populated_index, include_wikilinks=True, include_relations=False
+        )
         assert len(graph["nodes"]) == 3
         assert len(graph["edges"]) == 2
 
@@ -75,7 +77,7 @@ class TestBuildGraph:
         """)
         temp_db.conn.execute(
             "INSERT INTO relations (source, target, relation, confidence) VALUES (?, ?, ?, ?)",
-            ("A", "B", "uses", "EXTRACTED")
+            ("A", "B", "uses", "EXTRACTED"),
         )
         temp_db.conn.commit()
 
@@ -93,11 +95,11 @@ class TestCommunityDetection:
     def test_no_edges(self, temp_db):
         temp_db.conn.execute(
             "INSERT INTO pages (page_name, file_path, content_length, word_count, link_count) VALUES (?, ?, ?, ?, ?)",
-            ("A", "a.md", 100, 20, 0)
+            ("A", "a.md", 100, 20, 0),
         )
         temp_db.conn.execute(
             "INSERT INTO pages (page_name, file_path, content_length, word_count, link_count) VALUES (?, ?, ?, ?, ?)",
-            ("B", "b.md", 100, 20, 0)
+            ("B", "b.md", 100, 20, 0),
         )
         temp_db.conn.commit()
 
@@ -117,13 +119,18 @@ class TestSurpriseScore:
     def test_extracted_low_score(self):
         graph = {
             "nodes": [{"id": "A"}, {"id": "B"}],
-            "edges": [{"source": "A", "target": "B", "type": "uses", "confidence": "EXTRACTED"}],
+            "edges": [
+                {
+                    "source": "A",
+                    "target": "B",
+                    "type": "uses",
+                    "confidence": "EXTRACTED",
+                }
+            ],
         }
         G = _build_networkx(graph)
         score, reasons = compute_surprise_score(
-            G, "A", "B",
-            {"confidence": "EXTRACTED"},
-            {0: ["A", "B"]}
+            G, "A", "B", {"confidence": "EXTRACTED"}, {0: ["A", "B"]}
         )
         assert score == 1  # Only base confidence
         assert len(reasons) == 0
@@ -131,26 +138,44 @@ class TestSurpriseScore:
     def test_ambiguous_high_score(self):
         graph = {
             "nodes": [{"id": "A"}, {"id": "B"}],
-            "edges": [{"source": "A", "target": "B", "type": "uses", "confidence": "AMBIGUOUS"}],
+            "edges": [
+                {
+                    "source": "A",
+                    "target": "B",
+                    "type": "uses",
+                    "confidence": "AMBIGUOUS",
+                }
+            ],
         }
         G = _build_networkx(graph)
         score, reasons = compute_surprise_score(
-            G, "A", "B",
-            {"confidence": "AMBIGUOUS"},
-            {0: ["A"], 1: ["B"]}
+            G, "A", "B", {"confidence": "AMBIGUOUS"}, {0: ["A"], 1: ["B"]}
         )
         assert score >= 4  # AMBIGUOUS(3) + cross-community(1)
 
     def test_cross_type_bonus(self):
         graph = {
             "nodes": [{"id": "A"}, {"id": "B"}],
-            "edges": [{"source": "A", "target": "B", "type": "uses", "confidence": "EXTRACTED"}],
+            "edges": [
+                {
+                    "source": "A",
+                    "target": "B",
+                    "type": "uses",
+                    "confidence": "EXTRACTED",
+                }
+            ],
         }
         G = _build_networkx(graph)
         score, reasons = compute_surprise_score(
-            G, "A", "B",
-            {"confidence": "EXTRACTED", "source_type_a": "paper", "source_type_b": "analysis"},
-            {0: ["A"], 1: ["B"]}
+            G,
+            "A",
+            "B",
+            {
+                "confidence": "EXTRACTED",
+                "source_type_a": "paper",
+                "source_type_b": "analysis",
+            },
+            {0: ["A"], 1: ["B"]},
         )
         assert score >= 4  # EXTRACTED(1) + cross-type(2) + cross-community(1)
 

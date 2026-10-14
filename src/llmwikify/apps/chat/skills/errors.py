@@ -38,9 +38,7 @@ class ActionNotFoundError(SkillError):
     """Raised when an action name is not declared on a skill."""
 
     def __init__(self, skill_name: str, action_name: str) -> None:
-        super().__init__(
-            f"Action {action_name!r} not found on skill {skill_name!r}"
-        )
+        super().__init__(f"Action {action_name!r} not found on skill {skill_name!r}")
         self.skill_name = skill_name
         self.action_name = action_name
 
@@ -98,9 +96,7 @@ class ConfirmationRequiredError(SkillError):
     """
 
     def __init__(self, skill_name: str, action_name: str, args: dict) -> None:
-        super().__init__(
-            f"Action {skill_name}.{action_name} requires confirmation"
-        )
+        super().__init__(f"Action {skill_name}.{action_name} requires confirmation")
         self.skill_name = skill_name
         self.action_name = action_name
         # NOTE: must NOT use self.args here — ``Exception.args`` is

@@ -39,28 +39,33 @@ def register_routes(
     """
     # Wiki 路由
     from llmwikify.interfaces.server.http.wiki.wiki_routes import register_wiki_routes
+
     register_wiki_routes(app, registry)
 
     # Wikis 注册路由
     from llmwikify.interfaces.server.http.wiki.registry_routes import (
         register_registry_routes,
     )
+
     register_registry_routes(app, registry)
 
     # 搜索路由
     from llmwikify.interfaces.server.http.wiki.search_routes import (
         register_search_routes,
     )
+
     register_search_routes(app, registry)
 
     # 日志路由
     from llmwikify.interfaces.server.http.wiki.log_routes import register_log_routes
+
     register_log_routes(app)
 
     # 自维护路由（manager 由 lifespan 挂载到 app.state）
     from llmwikify.interfaces.server.http.maintenance_routes import (
         register_maintenance_routes,
     )
+
     register_maintenance_routes(app)
 
     # Agent 路由
@@ -71,6 +76,7 @@ def register_routes(
 
     # WebSocket 路由
     from llmwikify.interfaces.server.http.agent._common import get_agent_service
+
     agent_svc = None
     try:
         agent_svc = get_agent_service()
@@ -78,7 +84,9 @@ def register_routes(
         # Agent service not initialized — WS falls back to echo
         pass
     _register_websocket_routes(
-        app, api_key=api_key or "", chat_service=agent_svc,
+        app,
+        api_key=api_key or "",
+        chat_service=agent_svc,
     )
 
 
@@ -118,9 +126,13 @@ def _load_llm_config() -> dict[str, Any] | None:
     Reads the "llm" section if present. Returns None if file doesn't exist.
     """
     from llmwikify.foundation.llm.client import load_llm_config
-    return load_llm_config(
-        config_path=Path.home() / ".llmwikify" / "llmwikify.json",
-    ) or None
+
+    return (
+        load_llm_config(
+            config_path=Path.home() / ".llmwikify" / "llmwikify.json",
+        )
+        or None
+    )
 
 
 def _build_research_config_overrides() -> dict[str, Any]:
@@ -170,10 +182,7 @@ def _build_research_config_overrides() -> dict[str, Any]:
             if (
                 llm_cfg.get("provider") == "minimax"
                 and llm_cfg.get("api_key")
-                and (
-                    not search_provider
-                    or search_provider in {"minimax", "auto"}
-                )
+                and (not search_provider or search_provider in {"minimax", "auto"})
             ):
                 out["minimax_api_key"] = llm_cfg["api_key"]
         return out
@@ -235,7 +244,9 @@ def _register_agent_routes(
         try:
             autoresearch_llm = agent_service._get_llm()
         except Exception:
-            logger.debug("agent_service._get_llm() unavailable, proceeding without LLM client for autoresearch")
+            logger.debug(
+                "agent_service._get_llm() unavailable, proceeding without LLM client for autoresearch"
+            )
     research_overrides = _build_research_config_overrides()
     set_autoresearch_deps(
         db=db,
@@ -266,11 +277,14 @@ def _register_agent_routes(
     model_name = "llmwikify-chat"
     try:
         from llmwikify.apps.chat.providers.registry import get_default_provider
+
         provider = get_default_provider()
         if provider and getattr(provider, "model", None):
             model_name = provider.model
     except Exception:
-        logger.debug("Could not resolve default provider model, using fallback %r", model_name)
+        logger.debug(
+            "Could not resolve default provider model, using fallback %r", model_name
+        )
     app.include_router(create_openai_router(model=model_name))
 
 

@@ -177,7 +177,8 @@ class TestSkillAction:
     def test_invalid_action_type(self) -> None:
         with pytest.raises(ValueError, match="action_type"):
             SkillAction(
-                name="x", description="x",
+                name="x",
+                description="x",
                 handler=lambda a, c: SkillResult.ok(),
                 action_type="delete",
             )
@@ -232,17 +233,25 @@ class TestSkillContext:
 class TestSkillABC:
     def test_name_required(self) -> None:
         with pytest.raises(ValueError, match="must set class attribute 'name'"):
+
             class Bad(Skill):
                 description = "x"
-                actions = {"a": SkillAction(description="a", handler=lambda a, c: SkillResult.ok())}
+                actions = {
+                    "a": SkillAction(
+                        description="a", handler=lambda a, c: SkillResult.ok()
+                    )
+                }
+
             Bad()
 
     def test_actions_required(self) -> None:
         with pytest.raises(ValueError, match="at least one action"):
+
             class Bad(Skill):
                 name = "n"
                 description = "x"
                 actions = {}
+
             Bad()
 
     def test_action_name_auto_filled_from_dict_key(self) -> None:
@@ -268,10 +277,14 @@ class TestSkillABC:
             name = "t"
             description = "t"
             actions = {
-                "a": SkillAction(description="a", handler=lambda a, c: SkillResult.ok()),
+                "a": SkillAction(
+                    description="a", handler=lambda a, c: SkillResult.ok()
+                ),
             }
+
             def setup(self) -> None:
                 calls.append("setup")
+
             def teardown(self) -> None:
                 calls.append("teardown")
 
@@ -373,9 +386,7 @@ class TestSkillRegistry:
         fresh_registry.register(_search_skill())
         assert any("Replacing" in r.message for r in caplog.records)
 
-    def test_register_reject_on_duplicate(
-        self, fresh_registry: SkillRegistry
-    ) -> None:
+    def test_register_reject_on_duplicate(self, fresh_registry: SkillRegistry) -> None:
         fresh_registry.register(_search_skill())
         with pytest.raises(ValueError, match="already registered"):
             fresh_registry.register(_search_skill(), replace=False)
@@ -386,9 +397,7 @@ class TestSkillRegistry:
         with pytest.raises(TypeError, match="requires a Skill"):
             fresh_registry.register("not a skill")  # type: ignore[arg-type]
 
-    def test_unregister_returns_removed(
-        self, fresh_registry: SkillRegistry
-    ) -> None:
+    def test_unregister_returns_removed(self, fresh_registry: SkillRegistry) -> None:
         fresh_registry.register(_search_skill())
         assert fresh_registry.unregister("search") is not None
         assert fresh_registry.get("search") is None
@@ -434,9 +443,7 @@ class TestSkillRegistry:
     def test_parse_qualified(self, fresh_registry: SkillRegistry) -> None:
         assert fresh_registry.parse_qualified("a.b") == ("a", "b")
 
-    def test_parse_qualified_no_dot_raises(
-        self, fresh_registry: SkillRegistry
-    ) -> None:
+    def test_parse_qualified_no_dot_raises(self, fresh_registry: SkillRegistry) -> None:
         with pytest.raises(ValueError, match="skill.action"):
             fresh_registry.parse_qualified("nodot")
 
@@ -448,26 +455,20 @@ class TestSkillRegistry:
         with pytest.raises(ValueError, match="non-empty"):
             fresh_registry.parse_qualified("a.")
 
-    def test_all_manifests_sorted(
-        self, fresh_registry: SkillRegistry
-    ) -> None:
+    def test_all_manifests_sorted(self, fresh_registry: SkillRegistry) -> None:
         fresh_registry.register(_write_skill())
         fresh_registry.register(_search_skill())
         names = [m.name for m in fresh_registry.all_manifests()]
         assert names == ["search", "write"]
 
-    def test_all_actions_no_filter(
-        self, fresh_registry: SkillRegistry
-    ) -> None:
+    def test_all_actions_no_filter(self, fresh_registry: SkillRegistry) -> None:
         fresh_registry.register(_search_skill())
         fresh_registry.register(_write_skill())
         out = fresh_registry.all_actions()
         assert len(out) == 2
         assert all(isinstance(a, SkillAction) for _, a in out)
 
-    def test_all_actions_tag_filter(
-        self, fresh_registry: SkillRegistry
-    ) -> None:
+    def test_all_actions_tag_filter(self, fresh_registry: SkillRegistry) -> None:
         class Tagged(Skill):
             name = "tagged"
             description = "tag demo"
@@ -506,6 +507,7 @@ class TestSkillRegistry:
 
         def worker(i: int) -> None:
             try:
+
                 class ThreadSkill(Skill):
                     name = f"thread-{i}"
                     description = f"thread {i}"
@@ -515,6 +517,7 @@ class TestSkillRegistry:
                             handler=lambda a, c: SkillResult.ok(),
                         ),
                     }
+
                 fresh_registry.register(ThreadSkill())
             except Exception as e:
                 errors.append(e)
@@ -762,23 +765,27 @@ class TestValidator:
 
     def test_check_type_string(self) -> None:
         from llmwikify.apps.chat.skills.runtime import _check_type
+
         assert _check_type("x", "string")
         assert not _check_type(1, "string")
 
     def test_check_type_integer_vs_boolean(self) -> None:
         """bool is a subclass of int; we must reject booleans for integer."""
         from llmwikify.apps.chat.skills.runtime import _check_type
+
         assert _check_type(1, "integer")
         assert not _check_type(True, "integer")
 
     def test_check_type_number(self) -> None:
         from llmwikify.apps.chat.skills.runtime import _check_type
+
         assert _check_type(1, "number")
         assert _check_type(1.5, "number")
         assert not _check_type("x", "number")
 
     def test_check_type_array_and_object(self) -> None:
         from llmwikify.apps.chat.skills.runtime import _check_type
+
         assert _check_type([], "array")
         assert not _check_type({}, "array")
         assert _check_type({}, "object")
@@ -787,15 +794,18 @@ class TestValidator:
     def test_check_type_unknown_returns_true(self) -> None:
         """The runtime is a subset validator: unknown types pass."""
         from llmwikify.apps.chat.skills.runtime import _check_type
+
         assert _check_type("x", "anyOf")
         assert _check_type("x", ["string", "anyOf"])
 
     def test_check_type_list_of_types(self) -> None:
         from llmwikify.apps.chat.skills.runtime import _check_type
+
         assert _check_type(1, ["string", "integer"])
 
     def test_validate_args_rejects_non_object_schema(self) -> None:
         from llmwikify.apps.chat.skills.runtime import _validate_args
+
         a = SkillAction(
             description="x",
             handler=lambda a, c: SkillResult.ok(),

@@ -217,10 +217,12 @@ class TestWebSocketEndpoint:
         client = TestClient(app)
         with client.websocket_connect("/api/ws/agent") as ws:
             ws.receive_json()  # ready
-            ws.send_json({
-                "type": WSClientMsg.NEW_CHAT,
-                "chat_id": "my-custom-id",
-            })
+            ws.send_json(
+                {
+                    "type": WSClientMsg.NEW_CHAT,
+                    "chat_id": "my-custom-id",
+                }
+            )
             created = ws.receive_json()
             assert created["chat_id"] == "my-custom-id"
 
@@ -228,15 +230,19 @@ class TestWebSocketEndpoint:
         client = TestClient(app)
         with client.websocket_connect("/api/ws/agent") as ws:
             ws.receive_json()  # ready
-            ws.send_json({
-                "type": WSClientMsg.NEW_CHAT,
-                "chat_id": "shared",
-            })
+            ws.send_json(
+                {
+                    "type": WSClientMsg.NEW_CHAT,
+                    "chat_id": "shared",
+                }
+            )
             ws.receive_json()  # chat_created
-            ws.send_json({
-                "type": WSClientMsg.ATTACH,
-                "chat_id": "shared",
-            })
+            ws.send_json(
+                {
+                    "type": WSClientMsg.ATTACH,
+                    "chat_id": "shared",
+                }
+            )
             attached = ws.receive_json()
             assert attached["type"] == WSServerMsg.ATTACHED
             assert attached["chat_id"] == "shared"
@@ -257,16 +263,20 @@ class TestWebSocketEndpoint:
         client = TestClient(app)
         with client.websocket_connect("/api/ws/agent") as ws:
             ws.receive_json()  # ready
-            ws.send_json({
-                "type": WSClientMsg.NEW_CHAT,
-                "chat_id": "echo-room",
-            })
+            ws.send_json(
+                {
+                    "type": WSClientMsg.NEW_CHAT,
+                    "chat_id": "echo-room",
+                }
+            )
             ws.receive_json()  # chat_created
-            ws.send_json({
-                "type": WSClientMsg.MESSAGE,
-                "chat_id": "echo-room",
-                "content": "hello",
-            })
+            ws.send_json(
+                {
+                    "type": WSClientMsg.MESSAGE,
+                    "chat_id": "echo-room",
+                    "content": "hello",
+                }
+            )
             delta = ws.receive_json()
             assert delta["type"] == WSServerMsg.DELTA
             assert "[echo] hello" in delta["content"]
@@ -277,11 +287,13 @@ class TestWebSocketEndpoint:
         client = TestClient(app)
         with client.websocket_connect("/api/ws/agent") as ws:
             ws.receive_json()  # ready
-            ws.send_json({
-                "type": WSClientMsg.MESSAGE,
-                "chat_id": "unknown",
-                "content": "x",
-            })
+            ws.send_json(
+                {
+                    "type": WSClientMsg.MESSAGE,
+                    "chat_id": "unknown",
+                    "content": "x",
+                }
+            )
             err = ws.receive_json()
             assert err["type"] == WSServerMsg.ERROR
 
@@ -314,6 +326,7 @@ class TestWebSocketEndpoint:
         # Connection closed — manager should clean up
         # (small grace period for the writer_task to finish)
         import time as _time
+
         _time.sleep(0.05)
         assert manager.subscribed_count("X") == 0
 
@@ -353,8 +366,10 @@ class TestMultiConnectionFanOut:
         reset_default_ws_manager()
 
         client = TestClient(app)
-        with client.websocket_connect("/api/ws/agent") as ws1, \
-             client.websocket_connect("/api/ws/agent") as ws2:
+        with (
+            client.websocket_connect("/api/ws/agent") as ws1,
+            client.websocket_connect("/api/ws/agent") as ws2,
+        ):
             ws1.receive_json()  # ready
             ws2.receive_json()  # ready
             # Both attach to "broadcast"
@@ -363,11 +378,13 @@ class TestMultiConnectionFanOut:
             ws2.send_json({"type": "attach", "chat_id": "broadcast"})
             ws2.receive_json()
             # ws1 publishes a message → both should see delta + stream_end
-            ws1.send_json({
-                "type": "message",
-                "chat_id": "broadcast",
-                "content": "hi all",
-            })
+            ws1.send_json(
+                {
+                    "type": "message",
+                    "chat_id": "broadcast",
+                    "content": "hi all",
+                }
+            )
             # Both get delta then stream_end
             for ws in (ws1, ws2):
                 delta = ws.receive_json()

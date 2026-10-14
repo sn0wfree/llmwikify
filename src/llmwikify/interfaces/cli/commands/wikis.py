@@ -33,7 +33,9 @@ def _wikis_list(config: dict, cli_config: Any) -> int:
 
     for wiki in wikis:
         is_default = "✓" if wiki.wiki_id == default_id else ""
-        print(f"{wiki.wiki_id:<20} {wiki.name:<25} {wiki.wiki_type.value:<10} {wiki.page_count:<10} {is_default:<10}")
+        print(
+            f"{wiki.wiki_id:<20} {wiki.name:<25} {wiki.wiki_type.value:<10} {wiki.page_count:<10} {is_default:<10}"
+        )
 
     registry.close()
     return 0
@@ -44,7 +46,10 @@ def _wikis_add(config: dict, args: Any) -> int:
     from llmwikify.kernel.multi_wiki.registry import WikiRegistry
 
     wiki_id = args.wiki_id
-    name = getattr(args, "name", None) or wiki_id.replace("-", " ").replace("_", " ").title()
+    name = (
+        getattr(args, "name", None)
+        or wiki_id.replace("-", " ").replace("_", " ").title()
+    )
     path = getattr(args, "path", None)
     url = getattr(args, "url", None)
     api_key = getattr(args, "api_key", None)

@@ -19,14 +19,12 @@ class TestWikiIndex:
         index.initialize()
 
         # Check tables exist
-        cursor = index.conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table'"
-        )
+        cursor = index.conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
         tables = [row[0] for row in cursor.fetchall()]
 
-        assert 'pages_fts' in tables
-        assert 'page_links' in tables
-        assert 'pages' in tables
+        assert "pages_fts" in tables
+        assert "page_links" in tables
+        assert "pages" in tables
 
         index.close()
 
@@ -41,15 +39,14 @@ class TestWikiIndex:
 
         # Check FTS5
         cursor = index.conn.execute(
-            "SELECT COUNT(*) FROM pages_fts WHERE page_name = ?",
-            ("test-page",)
+            "SELECT COUNT(*) FROM pages_fts WHERE page_name = ?", ("test-page",)
         )
         assert cursor.fetchone()[0] == 1
 
         # Check content_seg column is populated (non-CJK -> same as content)
         row = index.conn.execute(
             "SELECT content, content_seg FROM pages_fts WHERE page_name = ?",
-            ("test-page",)
+            ("test-page",),
         ).fetchone()
         assert row is not None
         assert row["content"] == content
@@ -57,8 +54,7 @@ class TestWikiIndex:
 
         # Check links
         cursor = index.conn.execute(
-            "SELECT COUNT(*) FROM page_links WHERE source_page = ?",
-            ("test-page",)
+            "SELECT COUNT(*) FROM page_links WHERE source_page = ?", ("test-page",)
         )
         assert cursor.fetchone()[0] == 1
 
@@ -71,12 +67,14 @@ class TestWikiIndex:
         index.initialize()
 
         index.upsert_page("gold-page", "# Gold\n\nGold mining content", "gold.md")
-        index.upsert_page("copper-page", "# Copper\n\nCopper mining content", "copper.md")
+        index.upsert_page(
+            "copper-page", "# Copper\n\nCopper mining content", "copper.md"
+        )
 
         results = index.search("gold", limit=10)
 
         assert len(results) == 1
-        assert results[0]['page_name'] == 'gold-page'
+        assert results[0]["page_name"] == "gold-page"
 
         index.close()
 
@@ -94,9 +92,9 @@ class TestWikiIndex:
         inbound = index.get_inbound_links("page-b")
 
         assert len(inbound) == 2
-        sources = [i['source'] for i in inbound]
-        assert 'page-a' in sources
-        assert 'page-c' in sources
+        sources = [i["source"] for i in inbound]
+        assert "page-a" in sources
+        assert "page-c" in sources
 
         index.close()
 
@@ -112,9 +110,9 @@ class TestWikiIndex:
         outbound = index.get_outbound_links("page-a")
 
         assert len(outbound) == 2
-        targets = [o['target'] for o in outbound]
-        assert 'page-b' in targets
-        assert 'page-c' in targets
+        targets = [o["target"] for o in outbound]
+        assert "page-b" in targets
+        assert "page-c" in targets
 
         index.close()
 
@@ -130,9 +128,9 @@ class TestWikiIndex:
         output_path = temp_wiki / "test_export.json"
         data = index.export_json(output_path)
 
-        assert data['total_pages'] == 2
-        assert 'page-a' in data['outbound_links']
-        assert 'page-b' in data['inbound_links']
+        assert data["total_pages"] == 2
+        assert "page-a" in data["outbound_links"]
+        assert "page-b" in data["inbound_links"]
 
         # Verify file created
         assert output_path.exists()
@@ -141,8 +139,8 @@ class TestWikiIndex:
         with open(output_path) as f:
             loaded = json.load(f)
 
-        assert loaded['total_pages'] == 2
-        assert 'summary' in loaded
+        assert loaded["total_pages"] == 2
+        assert "summary" in loaded
 
         index.close()
 
@@ -178,18 +176,18 @@ class TestWikiIndex:
 
         assert len(links) == 4
 
-        assert links[0]['target'] == 'page-a'
-        assert links[0]['section'] == ''
-        assert links[0]['display'] == 'page-a'
+        assert links[0]["target"] == "page-a"
+        assert links[0]["section"] == ""
+        assert links[0]["display"] == "page-a"
 
-        assert links[1]['target'] == 'page-b'
-        assert links[1]['display'] == 'Display'
+        assert links[1]["target"] == "page-b"
+        assert links[1]["display"] == "Display"
 
-        assert links[2]['target'] == 'page-c'
-        assert links[2]['section'] == '#section'
+        assert links[2]["target"] == "page-c"
+        assert links[2]["section"] == "#section"
 
-        assert links[3]['target'] == 'page-d'
-        assert links[3]['section'] == '#section'
-        assert links[3]['display'] == 'Custom'
+        assert links[3]["target"] == "page-d"
+        assert links[3]["section"] == "#section"
+        assert links[3]["display"] == "Custom"
 
         index.close()

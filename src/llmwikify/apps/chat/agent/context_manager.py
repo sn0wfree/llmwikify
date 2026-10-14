@@ -64,21 +64,25 @@ class AgentContext:
         """Track a ReAct observation from a tool call result."""
         self.react_observations.append(observation)
         if len(self.react_observations) > self._observation_limit:
-            self.react_observations = self.react_observations[-self._observation_limit:]
+            self.react_observations = self.react_observations[
+                -self._observation_limit :
+            ]
 
     def add_thought(self, thought: str) -> None:
         """Track a ReAct thought from the LLM reasoning step."""
         if thought:
             self.react_thoughts.append(thought)
             if len(self.react_thoughts) > self._observation_limit:
-                self.react_thoughts = self.react_thoughts[-self._observation_limit:]
+                self.react_thoughts = self.react_thoughts[-self._observation_limit :]
 
     def get_observations_summary(self) -> str:
         """Generate a summary of recent observations for prompt injection."""
         if not self.react_observations:
             return ""
         lines = ["## Recent tool observations"]
-        for i, obs in enumerate(self.react_observations[-self._observation_summary_limit:], 1):
+        for i, obs in enumerate(
+            self.react_observations[-self._observation_summary_limit :], 1
+        ):
             lines.append(f"{i}. {obs}")
         return "\n".join(lines)
 
@@ -95,6 +99,7 @@ class ContextManager:
 
     def __init__(self, config: dict | None = None, llm_client: Any = None) -> None:
         from llmwikify.apps.chat.config import merge_six_step_config
+
         self.config = config or merge_six_step_config()
         self._llm_client = llm_client
         self._contexts = ContextStore(
@@ -127,7 +132,9 @@ class ContextManager:
                 session_id=session_id,
                 wiki_id=wiki_id,
                 _observation_limit=self.config.get("observation_limit", 10),
-                _observation_summary_limit=self.config.get("observation_summary_limit", 5),
+                _observation_summary_limit=self.config.get(
+                    "observation_summary_limit", 5
+                ),
             )
             # Restore conversation history. D-route: for each
             # assistant message that has DB-formatted tool_calls, also
@@ -165,27 +172,32 @@ class ContextManager:
                                         tc.get("call_id")
                                         or f"call_{uuid.uuid4().hex[:24]}"
                                     )
-                                    api_tcs.append({
-                                        "id": call_id,
-                                        "type": "function",
-                                        "function": {
-                                            "name": tc.get("tool", ""),
-                                            "arguments": args_str,
-                                        },
-                                    })
+                                    api_tcs.append(
+                                        {
+                                            "id": call_id,
+                                            "type": "function",
+                                            "function": {
+                                                "name": tc.get("tool", ""),
+                                                "arguments": args_str,
+                                            },
+                                        }
+                                    )
                                     results.append(tc.get("result"))
                                 entry["tool_calls"] = api_tcs
                                 ctx.messages.append(entry)
                                 for tc, result in zip(api_tcs, results, strict=True):
                                     if result is not None:
-                                        ctx.messages.append({
-                                            "role": "tool",
-                                            "name": tc["function"]["name"],
-                                            "content": json.dumps(
-                                                result, ensure_ascii=False,
-                                            ),
-                                            "tool_call_id": tc["id"],
-                                        })
+                                        ctx.messages.append(
+                                            {
+                                                "role": "tool",
+                                                "name": tc["function"]["name"],
+                                                "content": json.dumps(
+                                                    result,
+                                                    ensure_ascii=False,
+                                                ),
+                                                "tool_call_id": tc["id"],
+                                            }
+                                        )
                         except (json.JSONDecodeError, TypeError):
                             pass
                     else:
@@ -195,12 +207,14 @@ class ContextManager:
                     # adds ``tool_call_id`` (and ``name``) to the
                     # ``chat_messages`` table. Older DBs never have
                     # ``role=tool`` rows, so this branch is a no-op.
-                    ctx.messages.append({
-                        "role": "tool",
-                        "name": msg.get("name", ""),
-                        "content": content,
-                        "tool_call_id": msg.get("tool_call_id", ""),
-                    })
+                    ctx.messages.append(
+                        {
+                            "role": "tool",
+                            "name": msg.get("name", ""),
+                            "content": content,
+                            "tool_call_id": msg.get("tool_call_id", ""),
+                        }
+                    )
             # Restore wiki_id from session
             if not wiki_id and db is not None:
                 session = db.get_chat_session(session_id)
@@ -275,11 +289,14 @@ class ContextManager:
 
         try:
             summary_prompt = [
-                {"role": "system", "content": (
-                    "Summarize the following conversation into a concise brief. "
-                    "Preserve key facts, decisions, and context. "
-                    "Output ONLY the summary, no preamble."
-                )},
+                {
+                    "role": "system",
+                    "content": (
+                        "Summarize the following conversation into a concise brief. "
+                        "Preserve key facts, decisions, and context. "
+                        "Output ONLY the summary, no preamble."
+                    ),
+                },
                 {"role": "user", "content": compact_text},
             ]
             llm = wiki_service.get_llm() if wiki_service else self._llm_client
@@ -305,7 +322,9 @@ class ContextManager:
             return [system, summary_msg] + recent_messages
 
         except Exception:
-            logger.warning("Compaction failed, falling back to truncation", exc_info=True)
+            logger.warning(
+                "Compaction failed, falling back to truncation", exc_info=True
+            )
             return messages
 
     # ─── Truncation ────────────────────────────────────────────
@@ -351,9 +370,7 @@ class ContextManager:
                 if msg is kept[0]:
                     break
                 if msg.get("role") == "assistant" and msg.get("tool_calls"):
-                    if any(
-                        tc.get("id") == target_id for tc in msg["tool_calls"]
-                    ):
+                    if any(tc.get("id") == target_id for tc in msg["tool_calls"]):
                         kept.insert(0, msg)
                         kept_tokens += count_messages([msg], model_name)
                     break

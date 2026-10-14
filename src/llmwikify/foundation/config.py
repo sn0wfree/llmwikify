@@ -74,7 +74,13 @@ DEFAULT_CONFIG = {
             "enabled": False,
             "scan_paths": ["."],
             "scan_depth": 2,
-            "exclude_patterns": ["node_modules", ".git", "__pycache__", ".venv", "venv"],
+            "exclude_patterns": [
+                "node_modules",
+                ".git",
+                "__pycache__",
+                ".venv",
+                "venv",
+            ],
             "auto_register": False,
             "scan_interval": 3600,
         },
@@ -82,9 +88,7 @@ DEFAULT_CONFIG = {
 }
 
 # Template default config path (package-relative)
-_DEFAULT_TEMPLATE_PATH = (
-    Path(__file__).parent / "templates" / "llmwikify.default.json"
-)
+_DEFAULT_TEMPLATE_PATH = Path(__file__).parent / "templates" / "llmwikify.default.json"
 
 
 # ─── Config Singleton ────────────────────────────────────────────
@@ -118,10 +122,12 @@ class Config:
         if self._initialized:
             return
         self._initialized = True
-        self._home = Path(
-            os.environ.get("LLMWIKIFY_HOME", "").strip()
-            or os.path.expanduser("~")
-        ) / ".llmwikify"
+        self._home = (
+            Path(
+                os.environ.get("LLMWIKIFY_HOME", "").strip() or os.path.expanduser("~")
+            )
+            / ".llmwikify"
+        )
         self._path = self._home / "llmwikify.json"
         self._cache: dict[str, Any] | None = None
         self._wiki_cache: dict[str, dict[str, Any]] = {}
@@ -169,9 +175,7 @@ class Config:
         if cache_key not in self._wiki_cache:
             from llmwikify.foundation.io import read_yaml
 
-            self._wiki_cache[cache_key] = read_yaml(
-                wiki_root / ".wiki-config.yaml", {}
-            )
+            self._wiki_cache[cache_key] = read_yaml(wiki_root / ".wiki-config.yaml", {})
         return self._wiki_cache[cache_key]
 
     def get_default(self, section: str) -> dict[str, Any]:
@@ -247,7 +251,7 @@ def load_config(wiki_root: Path, config_file: str | None = None) -> dict[str, An
     if config_file:
         config_path = wiki_root / config_file
     else:
-        config_path = wiki_root / '.wiki-config.yaml'
+        config_path = wiki_root / ".wiki-config.yaml"
 
     # Try to load user configuration
     if config_path.exists():
@@ -296,7 +300,9 @@ def get_db_path(wiki_root: Path, cfg: dict[str, Any] | None = None) -> Path:
     return wiki_root / db_name
 
 
-def get_directory(wiki_root: Path, dir_type: str, cfg: dict[str, Any] | None = None) -> Path:
+def get_directory(
+    wiki_root: Path, dir_type: str, cfg: dict[str, Any] | None = None
+) -> Path:
     """Get a directory path based on configuration.
 
     Args:
@@ -310,7 +316,9 @@ def get_directory(wiki_root: Path, dir_type: str, cfg: dict[str, Any] | None = N
     if cfg is None:
         cfg = get_default_config()
 
-    dir_name = cfg.get("directories", {}).get(dir_type, DEFAULT_CONFIG["directories"][dir_type])
+    dir_name = cfg.get("directories", {}).get(
+        dir_type, DEFAULT_CONFIG["directories"][dir_type]
+    )
     return wiki_root / dir_name
 
 

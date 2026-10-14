@@ -42,12 +42,14 @@ class KnowledgeGapsRule(Rule):
             engine = wiki.get_relation_engine()
             orphan_concepts = engine.find_orphan_concepts()
             for concept in orphan_concepts[:3]:
-                gaps.append({
-                    "type": "unreferenced_entity",
-                    "concept": concept,
-                    "observation": f"'{concept}' is in the knowledge graph but has no wiki page",
-                    "suggestion": f"Consider creating a page for '{concept}'",
-                })
+                gaps.append(
+                    {
+                        "type": "unreferenced_entity",
+                        "concept": concept,
+                        "observation": f"'{concept}' is in the knowledge graph but has no wiki page",
+                        "suggestion": f"Consider creating a page for '{concept}'",
+                    }
+                )
         except Exception as e:
             logger.warning("Relation engine orphan detection failed: %s", e)
 
@@ -59,14 +61,16 @@ class KnowledgeGapsRule(Rule):
                     continue
                 page_name = wiki._page_display_name(source_page)
                 content = source_page.read_text()
-                wikilinks = re.findall(r'\[\[(.*?)\]\]', content)
+                wikilinks = re.findall(r"\[\[(.*?)\]\]", content)
                 if not wikilinks:
-                    gaps.append({
-                        "type": "isolated_source",
-                        "page": page_name,
-                        "observation": f"Source page '{page_name}' has no wikilinks to other pages",
-                        "suggestion": "Consider adding cross-references to related concepts/entities",
-                    })
+                    gaps.append(
+                        {
+                            "type": "isolated_source",
+                            "page": page_name,
+                            "observation": f"Source page '{page_name}' has no wikilinks to other pages",
+                            "suggestion": "Consider adding cross-references to related concepts/entities",
+                        }
+                    )
 
                 if len(gaps) >= self.max_results:
                     break

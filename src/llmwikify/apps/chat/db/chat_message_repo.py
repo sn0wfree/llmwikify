@@ -30,6 +30,7 @@ created after the target message's rowid). The tool_calls portion
 is exposed via the ``tool_call_delete_after_rowid`` hook which the
 ChatDatabase facade calls before invoking the messages update.
 """
+
 from __future__ import annotations
 
 import json
@@ -48,8 +49,7 @@ class ChatMessageRepository(ChatDBBase):
 
     def _init_schema(self) -> None:
         with self._mgr.transaction() as conn:
-            conn.execute(
-                """
+            conn.execute("""
                 CREATE TABLE IF NOT EXISTS chat_messages (
                     id TEXT PRIMARY KEY,
                     session_id TEXT NOT NULL,
@@ -59,14 +59,11 @@ class ChatMessageRepository(ChatDBBase):
                     created_at TEXT DEFAULT (datetime('now')),
                     FOREIGN KEY (session_id) REFERENCES chat_sessions(id)
                 )
-                """
-            )
-            conn.execute(
-                """
+                """)
+            conn.execute("""
                 CREATE INDEX IF NOT EXISTS idx_chat_messages_session
                 ON chat_messages(session_id, created_at DESC)
-                """
-            )
+                """)
             # v0.40: reverted column for session revert
             try:
                 conn.execute(
@@ -76,8 +73,12 @@ class ChatMessageRepository(ChatDBBase):
                 pass  # column already exists
             # v0.40: token/cost columns
             for col in (
-                "tokens_input", "tokens_output", "tokens_reasoning",
-                "tokens_cache_read", "tokens_cache_write", "cost",
+                "tokens_input",
+                "tokens_output",
+                "tokens_reasoning",
+                "tokens_cache_read",
+                "tokens_cache_write",
+                "cost",
             ):
                 try:
                     default = "0" if col != "cost" else "0.0"
@@ -101,9 +102,7 @@ class ChatMessageRepository(ChatDBBase):
         role = message.get("role", "")
         content = message.get("content", "")
         tool_calls = (
-            json.dumps(message["tool_calls"])
-            if message.get("tool_calls")
-            else None
+            json.dumps(message["tool_calls"]) if message.get("tool_calls") else None
         )
         tokens_input = message.get("tokens_input", 0)
         tokens_output = message.get("tokens_output", 0)
@@ -119,10 +118,20 @@ class ChatMessageRepository(ChatDBBase):
                 tokens_cache_read, tokens_cache_write, cost,
                 research_run_id)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (msg_id, session_id, role, content, tool_calls,
-             tokens_input, tokens_output, tokens_reasoning,
-             tokens_cache_read, tokens_cache_write, cost,
-             research_run_id),
+            (
+                msg_id,
+                session_id,
+                role,
+                content,
+                tool_calls,
+                tokens_input,
+                tokens_output,
+                tokens_reasoning,
+                tokens_cache_read,
+                tokens_cache_write,
+                cost,
+                research_run_id,
+            ),
         )
 
     def update_chat_message(self, message_id: str, content: str) -> bool:
@@ -205,7 +214,9 @@ class ChatMessageRepository(ChatDBBase):
             )
             if tool_call_delete_after_rowid is not None:
                 tool_call_delete_after_rowid(
-                    conn, session_id, target_rowid,
+                    conn,
+                    session_id,
+                    target_rowid,
                 )
             return cursor.rowcount
 

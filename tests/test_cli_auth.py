@@ -90,6 +90,7 @@ class TestAuthInitInteractive:
             # run_auth_init signature: (wiki, config, args)
             # Build a minimal args namespace.
             import argparse
+
             args = argparse.Namespace(email=None)
             rc = run_auth_init(wiki=None, config={}, args=args)
         assert rc == 0
@@ -118,12 +119,14 @@ class TestAuthInitInteractive:
         fake = io.StringIO()  # NOT a TTY
         with patch("sys.stdin", fake), patch("sys.stdout", fake):
             import argparse
+
             args = argparse.Namespace(email=None)
             rc = run_auth_init(wiki=None, config={}, args=args)
         assert rc == 1
 
     def test_init_with_email_non_interactive(self):
         import argparse
+
         args = argparse.Namespace(email="bob@example.com")
         rc = run_auth_init(wiki=None, config={}, args=args)
         assert rc == 0
@@ -136,6 +139,7 @@ class TestAuthInitInteractive:
 
     def test_init_non_interactive_without_email_returns_1(self):
         import argparse
+
         args = argparse.Namespace(email="")
         rc = run_auth_init(wiki=None, config={}, args=args)
         assert rc == 1
@@ -143,6 +147,7 @@ class TestAuthInitInteractive:
     def test_init_idempotent_same_email(self):
         # Run init twice with same email → second is a no-op (no error).
         import argparse
+
         args1 = argparse.Namespace(email="dup@e.com")
         rc1 = run_auth_init(wiki=None, config={}, args=args1)
         assert rc1 == 0
@@ -160,6 +165,7 @@ class TestAuthInitInteractive:
 class TestAuthCreateToken:
     def test_create_token_creates_pat_and_local_token(self):
         import argparse
+
         # First init to create a user.
         init_args = argparse.Namespace(email="ct@e.com")
         run_auth_init(wiki=None, config={}, args=init_args)
@@ -179,6 +185,7 @@ class TestAuthCreateToken:
 
     def test_create_token_no_users_returns_1(self):
         import argparse
+
         out = io.StringIO()
         err = io.StringIO()
         with patch("sys.stdout", out), patch("sys.stderr", err):
@@ -195,6 +202,7 @@ class TestAuthCreateToken:
 class TestAuthListTokens:
     def test_list_tokens_after_init(self):
         import argparse
+
         run_auth_init(wiki=None, config={}, args=argparse.Namespace(email="lt@e.com"))
         out = io.StringIO()
         with patch("sys.stdout", out):
@@ -206,6 +214,7 @@ class TestAuthListTokens:
 
     def test_list_tokens_with_tokens(self):
         import argparse
+
         run_auth_init(wiki=None, config={}, args=argparse.Namespace(email="lt2@e.com"))
         # Create a token.
         err = io.StringIO()
@@ -221,6 +230,7 @@ class TestAuthListTokens:
 
     def test_list_tokens_no_users_returns_1(self):
         import argparse
+
         out = io.StringIO()
         err = io.StringIO()
         with patch("sys.stdout", out), patch("sys.stderr", err):
@@ -235,6 +245,7 @@ class TestAuthListTokens:
 class TestAuthRevokeToken:
     def test_revoke_existing_token(self):
         import argparse
+
         run_auth_init(wiki=None, config={}, args=argparse.Namespace(email="rt@e.com"))
         # Create a token so we have a key_id.
         create_out = io.StringIO()
@@ -261,6 +272,7 @@ class TestAuthRevokeToken:
 
     def test_revoke_nonexistent_returns_1(self):
         import argparse
+
         # Init first so we have a user.
         run_auth_init(wiki=None, config={}, args=argparse.Namespace(email="rn@e.com"))
         out = io.StringIO()
@@ -274,6 +286,7 @@ class TestAuthRevokeToken:
 
     def test_revoke_no_key_id_returns_1(self):
         import argparse
+
         out = io.StringIO()
         err = io.StringIO()
         with patch("sys.stdout", out), patch("sys.stderr", err):
@@ -289,6 +302,7 @@ class TestAuthRevokeToken:
 class TestAuthToken:
     def test_token_after_init_writes_local_token(self):
         import argparse
+
         # First init.
         init_args = argparse.Namespace(email="d@e.com")
         run_auth_init(wiki=None, config={}, args=init_args)
@@ -303,6 +317,7 @@ class TestAuthToken:
 
     def test_token_with_no_users_returns_1(self):
         import argparse
+
         out = io.StringIO()
         err = io.StringIO()
         with patch("sys.stdout", out), patch("sys.stderr", err):
@@ -317,6 +332,7 @@ class TestAuthToken:
 class TestAuthWhoami:
     def test_whoami_no_token_returns_1(self):
         import argparse
+
         out = io.StringIO()
         err = io.StringIO()
         with patch("sys.stdout", out), patch("sys.stderr", err):
@@ -326,6 +342,7 @@ class TestAuthWhoami:
 
     def test_whoami_prints_friendly_json(self):
         import argparse
+
         # Init then whoami.
         run_auth_init(
             wiki=None,
@@ -352,6 +369,7 @@ class TestAuthWhoami:
 class TestAuthLogout:
     def test_logout_removes_local_token(self):
         import argparse
+
         # First init.
         run_auth_init(
             wiki=None,
@@ -367,5 +385,6 @@ class TestAuthLogout:
 
     def test_logout_no_token_is_noop(self):
         import argparse
+
         rc = run_auth_logout(wiki=None, config={}, args=argparse.Namespace())
         assert rc == 0

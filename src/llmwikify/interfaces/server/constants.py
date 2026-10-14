@@ -5,6 +5,7 @@ from enum import Enum
 
 class GraphMode(str, Enum):
     """Graph visualization display modes."""
+
     FULL = "full"
     FOCUSED = "focused"
     MINIMAL = "minimal"
@@ -13,6 +14,7 @@ class GraphMode(str, Enum):
 
 class TransportType(str, Enum):
     """MCP server transport modes."""
+
     STDIO = "stdio"
     HTTP = "http"
     SSE = "sse"

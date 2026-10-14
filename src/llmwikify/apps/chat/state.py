@@ -27,17 +27,17 @@ logger = logging.getLogger(__name__)
 # ─── State machine ────────────────────────────────────────────────────────
 
 VALID_TRANSITIONS: dict[str | None, list[str]] = {
-    None:           ["clarifying", "plan"],   # 6-step: clarify first
-    "clarifying":   ["plan"],                 # 6-step new state
-    "planning":     ["gather"],
-    "gathering":    ["analyze", "plan"],
-    "analyzing":    ["synthesizing", "plan"],
+    None: ["clarifying", "plan"],  # 6-step: clarify first
+    "clarifying": ["plan"],  # 6-step new state
+    "planning": ["gather"],
+    "gathering": ["analyze", "plan"],
+    "analyzing": ["synthesizing", "plan"],
     "synthesizing": ["reporting", "plan"],
-    "reporting":    ["reviewing"],
-    "reviewing":    ["revise", "done"],
-    "revise":       ["reviewing", "done"],
-    "error":        ["done"],
-    "done":         [],
+    "reporting": ["reviewing"],
+    "reviewing": ["revise", "done"],
+    "revise": ["reviewing", "done"],
+    "error": ["done"],
+    "done": [],
 }
 
 
@@ -47,6 +47,7 @@ VALID_TRANSITIONS: dict[str | None, list[str]] = {
 @dataclass
 class ActionMetrics:
     """Metrics for a single action execution."""
+
     action: str
     start_time: float
     end_time: float = 0.0
@@ -96,6 +97,7 @@ class LLMCallMetrics:
             (only meaningful for ``expects_json=True`` prompts).
         error: Stringified exception on failure, "" on success.
     """
+
     prompt_name: str
     llm_role: str
     attempt_count: int = 1
@@ -120,6 +122,7 @@ class MetricsCollector:
 
     Back-compat: ``SessionMetrics = MetricsCollector`` (alias at module level).
     """
+
     session_id: str
     start_time: float = 0.0
     end_time: float = 0.0
@@ -155,16 +158,21 @@ class MetricsCollector:
 
     def summary(self) -> str:
         """Generate human-readable summary."""
-        lines = [f"Session {self.session_id} completed in {self.total_duration_ms/1000:.1f}s"]
+        lines = [
+            f"Session {self.session_id} completed in {self.total_duration_ms/1000:.1f}s"
+        ]
         for a in self.actions:
             token_str = f"{a.tokens_used:,} tokens" if a.tokens_used > 0 else "0 tokens"
             cost_str = f"${a.cost_usd:.3f}" if a.cost_usd > 0 else "$0.00"
-            lines.append(f"├── {a.action}: {a.duration_ms/1000:.1f}s, {token_str}, {cost_str}")
+            lines.append(
+                f"├── {a.action}: {a.duration_ms/1000:.1f}s, {token_str}, {cost_str}"
+            )
         if self.llm_calls:
             lines.append(f"├── LLM calls: {len(self.llm_calls)} total")
             for c in self.llm_calls:
                 status = (
-                    "fallback" if c.fallback_used
+                    "fallback"
+                    if c.fallback_used
                     else ("ok" if c.success else f"err: {c.error[-80:]}")
                 )
                 lines.append(
@@ -178,7 +186,9 @@ class MetricsCollector:
                 f"│   └── Total: {total_llm_ms/1000:.1f}s, "
                 f"{total_attempts} attempt(s)"
             )
-        lines.append(f"└── Total: {self.total_duration_ms/1000:.1f}s, {self.total_tokens:,} tokens, ${self.total_cost_usd:.3f}")
+        lines.append(
+            f"└── Total: {self.total_duration_ms/1000:.1f}s, {self.total_tokens:,} tokens, ${self.total_cost_usd:.3f}"
+        )
         return "\n".join(lines)
 
     def record(self, action: str) -> Iterator[ActionMetrics]:
@@ -202,7 +212,8 @@ SessionMetrics = MetricsCollector
 
 @contextmanager
 def _record_action_impl(
-    collector: MetricsCollector, action: str,
+    collector: MetricsCollector,
+    action: str,
 ) -> Iterator[ActionMetrics]:
     """Context manager body: start/finish + append action metrics.
 
@@ -240,7 +251,9 @@ class ResearchState:
     # Round tracking
     round: int = 0
     max_rounds: int = 5
-    phase: str = ""  # planning | gathering | analyzing | synthesizing | reporting | reviewing | done
+    phase: str = (
+        ""  # planning | gathering | analyzing | synthesizing | reporting | reviewing | done
+    )
 
     # Data accumulators
     sub_queries: list[dict[str, Any]] = field(default_factory=list)

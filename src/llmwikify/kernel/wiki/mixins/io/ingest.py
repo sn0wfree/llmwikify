@@ -32,16 +32,18 @@ class WikiIngestMixin(WikiProtocol):
         header_lines = []
 
         for i, line in enumerate(lines):
-            match = re.match(r'^(#{1,6})\s+(.+)', line)
+            match = re.match(r"^(#{1,6})\s+(.+)", line)
             if match:
                 level = len(match.group(1))
                 header_lines.append(i)
-                sections.append({
-                    "id": len(header_lines),
-                    "level": level,
-                    "title": match.group(2).strip(),
-                    "line": i,
-                })
+                sections.append(
+                    {
+                        "id": len(header_lines),
+                        "level": level,
+                        "title": match.group(2).strip(),
+                        "line": i,
+                    }
+                )
 
         if not header_lines:
             sections = self._detect_paragraph_sections(lines)
@@ -77,37 +79,47 @@ class WikiIngestMixin(WikiProtocol):
                     paragraph = "\n".join(lines[current_section_start:i]).strip()
                     if paragraph:
                         words = paragraph.split()
-                        if len(words) < 10 and (paragraph.endswith(":") or paragraph.isupper()):
-                            sections.append({
-                                "id": len(sections) + 1,
-                                "level": 2,
-                                "title": paragraph.rstrip(":").strip(),
-                                "line": current_section_start,
-                                "heuristic": True,
-                            })
+                        if len(words) < 10 and (
+                            paragraph.endswith(":") or paragraph.isupper()
+                        ):
+                            sections.append(
+                                {
+                                    "id": len(sections) + 1,
+                                    "level": 2,
+                                    "title": paragraph.rstrip(":").strip(),
+                                    "line": current_section_start,
+                                    "heuristic": True,
+                                }
+                            )
                         elif len(words) >= 50:
-                            sections.append({
-                                "id": len(sections) + 1,
-                                "level": 2,
-                                "title": f"Section {len(sections) + 1}",
-                                "line": current_section_start,
-                                "heuristic": True,
-                            })
+                            sections.append(
+                                {
+                                    "id": len(sections) + 1,
+                                    "level": 2,
+                                    "title": f"Section {len(sections) + 1}",
+                                    "line": current_section_start,
+                                    "heuristic": True,
+                                }
+                            )
                 current_section_start = i + 1
 
         remaining = "\n".join(lines[current_section_start:]).strip()
         if remaining and len(remaining.split()) >= 10:
-            sections.append({
-                "id": len(sections) + 1,
-                "level": 2,
-                "title": f"Section {len(sections) + 1}",
-                "line": current_section_start,
-                "heuristic": True,
-            })
+            sections.append(
+                {
+                    "id": len(sections) + 1,
+                    "level": 2,
+                    "title": f"Section {len(sections) + 1}",
+                    "line": current_section_start,
+                    "heuristic": True,
+                }
+            )
 
         return sections
 
-    def targeted_read(self, content: str, selected_sections: list[int], max_chars: int = 32000) -> tuple[str, bool]:
+    def targeted_read(
+        self, content: str, selected_sections: list[int], max_chars: int = 32000
+    ) -> tuple[str, bool]:
         """Read only selected sections, respecting char budget.
 
         Args:
@@ -122,7 +134,7 @@ class WikiIngestMixin(WikiProtocol):
 
         header_lines = []
         for i, line in enumerate(lines):
-            if re.match(r'^#{1,6}\s+', line):
+            if re.match(r"^#{1,6}\s+", line):
                 header_lines.append(i)
 
         if not header_lines:
@@ -136,7 +148,11 @@ class WikiIngestMixin(WikiProtocol):
                 continue
 
             start = header_lines[section_id - 1]
-            end = header_lines[section_id] if section_id < len(header_lines) else len(lines)
+            end = (
+                header_lines[section_id]
+                if section_id < len(header_lines)
+                else len(lines)
+            )
 
             section_text = "\n".join(lines[start:end])
 
@@ -151,8 +167,17 @@ class WikiIngestMixin(WikiProtocol):
 
         result = "\n\n".join(selected_text)
         was_truncated = char_budget == 0 and len(result) < sum(
-            len("\n".join(lines[header_lines[sid - 1]:header_lines[sid] if sid < len(header_lines) else len(lines)]))
-            for sid in selected_sections if 1 <= sid <= len(header_lines)
+            len(
+                "\n".join(
+                    lines[
+                        header_lines[sid - 1] : (
+                            header_lines[sid] if sid < len(header_lines) else len(lines)
+                        )
+                    ]
+                )
+            )
+            for sid in selected_sections
+            if 1 <= sid <= len(header_lines)
         )
 
         return result, was_truncated
@@ -191,7 +216,9 @@ class WikiIngestMixin(WikiProtocol):
 
         return "\n\n".join(selected_text), char_budget == 0
 
-    def _generate_lint_hint(self, source_name: str, content: str, already_exists: bool) -> dict:
+    def _generate_lint_hint(
+        self, source_name: str, content: str, already_exists: bool
+    ) -> dict:
         """Generate lightweight lint hints (pure computation, no LLM).
 
         Acts as a harness pre-check layer, alerting the Agent to potential
@@ -201,28 +228,36 @@ class WikiIngestMixin(WikiProtocol):
 
         word_count = len(content.split()) if content else 0
         if word_count < 50:
-            issues.append({
-                "type": "content_too_short",
-                "message": f"Content is very short ({word_count} words), may need manual review"
-            })
+            issues.append(
+                {
+                    "type": "content_too_short",
+                    "message": f"Content is very short ({word_count} words), may need manual review",
+                }
+            )
 
-        image_refs = re.findall(r'!\[.*?\]\((.*?)\)', content or '')
+        image_refs = re.findall(r"!\[.*?\]\((.*?)\)", content or "")
         if image_refs:
-            issues.append({
-                "type": "has_images",
-                "message": f"Document contains {len(image_refs)} image(s), review for important visuals"
-            })
+            issues.append(
+                {
+                    "type": "has_images",
+                    "message": f"Document contains {len(image_refs)} image(s), review for important visuals",
+                }
+            )
 
         if already_exists:
-            issues.append({
-                "type": "source_already_exists",
-                "message": f"Source already exists in raw/{source_name}, consider updating"
-            })
+            issues.append(
+                {
+                    "type": "source_already_exists",
+                    "message": f"Source already exists in raw/{source_name}, consider updating",
+                }
+            )
 
         return {
             "issues_found": len(issues),
-            "suggestion": "Run wiki_lint(mode='check') for full analysis" if issues else None,
-            "top_issues": issues[:5]
+            "suggestion": (
+                "Run wiki_lint(mode='check') for full analysis" if issues else None
+            ),
+            "top_issues": issues[:5],
         }
 
     def ingest_source(self, source: str) -> dict:
@@ -244,7 +279,10 @@ class WikiIngestMixin(WikiProtocol):
         timing["extract_ms"] = int((time.monotonic() - t0) * 1000)
 
         if result.source_type == "error":
-            return {"error": result.metadata.get("error", "Unknown extraction error"), "timing": timing}
+            return {
+                "error": result.metadata.get("error", "Unknown extraction error"),
+                "timing": timing,
+            }
 
         if not result.text:
             return {"error": "No content extracted", "timing": timing}
@@ -277,7 +315,10 @@ class WikiIngestMixin(WikiProtocol):
                 saved_to_raw = False
                 hint = f"Source is already in raw/{source_name}"
             except ValueError:
-                safe_name = self._slugify(result.title or original_path.stem) + original_path.suffix
+                safe_name = (
+                    self._slugify(result.title or original_path.stem)
+                    + original_path.suffix
+                )
                 saved_path = self.raw_dir / safe_name
 
                 if saved_path.exists():
@@ -308,7 +349,7 @@ class WikiIngestMixin(WikiProtocol):
         if raw_file.exists():
             file_size = raw_file.stat().st_size
             word_count = len(result.text.split()) if result.text else 0
-            image_refs = re.findall(r'!\[.*?\]\((.*?)\)', result.text or '')
+            image_refs = re.findall(r"!\[.*?\]\((.*?)\)", result.text or "")
             image_count = len(image_refs)
             has_images = image_count > 0
 
@@ -332,9 +373,15 @@ class WikiIngestMixin(WikiProtocol):
             "hint": hint,
             "current_index": index_content,
             "message": "Source ingested. Read the file to extract key takeaways.",
-            "instructions": self._get_prompt_registry().render_text("ingest_instructions"),
-            "section_metadata": self.extract_section_metadata(result.text or "", result.title),
-            "lint_hint": self._generate_lint_hint(source_name, result.text or "", already_exists),
+            "instructions": self._get_prompt_registry().render_text(
+                "ingest_instructions"
+            ),
+            "section_metadata": self.extract_section_metadata(
+                result.text or "", result.title
+            ),
+            "lint_hint": self._generate_lint_hint(
+                source_name, result.text or "", already_exists
+            ),
             "timing": {
                 "extract_ms": timing.get("extract_ms", 0),
                 "total_ms": int((time.monotonic() - t0) * 1000),

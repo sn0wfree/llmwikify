@@ -89,7 +89,7 @@ class TestWireFormat:
         assert "data: " in wire
         # Data must be valid JSON
         data_line = next(ln for ln in wire.split("\n") if ln.startswith("data: "))
-        json.loads(data_line[len("data: "):])
+        json.loads(data_line[len("data: ") :])
 
     async def test_multiple_events_preserve_order(self) -> None:
         """Factory yields events in source order."""
@@ -115,7 +115,9 @@ class TestBusMirror:
             adapter = BusAdapter(bus=bus)
             async for event in _aiter(events):
                 adapter.mirror_sse_event(
-                    event, target_id="", session_key="",
+                    event,
+                    target_id="",
+                    session_key="",
                 )
                 yield {"event": "message", "data": json.dumps(event)}
 
@@ -235,7 +237,9 @@ class TestEndOfStreamHeartbeat:
         # The factory is the single source of truth, so the behavior is
         # unified regardless of which endpoint calls it. This test documents
         # the intentional behavior change so future regressions are obvious.
-        assert HEARTBEAT_INTERVAL == 15, "heartbeat interval changed; review unification"
+        assert (
+            HEARTBEAT_INTERVAL == 15
+        ), "heartbeat interval changed; review unification"
 
 
 # ─── 5. session_key construction ────────────────────────────────────
@@ -247,16 +251,12 @@ class TestSessionKey:
     async def test_session_key_with_session_id(self) -> None:
         """Verify the factory accepts session_id without errors and produces events."""
         # Indirectly verified: factory signature accepts session_id kwarg
-        out = await _collect(
-            _sse_stream(_aiter([{"type": "x"}]), session_id="abc-123")
-        )
+        out = await _collect(_sse_stream(_aiter([{"type": "x"}]), session_id="abc-123"))
         assert len(out) == 1
 
     async def test_session_key_with_empty_session_id(self) -> None:
         """Verify factory works with empty session_id (no exception)."""
-        out = await _collect(
-            _sse_stream(_aiter([{"type": "x"}]), session_id="")
-        )
+        out = await _collect(_sse_stream(_aiter([{"type": "x"}]), session_id=""))
         assert len(out) == 1
 
     async def test_session_key_default_is_empty(self) -> None:
@@ -290,11 +290,13 @@ class TestBackwardCompat:
     def test_sse_stream_is_importable_from_chat_sse(self) -> None:
         """`_sse_stream` is the new factory; must be importable for testing."""
         from llmwikify.interfaces.server.http.agent._sse import _sse_stream
+
         assert callable(_sse_stream)
 
     def test_router_prefix_unchanged(self) -> None:
         """The agent router's URL prefix must still be ``/api/agent``."""
         from llmwikify.interfaces.server.http.agent._common import router
+
         assert router.prefix == "/api/agent"
 
     def test_get_set_agent_service_still_works(self) -> None:
@@ -303,5 +305,6 @@ class TestBackwardCompat:
             get_agent_service,
             set_agent_service,
         )
+
         assert callable(set_agent_service)
         assert callable(get_agent_service)

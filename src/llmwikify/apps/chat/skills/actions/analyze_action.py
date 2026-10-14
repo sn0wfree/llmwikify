@@ -27,7 +27,9 @@ async def _analyze(args: dict, ctx: SkillContext) -> SkillResult:
     source_path = args.get("source_path", "")
     force = args.get("force", False)
     return safe_call(
-        wiki.analyze_source, source_path, force=force,
+        wiki.analyze_source,
+        source_path,
+        force=force,
         error_prefix="analyze failed",
     )
 

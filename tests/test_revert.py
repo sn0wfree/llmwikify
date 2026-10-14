@@ -20,13 +20,19 @@ class TestRevert:
     def test_revert_middle_message(self):
         db, sid, tmpdir = _make_db()
         try:
-            db.save_chat_message({"session_id": sid, "role": "user", "content": "hello"})
+            db.save_chat_message(
+                {"session_id": sid, "role": "user", "content": "hello"}
+            )
             time.sleep(1.1)
-            db.save_chat_message({"session_id": sid, "role": "assistant", "content": "hi"})
+            db.save_chat_message(
+                {"session_id": sid, "role": "assistant", "content": "hi"}
+            )
             time.sleep(1.1)
             db.save_chat_message({"session_id": sid, "role": "user", "content": "bye"})
             time.sleep(1.1)
-            db.save_chat_message({"session_id": sid, "role": "assistant", "content": "goodbye"})
+            db.save_chat_message(
+                {"session_id": sid, "role": "assistant", "content": "goodbye"}
+            )
 
             msgs = db.get_chat_messages(sid)
             assert len(msgs) == 4
@@ -46,9 +52,13 @@ class TestRevert:
     def test_revert_first_message(self):
         db, sid, tmpdir = _make_db()
         try:
-            db.save_chat_message({"session_id": sid, "role": "user", "content": "hello"})
+            db.save_chat_message(
+                {"session_id": sid, "role": "user", "content": "hello"}
+            )
             time.sleep(1.1)
-            db.save_chat_message({"session_id": sid, "role": "assistant", "content": "hi"})
+            db.save_chat_message(
+                {"session_id": sid, "role": "assistant", "content": "hi"}
+            )
 
             msgs = db.get_chat_messages(sid)
             count = db.revert_to_message(sid, msgs[0]["id"])
@@ -63,7 +73,9 @@ class TestRevert:
     def test_revert_nonexistent_message(self):
         db, sid, tmpdir = _make_db()
         try:
-            db.save_chat_message({"session_id": sid, "role": "user", "content": "hello"})
+            db.save_chat_message(
+                {"session_id": sid, "role": "user", "content": "hello"}
+            )
             count = db.revert_to_message(sid, "nonexistent_id")
             assert count == 0
             msgs = db.get_chat_messages(sid)
@@ -74,9 +86,13 @@ class TestRevert:
     def test_include_reverted(self):
         db, sid, tmpdir = _make_db()
         try:
-            db.save_chat_message({"session_id": sid, "role": "user", "content": "hello"})
+            db.save_chat_message(
+                {"session_id": sid, "role": "user", "content": "hello"}
+            )
             time.sleep(1.1)
-            db.save_chat_message({"session_id": sid, "role": "assistant", "content": "hi"})
+            db.save_chat_message(
+                {"session_id": sid, "role": "assistant", "content": "hi"}
+            )
             time.sleep(1.1)
             db.save_chat_message({"session_id": sid, "role": "user", "content": "bye"})
 
@@ -110,7 +126,9 @@ class TestAutoNaming:
     def test_title_falls_back_to_first_message(self):
         db, sid, tmpdir = _make_db()
         try:
-            db.save_chat_message({"session_id": sid, "role": "user", "content": "hello world"})
+            db.save_chat_message(
+                {"session_id": sid, "role": "user", "content": "hello world"}
+            )
             title = db.get_chat_session_title(sid)
             assert title == "hello world"
         finally:
@@ -119,7 +137,9 @@ class TestAutoNaming:
     def test_title_prefers_stored_over_derived(self):
         db, sid, tmpdir = _make_db()
         try:
-            db.save_chat_message({"session_id": sid, "role": "user", "content": "hello world"})
+            db.save_chat_message(
+                {"session_id": sid, "role": "user", "content": "hello world"}
+            )
             db.update_chat_session_title(sid, "Custom Title")
             title = db.get_chat_session_title(sid)
             assert title == "Custom Title"

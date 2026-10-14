@@ -93,12 +93,14 @@ async def _start_long_task(args: dict, ctx: SkillContext) -> SkillResult:
         "started_at": _iso_now(),
     }
     repo.update_session_metadata(session_id, **{GOAL_STATE_KEY: blob})
-    return SkillResult.ok({
-        "registered": True,
-        "objective": goal,
-        "ui_summary": ui_summary,
-        "started_at": blob["started_at"],
-    })
+    return SkillResult.ok(
+        {
+            "registered": True,
+            "objective": goal,
+            "ui_summary": ui_summary,
+            "started_at": blob["started_at"],
+        }
+    )
 
 
 async def _complete_goal(args: dict, ctx: SkillContext) -> SkillResult:
@@ -124,12 +126,14 @@ async def _complete_goal(args: dict, ctx: SkillContext) -> SkillResult:
         "recap": recap,
     }
     repo.update_session_metadata(session_id, **{GOAL_STATE_KEY: blob})
-    return SkillResult.ok({
-        "completed": True,
-        "completed_at": ended,
-        "recap": recap,
-        "objective": prior.get("objective", ""),
-    })
+    return SkillResult.ok(
+        {
+            "completed": True,
+            "completed_at": ended,
+            "recap": recap,
+            "objective": prior.get("objective", ""),
+        }
+    )
 
 
 async def _get_goal(args: dict, ctx: SkillContext) -> SkillResult:
@@ -142,10 +146,12 @@ async def _get_goal(args: dict, ctx: SkillContext) -> SkillResult:
         return repo
     metadata = repo.get_session_metadata(session_id)
     goal = parse_goal_state(goal_state_raw(metadata))
-    return SkillResult.ok({
-        "active": isinstance(goal, dict) and goal.get("status") == "active",
-        "goal": goal or {},
-    })
+    return SkillResult.ok(
+        {
+            "active": isinstance(goal, dict) and goal.get("status") == "active",
+            "goal": goal or {},
+        }
+    )
 
 
 # ─── Skill declaration ─────────────────────────────────────────────

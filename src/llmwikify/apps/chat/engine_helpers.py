@@ -49,7 +49,7 @@ def _repair_truncated_json(text: str) -> Any | None:
         if escape_next:
             escape_next = False
             continue
-        if c == '\\' and in_string:
+        if c == "\\" and in_string:
             escape_next = True
             continue
         if c == '"':
@@ -58,12 +58,12 @@ def _repair_truncated_json(text: str) -> Any | None:
         if in_string:
             continue
         # Outside string
-        if c in '{[':
-            stack.append('}' if c == '{' else ']')
-        elif c in '}]':
+        if c in "{[":
+            stack.append("}" if c == "{" else "]")
+        elif c in "}]":
             if stack and stack[-1] == c:
                 stack.pop()
-        elif c == ',' and not in_string:
+        elif c == "," and not in_string:
             last_safe = i  # position after a complete value
 
     if last_safe >= 0:
@@ -77,7 +77,7 @@ def _repair_truncated_json(text: str) -> Any | None:
             if t_escape:
                 t_escape = False
                 continue
-            if c == '\\' and t_in_string:
+            if c == "\\" and t_in_string:
                 t_escape = True
                 continue
             if c == '"':
@@ -85,15 +85,15 @@ def _repair_truncated_json(text: str) -> Any | None:
                 continue
             if t_in_string:
                 continue
-            if c in '{[':
-                t_stack.append('}' if c == '{' else ']')
-            elif c in '}]':
+            if c in "{[":
+                t_stack.append("}" if c == "{" else "]")
+            elif c in "}]":
                 if t_stack and t_stack[-1] == c:
                     t_stack.pop()
-        closing = ''
+        closing = ""
         if t_in_string:
             closing += '"'
-        closing += ''.join(reversed(t_stack))
+        closing += "".join(reversed(t_stack))
         candidate = truncated + closing
         try:
             return json.loads(candidate)
@@ -103,10 +103,10 @@ def _repair_truncated_json(text: str) -> Any | None:
     # No comma-separated safe point: try closing the unterminated
     # string and any open brackets directly.
     if in_string or stack:
-        closing = ''
+        closing = ""
         if in_string:
             closing += '"'
-        closing += ''.join(reversed(stack))
+        closing += "".join(reversed(stack))
         candidate = text + closing
         try:
             return json.loads(candidate)
@@ -198,6 +198,7 @@ async def chat_json(
         json.JSONDecodeError: If the response cannot be parsed.
         Any exception from ``llm.chat()`` is propagated unchanged.
     """
+
     def _sync() -> str:
         return llm.chat(
             messages,
@@ -205,6 +206,7 @@ async def chat_json(
             max_tokens=max_tokens,
             temperature=temperature,
         )
+
     raw = await asyncio.to_thread(_sync)
     return safe_json_loads(raw)
 
@@ -234,13 +236,13 @@ def safe_persist_status(
             ``iteration_round``, ``synthesis_json``, ``review_json``).
     """
     try:
-        session_manager.update_status(
-            session_id, status, step, **kwargs
-        )
+        session_manager.update_status(session_id, status, step, **kwargs)
     except Exception as e:  # noqa: BLE001
         logger.warning(
             "Persist status %s/%s failed (continuing): %s",
-            status, step, e,
+            status,
+            step,
+            e,
         )
 
 
@@ -272,7 +274,8 @@ def safe_persist_six_step(
     except Exception as e:  # noqa: BLE001
         logger.warning(
             "Persist six-step fields %s failed (continuing): %s",
-            list(fields.keys()), e,
+            list(fields.keys()),
+            e,
         )
 
 
@@ -352,7 +355,8 @@ def resolve_llm_params(
         except (FileNotFoundError, KeyError, AttributeError, TypeError) as e:
             logger.debug(
                 "resolve_llm_params: registry lookup failed for %r: %s",
-                prompt_name, e,
+                prompt_name,
+                e,
             )
             registry_params = {}
 

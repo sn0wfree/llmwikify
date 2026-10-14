@@ -83,8 +83,7 @@ class TestWikiRoutesPage:
     def test_write_page_success(self, api_client):
         """Test writing a new page."""
         response = api_client.post(
-            "/api/wiki/page",
-            json={"page_name": "NewPage", "content": "# New Page\n"}
+            "/api/wiki/page", json={"page_name": "NewPage", "content": "# New Page\n"}
         )
         assert response.status_code == 200
         data = response.json()
@@ -93,17 +92,13 @@ class TestWikiRoutesPage:
 
     def test_write_page_no_name(self, api_client):
         """Test writing page without page_name returns 400."""
-        response = api_client.post(
-            "/api/wiki/page",
-            json={"content": "# No Name\n"}
-        )
+        response = api_client.post("/api/wiki/page", json={"content": "# No Name\n"})
         assert response.status_code == 400
 
     def test_write_page_empty_content_rejected(self, api_client):
         """Test writing page with empty content returns 400."""
         response = api_client.post(
-            "/api/wiki/page",
-            json={"page_name": "EmptyPage", "content": ""}
+            "/api/wiki/page", json={"page_name": "EmptyPage", "content": ""}
         )
         assert response.status_code == 400
 
@@ -269,11 +264,7 @@ class TestWikiServerConfiguration:
 
     def test_server_with_cors_disabled(self, wiki_instance):
         """Test server with CORS disabled."""
-        server = WikiServer(
-            wiki_instance,
-            enable_webui=False,
-            cors_enabled=False
-        )
+        server = WikiServer(wiki_instance, enable_webui=False, cors_enabled=False)
         client = TestClient(server.app)
         response = client.get("/api/health")
         # Should work without CORS

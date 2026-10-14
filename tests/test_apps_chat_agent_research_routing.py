@@ -65,9 +65,9 @@ class TestAutoresearchTriggerIsStudyOnly:
 
         run_action = AutoResearchCompoundSkill.actions.get("run")
         assert run_action is not None, "autoresearch.run action not found"
-        assert run_action.triggers == ["/study"], (
-            f"Expected triggers=['/study'], got {run_action.triggers}"
-        )
+        assert run_action.triggers == [
+            "/study"
+        ], f"Expected triggers=['/study'], got {run_action.triggers}"
 
     def test_no_chinese_research_trigger_anywhere(self) -> None:
         """Belt-and-suspenders: no autoresearch trigger should contain
@@ -78,9 +78,9 @@ class TestAutoresearchTriggerIsStudyOnly:
 
         for action_name, action in AutoResearchCompoundSkill.actions.items():
             for trigger in action.triggers:
-                assert not re.search(r"[\u4e00-\u9fff]", trigger), (
-                    f"Action '{action_name}' has Chinese trigger: {trigger!r}"
-                )
+                assert not re.search(
+                    r"[\u4e00-\u9fff]", trigger
+                ), f"Action '{action_name}' has Chinese trigger: {trigger!r}"
 
 
 # ── 2. system prompt must NOT nudge implicit research routing ────
@@ -100,16 +100,17 @@ class TestSystemPromptResearchGuard:
         )
         prompt = _run(builder.build_with_context(ctx))
         # Old phrasing must be gone
-        assert "研究：" not in prompt, (
-            "Old system prompt still mentions 研究： trigger — re-check prompt_builder.py"
-        )
+        assert (
+            "研究：" not in prompt
+        ), "Old system prompt still mentions 研究： trigger — re-check prompt_builder.py"
         # /study must still be there (it's the canonical example)
-        assert "/study" in prompt, (
-            "System prompt should still reference /study as the canonical slash command"
-        )
+        assert (
+            "/study" in prompt
+        ), "System prompt should still reference /study as the canonical slash command"
 
     def test_prompt_includes_explicit_no_implicit_routing_clause(
-        self, tmp_path: Path,
+        self,
+        tmp_path: Path,
     ) -> None:
         """The new prompt should explicitly tell the LLM not to
         invoke skill tools for ordinary questions mentioning
@@ -118,9 +119,10 @@ class TestSystemPromptResearchGuard:
         ctx = BuildContext(workspace=tmp_path)
         prompt = _run(builder.build_with_context(ctx))
         # The guard phrasing should be present
-        assert "do NOT invoke skill tools" in prompt or "do not invoke skill tools" in prompt.lower(), (
-            "System prompt should explicitly forbid implicit skill invocation"
-        )
+        assert (
+            "do NOT invoke skill tools" in prompt
+            or "do not invoke skill tools" in prompt.lower()
+        ), "System prompt should explicitly forbid implicit skill invocation"
         # And it should call out the example keywords
         for keyword in ("研究", "调研", "research"):
             assert keyword in prompt, (
@@ -141,11 +143,15 @@ class TestResearchKeywordInUserMessageDoesNotChangePrompt:
         on the prompt, not based on a per-message key in the prompt."""
         builder = _make_builder(tmp_path, tool_names=["read_file"])
         ctx_hello = BuildContext(
-            wiki_id="w", user_message="hello", session_id="s1",
+            wiki_id="w",
+            user_message="hello",
+            session_id="s1",
             workspace=tmp_path,
         )
         ctx_research = BuildContext(
-            wiki_id="w", user_message="调研 nanobot", session_id="s1",
+            wiki_id="w",
+            user_message="调研 nanobot",
+            session_id="s1",
             workspace=tmp_path,
         )
         prompt_hello = _run(builder.build_with_context(ctx_hello))
@@ -181,9 +187,9 @@ class TestCommandRouterDoesNotRouteResearch:
         # 研究：nanobot should not match any registered command
         ctx = CommandContext(text="研究：nanobot", raw="研究：nanobot")
         result = asyncio.run(router.dispatch(ctx))
-        assert result == [], (
-            f"研究：nanobot should not match any router command; got {result!r}"
-        )
+        assert (
+            result == []
+        ), f"研究：nanobot should not match any router command; got {result!r}"
         # And 研究 alone (no colon) shouldn't either
         ctx2 = CommandContext(text="研究 nanobot", raw="研究 nanobot")
         result = asyncio.run(router.dispatch(ctx2))

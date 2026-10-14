@@ -47,7 +47,11 @@ class SearchSkill(Skill):
                 "type": "object",
                 "properties": {
                     "query": {"type": "string", "description": "Search query"},
-                    "limit": {"type": "integer", "description": "Max results", "default": 10},
+                    "limit": {
+                        "type": "integer",
+                        "description": "Max results",
+                        "default": 10,
+                    },
                 },
                 "required": ["query"],
             },

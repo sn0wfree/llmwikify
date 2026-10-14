@@ -278,9 +278,7 @@ class WikiRegistry:
 
         if instance.wiki_type == WikiType.REMOTE:
             # Remote wikis don't have local Wiki objects
-            raise ValueError(
-                f"Cannot get local Wiki object for remote wiki: {wiki_id}"
-            )
+            raise ValueError(f"Cannot get local Wiki object for remote wiki: {wiki_id}")
 
         # Import here to avoid circular imports
         from ..wiki import Wiki
@@ -325,7 +323,9 @@ class WikiRegistry:
                     status = self.get_wiki_status(instance.wiki_id)
                     instance.page_count = status.get("page_count", 0)
                 except Exception:
-                    logger.debug("Failed to refresh page_count for %s", instance.wiki_id)
+                    logger.debug(
+                        "Failed to refresh page_count for %s", instance.wiki_id
+                    )
         return list(self._instances.values())
 
     def get_default_wiki(self) -> Any:

@@ -105,8 +105,8 @@ class Consolidator:
     def __init__(
         self,
         memory_manager: Any,
-        db: Any,                       # ChatDatabase (only need .db_path)
-        provider: Any,                 # LLMProvider with .achat(messages, ...)
+        db: Any,  # ChatDatabase (only need .db_path)
+        provider: Any,  # LLMProvider with .achat(messages, ...)
         data_dir: Path | str,
         config: ConsolidatorConfig | None = None,
     ):
@@ -188,8 +188,11 @@ class Consolidator:
         if self.config.enable_md_write:
             try:
                 md_path = self._write_markdown(
-                    session_id, to_evict, summary,
-                    tokens_before, tokens_after,
+                    session_id,
+                    to_evict,
+                    summary,
+                    tokens_before,
+                    tokens_after,
                 )
             except Exception:
                 logger.warning(
@@ -214,7 +217,10 @@ class Consolidator:
 
         logger.info(
             "Consolidator: session=%s evicted %d msgs (%d→%d tokens)",
-            session_id, len(to_evict), tokens_before, tokens_after,
+            session_id,
+            len(to_evict),
+            tokens_before,
+            tokens_after,
         )
 
         return ConsolidationResult(
@@ -248,9 +254,7 @@ class Consolidator:
         )
         # response is dict-like {"content": "..."}
         content = (
-            response.get("content", "")
-            if isinstance(response, dict)
-            else str(response)
+            response.get("content", "") if isinstance(response, dict) else str(response)
         )
         if not content:
             raise ValueError("LLM returned empty summary")

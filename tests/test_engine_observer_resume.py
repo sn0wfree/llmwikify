@@ -31,12 +31,12 @@ def test_engine_constructs_observer_and_resume_loader():
     import llmwikify.apps.chat.research_engine.engine as engine_mod
 
     src = inspect.getsource(engine_mod.ResearchEngine.__init__)
-    assert "self.observer = ResearchObserver(self)" in src, (
-        "ResearchEngine.__init__ should construct a ResearchObserver"
-    )
-    assert "self.resume_loader = ResearchResumeLoader(self)" in src, (
-        "ResearchEngine.__init__ should construct a ResearchResumeLoader"
-    )
+    assert (
+        "self.observer = ResearchObserver(self)" in src
+    ), "ResearchEngine.__init__ should construct a ResearchObserver"
+    assert (
+        "self.resume_loader = ResearchResumeLoader(self)" in src
+    ), "ResearchEngine.__init__ should construct a ResearchResumeLoader"
 
 
 def test_observer_holds_back_refs_to_engine_deps():
@@ -68,9 +68,9 @@ def test_engine_observe_delegates_to_observer():
     import llmwikify.apps.chat.research_engine.engine as engine_mod
 
     src = inspect.getsource(engine_mod.ResearchEngine._observe)
-    assert "self.observer.observe" in src, (
-        "engine._observe should delegate to self.observer.observe"
-    )
+    assert (
+        "self.observer.observe" in src
+    ), "engine._observe should delegate to self.observer.observe"
 
 
 def test_engine_load_resume_state_delegates_to_resume_loader():
@@ -79,8 +79,7 @@ def test_engine_load_resume_state_delegates_to_resume_loader():
 
     src = inspect.getsource(engine_mod.ResearchEngine._load_resume_state)
     assert "self.resume_loader.load" in src, (
-        "engine._load_resume_state should delegate to "
-        "self.resume_loader.load"
+        "engine._load_resume_state should delegate to " "self.resume_loader.load"
     )
 
 
@@ -137,11 +136,15 @@ def test_observer_populates_observations_on_analyzed_sources():
         def __init__(self):
             self.sources = [
                 {
-                    "id": 1, "sub_query_id": 1, "source_type": "wiki",
+                    "id": 1,
+                    "sub_query_id": 1,
+                    "source_type": "wiki",
                     "analysis": {"quality_assessment": {"credibility": 8}},
                 },
                 {
-                    "id": 2, "sub_query_id": 2, "source_type": "web",
+                    "id": 2,
+                    "sub_query_id": 2,
+                    "source_type": "web",
                     "analysis": {"quality_assessment": {"credibility": 6}},
                 },
             ]
@@ -169,9 +172,9 @@ def test_observer_populates_observations_on_analyzed_sources():
     state = ResearchState(session_id="s1")
     obs.observe(state)
     # 3 observations: avg credibility, source types, wiki vs web
-    assert len(state.observations) >= 3, (
-        f"Expected ≥3 observations, got {state.observations}"
-    )
+    assert (
+        len(state.observations) >= 3
+    ), f"Expected ≥3 observations, got {state.observations}"
     # The first should be the avg credibility line
     assert "Average source credibility" in state.observations[0]
     # Source types should appear
@@ -288,10 +291,12 @@ def test_resume_loader_restores_self_loop_metadata():
         "quality_score": 0,
         "current_step": "planning",
         "self_loop_counts_json": json.dumps({"clarify": 2, "gather": 0}),
-        "self_loop_history_json": json.dumps([
-            {"step": "clarify", "attempt": 1, "reason": "scope_check fail"},
-            {"step": "clarify", "attempt": 2, "reason": "scope_check fail"},
-        ]),
+        "self_loop_history_json": json.dumps(
+            [
+                {"step": "clarify", "attempt": 1, "reason": "scope_check fail"},
+                {"step": "clarify", "attempt": 2, "reason": "scope_check fail"},
+            ]
+        ),
     }
 
     class FakeDB:
@@ -362,9 +367,9 @@ def test_action_clarify_persists_self_loop_fields():
     from llmwikify.apps.chat import actions
 
     src = inspect.getsource(actions.action_clarify)
-    assert "self_loop_counts=state.self_loop_counts" in src, (
-        "action_clarify must persist state.self_loop_counts to DB"
-    )
-    assert "self_loop_history=state.self_loop_history" in src, (
-        "action_clarify must persist state.self_loop_history to DB"
-    )
+    assert (
+        "self_loop_counts=state.self_loop_counts" in src
+    ), "action_clarify must persist state.self_loop_counts to DB"
+    assert (
+        "self_loop_history=state.self_loop_history" in src
+    ), "action_clarify must persist state.self_loop_history to DB"

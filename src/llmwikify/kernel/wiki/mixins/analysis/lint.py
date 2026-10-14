@@ -56,7 +56,9 @@ class WikiLintMixin(WikiProtocol):
     ) -> dict:
         """Health check the wiki with schema-aware gap detection."""
         return self._analyzer.lint(
-            mode=mode, limit=limit, force=force,
+            mode=mode,
+            limit=limit,
+            force=force,
             generate_investigations=generate_investigations,
         )
 

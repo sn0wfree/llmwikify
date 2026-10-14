@@ -19,7 +19,12 @@ import yaml
 
 from llmwikify.foundation.logging import setup_logging
 
-setup_logging(level=logging.INFO, log_file=None, fmt="%(asctime)s [%(levelname)s] %(message)s", force=True)
+setup_logging(
+    level=logging.INFO,
+    log_file=None,
+    fmt="%(asctime)s [%(levelname)s] %(message)s",
+    force=True,
+)
 logger = logging.getLogger(__name__)
 
 FIXTURES_DIR = Path("/home/ll/llmwikify/tests/fixtures/comparison")
@@ -49,6 +54,7 @@ def get_llm_client():
     llm_cfg = full_config.get("llm", {})
 
     from llmwikify.foundation.llm_client import LLMClient
+
     return LLMClient.from_config({"llm": llm_cfg})
 
 
@@ -153,8 +159,11 @@ def run_path_a(llm_client, paper_id: str, paper_content: str) -> dict:
     extract_prompt = load_prompt("repro_extract")
     factor_prompt = load_prompt("repro_factor")
 
-    api_params = {k: v for k, v in extract_prompt.get("params", {}).items()
-                  if k in {"temperature", "max_tokens", "top_p", "top_k"}}
+    api_params = {
+        k: v
+        for k, v in extract_prompt.get("params", {}).items()
+        if k in {"temperature", "max_tokens", "top_p", "top_k"}
+    }
 
     # Call 1: extract
     t0 = time.time()
@@ -176,8 +185,11 @@ def run_path_a(llm_client, paper_id: str, paper_content: str) -> dict:
         paper_id=paper_id,
         paper_understanding=json.dumps(extraction, indent=2, ensure_ascii=False),
     )
-    api_params2 = {k: v for k, v in factor_prompt.get("params", {}).items()
-                   if k in {"temperature", "max_tokens", "top_p", "top_k"}}
+    api_params2 = {
+        k: v
+        for k, v in factor_prompt.get("params", {}).items()
+        if k in {"temperature", "max_tokens", "top_p", "top_k"}
+    }
     factor_resp = llm_client.chat(factor_msgs, **api_params2)
     factor_list = extract_json(factor_resp)
     t2 = time.time()
@@ -230,18 +242,29 @@ def merge_path_a(extraction: dict, factor_list_resp: dict, paper_id: str) -> dic
         # Fallback: parse operation_steps.signal_generation text
         sig_gen = extraction.get("operation_steps", {}).get("signal_generation", "")
         if sig_gen:
-            l2_steps = [{"step": i + 1, "description": s.strip()}
-                        for i, s in enumerate(sig_gen.split("\n")) if s.strip()]
+            l2_steps = [
+                {"step": i + 1, "description": s.strip()}
+                for i, s in enumerate(sig_gen.split("\n"))
+                if s.strip()
+            ]
         else:
             l2_steps = [{"step": 1, "description": f"计算 {factor_class} 因子"}]
 
     # Prefer LLM-provided L3 fields, fall back to strategy_logic
     l3_llm = factor.get("l3", {})
     l3 = {
-        "financial_intuition": l3_llm.get("financial_intuition", factor.get("description", reasoning)),
-        "market_behavior": l3_llm.get("market_behavior", strategy_logic.get("alpha_source", "TBD")),
-        "theoretical_basis": l3_llm.get("theoretical_basis", strategy_logic.get("core_hypothesis", "TBD")),
-        "historical_effectiveness": l3_llm.get("historical_effectiveness", strategy_logic.get("market_logic", "TBD")),
+        "financial_intuition": l3_llm.get(
+            "financial_intuition", factor.get("description", reasoning)
+        ),
+        "market_behavior": l3_llm.get(
+            "market_behavior", strategy_logic.get("alpha_source", "TBD")
+        ),
+        "theoretical_basis": l3_llm.get(
+            "theoretical_basis", strategy_logic.get("core_hypothesis", "TBD")
+        ),
+        "historical_effectiveness": l3_llm.get(
+            "historical_effectiveness", strategy_logic.get("market_logic", "TBD")
+        ),
         "related_factors": l3_llm.get("related_factors", "TBD"),
     }
 
@@ -250,7 +273,12 @@ def merge_path_a(extraction: dict, factor_list_resp: dict, paper_id: str) -> dic
     l4 = {
         "hypotheses": l4_llm.get("hypotheses", []),
         "meaning_summary": l4_llm.get("meaning_summary", reasoning),
-        "key_insights": l4_llm.get("key_insights", extraction.get("strengths_weaknesses", {}).get("improvement_directions", [])),
+        "key_insights": l4_llm.get(
+            "key_insights",
+            extraction.get("strengths_weaknesses", {}).get(
+                "improvement_directions", []
+            ),
+        ),
         "uncertainty": l4_llm.get("uncertainty", "TBD"),
     }
 
@@ -265,10 +293,15 @@ def merge_path_a(extraction: dict, factor_list_resp: dict, paper_id: str) -> dic
             "version": 1,
             "status": "已注册",
             "l1": {
-                "definition": l1_llm.get("definition", factor.get("description", reasoning)),
+                "definition": l1_llm.get(
+                    "definition", factor.get("description", reasoning)
+                ),
                 "formula": factor.get("formula", "TBD"),
                 "input_columns": l1_llm.get("input_columns", ["close"]),
-                "frequency": l1_llm.get("frequency", extraction.get("data_requirements", {}).get("frequency", "日频")),
+                "frequency": l1_llm.get(
+                    "frequency",
+                    extraction.get("data_requirements", {}).get("frequency", "日频"),
+                ),
                 "output_schema": "[date × Code]",
                 "nan_meaning": "TBD",
                 "default_params": l1_llm.get("default_params", l1_default_params),
@@ -301,8 +334,11 @@ def run_path_b(llm_client, paper_id: str, paper_content: str) -> dict:
     """Run the one-call path: single prompt → 6-layer YAML."""
     full_prompt = load_prompt("repro_factor_full")
 
-    api_params = {k: v for k, v in full_prompt.get("params", {}).items()
-                  if k in {"temperature", "max_tokens", "top_p", "top_k"}}
+    api_params = {
+        k: v
+        for k, v in full_prompt.get("params", {}).items()
+        if k in {"temperature", "max_tokens", "top_p", "top_k"}
+    }
 
     t0 = time.time()
     msgs = build_messages(
@@ -425,7 +461,17 @@ def score_yaml(yaml_data: dict) -> dict[str, float]:
     """Score a 6-layer YAML across 6 dimensions (0-5 each)."""
     scores = {}
     if "error" in yaml_data:
-        return dict.fromkeys(["L1_formula", "L1_completeness", "L2_steps", "L3_understanding", "L4_hypotheses", "factor_class"], 0.0)
+        return dict.fromkeys(
+            [
+                "L1_formula",
+                "L1_completeness",
+                "L2_steps",
+                "L3_understanding",
+                "L4_hypotheses",
+                "factor_class",
+            ],
+            0.0,
+        )
 
     factor = yaml_data.get("factor", {})
     l1 = factor.get("l1", {})
@@ -439,17 +485,31 @@ def score_yaml(yaml_data: dict) -> dict[str, float]:
         scores["L1_formula"] = 0.0
     elif len(str(formula)) < 20:
         scores["L1_formula"] = 2.0  # too short
-    elif any(sym in str(formula) for sym in ["=", "f_t", "_t", "\\", "**", "(", "return", "ratio"]):
+    elif any(
+        sym in str(formula)
+        for sym in ["=", "f_t", "_t", "\\", "**", "(", "return", "ratio"]
+    ):
         scores["L1_formula"] = 4.5  # has math symbols or real formula
     else:
         scores["L1_formula"] = 3.0  # has content but no math
 
     # L1 field completeness (9 fields)
-    l1_fields = ["definition", "formula", "input_columns", "frequency",
-                 "output_schema", "nan_meaning", "default_params",
-                 "param_constraints", "business_constraints"]
-    filled = sum(1 for f in l1_fields
-                 if l1.get(f) and str(l1.get(f)) not in ["TBD", "", "[]", "{}"])
+    l1_fields = [
+        "definition",
+        "formula",
+        "input_columns",
+        "frequency",
+        "output_schema",
+        "nan_meaning",
+        "default_params",
+        "param_constraints",
+        "business_constraints",
+    ]
+    filled = sum(
+        1
+        for f in l1_fields
+        if l1.get(f) and str(l1.get(f)) not in ["TBD", "", "[]", "{}"]
+    )
     non_default = filled / len(l1_fields)
     scores["L1_completeness"] = 5.0 * non_default
 
@@ -473,11 +533,17 @@ def score_yaml(yaml_data: dict) -> dict[str, float]:
             scores["L2_steps"] = 3.5
 
     # L3 financial understanding
-    l3_fields = ["financial_intuition", "market_behavior", "theoretical_basis",
-                 "historical_effectiveness", "related_factors"]
+    l3_fields = [
+        "financial_intuition",
+        "market_behavior",
+        "theoretical_basis",
+        "historical_effectiveness",
+        "related_factors",
+    ]
     l3_filled = [l3.get(f, "") for f in l3_fields]
-    l3_non_tbd = sum(1 for v in l3_filled
-                     if v and str(v) not in ["TBD", "", "Extracted from"])
+    l3_non_tbd = sum(
+        1 for v in l3_filled if v and str(v) not in ["TBD", "", "Extracted from"]
+    )
     l3_avg_len = sum(len(str(v)) for v in l3_filled) / len(l3_fields)
     if l3_non_tbd == 0:
         scores["L3_understanding"] = 0.0
@@ -514,8 +580,18 @@ def score_yaml(yaml_data: dict) -> dict[str, float]:
 
     # factor_class accuracy
     subcategory = factor.get("subcategory", "")
-    valid_classes = {"momentum", "reversal", "volatility", "liquidity", "value",
-                     "growth", "quality", "size", "signal", "composite"}
+    valid_classes = {
+        "momentum",
+        "reversal",
+        "volatility",
+        "liquidity",
+        "value",
+        "growth",
+        "quality",
+        "size",
+        "signal",
+        "composite",
+    }
     if subcategory in valid_classes:
         scores["factor_class"] = 5.0
     elif subcategory and subcategory != "unknown":
@@ -563,7 +639,9 @@ def main():
             logger.info("Loading cached results for %s", pid)
             results.setdefault(pid, {})["A"] = {
                 "extraction": json.loads(cache_a.read_text()),
-                "factor_list": json.loads((FIXTURES_DIR / f"{pid}_path_a_raw_factor.json").read_text()),
+                "factor_list": json.loads(
+                    (FIXTURES_DIR / f"{pid}_path_a_raw_factor.json").read_text()
+                ),
                 "duration_s": 0,
                 "tokens_used": 0,
             }
@@ -595,8 +673,12 @@ def main():
 
         yaml_a_path = FIXTURES_DIR / f"{pid}_path_a.yaml"
         yaml_a_path.write_text(
-            yaml.dump(result_a["yaml_6layer"], default_flow_style=False,
-                      allow_unicode=True, sort_keys=False),
+            yaml.dump(
+                result_a["yaml_6layer"],
+                default_flow_style=False,
+                allow_unicode=True,
+                sort_keys=False,
+            ),
             encoding="utf-8",
         )
 
@@ -617,13 +699,19 @@ def main():
 
         yaml_b_path = FIXTURES_DIR / f"{pid}_path_b.yaml"
         yaml_b_path.write_text(
-            yaml.dump(result_b["yaml_6layer"], default_flow_style=False,
-                      allow_unicode=True, sort_keys=False),
+            yaml.dump(
+                result_b["yaml_6layer"],
+                default_flow_style=False,
+                allow_unicode=True,
+                sort_keys=False,
+            ),
             encoding="utf-8",
         )
 
         (FIXTURES_DIR / f"{pid}_path_b_raw.json").write_text(
-            json.dumps(result_b.get("full_extraction", {}), indent=2, ensure_ascii=False)
+            json.dumps(
+                result_b.get("full_extraction", {}), indent=2, ensure_ascii=False
+            )
         )
 
     # Print comparison
@@ -652,9 +740,15 @@ def main():
             winner = "A" if a > b else ("B" if b > a else "Tie")
             print(f"{label:<28} {a:<12.1f} {b:<12.1f} {winner:<10}")
         print(f"{'─' * 80}")
-        print(f"{'加权总分 (0-100)':<28} {paths['A']['weighted']:<12.1f} {paths['B']['weighted']:<12.1f}")
-        print(f"{'耗时 (秒)':<28} {paths['A']['duration_s']:<12.1f} {paths['B']['duration_s']:<12.1f}")
-        print(f"{'Token 用量 (近似)':<28} {paths['A']['tokens_used']:<12} {paths['B']['tokens_used']:<12}")
+        print(
+            f"{'加权总分 (0-100)':<28} {paths['A']['weighted']:<12.1f} {paths['B']['weighted']:<12.1f}"
+        )
+        print(
+            f"{'耗时 (秒)':<28} {paths['A']['duration_s']:<12.1f} {paths['B']['duration_s']:<12.1f}"
+        )
+        print(
+            f"{'Token 用量 (近似)':<28} {paths['A']['tokens_used']:<12} {paths['B']['tokens_used']:<12}"
+        )
 
     # Generate report
     report = generate_report(results, dim_labels)
@@ -697,57 +791,79 @@ def generate_report(results: dict, dim_labels: dict) -> str:
     ]
 
     for pid, paths in results.items():
-        lines.extend([
-            f"### {pid}",
-            "",
-            "| 维度 | 权重 | Path A | Path B | Winner |",
-            "|---|---|---|---|---|",
-        ])
+        lines.extend(
+            [
+                f"### {pid}",
+                "",
+                "| 维度 | 权重 | Path A | Path B | Winner |",
+                "|---|---|---|---|---|",
+            ]
+        )
         for dim, label in dim_labels.items():
             a = paths["A"]["scores"].get(dim, 0)
             b = paths["B"]["scores"].get(dim, 0)
             winner = "**A**" if a > b else ("**B**" if b > a else "Tie")
             weight = {
-                "L1_formula": "20%", "L1_completeness": "10%", "L2_steps": "10%",
-                "L3_understanding": "20%", "L4_hypotheses": "25%", "factor_class": "15%",
+                "L1_formula": "20%",
+                "L1_completeness": "10%",
+                "L2_steps": "10%",
+                "L3_understanding": "20%",
+                "L4_hypotheses": "25%",
+                "factor_class": "15%",
             }[dim]
             lines.append(f"| {label} | {weight} | {a:.1f} | {b:.1f} | {winner} |")
-        lines.extend([
-            f"| **加权总分** | - | **{paths['A']['weighted']:.1f}** | **{paths['B']['weighted']:.1f}** | - |",
-            f"| 耗时 (秒) | - | {paths['A']['duration_s']:.1f} | {paths['B']['duration_s']:.1f} | - |",
-            f"| Token (近似) | - | {paths['A']['tokens_used']} | {paths['B']['tokens_used']} | - |",
-            "",
-        ])
+        lines.extend(
+            [
+                f"| **加权总分** | - | **{paths['A']['weighted']:.1f}** | **{paths['B']['weighted']:.1f}** | - |",
+                f"| 耗时 (秒) | - | {paths['A']['duration_s']:.1f} | {paths['B']['duration_s']:.1f} | - |",
+                f"| Token (近似) | - | {paths['A']['tokens_used']} | {paths['B']['tokens_used']} | - |",
+                "",
+            ]
+        )
 
     # Per-paper detailed outputs
-    lines.extend([
-        "## 详细输出对比",
-        "",
-    ])
+    lines.extend(
+        [
+            "## 详细输出对比",
+            "",
+        ]
+    )
 
     for pid, paths in results.items():
-        lines.extend([
-            f"### {pid} — Path A 输出",
-            "",
-            "```yaml",
-            yaml.dump(paths["A"]["yaml_6layer"], default_flow_style=False,
-                      allow_unicode=True, sort_keys=False),
-            "```",
-            "",
-            f"### {pid} — Path B 输出",
-            "",
-            "```yaml",
-            yaml.dump(paths["B"]["yaml_6layer"], default_flow_style=False,
-                      allow_unicode=True, sort_keys=False),
-            "```",
-            "",
-        ])
+        lines.extend(
+            [
+                f"### {pid} — Path A 输出",
+                "",
+                "```yaml",
+                yaml.dump(
+                    paths["A"]["yaml_6layer"],
+                    default_flow_style=False,
+                    allow_unicode=True,
+                    sort_keys=False,
+                ),
+                "```",
+                "",
+                f"### {pid} — Path B 输出",
+                "",
+                "```yaml",
+                yaml.dump(
+                    paths["B"]["yaml_6layer"],
+                    default_flow_style=False,
+                    allow_unicode=True,
+                    sort_keys=False,
+                ),
+                "```",
+                "",
+            ]
+        )
 
     # Conclusion
-    lines.extend([
-        "## 结论与建议",
-        "",
-    ])
+    lines.extend(
+        [
+            "## 结论与建议",
+            "",
+        ]
+    )
 
     a_avg = sum(p["A"]["weighted"] for p in results.values()) / len(results)
     b_avg = sum(p["B"]["weighted"] for p in results.values()) / len(results)
@@ -759,77 +875,83 @@ def generate_report(results: dict, dim_labels: dict) -> str:
     else:
         recommendation = "两种路径质量相当"
 
-    lines.extend([
-        f"- Path A 平均分: **{a_avg:.1f}**",
-        f"- Path B 平均分: **{b_avg:.1f}**",
-        f"- {recommendation}",
-        "",
-        "## 提示词设计差异",
-        "",
-        "| Prompt | Token 上限 | 设计目标 | 6-layer 适配 |",
-        "|---|---|---|---|",
-        "| `repro_extract.yaml` | 4096 | 论文理解（8类结构化信息） | ❌ 不直接支持 |",
-        "| `repro_factor.yaml` (v2.0 升级后) | 6000 | 因子列表 + L1-L4 metadata | ⚠️ 部分支持 |",
-        "| `repro_factor_full.yaml` | 6000 | 6-layer YAML 直接输出 | ✅ 完全支持 |",
-        "",
-        "## 关键发现",
-        "",
-        "1. **当 `repro_factor.yaml` 升级到支持 L1-L4 后，Path A 反而胜出**",
-        "   - 两次 LLM 调用的总 token (~35K) 仍小于一次大调用的预期",
-        "   - 第二次 LLM 调用有第一次的 extraction 作为 context，输出更稳定",
-        "",
-        "2. **Path B 的优势在速度而非质量**",
-        "   - 4-6x 快 (~15s vs ~75s)",
-        "   - token 用量更少 (~10K vs ~35K)",
-        "   - 架构更简单（一次调用，一次解析）",
-        "",
-        "3. **L4 假设质量在两个路径都达到 5.0**",
-        "   - 升级 `repro_factor.yaml` 后，Path A 的 L4 质量反超",
-        "   - 证明 LLM 假设生成能力不依赖调用次数，依赖 prompt 质量",
-        "",
-        "## 决策矩阵",
-        "",
-        "| 维度 | Path A | Path B |",
-        "|---|---|---|",
-        "| 6-layer YAML 质量 | 92.2 | 88.3 |",
-        "| 单次耗时 | 60-85s | 14-17s |",
-        "| Token 用量 | 34-37K | 10-13K |",
-        "| 架构复杂度 | 中（两次调用+合并） | 低（一次调用） |",
-        "| 调试难度 | 中（需看两步 LLM 输出） | 低（一步） |",
-        "| 失败模式 | 一处失败不影响另一处 | 全有或全无 |",
-        "| 可扩展性 | 高（每步可独立优化） | 中 |",
-        "",
-    ])
+    lines.extend(
+        [
+            f"- Path A 平均分: **{a_avg:.1f}**",
+            f"- Path B 平均分: **{b_avg:.1f}**",
+            f"- {recommendation}",
+            "",
+            "## 提示词设计差异",
+            "",
+            "| Prompt | Token 上限 | 设计目标 | 6-layer 适配 |",
+            "|---|---|---|---|",
+            "| `repro_extract.yaml` | 4096 | 论文理解（8类结构化信息） | ❌ 不直接支持 |",
+            "| `repro_factor.yaml` (v2.0 升级后) | 6000 | 因子列表 + L1-L4 metadata | ⚠️ 部分支持 |",
+            "| `repro_factor_full.yaml` | 6000 | 6-layer YAML 直接输出 | ✅ 完全支持 |",
+            "",
+            "## 关键发现",
+            "",
+            "1. **当 `repro_factor.yaml` 升级到支持 L1-L4 后，Path A 反而胜出**",
+            "   - 两次 LLM 调用的总 token (~35K) 仍小于一次大调用的预期",
+            "   - 第二次 LLM 调用有第一次的 extraction 作为 context，输出更稳定",
+            "",
+            "2. **Path B 的优势在速度而非质量**",
+            "   - 4-6x 快 (~15s vs ~75s)",
+            "   - token 用量更少 (~10K vs ~35K)",
+            "   - 架构更简单（一次调用，一次解析）",
+            "",
+            "3. **L4 假设质量在两个路径都达到 5.0**",
+            "   - 升级 `repro_factor.yaml` 后，Path A 的 L4 质量反超",
+            "   - 证明 LLM 假设生成能力不依赖调用次数，依赖 prompt 质量",
+            "",
+            "## 决策矩阵",
+            "",
+            "| 维度 | Path A | Path B |",
+            "|---|---|---|",
+            "| 6-layer YAML 质量 | 92.2 | 88.3 |",
+            "| 单次耗时 | 60-85s | 14-17s |",
+            "| Token 用量 | 34-37K | 10-13K |",
+            "| 架构复杂度 | 中（两次调用+合并） | 低（一次调用） |",
+            "| 调试难度 | 中（需看两步 LLM 输出） | 低（一步） |",
+            "| 失败模式 | 一处失败不影响另一处 | 全有或全无 |",
+            "| 可扩展性 | 高（每步可独立优化） | 中 |",
+            "",
+        ]
+    )
 
     # Add final recommendation
     if a_avg > b_avg:
-        lines.extend([
-            "## 最终建议",
-            "",
-            "**选择 Path A（两次调用）**",
-            "",
-            "理由:",
-            "1. 质量更高 (+3.9 分平均)",
-            "2. 升级后的 `repro_factor.yaml` 已能输出 L1-L4，弥补了原始设计缺陷",
-            "3. `repro_extract.yaml` 仍产生 8 类论文理解信息（用于 Source 页面）",
-            "4. 失败隔离：两次调用中一次失败不会完全丢失结果",
-            "",
-            "如选择 Path A，仍需解决:",
-            "- 两次调用的耗时问题（~75s vs ~15s）",
-            "- 第二次调用依赖第一次输出，需处理 partial failure",
-        ])
+        lines.extend(
+            [
+                "## 最终建议",
+                "",
+                "**选择 Path A（两次调用）**",
+                "",
+                "理由:",
+                "1. 质量更高 (+3.9 分平均)",
+                "2. 升级后的 `repro_factor.yaml` 已能输出 L1-L4，弥补了原始设计缺陷",
+                "3. `repro_extract.yaml` 仍产生 8 类论文理解信息（用于 Source 页面）",
+                "4. 失败隔离：两次调用中一次失败不会完全丢失结果",
+                "",
+                "如选择 Path A，仍需解决:",
+                "- 两次调用的耗时问题（~75s vs ~15s）",
+                "- 第二次调用依赖第一次输出，需处理 partial failure",
+            ]
+        )
     else:
-        lines.extend([
-            "## 最终建议",
-            "",
-            "**选择 Path B（一次调用）**",
-            "",
-            "理由:",
-            "1. 4-6x 速度优势",
-            "2. 60%+ token 节省",
-            "3. 架构简单（一处实现）",
-            "4. 质量虽低 4 分但在可接受范围",
-        ])
+        lines.extend(
+            [
+                "## 最终建议",
+                "",
+                "**选择 Path B（一次调用）**",
+                "",
+                "理由:",
+                "1. 4-6x 速度优势",
+                "2. 60%+ token 节省",
+                "3. 架构简单（一处实现）",
+                "4. 质量虽低 4 分但在可接受范围",
+            ]
+        )
 
     return "\n".join(lines)
 

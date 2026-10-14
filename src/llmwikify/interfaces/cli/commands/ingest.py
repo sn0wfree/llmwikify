@@ -74,7 +74,9 @@ def run_ingest(wiki: Any, args: Any, _ingest_smart_fn: Any = None) -> int:
             stderr_print("\n[DRY RUN] LLM self-create mode requested.")
             stderr_print("Remove --dry-run to execute LLM processing.")
         else:
-            stderr_print("\nNo pages created. Use --self-create for LLM-assisted processing.")
+            stderr_print(
+                "\nNo pages created. Use --self-create for LLM-assisted processing."
+            )
         return 0
 
     if self_create:
@@ -169,15 +171,20 @@ class IngestCommand(Command):
         p = subparsers.add_parser(self.name, help=self.help)
         p.add_argument("file", type=str, help="File path or URL")
         p.add_argument(
-            "--self-create", "-s", action="store_true",
+            "--self-create",
+            "-s",
+            action="store_true",
             help="CLI uses LLM API to automatically analyze content and create wiki pages",
         )
         p.add_argument(
-            "--smart", action="store_true",
+            "--smart",
+            action="store_true",
             help="[Deprecated] Alias for --self-create",
         )
         p.add_argument(
-            "--dry-run", "-n", action="store_true",
+            "--dry-run",
+            "-n",
+            action="store_true",
             help="Show extraction summary without creating pages",
         )
 

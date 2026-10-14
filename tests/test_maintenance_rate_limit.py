@@ -110,15 +110,19 @@ def test_config_llm_rate_limit_overrides(tmp_path):
     from llmwikify.apps.agent.maintenance.config import load_maintenance_config
 
     path = tmp_path / "llmwikify.json"
-    path.write_text(json.dumps({
-        "maintenance": {
-            "llm_rate_limit": {
-                "enabled": True,
-                "max_requests": 2,
-                "window_seconds": 10.0,
-            },
-        },
-    }))
+    path.write_text(
+        json.dumps(
+            {
+                "maintenance": {
+                    "llm_rate_limit": {
+                        "enabled": True,
+                        "max_requests": 2,
+                        "window_seconds": 10.0,
+                    },
+                },
+            }
+        )
+    )
     cfg = load_maintenance_config(path)
     assert cfg.llm_rate_limit.max_requests == 2
     assert cfg.llm_rate_limit.window_seconds == 10.0

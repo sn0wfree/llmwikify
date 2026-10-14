@@ -24,11 +24,11 @@ class TestRecommend:
         result = wiki.recommend()
 
         # Missing Page now exists, so only "Another Missing" should be missing
-        missing = result['missing_pages']
+        missing = result["missing_pages"]
 
         # "Another Missing" is only referenced once, so may not appear (threshold is 2)
-        assert 'missing_pages' in result
-        assert 'summary' in result
+        assert "missing_pages" in result
+        assert "summary" in result
 
         wiki.close()
 
@@ -43,13 +43,13 @@ class TestRecommend:
 
         result = wiki.recommend()
 
-        orphans = result['orphan_pages']
-        orphan_names = [o['page'] for o in orphans]
+        orphans = result["orphan_pages"]
+        orphan_names = [o["page"] for o in orphans]
 
         # Orphan and Hub should be orphans (no inbound links)
-        assert 'Orphan' in orphan_names
-        assert 'Hub' in orphan_names
-        assert 'Linked' not in orphan_names  # Has inbound from Hub
+        assert "Orphan" in orphan_names
+        assert "Hub" in orphan_names
+        assert "Linked" not in orphan_names  # Has inbound from Hub
 
         wiki.close()
 
@@ -59,15 +59,21 @@ class TestRecommend:
         wiki.init()
 
         # Create pages with shared topics
-        wiki.write_page("Gold Mining A", "# A\n\nGold mining is great. Gold prices are high. Production is up.")
-        wiki.write_page("Gold Mining B", "# B\n\nGold mining company. Gold production up. Mining operations expanded.")
+        wiki.write_page(
+            "Gold Mining A",
+            "# A\n\nGold mining is great. Gold prices are high. Production is up.",
+        )
+        wiki.write_page(
+            "Gold Mining B",
+            "# B\n\nGold mining company. Gold production up. Mining operations expanded.",
+        )
 
         result = wiki.recommend()
 
         # Check the structure is correct
-        assert 'missing_pages' in result
-        assert 'orphan_pages' in result
-        assert 'summary' in result
+        assert "missing_pages" in result
+        assert "orphan_pages" in result
+        assert "summary" in result
 
         wiki.close()
 
@@ -81,14 +87,14 @@ class TestRecommend:
         result = wiki.recommend()
 
         # Check structure
-        assert 'missing_pages' in result
-        assert 'orphan_pages' in result
-        assert 'summary' in result
+        assert "missing_pages" in result
+        assert "orphan_pages" in result
+        assert "summary" in result
 
         # Check summary fields
-        summary = result['summary']
-        assert 'total_missing_pages' in summary
-        assert 'total_orphans' in summary
+        summary = result["summary"]
+        assert "total_missing_pages" in summary
+        assert "total_orphans" in summary
 
         wiki.close()
 
@@ -105,7 +111,7 @@ class TestRecommend:
         result = wiki.recommend()
 
         # All pages should be linked
-        missing = result['missing_pages']
+        missing = result["missing_pages"]
         assert len(missing) == 0
 
         wiki.close()

@@ -59,7 +59,10 @@ async def translate_react_events(
                 update_status(session_id, "paused", phase_name, round_idx)
 
             elif phase == "timeout":
-                yield {"type": "error", "error": f"Research timed out after {timeout_seconds}s"}
+                yield {
+                    "type": "error",
+                    "error": f"Research timed out after {timeout_seconds}s",
+                }
                 update_status(session_id, "timeout", _state_get(state, "phase", ""), -1)
 
             elif phase == "done" and reason in ("max_rounds", None):
@@ -70,7 +73,11 @@ async def translate_react_events(
                 # sees a terminal event instead of silence.
                 round_idx = _state_get(state, "round", 0)
                 max_rounds = _state_get(state, "max_rounds", 0)
-                yield {"type": "round_max", "round": round_idx, "message": f"Reached max rounds ({max_rounds})"}
+                yield {
+                    "type": "round_max",
+                    "round": round_idx,
+                    "message": f"Reached max rounds ({max_rounds})",
+                }
                 update_status(session_id, "error", _state_get(state, "phase", ""), -1)
 
             elif phase == "done" and reason == "reason_returned_done":
@@ -79,7 +86,9 @@ async def translate_react_events(
                         yield done_ev
                 else:
                     yield {"type": "completed", "phase": _state_get(state, "phase", "")}
-                    update_status(session_id, "completed", _state_get(state, "phase", ""), -1)
+                    update_status(
+                        session_id, "completed", _state_get(state, "phase", ""), -1
+                    )
 
         elif event_type == "reasoning":
             phase_name = _state_get(state, "phase", "")

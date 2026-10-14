@@ -1,4 +1,5 @@
 """Tests for wiki._wiki_ops — wiki operations helpers."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -106,7 +107,9 @@ class TestWritePage:
 class TestLoadWikiConfig:
     """Tests for load_wiki_config() function."""
 
-    def test_returns_default_when_no_config(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_returns_default_when_no_config(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Returns default config when file doesn't exist."""
         from llmwikify.foundation.config import Config
 

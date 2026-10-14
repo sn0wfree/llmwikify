@@ -10,6 +10,7 @@
 历史: 从 apps/chat/agent/unified/spec.py 拆分。
 ChatSpec 留在 apps/chat/agent/spec.py（chat-specific）。
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field

@@ -32,7 +32,9 @@ async def _write(args: dict, ctx: SkillContext) -> SkillResult:
     page_name = args.get("page_name", "")
     content = args.get("content", "")
     return safe_call(
-        wiki.write_page, page_name, content,
+        wiki.write_page,
+        page_name,
+        content,
         error_prefix="write failed",
     )
 

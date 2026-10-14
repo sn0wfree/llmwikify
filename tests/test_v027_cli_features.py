@@ -7,6 +7,7 @@ from llmwikify.interfaces.cli.commands import WikiCLI
 
 class Args:
     """Simple args namespace for testing."""
+
     def __init__(self, **kwargs):
         for k, v in kwargs.items():
             setattr(self, k, v)
@@ -28,49 +29,67 @@ class TestLintJsonFormat:
 
         import io
         import sys
+
         captured = io.StringIO()
         old_stdout = sys.stdout
         sys.stdout = captured
 
-        cli.lint(Args(format='json', generate_investigations=False, mode='check', limit=10, force=False))
+        cli.lint(
+            Args(
+                format="json",
+                generate_investigations=False,
+                mode="check",
+                limit=10,
+                force=False,
+            )
+        )
 
         sys.stdout = old_stdout
         output = captured.getvalue()
 
         data = json.loads(output)
-        assert 'total_pages' in data
-        assert 'issue_count' in data
-        assert 'issues' in data
-        assert 'hints' in data
+        assert "total_pages" in data
+        assert "issue_count" in data
+        assert "issues" in data
+        assert "hints" in data
 
     def test_lint_json_with_broken_links(self, temp_wiki):
         """JSON output includes broken link issues."""
         cli = _make_cli(temp_wiki)
 
-        concepts = cli.wiki.wiki_dir / 'concepts'
+        concepts = cli.wiki.wiki_dir / "concepts"
         concepts.mkdir(parents=True, exist_ok=True)
-        (concepts / 'Risk Parity.md').write_text('# Risk Parity')
+        (concepts / "Risk Parity.md").write_text("# Risk Parity")
 
-        broken_page = cli.wiki.wiki_dir / 'overview.md'
-        broken_page.write_text('# Overview\n\n[[Risk Parity]]')
+        broken_page = cli.wiki.wiki_dir / "overview.md"
+        broken_page.write_text("# Overview\n\n[[Risk Parity]]")
 
-        cli.wiki.index.upsert_page('overview', broken_page.read_text(), 'overview.md')
+        cli.wiki.index.upsert_page("overview", broken_page.read_text(), "overview.md")
 
         import io
         import sys
+
         captured = io.StringIO()
         old_stdout = sys.stdout
         sys.stdout = captured
 
-        cli.lint(Args(format='json', generate_investigations=False, mode='check', limit=10, force=False))
+        cli.lint(
+            Args(
+                format="json",
+                generate_investigations=False,
+                mode="check",
+                limit=10,
+                force=False,
+            )
+        )
 
         sys.stdout = old_stdout
         output = captured.getvalue()
 
         data = json.loads(output)
-        broken = [i for i in data['issues'] if i['type'] == 'broken_link']
+        broken = [i for i in data["issues"] if i["type"] == "broken_link"]
         assert len(broken) >= 1
-        assert broken[0]['link'] == 'Risk Parity'
+        assert broken[0]["link"] == "Risk Parity"
 
 
 class TestFixWikilinksCLI:
@@ -80,17 +99,18 @@ class TestFixWikilinksCLI:
         """--dry-run reports changes without modifying."""
         cli = _make_cli(temp_wiki)
 
-        concepts = cli.wiki.wiki_dir / 'concepts'
+        concepts = cli.wiki.wiki_dir / "concepts"
         concepts.mkdir(parents=True, exist_ok=True)
-        (concepts / 'Risk Parity.md').write_text('# Risk Parity')
+        (concepts / "Risk Parity.md").write_text("# Risk Parity")
 
-        broken_page = cli.wiki.wiki_dir / 'overview.md'
-        broken_page.write_text('# Overview\n\n[[Risk Parity]]')
+        broken_page = cli.wiki.wiki_dir / "overview.md"
+        broken_page.write_text("# Overview\n\n[[Risk Parity]]")
 
-        cli.wiki.index.upsert_page('overview', broken_page.read_text(), 'overview.md')
+        cli.wiki.index.upsert_page("overview", broken_page.read_text(), "overview.md")
 
         import io
         import sys
+
         captured = io.StringIO()
         old_stdout = sys.stdout
         sys.stdout = captured
@@ -101,28 +121,29 @@ class TestFixWikilinksCLI:
         output = captured.getvalue()
 
         assert ret == 0
-        assert 'DRY RUN' in output
-        assert 'Fixed:     1' in output
+        assert "DRY RUN" in output
+        assert "Fixed:     1" in output
 
         # File not modified
         content = broken_page.read_text()
-        assert '[[Risk Parity]]' in content
+        assert "[[Risk Parity]]" in content
 
     def test_fix_wikilinks_actual_fix(self, temp_wiki):
         """Without --dry-run, fixes links."""
         cli = _make_cli(temp_wiki)
 
-        concepts = cli.wiki.wiki_dir / 'concepts'
+        concepts = cli.wiki.wiki_dir / "concepts"
         concepts.mkdir(parents=True, exist_ok=True)
-        (concepts / 'Risk Parity.md').write_text('# Risk Parity')
+        (concepts / "Risk Parity.md").write_text("# Risk Parity")
 
-        broken_page = cli.wiki.wiki_dir / 'overview.md'
-        broken_page.write_text('# Overview\n\n[[Risk Parity]]')
+        broken_page = cli.wiki.wiki_dir / "overview.md"
+        broken_page.write_text("# Overview\n\n[[Risk Parity]]")
 
-        cli.wiki.index.upsert_page('overview', broken_page.read_text(), 'overview.md')
+        cli.wiki.index.upsert_page("overview", broken_page.read_text(), "overview.md")
 
         import io
         import sys
+
         captured = io.StringIO()
         old_stdout = sys.stdout
         sys.stdout = captured
@@ -133,11 +154,11 @@ class TestFixWikilinksCLI:
         output = captured.getvalue()
 
         assert ret == 0
-        assert 'FIXED' in output
+        assert "FIXED" in output
 
         # File modified
         content = broken_page.read_text()
-        assert '[[concepts/Risk Parity]]' in content
+        assert "[[concepts/Risk Parity]]" in content
 
 
 class TestBuildIndexForce:
@@ -148,7 +169,9 @@ class TestBuildIndexForce:
         cli = _make_cli(temp_wiki)
 
         # Old format: page_name is bare but file_path has directory
-        cli.wiki.index.upsert_page('Risk Parity', '# Risk Parity', 'concepts/Risk Parity.md')
+        cli.wiki.index.upsert_page(
+            "Risk Parity", "# Risk Parity", "concepts/Risk Parity.md"
+        )
 
         assert cli._detect_old_index_format() is True
         cli.wiki.close()
@@ -158,8 +181,8 @@ class TestBuildIndexForce:
         cli = _make_cli(temp_wiki)
 
         # Root pages: page_name == file_path[:-3]
-        cli.wiki.index.upsert_page('overview', '# Overview', 'overview.md')
-        cli.wiki.index.upsert_page('log', '# Log', 'log.md')
+        cli.wiki.index.upsert_page("overview", "# Overview", "overview.md")
+        cli.wiki.index.upsert_page("log", "# Log", "log.md")
 
         assert cli._detect_old_index_format() is False
         cli.wiki.close()
@@ -169,8 +192,10 @@ class TestBuildIndexForce:
         cli = _make_cli(temp_wiki)
 
         # New format: page_name == file_path[:-3]
-        cli.wiki.index.upsert_page('concepts/Risk Parity', '# Risk Parity', 'concepts/Risk Parity.md')
-        cli.wiki.index.upsert_page('entities/Gold', '# Gold', 'entities/Gold.md')
+        cli.wiki.index.upsert_page(
+            "concepts/Risk Parity", "# Risk Parity", "concepts/Risk Parity.md"
+        )
+        cli.wiki.index.upsert_page("entities/Gold", "# Gold", "entities/Gold.md")
 
         assert cli._detect_old_index_format() is False
         cli.wiki.close()
@@ -180,24 +205,29 @@ class TestBuildIndexForce:
         cli = _make_cli(temp_wiki)
 
         # Create old-format page
-        cli.wiki.index.upsert_page('Risk Parity', '# Risk Parity', 'concepts/Risk Parity.md')
+        cli.wiki.index.upsert_page(
+            "Risk Parity", "# Risk Parity", "concepts/Risk Parity.md"
+        )
 
         import io
         import sys
+
         captured = io.StringIO()
         old_stdout = sys.stdout
         sys.stdout = captured
 
-        ret = cli.build_index(Args(no_export=True, output=None, export_only=False, force=False))
+        ret = cli.build_index(
+            Args(no_export=True, output=None, export_only=False, force=False)
+        )
 
         sys.stdout = old_stdout
         output = captured.getvalue()
 
         # Should succeed with migration message
         assert ret == 0
-        assert 'Old index format detected' in output
-        assert 'Migrating' in output
-        assert 'Index Built' in output
+        assert "Old index format detected" in output
+        assert "Migrating" in output
+        assert "Index Built" in output
         cli.wiki.close()
 
     def test_build_index_force_rebuild(self, temp_wiki):
@@ -205,19 +235,24 @@ class TestBuildIndexForce:
         cli = _make_cli(temp_wiki)
 
         # Create old-format page
-        cli.wiki.index.upsert_page('Risk Parity', '# Risk Parity', 'concepts/Risk Parity.md')
+        cli.wiki.index.upsert_page(
+            "Risk Parity", "# Risk Parity", "concepts/Risk Parity.md"
+        )
 
         import io
         import sys
+
         captured = io.StringIO()
         old_stdout = sys.stdout
         sys.stdout = captured
 
-        ret = cli.build_index(Args(no_export=True, output=None, export_only=False, force=True))
+        ret = cli.build_index(
+            Args(no_export=True, output=None, export_only=False, force=True)
+        )
 
         sys.stdout = old_stdout
         output = captured.getvalue()
 
         assert ret == 0
-        assert 'Index Built' in output
+        assert "Index Built" in output
         cli.wiki.close()

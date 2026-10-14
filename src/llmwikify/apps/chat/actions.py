@@ -16,6 +16,7 @@ The shim exposes the SAME module object as the canonical home (via
 
 New code should import from ``llmwikify.apps.research.actions`` directly.
 """
+
 import sys as _sys
 
 from llmwikify.apps.research import actions as _canonical  # noqa: F401

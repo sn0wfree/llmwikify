@@ -129,10 +129,12 @@ class ResearchTaskManager(BaseResearchTaskManager):
             # Note: this is called from _run_task's finally block,
             # which is already inside the event loop.
             import asyncio as _asyncio
+
             _asyncio.create_task(buffer.flush(), name="event_flush_final")
         except Exception as ex:
-            logger.warning("Final EventBuffer flush dispatch failed for %s: %s",
-                           session_id, ex)
+            logger.warning(
+                "Final EventBuffer flush dispatch failed for %s: %s", session_id, ex
+            )
 
     def _on_session_cleanup(self, session_id: str) -> None:
         """Close + drop the per-session EventBuffer."""

@@ -43,15 +43,17 @@ logger = logging.getLogger(__name__)
 # Directory names to exclude from wiki scans.
 # Filters Jupyter checkpoint directories, VCS metadata, and other
 # hidden/system folders that should never be indexed as wiki pages.
-EXCLUDED_DIR_NAMES: frozenset[str] = frozenset({
-    ".ipynb_checkpoints",
-    ".git",
-    ".hg",
-    ".svn",
-    ".DS_Store",
-    ".vscode",
-    ".idea",
-})
+EXCLUDED_DIR_NAMES: frozenset[str] = frozenset(
+    {
+        ".ipynb_checkpoints",
+        ".git",
+        ".hg",
+        ".svn",
+        ".DS_Store",
+        ".vscode",
+        ".idea",
+    }
+)
 
 
 def is_path_excluded(path: Path) -> bool:
@@ -138,6 +140,7 @@ class LocalFileBackend:
         # initialization. Future InMemoryBackend will pass
         # ``Path(":memory:")`` here for free SQLite in-memory mode.
         from .index import WikiIndex
+
         self.index: WikiIndex = WikiIndex(self.db_path)
 
     # === Pages (4 methods) ===
@@ -205,7 +208,8 @@ class LocalFileBackend:
         new_sections = _parse_h2_sections(new)
         existing_headers = {header.lower() for header, _ in existing_sections}
         sections_to_add = [
-            (header, body) for header, body in new_sections
+            (header, body)
+            for header, body in new_sections
             if header.lower() not in existing_headers
         ]
 
@@ -244,7 +248,9 @@ class LocalFileBackend:
 
     # === Log (1 method) ===
     def append_log(self, entry: dict[str, Any]) -> dict[str, Any]:
-        timestamp = entry.get("timestamp") or datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        timestamp = entry.get("timestamp") or datetime.now(
+            timezone.utc
+        ).isoformat().replace("+00:00", "Z")
         operation = entry.get("operation", "")
         details = entry.get("details", "")
         line = f"## [{timestamp}] {operation} | {details}\n"
@@ -252,7 +258,12 @@ class LocalFileBackend:
         log_path.parent.mkdir(parents=True, exist_ok=True)
         with open(log_path, "a") as f:
             f.write(line)
-        return {"timestamp": timestamp, "operation": operation, "details": details, "line": line.strip()}
+        return {
+            "timestamp": timestamp,
+            "operation": operation,
+            "details": details,
+            "line": line.strip(),
+        }
 
     # === Source analysis cache (2 methods) ===
     def get_source_cache(self, key: str) -> dict[str, Any] | None:
@@ -277,13 +288,15 @@ class LocalFileBackend:
             content = path.read_text()
             analysis_json = json.dumps(data, ensure_ascii=False)
             comment = (
-                f'<!-- llmwikify:analysis '
+                f"<!-- llmwikify:analysis "
                 f'{{"version":1,"hash":"{hash}",'
                 f'"analyzed_at":"{datetime.now(timezone.utc).isoformat()}",'
                 f'"data":{analysis_json}}} -->'
             )
             if "<!-- llmwikify:analysis" in content:
-                content = re.sub(r"<!-- llmwikify:analysis.*? -->", comment, content, flags=re.DOTALL)
+                content = re.sub(
+                    r"<!-- llmwikify:analysis.*? -->", comment, content, flags=re.DOTALL
+                )
             else:
                 content += f"\n{comment}"
             path.write_text(content)
@@ -320,7 +333,9 @@ class LocalFileBackend:
                 continue
             if not in_page_types:
                 continue
-            if "|" in line and (line.strip().startswith("|---") or line.strip().startswith("| -")):
+            if "|" in line and (
+                line.strip().startswith("|---") or line.strip().startswith("| -")
+            ):
                 in_table = True
                 continue
             if in_table and "|" in line:
@@ -346,6 +361,7 @@ class LocalFileBackend:
 
 
 # === Module-level helpers (shared between backend and Wiki mixins) ===
+
 
 def _parse_h2_sections(content: str) -> list[tuple[str, str]]:
     """Parse markdown into list of (section_header, section_body).
@@ -420,9 +436,9 @@ def _build_merge_notice(new_sections: list[str], version: str) -> str:
         f"  NEW SECTIONS ADDED (please review and deduplicate):\n"
         f"{section_list}\n\n"
         f"  ACTION REQUIRED:\n"
-        f"  1. Review the \"## Schema Updates (v{version})\" section at the end of this file\n"
+        f'  1. Review the "## Schema Updates (v{version})" section at the end of this file\n'
         f"  2. If any new sections duplicate existing content, merge them into the existing sections\n"
-        f"  3. Remove the \"## Schema Updates\" section after deduplication\n"
+        f'  3. Remove the "## Schema Updates" section after deduplication\n'
         f"  4. Remove this notice after cleanup is complete\n\n"
         f"  The new sections contain updated conventions and workflows that may complement\n"
         f"  or replace your existing customizations.\n"
@@ -433,6 +449,7 @@ def _build_merge_notice(new_sections: list[str], version: str) -> str:
 def _get_version_safe() -> str:
     try:
         from .. import __version__
+
         return __version__
     except ImportError:
         return "0.11.0"

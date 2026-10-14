@@ -48,7 +48,7 @@ if _stop_path.exists():
 
 
 def _is_cjk_char(c: str) -> bool:
-    return '\u4e00' <= c <= '\u9fff' or '\u3000' <= c <= '\u303f'
+    return "\u4e00" <= c <= "\u9fff" or "\u3000" <= c <= "\u303f"
 
 
 def _is_cjk_word(word: str) -> bool:
@@ -256,7 +256,9 @@ def generate_user_dict(db_path: Path, wiki_root: Path) -> dict[str, Any]:
 
     logger.info(
         "Auto-generated jieba dict: %d fast + %d slow terms for %d pages",
-        fast_count, slow_count, page_count,
+        fast_count,
+        slow_count,
+        page_count,
     )
 
     return {"fast": fast_count, "slow": slow_count, "page_count": page_count}

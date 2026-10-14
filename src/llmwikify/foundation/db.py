@@ -19,6 +19,7 @@ Usage::
         conn.execute("INSERT ...")
     row = mc.select_one("SELECT * FROM ...", (id,))
 """
+
 from __future__ import annotations
 
 import atexit
@@ -29,6 +30,7 @@ from pathlib import Path
 from typing import Any
 
 # ─── 工厂函数 (保持向后兼容) ─────────────────────────────────
+
 
 def connect(
     db_path: Path | str,
@@ -68,6 +70,7 @@ def connect(
 
 # ─── 行转换辅助 ─────────────────────────────────────────────
 
+
 def rows_to_dicts(rows: list[sqlite3.Row]) -> list[dict[str, Any]]:
     """Convert sqlite3.Row list to list of dicts.
 
@@ -93,6 +96,7 @@ def row_to_dict(row: sqlite3.Row | None) -> dict[str, Any] | None:
 
 
 # ─── ManagedConnection (Thread-local 持久连接) ──────────────
+
 
 class ManagedConnection:
     """Thread-local persistent SQLite connection with transaction support.

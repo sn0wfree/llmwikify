@@ -43,8 +43,14 @@ from llmwikify.foundation.llm_client import LLMClient, _legacy_fallback_enabled
 
 @pytest.fixture(autouse=True)
 def _clean_env(monkeypatch):
-    for k in ("LLM_LEGACY_FALLBACK", "LLM_API_KEY", "LLM_BASE_URL",
-              "LLM_MODEL", "LLM_PROVIDER", "LLM_USE_RESOLVER"):
+    for k in (
+        "LLM_LEGACY_FALLBACK",
+        "LLM_API_KEY",
+        "LLM_BASE_URL",
+        "LLM_MODEL",
+        "LLM_PROVIDER",
+        "LLM_USE_RESOLVER",
+    ):
         monkeypatch.delenv(k, raising=False)
     yield
 
@@ -115,6 +121,7 @@ class TestLALErrorTypes:
     def test_all_errors_importable_from_lal_module(self):
         # Re-export check.
         from llmwikify.foundation.llm import errors as m
+
         assert m.LLMNotConfiguredError is LLMNotConfiguredError
         assert m.LLMModelNotSupportedError is LLMModelNotSupportedError
         assert m.LLMSpecMismatchError is LLMSpecMismatchError
@@ -202,6 +209,7 @@ class TestDefaultConfigLLM:
 class TestNoGPT4OFallbacks:
     def test_context_manager_no_gpt4o(self, monkeypatch):
         from llmwikify.apps.chat.agent.context_manager import ContextManager
+
         # Construct without an llm_client; method should NOT
         # return 'gpt-4o' as the model name (PR 4 contract).
         cm = ContextManager.__new__(ContextManager)
@@ -210,10 +218,13 @@ class TestNoGPT4OFallbacks:
 
     def test_context_manager_uses_real_model_when_set(self, monkeypatch):
         from llmwikify.apps.chat.agent.context_manager import ContextManager
+
         cm = ContextManager.__new__(ContextManager)
+
         # A bare object with a .model attribute mimics the client.
         class _Fake:
             model = "minimax-M3"
+
         cm._llm_client = _Fake()
         assert cm._get_model_name() == "minimax-M3"
 
@@ -243,6 +254,7 @@ class TestProviderIdResolution:
         # If a legacy alias exists for a known provider, it must
         # resolve. The alias is in PROVIDER_ALIASES.
         from llmwikify.foundation.llm.resolver import PROVIDER_ALIASES
+
         # Each alias target must be a registered provider.
         for legacy, canonical in PROVIDER_ALIASES.items():
             assert canonical in PROVIDERS, (
@@ -312,15 +324,17 @@ class TestNoSilentGPT4OInBusinessCode:
         # We isolate the signature between ( and ) using DOTALL to
         # handle multi-line signatures.
         import re
+
         sig_match = re.search(
             r"def __init__\s*\((.*?)\)\s*:",
-            content, re.DOTALL,
+            content,
+            re.DOTALL,
         )
         assert sig_match, "could not locate LLMClient.__init__ signature"
         sig = sig_match.group(1)
-        assert '"gpt-4o"' not in sig, (
-            "LLMClient.__init__ signature still defaults to 'gpt-4o'"
-        )
+        assert (
+            '"gpt-4o"' not in sig
+        ), "LLMClient.__init__ signature still defaults to 'gpt-4o'"
         assert "'gpt-4o'" not in sig
 
     def test_no_gpt4o_default_in_streamable_init(self):
@@ -328,15 +342,17 @@ class TestNoSilentGPT4OInBusinessCode:
         full = repo / "src/llmwikify/foundation/llm/streamable.py"
         content = full.read_text(encoding="utf-8")
         import re
+
         sig_match = re.search(
             r"def __init__\s*\((.*?)\)\s*:",
-            content, re.DOTALL,
+            content,
+            re.DOTALL,
         )
         assert sig_match, "could not locate StreamableLLMClient.__init__ signature"
         sig = sig_match.group(1)
-        assert '"gpt-4o"' not in sig, (
-            "StreamableLLMClient.__init__ signature still defaults to 'gpt-4o'"
-        )
+        assert (
+            '"gpt-4o"' not in sig
+        ), "StreamableLLMClient.__init__ signature still defaults to 'gpt-4o'"
         assert "'gpt-4o'" not in sig
 
     def test_no_getattr_gpt4o_fallback_in_business_code(self):
@@ -357,9 +373,9 @@ class TestNoSilentGPT4OInBusinessCode:
             if not full.exists():
                 continue
             content = full.read_text(encoding="utf-8")
-            assert 'getattr(' not in content or '"gpt-4o"' not in content, (
-                f"{rel} still has getattr(..., 'gpt-4o') fallback"
-            )
+            assert (
+                "getattr(" not in content or '"gpt-4o"' not in content
+            ), f"{rel} still has getattr(..., 'gpt-4o') fallback"
 
     def test_token_estimation_files_untouched(self):
         # Sanity: ensure the exempt files are still there.

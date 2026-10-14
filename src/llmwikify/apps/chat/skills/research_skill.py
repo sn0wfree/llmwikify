@@ -125,7 +125,8 @@ async def _act_plan(args: dict, ctx: SkillContext) -> SkillResult:
         return SkillResult.fail("query is required for plan")
     # Delegate to Phase 5's plan action
     r = await plan_skill.actions["plan"].handler(
-        {"query": query}, ctx,
+        {"query": query},
+        ctx,
     )
     if r.status != "ok":
         return r
@@ -134,10 +135,12 @@ async def _act_plan(args: dict, ctx: SkillContext) -> SkillResult:
     existing = {sq.get("q", "").lower() for sq in state.get("sub_queries", [])}
     new = [sq for sq in sub_queries if sq.get("q", "").lower() not in existing]
     state.setdefault("sub_queries", []).extend(new)
-    return SkillResult.ok({
-        "sub_queries": state["sub_queries"],
-        "_plan_added": len(new),
-    })
+    return SkillResult.ok(
+        {
+            "sub_queries": state["sub_queries"],
+            "_plan_added": len(new),
+        }
+    )
 
 
 async def _act_gather(args: dict, ctx: SkillContext) -> SkillResult:
@@ -151,16 +154,15 @@ async def _act_gather(args: dict, ctx: SkillContext) -> SkillResult:
     state["phase"] = "gathering"
     # Filter out already-gathered sub-queries
     sub_queries = state.get("sub_queries", [])
-    ungathered = [
-        sq for sq in sub_queries
-        if sq.get("status") != "gathered"
-    ]
+    ungathered = [sq for sq in sub_queries if sq.get("status") != "gathered"]
     if not ungathered:
         state.setdefault("sources", [])
-        return SkillResult.ok({
-            "sources": state["sources"],
-            "_new_sources": 0,
-        })
+        return SkillResult.ok(
+            {
+                "sources": state["sources"],
+                "_new_sources": 0,
+            }
+        )
     # Read ``research.enable_web_search`` from config (default ON,
     # so the pipeline falls back to web search when wiki yields no
     # results — see ``gather_skill.gather_for_research``).
@@ -170,12 +172,14 @@ async def _act_gather(args: dict, ctx: SkillContext) -> SkillResult:
     from llmwikify.apps.chat.skills.pipelines.gather_skill import (
         gather_skill as _gather,
     )
+
     r = await _gather.actions["gather_for_research"].handler(
         {
             "sub_queries": ungathered,
             "sources": state.get("sources", []),
             "enable_web_search": enable_web_search,
-        }, ctx,
+        },
+        ctx,
     )
     if r.status != "ok":
         return r
@@ -187,10 +191,12 @@ async def _act_gather(args: dict, ctx: SkillContext) -> SkillResult:
         else:
             sq["status"] = "gathered"
     state["sources"] = r.data["sources"]
-    return SkillResult.ok({
-        "sources": state["sources"],
-        "_new_sources": r.data.get("_new_sources", 0),
-    })
+    return SkillResult.ok(
+        {
+            "sources": state["sources"],
+            "_new_sources": r.data.get("_new_sources", 0),
+        }
+    )
 
 
 async def _act_analyze(args: dict, ctx: SkillContext) -> SkillResult:
@@ -208,18 +214,21 @@ async def _act_analyze(args: dict, ctx: SkillContext) -> SkillResult:
         "_source_count": len(sources),
     }
     if not sources:
-        return SkillResult.ok({
-            "_no_sources": True,
-            "analyzed": 0,
-            "analysis": state["analysis"],
-        })
+        return SkillResult.ok(
+            {
+                "_no_sources": True,
+                "analyzed": 0,
+                "analysis": state["analysis"],
+            }
+        )
     wiki = ctx.wiki
     if wiki is None:
         # Offline: synthetic per-source analysis
         for s in sources:
             if "analysis" not in s:
                 s["analysis"] = {
-                    "entities": [], "quality_assessment": {"credibility": 7},
+                    "entities": [],
+                    "quality_assessment": {"credibility": 7},
                 }
         return SkillResult.ok({"_offline_analyze": True, "analyzed": len(sources)})
     # Use Phase 5's analyze action (one source at a time)
@@ -228,7 +237,8 @@ async def _act_analyze(args: dict, ctx: SkillContext) -> SkillResult:
         if s.get("analysis"):
             continue
         r = await analyze_skill.actions["analyze"].handler(
-            {"source_path": s.get("url", ""), "force": False}, ctx,
+            {"source_path": s.get("url", ""), "force": False},
+            ctx,
         )
         if r.status == "ok":
             s["analysis"] = r.data
@@ -242,7 +252,8 @@ async def _act_synthesize(args: dict, ctx: SkillContext) -> SkillResult:
     state["phase"] = "synthesizing"
     sources = state.get("sources", [])
     r = await summarize_skill.actions["summarize"].handler(
-        {"sources": sources}, ctx,
+        {"sources": sources},
+        ctx,
     )
     if r.status != "ok":
         return r
@@ -250,10 +261,12 @@ async def _act_synthesize(args: dict, ctx: SkillContext) -> SkillResult:
     # Extract knowledge gaps and contradictions
     state["knowledge_gaps"] = r.data.get("gaps", [])
     state["contradictions"] = r.data.get("contradictions", [])
-    return SkillResult.ok({
-        "synthesis": r.data,
-        "knowledge_gaps": state["knowledge_gaps"],
-    })
+    return SkillResult.ok(
+        {
+            "synthesis": r.data,
+            "knowledge_gaps": state["knowledge_gaps"],
+        }
+    )
 
 
 async def _act_score(args: dict, ctx: SkillContext) -> SkillResult:
@@ -265,16 +278,19 @@ async def _act_score(args: dict, ctx: SkillContext) -> SkillResult:
     if not text:
         return SkillResult.fail("no synthesis narrative to score")
     r = await score_skill.actions["score"].handler(
-        {"text": text}, ctx,
+        {"text": text},
+        ctx,
     )
     if r.status != "ok":
         return r
     state["score"] = r.data["score"]
     state["score_by_dim"] = r.data.get("by_dimension", {})
-    return SkillResult.ok({
-        "score": state["score"],
-        "by_dimension": state["score_by_dim"],
-    })
+    return SkillResult.ok(
+        {
+            "score": state["score"],
+            "by_dimension": state["score_by_dim"],
+        }
+    )
 
 
 async def _act_revise(args: dict, ctx: SkillContext) -> SkillResult:
@@ -287,7 +303,8 @@ async def _act_revise(args: dict, ctx: SkillContext) -> SkillResult:
     if score >= 0.5:
         return SkillResult.ok({"_skipped": True, "score": score})
     r = await revise_skill.actions["revise"].handler(
-        {"text": text, "score": score}, ctx,
+        {"text": text, "score": score},
+        ctx,
     )
     if r.status != "ok":
         return r
@@ -296,10 +313,12 @@ async def _act_revise(args: dict, ctx: SkillContext) -> SkillResult:
         synthesis["narrative"] = r.data["revised"]
     state["synthesis"] = synthesis
     state["revision_count"] = state.get("revision_count", 0) + 1
-    return SkillResult.ok({
-        "revised": True,
-        "revision_count": state["revision_count"],
-    })
+    return SkillResult.ok(
+        {
+            "revised": True,
+            "revision_count": state["revision_count"],
+        }
+    )
 
 
 async def _act_report(args: dict, ctx: SkillContext) -> SkillResult:
@@ -313,21 +332,25 @@ async def _act_report(args: dict, ctx: SkillContext) -> SkillResult:
     from llmwikify.apps.chat.skills.pipelines.report_skill import (
         report_skill as _report,
     )
+
     r = await _report.actions["generate_report"].handler(
         {
             "query": state.get("query", "Research Report"),
             "synthesis": state.get("synthesis"),
             "sources": state.get("sources", []),
             "knowledge_gaps": state.get("knowledge_gaps", []),
-        }, ctx,
+        },
+        ctx,
     )
     if r.status != "ok":
         return r
     state["report_md"] = r.data["report_md"]
-    return SkillResult.ok({
-        "report_md": state["report_md"],
-        "report_length": r.data.get("report_length", 0),
-    })
+    return SkillResult.ok(
+        {
+            "report_md": state["report_md"],
+            "report_length": r.data.get("report_length", 0),
+        }
+    )
 
 
 # ─── Hooks ──────────────────────────────────────────────────────
@@ -340,6 +363,7 @@ def _make_check_control_signals(db: Any) -> Any:
     "pausing", sets state flags. ReActEngine's done_condition
     picks these up next round.
     """
+
     def check_control_signals(state: dict, action_name: str) -> None:
         if db is None:
             return
@@ -353,6 +377,7 @@ def _make_check_control_signals(db: Any) -> Any:
                     state["paused"] = True
         except Exception as e:
             logger.debug("Control signal check failed: %s", e)
+
     return check_control_signals
 
 
@@ -368,6 +393,7 @@ def _make_gate_intervention(
     A full gate implementation lands in Phase 7 (5 harness
     eval classes).
     """
+
     def gate_intervention(state: dict, action_name: str, result: SkillResult) -> None:
         if action_name != "gather":
             return
@@ -380,11 +406,13 @@ def _make_gate_intervention(
                 f"gate: gathered {len(sources)} ≥ {gate_min_sources} sources, "
                 f"forcing analyze next round"
             )
+
     return gate_intervention
 
 
 def _make_persist_state(db: Any) -> Any:
     """Build the persist_state hook: serialize state into research_steps."""
+
     def persist_research_state(state: dict, round_idx: int) -> None:
         if db is None:
             return
@@ -396,11 +424,13 @@ def _make_persist_state(db: Any) -> Any:
             )
         except Exception as e:
             logger.warning("persist_state failed: %s", e)
+
     return persist_research_state
 
 
 def _make_restore_state(db: Any) -> Any:
     """Build the restore_state hook: load last persisted state."""
+
     def restore_research_state(state: dict) -> dict:
         if db is None or not state.get("session_id"):
             return state
@@ -413,6 +443,7 @@ def _make_restore_state(db: Any) -> Any:
         if isinstance(saved, dict):
             return saved
         return state
+
     return restore_research_state
 
 
@@ -457,9 +488,12 @@ def _make_research_config(args: dict, ctx: SkillContext) -> ReactConfig:
             from llmwikify.apps.chat.skills.actions import (
                 summarize_skill as _summarize,
             )
+
             fallback = {
-                "plan": _plan, "analyze": _analyze,
-                "summarize": _summarize, "score": _score,
+                "plan": _plan,
+                "analyze": _analyze,
+                "summarize": _summarize,
+                "score": _score,
                 "revise": _revise,
             }
             return fallback[name].actions[action]
@@ -474,6 +508,7 @@ def _make_research_config(args: dict, ctx: SkillContext) -> ReactConfig:
     def _wrap(name: str, fn: Any) -> SkillAction:
         async def handler(args: dict, ctx: SkillContext) -> SkillResult:
             return await fn(args, ctx)
+
         return SkillAction(
             name=name,
             description=f"research_skill {name} step",
@@ -511,6 +546,7 @@ def _make_research_config(args: dict, ctx: SkillContext) -> ReactConfig:
                 logger.warning("LLM reason failed: %s, using rule-based", e)
         # Rule-based fallback (Phase 5)
         from llmwikify.apps.chat.skills.actions.reason_action import _rule_based_reason
+
         return _rule_based_reason(state)
 
     # Initial state — 15+ fields per Phase 3 design
@@ -549,7 +585,8 @@ def _make_research_config(args: dict, ctx: SkillContext) -> ReactConfig:
         max_rounds=args.get("max_rounds", 5),
         on_before_act=_make_check_control_signals(db),
         on_after_act=_make_gate_intervention(
-            db, gate_min_sources=args.get("gate_min_sources", 3),
+            db,
+            gate_min_sources=args.get("gate_min_sources", 3),
         ),
         persist_state=_make_persist_state(db),
         restore_state=_make_restore_state(db),
@@ -582,15 +619,17 @@ async def run_research(args: dict, ctx: SkillContext) -> SkillResult:
         events.append(event)
     # Find the terminal phase event for the final state
     final_state = loop.state
-    return SkillResult.ok({
-        "events": events,
-        "final_state": final_state,
-        "report_md": final_state.get("report_md"),
-        "round": final_state.get("round", 0),
-        "score": final_state.get("score"),
-        "cancelled": final_state.get("cancelled", False),
-        "paused": final_state.get("paused", False),
-    })
+    return SkillResult.ok(
+        {
+            "events": events,
+            "final_state": final_state,
+            "report_md": final_state.get("report_md"),
+            "round": final_state.get("round", 0),
+            "score": final_state.get("score"),
+            "cancelled": final_state.get("cancelled", False),
+            "paused": final_state.get("paused", False),
+        }
+    )
 
 
 async def resume_research(args: dict, ctx: SkillContext) -> SkillResult:
@@ -655,7 +694,10 @@ class ResearchSkill(Skill):
             input_schema={
                 "type": "object",
                 "properties": {
-                    "session_id": {"type": "string", "description": "Pre-created session id"},
+                    "session_id": {
+                        "type": "string",
+                        "description": "Pre-created session id",
+                    },
                     "query": {"type": "string", "description": "Research query"},
                     "max_rounds": {"type": "integer", "default": 5},
                     "gate_min_sources": {"type": "integer", "default": 3},

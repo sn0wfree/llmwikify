@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from llmwikify.kernel.storage.watcher import (
     SUPPORTED_EXTENSIONS,
@@ -110,6 +110,7 @@ class TestFileSystemWatcher:
 
     def test_on_event_callback(self, watch_dir):
         events = []
+
         def on_event(event_type, path):
             events.append((event_type, path.name))
 

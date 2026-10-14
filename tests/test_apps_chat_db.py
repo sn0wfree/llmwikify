@@ -81,6 +81,7 @@ class TestSchema:
         with tempfile.TemporaryDirectory() as tmp:
             db = ChatDatabase(tmp)
             import sqlite3
+
             with sqlite3.connect(db.db_path) as conn:
                 tables = {
                     row[0]
@@ -98,9 +99,11 @@ class TestSchema:
         import tempfile
 
         from llmwikify.apps.research.db import ResearchDatabase
+
         with tempfile.TemporaryDirectory() as tmp:
             rdb = ResearchDatabase(tmp)
             import sqlite3
+
             with sqlite3.connect(rdb.db_path) as conn:
                 cols = {
                     row[1]
@@ -109,8 +112,15 @@ class TestSchema:
                     ).fetchall()
                 }
             expected = {
-                "id", "session_id", "step_num", "action", "thought",
-                "status", "result_json", "duration_ms", "created_at",
+                "id",
+                "session_id",
+                "step_num",
+                "action",
+                "thought",
+                "status",
+                "result_json",
+                "duration_ms",
+                "created_at",
             }
             assert expected.issubset(cols)
 
@@ -118,9 +128,11 @@ class TestSchema:
         import tempfile
 
         from llmwikify.apps.research.db import ResearchDatabase
+
         with tempfile.TemporaryDirectory() as tmp:
             rdb = ResearchDatabase(tmp)
             import sqlite3
+
             with sqlite3.connect(rdb.db_path) as conn:
                 indexes = {
                     row[0]
@@ -141,21 +153,21 @@ class TestSchema:
 
 
 class TestResearchSteps:
-    def test_save_step_minimal(
-        self, db_with_session: tuple[ChatDatabase, str]
-    ) -> None:
+    def test_save_step_minimal(self, db_with_session: tuple[ChatDatabase, str]) -> None:
         db, sid = db_with_session
         step_id = db.save_step(sid, 0, action="plan")
         assert isinstance(step_id, str)
         assert len(step_id) > 0
 
-    def test_save_step_full(
-        self, db_with_session: tuple[ChatDatabase, str]
-    ) -> None:
+    def test_save_step_full(self, db_with_session: tuple[ChatDatabase, str]) -> None:
         db, sid = db_with_session
         db.save_step(
-            sid, 0, action="plan", status="done",
-            thought="plan the query", result={"plan": "step 1: search"},
+            sid,
+            0,
+            action="plan",
+            status="done",
+            thought="plan the query",
+            result={"plan": "step 1: search"},
             duration_ms=150,
         )
         step = db.get_step(sid, 0)
@@ -192,10 +204,8 @@ class TestResearchSteps:
         """The UNIQUE(session_id, step_num) constraint means
         save_step with INSERT OR REPLACE updates the existing row."""
         db, sid = db_with_session
-        db.save_step(sid, 0, action="plan", status="pending",
-                    result={"v": 1})
-        db.save_step(sid, 0, action="plan", status="done",
-                    result={"v": 2})
+        db.save_step(sid, 0, action="plan", status="pending", result={"v": 1})
+        db.save_step(sid, 0, action="plan", status="done", result={"v": 2})
         step = db.get_step(sid, 0)
         assert step is not None
         assert step["status"] == "done"
@@ -316,19 +326,14 @@ class TestResultJsonEdgeCases:
         assert step is not None
         assert step["result"] is None
 
-    def test_unicode_in_result(
-        self, db_with_session: tuple[ChatDatabase, str]
-    ) -> None:
+    def test_unicode_in_result(self, db_with_session: tuple[ChatDatabase, str]) -> None:
         db, sid = db_with_session
-        db.save_step(sid, 0, action="plan",
-                    result={"observation": "中文 emoji 🎉"})
+        db.save_step(sid, 0, action="plan", result={"observation": "中文 emoji 🎉"})
         step = db.get_step(sid, 0)
         assert step is not None
         assert step["result"]["observation"] == "中文 emoji 🎉"
 
-    def test_nested_result(
-        self, db_with_session: tuple[ChatDatabase, str]
-    ) -> None:
+    def test_nested_result(self, db_with_session: tuple[ChatDatabase, str]) -> None:
         db, sid = db_with_session
         state = {
             "level1": {
@@ -353,18 +358,22 @@ class TestCascadeDelete:
     def test_cascade_deletes_messages_and_tool_calls(self, db):
         """Deleting a session removes its messages and tool_calls."""
         sid = db.create_chat_session()
-        db.save_chat_message({
-            "id": "msg-1",
-            "session_id": sid,
-            "role": "user",
-            "content": "hi",
-        })
-        db.save_chat_message({
-            "id": "msg-2",
-            "session_id": sid,
-            "role": "assistant",
-            "content": "hello",
-        })
+        db.save_chat_message(
+            {
+                "id": "msg-1",
+                "session_id": sid,
+                "role": "user",
+                "content": "hi",
+            }
+        )
+        db.save_chat_message(
+            {
+                "id": "msg-2",
+                "session_id": sid,
+                "role": "assistant",
+                "content": "hello",
+            }
+        )
         db.log_tool_call(sid, "search", {"q": "test"}, "executed")
 
         assert db.delete_chat_session(sid) is True
@@ -377,6 +386,7 @@ class TestCascadeDelete:
         sid = db.create_chat_session()
         # Manually insert a context entry
         import sqlite3
+
         with sqlite3.connect(db.db_path) as conn:
             conn.execute(
                 """INSERT INTO context_entries
@@ -393,6 +403,7 @@ class TestCascadeDelete:
     def test_cascade_deletes_event_log_and_permissions(self, db):
         sid = db.create_chat_session()
         import sqlite3
+
         with sqlite3.connect(db.db_path) as conn:
             conn.execute(
                 """INSERT INTO event_log (session_id, event_type, payload)
@@ -427,18 +438,22 @@ class TestCascadeDelete:
         """Deleting session A doesn't affect session B."""
         sid_a = db.create_chat_session()
         sid_b = db.create_chat_session()
-        db.save_chat_message({
-            "id": "msg-a",
-            "session_id": sid_a,
-            "role": "user",
-            "content": "from A",
-        })
-        db.save_chat_message({
-            "id": "msg-b",
-            "session_id": sid_b,
-            "role": "user",
-            "content": "from B",
-        })
+        db.save_chat_message(
+            {
+                "id": "msg-a",
+                "session_id": sid_a,
+                "role": "user",
+                "content": "from A",
+            }
+        )
+        db.save_chat_message(
+            {
+                "id": "msg-b",
+                "session_id": sid_b,
+                "role": "user",
+                "content": "from B",
+            }
+        )
 
         assert db.delete_chat_session(sid_a) is True
         # B should be untouched

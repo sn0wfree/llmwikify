@@ -15,6 +15,7 @@
         else:
             yield event  # 透传给 SSE
 """
+
 from __future__ import annotations
 
 import inspect
@@ -44,7 +45,10 @@ class ToolActor(StreamingHandler):
         self._executor = tool_executor
 
     async def stream(
-        self, input: Any, spec: Any, ctx: Any,
+        self,
+        input: Any,
+        spec: Any,
+        ctx: Any,
     ) -> AsyncIterator[dict[str, Any] | StepResult]:
         response = input  # ReasonResponse
 
@@ -76,7 +80,10 @@ class ToolActor(StreamingHandler):
             # 执行工具
             try:
                 result = await self._execute_tool(
-                    tool_name, args, spec, ctx,
+                    tool_name,
+                    args,
+                    spec,
+                    ctx,
                 )
             except Exception as exc:
                 logger.warning("Tool %s failed", tool_name, exc_info=True)
@@ -89,7 +96,10 @@ class ToolActor(StreamingHandler):
                 continue
 
             # Confirmation check
-            if isinstance(result, dict) and result.get("status") == "confirmation_required":
+            if (
+                isinstance(result, dict)
+                and result.get("status") == "confirmation_required"
+            ):
                 yield {
                     "type": "confirmation_required",
                     "confirmation_id": result.get("confirmation_id", ""),
@@ -98,12 +108,14 @@ class ToolActor(StreamingHandler):
                     "impact": result.get("impact", {}),
                     "call_id": call_id,
                 }
-                yield StepResult.ok(ActResult(
-                    success=True,
-                    needs_confirmation=True,
-                    tool_name=tool_name,
-                    messages_to_inject=messages_to_inject,
-                ))
+                yield StepResult.ok(
+                    ActResult(
+                        success=True,
+                        needs_confirmation=True,
+                        tool_name=tool_name,
+                        messages_to_inject=messages_to_inject,
+                    )
+                )
                 return
 
             # Error status check
@@ -118,7 +130,10 @@ class ToolActor(StreamingHandler):
 
             # microcompact — 双输出处理
             content, was_compacted, saved = self._microcompact(
-                result, tool_name, call_id, spec,
+                result,
+                tool_name,
+                call_id,
+                spec,
             )
             if was_compacted:
                 compacted_count += 1
@@ -130,12 +145,14 @@ class ToolActor(StreamingHandler):
                 }
 
             # compacted content → messages
-            messages_to_inject.append({
-                "role": "tool",
-                "name": tool_name,
-                "content": content,
-                "tool_call_id": call_id,
-            })
+            messages_to_inject.append(
+                {
+                    "role": "tool",
+                    "name": tool_name,
+                    "content": content,
+                    "tool_call_id": call_id,
+                }
+            )
 
             # original result → SSE event
             tools_used.append(tool_name)
@@ -146,11 +163,13 @@ class ToolActor(StreamingHandler):
                 "call_id": call_id,
             }
 
-        yield StepResult.ok(ActResult(
-            success=True,
-            messages_to_inject=messages_to_inject,
-            tool_calls_for_next_round=[],
-        ))
+        yield StepResult.ok(
+            ActResult(
+                success=True,
+                messages_to_inject=messages_to_inject,
+                tool_calls_for_next_round=[],
+            )
+        )
 
     def _parse_args(self, tc: dict[str, Any]) -> dict[str, Any]:
         """解析 tool_call 参数。"""
@@ -212,6 +231,7 @@ class ToolActor(StreamingHandler):
 
         try:
             from llmwikify.apps.chat.agent.microcompact import microcompact_serialize
+
             return microcompact_serialize(result, tool_name, call_id, spec)
         except Exception:
             return json.dumps(result, ensure_ascii=False, default=str), False, 0

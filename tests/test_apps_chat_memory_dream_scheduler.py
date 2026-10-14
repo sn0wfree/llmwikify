@@ -32,12 +32,14 @@ from llmwikify.apps.chat.memory.dream_scheduler import (
 def _make_dream_mock() -> MagicMock:
     """Build a minimal Dream mock."""
     dream = MagicMock(spec=Dream)
-    dream.run = AsyncMock(return_value=MagicMock(
-        consolidations_scanned=5,
-        facts_extracted=3,
-        facts_written=3,
-        cursor=12345.0,
-    ))
+    dream.run = AsyncMock(
+        return_value=MagicMock(
+            consolidations_scanned=5,
+            facts_extracted=3,
+            facts_written=3,
+            cursor=12345.0,
+        )
+    )
     return dream
 
 
@@ -180,14 +182,16 @@ class TestDreamSchedulerImportError:
         sched = DreamScheduler(dream=_make_dream_mock())
         # Simulate apscheduler not installed
         apscheduler_modules = [
-            name
-            for name in sys.modules
-            if name.startswith("apscheduler")
+            name for name in sys.modules if name.startswith("apscheduler")
         ]
         # Hide them temporarily
         hidden = {m: sys.modules.pop(m) for m in apscheduler_modules}
         # Inject ImportError via missing modules
-        for name in ("apscheduler", "apscheduler.schedulers", "apscheduler.schedulers.asyncio"):
+        for name in (
+            "apscheduler",
+            "apscheduler.schedulers",
+            "apscheduler.schedulers.asyncio",
+        ):
             sys.modules[name] = None  # causes ImportError on import
 
         try:
@@ -197,6 +201,10 @@ class TestDreamSchedulerImportError:
             # Restore
             for m, v in hidden.items():
                 sys.modules[m] = v
-            for name in ("apscheduler", "apscheduler.schedulers", "apscheduler.schedulers.asyncio"):
+            for name in (
+                "apscheduler",
+                "apscheduler.schedulers",
+                "apscheduler.schedulers.asyncio",
+            ):
                 if name in sys.modules and sys.modules[name] is None:
                     del sys.modules[name]

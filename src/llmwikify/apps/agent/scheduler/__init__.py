@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 
 try:
     from croniter import croniter
+
     HAS_CRONITER = True
 except ImportError:
     HAS_CRONITER = False
@@ -141,27 +142,29 @@ class WikiScheduler:
             if task.should_run(now):
                 try:
                     result = task.run()
-                    results.append({
-                        "task": task.name,
-                        "success": True,
-                        "result": result,
-                        "is_write": task.is_write,
-                    })
+                    results.append(
+                        {
+                            "task": task.name,
+                            "success": True,
+                            "result": result,
+                            "is_write": task.is_write,
+                        }
+                    )
                 except Exception as e:
-                    results.append({
-                        "task": task.name,
-                        "success": False,
-                        "error": str(e),
-                        "is_write": task.is_write,
-                    })
+                    results.append(
+                        {
+                            "task": task.name,
+                            "success": False,
+                            "error": str(e),
+                            "is_write": task.is_write,
+                        }
+                    )
         return results
 
     def save_state(self) -> None:
         if self._state_file:
             state = {
-                "tasks": {
-                    name: task.to_dict() for name, task in self._tasks.items()
-                }
+                "tasks": {name: task.to_dict() for name, task in self._tasks.items()}
             }
             self._state_file.parent.mkdir(parents=True, exist_ok=True)
             self._state_file.write_text(json.dumps(state, indent=2))
@@ -174,7 +177,9 @@ class WikiScheduler:
                     if name in self._tasks:
                         task = self._tasks[name]
                         if task_data.get("last_run"):
-                            task.last_run = datetime.fromisoformat(task_data["last_run"])
+                            task.last_run = datetime.fromisoformat(
+                                task_data["last_run"]
+                            )
                         if task_data.get("run_count"):
                             task.run_count = task_data["run_count"]
             except Exception as e:

@@ -14,28 +14,17 @@ logger = logging.getLogger(__name__)
 
 def main() -> None:
     """CLI entry point for standalone unified server."""
-    parser = argparse.ArgumentParser(description="llmwikify Unified Server (MCP + REST API + WebUI)")
+    parser = argparse.ArgumentParser(
+        description="llmwikify Unified Server (MCP + REST API + WebUI)"
+    )
+    parser.add_argument("--wiki-root", required=True, help="Wiki root directory path")
     parser.add_argument(
-        "--wiki-root",
-        required=True,
-        help="Wiki root directory path"
+        "--port", type=int, default=8765, help="Server port (default: 8765)"
     )
     parser.add_argument(
-        "--port",
-        type=int,
-        default=8765,
-        help="Server port (default: 8765)"
+        "--host", default="127.0.0.1", help="Bind address (default: 127.0.0.1)"
     )
-    parser.add_argument(
-        "--host",
-        default="127.0.0.1",
-        help="Bind address (default: 127.0.0.1)"
-    )
-    parser.add_argument(
-        "--api-key",
-        default=None,
-        help="API Key for authentication"
-    )
+    parser.add_argument("--api-key", default=None, help="API Key for authentication")
     parser.add_argument(
         "--force-skip-dream",
         action="store_true",
@@ -60,6 +49,7 @@ def main() -> None:
     provider = None
     try:
         from llmwikify.apps.chat.providers.registry import get_default_provider
+
         provider = get_default_provider()
         if provider is not None:
             logger.info(

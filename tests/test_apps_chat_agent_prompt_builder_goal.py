@@ -59,14 +59,17 @@ def test_goal_state_section_absent_when_session_has_no_goal(chat_db) -> None:
 
 def test_goal_state_section_appears_when_active(chat_db) -> None:
     sid = chat_db.create_chat_session()
-    chat_db.set_session_metadata(sid, {
-        GOAL_STATE_KEY: {
-            "status": "active",
-            "objective": "Investigate factor X over 3 turns",
-            "ui_summary": "factor X",
-            "started_at": "2026-06-20T00:00:00",
+    chat_db.set_session_metadata(
+        sid,
+        {
+            GOAL_STATE_KEY: {
+                "status": "active",
+                "objective": "Investigate factor X over 3 turns",
+                "ui_summary": "factor X",
+                "started_at": "2026-06-20T00:00:00",
+            },
         },
-    })
+    )
     ctx = BuildContext(session_id=sid, enable_bootstrap=False)
     prompt = _run(_builder(chat_db).build_with_context(ctx))
     assert "## Sustained goal" in prompt
@@ -77,13 +80,16 @@ def test_goal_state_section_appears_when_active(chat_db) -> None:
 
 def test_goal_state_section_absent_when_completed(chat_db) -> None:
     sid = chat_db.create_chat_session()
-    chat_db.set_session_metadata(sid, {
-        GOAL_STATE_KEY: {
-            "status": "completed",
-            "objective": "old goal",
-            "completed_at": "2026-06-20T00:00:00",
+    chat_db.set_session_metadata(
+        sid,
+        {
+            GOAL_STATE_KEY: {
+                "status": "completed",
+                "objective": "old goal",
+                "completed_at": "2026-06-20T00:00:00",
+            },
         },
-    })
+    )
     ctx = BuildContext(session_id=sid, enable_bootstrap=False)
     prompt = _run(_builder(chat_db).build_with_context(ctx))
     assert "Sustained goal" not in prompt

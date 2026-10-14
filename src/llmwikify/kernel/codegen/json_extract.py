@@ -4,6 +4,7 @@ C1: extracted from `reproduction/codegen/llm_code.py`. Tolerant parser:
 first tries ```json ... ``` fenced block, then falls back to finding
 a JSON object `{...}` in raw text.
 """
+
 from __future__ import annotations
 
 import json

@@ -36,6 +36,7 @@ Plan B v2 alignment
     (compatible with v0.50 archive + the existing ``research_skill`` tests).
   * State is a plain ``dict`` (15+ fields per research state spec).
 """
+
 from __future__ import annotations
 
 import inspect
@@ -109,6 +110,7 @@ class ReactConfig:
 def _is_dataclass(obj: Any) -> bool:
     """Check if obj is a dataclass instance (not the class itself)."""
     import dataclasses
+
     return dataclasses.is_dataclass(obj) and not isinstance(obj, type)
 
 
@@ -134,6 +136,7 @@ def _state_snapshot(state: Any) -> dict:
     if isinstance(state, dict):
         return dict(state)
     import dataclasses
+
     if dataclasses.is_dataclass(state):
         return dataclasses.asdict(state)
     return dict(vars(state))
@@ -168,6 +171,7 @@ class ReactLoop:
         # For dataclasses, keep the original instance (not a copy) so
         # mutations are visible to the caller.
         import dataclasses
+
         initial = config.initial_state
         if dataclasses.is_dataclass(initial) and not isinstance(initial, dict):
             self._state = initial
@@ -202,6 +206,7 @@ class ReactLoop:
                 If provided, events are both yielded AND passed to emit.
         """
         import time
+
         self._start_time = time.monotonic()
 
         async def _emit(ev: dict) -> None:
@@ -230,8 +235,10 @@ class ReactLoop:
                     # by inspecting the signature.
                     sig = inspect.signature(reason_fn)
                     n_params = sum(
-                        1 for p in sig.parameters.values()
-                        if p.kind not in (
+                        1
+                        for p in sig.parameters.values()
+                        if p.kind
+                        not in (
                             inspect.Parameter.VAR_POSITIONAL,
                             inspect.Parameter.VAR_KEYWORD,
                         )
@@ -244,11 +251,19 @@ class ReactLoop:
                         )
             except (LLMError, TypeError, ValueError, KeyError, AttributeError) as e:
                 logger.exception("reason failed")
-                yield {"type": EVENT_ACTION_ERROR, "action": "<reason>", "error": str(e)}
+                yield {
+                    "type": EVENT_ACTION_ERROR,
+                    "action": "<reason>",
+                    "error": str(e),
+                }
                 return
             except Exception as e:
                 logger.exception("reason failed with unexpected error")
-                yield {"type": EVENT_ACTION_ERROR, "action": "<reason>", "error": str(e)}
+                yield {
+                    "type": EVENT_ACTION_ERROR,
+                    "action": "<reason>",
+                    "error": str(e),
+                }
                 return
 
             action_name = decision.get("action", "done")
@@ -319,7 +334,9 @@ class ReactLoop:
                 }
                 continue
             except Exception as e:
-                logger.exception("Action %s raised unexpected error: %s", action_name, e)
+                logger.exception(
+                    "Action %s raised unexpected error: %s", action_name, e
+                )
                 yield {
                     "type": EVENT_ACTION_ERROR,
                     "action": action_name,
@@ -348,7 +365,9 @@ class ReactLoop:
             # 4. OBSERVE: fold result.data + observe() output into state (per v0.50)
             if self._config.on_before_observe is not None:
                 try:
-                    await _maybe_await(self._config.on_before_observe(self._state, result))
+                    await _maybe_await(
+                        self._config.on_before_observe(self._state, result)
+                    )
                 except Exception as e:
                     yield {
                         "type": EVENT_OBSERVATION_ERROR,
@@ -375,7 +394,9 @@ class ReactLoop:
 
             if self._config.on_after_observe is not None:
                 try:
-                    await _maybe_await(self._config.on_after_observe(self._state, result))
+                    await _maybe_await(
+                        self._config.on_after_observe(self._state, result)
+                    )
                 except Exception as e:
                     yield {
                         "type": EVENT_OBSERVATION_ERROR,
@@ -408,6 +429,7 @@ class ReactLoop:
         if not self._config.timeout_seconds:
             return False
         import time
+
         return (time.monotonic() - self._start_time) > self._config.timeout_seconds
 
     def _check_done(self) -> bool:

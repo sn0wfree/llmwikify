@@ -100,6 +100,7 @@ class TestMarkItDownExtractor:
     def mock_markitdown(self):
         """Create a mock markitdown module."""
         import sys
+
         mock_md_module = MagicMock()
         mock_md_class = MagicMock()
         mock_md_module.MarkItDown = mock_md_class
@@ -200,6 +201,7 @@ class TestExtractRouting:
     def mock_markitdown(self):
         """Create a mock markitdown module."""
         import sys
+
         mock_md_module = MagicMock()
         mock_md_class = MagicMock()
         mock_md_module.MarkItDown = mock_md_class
@@ -322,7 +324,9 @@ class TestBackwardCompatibility:
     def test_html_extraction_preserved(self, tmp_path):
         """HTML files should still be extracted."""
         test_file = tmp_path / "test.html"
-        test_file.write_text("<html><head><title>Test</title></head><body><p>Hello</p></body></html>")
+        test_file.write_text(
+            "<html><head><title>Test</title></head><body><p>Hello</p></body></html>"
+        )
 
         result = extract(str(test_file))
         assert result.source_type == "html"

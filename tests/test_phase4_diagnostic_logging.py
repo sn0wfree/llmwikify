@@ -32,14 +32,15 @@ class TestFallbackSearchProviderLogsChain:
             FallbackSearchProvider,
             SearXNGProvider,
         )
+
         chain = [SearXNGProvider("http://x"), DuckDuckGoProvider()]
         with caplog.at_level(logging.INFO, logger="llmwikify.apps.research.web_search"):
             FallbackSearchProvider(chain)
         messages = [r.message for r in caplog.records]
         chain_log = [m for m in messages if "fallback chain" in m]
-        assert chain_log, (
-            "FallbackSearchProvider.__init__ should log the resolved chain"
-        )
+        assert (
+            chain_log
+        ), "FallbackSearchProvider.__init__ should log the resolved chain"
         # Verify both providers are named
         msg = chain_log[0]
         assert "SearXNGProvider" in msg
@@ -58,7 +59,8 @@ class TestGatherSkillFallbackLoggingLevel:
 
     @pytest.mark.asyncio
     async def test_successful_web_search_logs_at_info(
-        self, caplog: pytest.LogCaptureFixture,
+        self,
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
         """When the web_search fallback returns results, both the
         invocation and the result-count log lines must appear at INFO.
@@ -71,7 +73,9 @@ class TestGatherSkillFallbackLoggingLevel:
         wiki = MagicMock()
         wiki.search = MagicMock(return_value=[])
 
-        ctx = SkillContext(config={"web_search_results_per_query": 3}).with_overrides(wiki=wiki)
+        ctx = SkillContext(config={"web_search_results_per_query": 3}).with_overrides(
+            wiki=wiki
+        )
 
         # Patch WebSearch.search to return 2 results synchronously
         mock_search_instance = MagicMock()
@@ -97,7 +101,8 @@ class TestGatherSkillFallbackLoggingLevel:
 
         assert r.status == "ok"
         info_msgs = [
-            r for r in caplog.records
+            r
+            for r in caplog.records
             if r.levelno == logging.INFO
             and "gather_skill web_search fallback" in r.message
         ]
@@ -110,7 +115,8 @@ class TestGatherSkillFallbackLoggingLevel:
 
     @pytest.mark.asyncio
     async def test_failed_web_search_logs_at_warning(
-        self, caplog: pytest.LogCaptureFixture,
+        self,
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
         """When WebSearch raises an exception, the failure must be
         logged at WARNING (not DEBUG), so operators see it.
@@ -121,7 +127,9 @@ class TestGatherSkillFallbackLoggingLevel:
         wiki = MagicMock()
         wiki.search = MagicMock(return_value=[])
 
-        ctx = SkillContext(config={"web_search_results_per_query": 3}).with_overrides(wiki=wiki)
+        ctx = SkillContext(config={"web_search_results_per_query": 3}).with_overrides(
+            wiki=wiki
+        )
 
         mock_search_instance = MagicMock()
         mock_search_instance.search = AsyncMock(
@@ -143,13 +151,14 @@ class TestGatherSkillFallbackLoggingLevel:
 
         assert r.status == "ok"
         warn_msgs = [
-            r for r in caplog.records
+            r
+            for r in caplog.records
             if r.levelno == logging.WARNING
             and "web_search fallback failed" in r.message
         ]
-        assert warn_msgs, (
-            "WebSearch failure in gather_skill fallback must log at WARNING"
-        )
+        assert (
+            warn_msgs
+        ), "WebSearch failure in gather_skill fallback must log at WARNING"
         assert any("search provider unavailable" in r.message for r in warn_msgs)
 
 
@@ -164,7 +173,8 @@ class TestGathererWebSearchLogging:
 
     @pytest.mark.asyncio
     async def test_logs_invocation_and_result_count(
-        self, caplog: pytest.LogCaptureFixture,
+        self,
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
         """When the gatherer invokes WebSearch for a 'web' sub-query,
         it should log both the invocation and the result count.
@@ -215,13 +225,15 @@ class TestGathererWebSearchLogging:
         ):
             with patch.object(gatherer, "_fetch_url", fake_fetch_url):
                 with caplog.at_level(
-                    logging.DEBUG, logger="llmwikify.apps.chat.gatherer",
+                    logging.DEBUG,
+                    logger="llmwikify.apps.chat.gatherer",
                 ):
                     await gatherer._gather_one(sub_query, seen_urls=set())
 
         # Verify INFO logs for invocation + result count
         info_msgs = [
-            r for r in caplog.records
+            r
+            for r in caplog.records
             if r.levelno == logging.INFO and "Gather sub_query" in r.message
         ]
         assert len(info_msgs) >= 2, (
@@ -233,7 +245,8 @@ class TestGathererWebSearchLogging:
 
     @pytest.mark.asyncio
     async def test_logs_timeout_at_warning(
-        self, caplog: pytest.LogCaptureFixture,
+        self,
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
         """When WebSearch hangs long enough for asyncio.wait_for to
         time it out, the gatherer must log at WARNING before raising
@@ -274,16 +287,17 @@ class TestGathererWebSearchLogging:
             return_value=mock_search,
         ):
             with caplog.at_level(
-                logging.DEBUG, logger="llmwikify.apps.chat.gatherer",
+                logging.DEBUG,
+                logger="llmwikify.apps.chat.gatherer",
             ):
                 # _gather_one catches the ValueError internally and
                 # returns []; we just check the WARNING log fired.
                 await gatherer._gather_one(sub_query, seen_urls=set())
 
         warn_msgs = [
-            r for r in caplog.records
-            if r.levelno == logging.WARNING
-            and "timed out" in r.message
+            r
+            for r in caplog.records
+            if r.levelno == logging.WARNING and "timed out" in r.message
         ]
         assert warn_msgs, (
             f"Gatherer must log WebSearch timeout at WARNING; "
@@ -380,9 +394,9 @@ class TestStartAutoresearchPersistsConfigInfo:
             assert response["status"] == "running"
 
             # append_events must have been called with [config_info, ...]
-            assert db.append_events.called, (
-                "start_autoresearch should persist a config_info event"
-            )
+            assert (
+                db.append_events.called
+            ), "start_autoresearch should persist a config_info event"
             call_args = db.append_events.call_args
             events = call_args[0][1]
             assert len(events) == 1
@@ -429,7 +443,8 @@ class TestStartAutoresearchPersistsConfigInfo:
 
     @pytest.mark.asyncio
     async def test_logs_startup_summary(
-        self, caplog: pytest.LogCaptureFixture,
+        self,
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
         """start_autoresearch must emit an INFO log summarizing
         the search provider configuration at startup.
@@ -447,17 +462,17 @@ class TestStartAutoresearchPersistsConfigInfo:
 
         for _engine, _db, _routes_mod in self._setup_deps(config=config):
             request = MagicMock(spec=Request)
-            request.json = AsyncMock(
-                return_value={"query": "test", "wiki_id": None}
-            )
+            request.json = AsyncMock(return_value={"query": "test", "wiki_id": None})
 
             with caplog.at_level(
-                logging.INFO, logger="llmwikify.apps.research.routes",
+                logging.INFO,
+                logger="llmwikify.apps.research.routes",
             ):
                 await routes_mod.start_autoresearch(request)
 
             msgs = [
-                r for r in caplog.records
+                r
+                for r in caplog.records
                 if "autoresearch start" in r.message
                 and "session=sess-abc123" in r.message
             ]
@@ -485,9 +500,7 @@ class TestStartAutoresearchPersistsConfigInfo:
                 side_effect=RuntimeError("DB locked"),
             )
             request = MagicMock(spec=Request)
-            request.json = AsyncMock(
-                return_value={"query": "test", "wiki_id": None}
-            )
+            request.json = AsyncMock(return_value={"query": "test", "wiki_id": None})
 
             response = await routes_mod.start_autoresearch(request)
             # Session is still created; only the diagnostic event failed

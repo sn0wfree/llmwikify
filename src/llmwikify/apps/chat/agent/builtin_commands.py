@@ -47,7 +47,10 @@ logger = logging.getLogger(__name__)
 
 
 def command_done_event(
-    command: str, ok: bool, message: str, data: Any = None,
+    command: str,
+    ok: bool,
+    message: str,
+    data: Any = None,
 ) -> dict:
     """Build a ``command_done`` SSE event dict.
 
@@ -90,6 +93,7 @@ def make_skill_ctx(
     ``config["memory_manager"]``. CommandContext doesn't expose those,
     so we wrap.
     """
+
     class _StubSkillContext:
         pass
 
@@ -153,11 +157,15 @@ async def title_handler(ctx: Any) -> dict:
         except Exception:
             logger.debug("Failed to update chat session title", exc_info=True)
     return command_done_event(
-        "/title", True, f"Title set: {new_title[:50]}",
+        "/title",
+        True,
+        f"Title set: {new_title[:50]}",
     )
 
 
-async def memory_dream_handler(ctx: Any, *, memory_manager: Any = None) -> AsyncIterator[dict]:
+async def memory_dream_handler(
+    ctx: Any, *, memory_manager: Any = None
+) -> AsyncIterator[dict]:
     """``/memory_dream [session <id>]`` (prefix) — fact extractor.
 
     Triggers the long-term fact extractor (borrowed from nanobot
@@ -187,7 +195,7 @@ async def memory_dream_handler(ctx: Any, *, memory_manager: Any = None) -> Async
 
     args_text = (ctx.args or "").strip()
     if args_text.startswith("session "):
-        sid = args_text[len("session "):].strip()
+        sid = args_text[len("session ") :].strip()
         result = await _run_for_session({"session_id": sid}, stub)
     else:
         result = await _run({}, stub)
@@ -275,9 +283,11 @@ def make_memory_dream_handler(memory_manager: Any) -> Any:
     always returned None (CommandContext doesn't carry the field). Now the
     orchestrator passes its ``self.memory_manager`` once at registration time.
     """
+
     async def handler(ctx: Any) -> AsyncIterator[dict]:
         async for ev in memory_dream_handler(ctx, memory_manager=memory_manager):
             yield ev
+
     return handler
 
 

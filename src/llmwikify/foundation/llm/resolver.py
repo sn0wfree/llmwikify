@@ -35,6 +35,7 @@ v0.41: Provider 元数据 (base_url, auth_scheme, default_model,
 supported_models, context_windows, reasoning_split) 全部从
 ``providers.yaml`` 读取，代码中不再硬编码。
 """
+
 from __future__ import annotations
 
 import logging
@@ -114,7 +115,8 @@ def apply_provider_alias(provider: str) -> str:
     if aliased != provider:
         logger.info(
             "provider alias applied: %r -> %r (consider updating config)",
-            provider, aliased,
+            provider,
+            aliased,
         )
     return aliased
 
@@ -152,6 +154,7 @@ def _provider_reasoning_split(provider: str) -> bool:
 
 # ─── Env-var resolution helpers ───────────────────────────────────────
 
+
 def _env_or(value: str | None, env_key: str) -> str | None:
     """Return the env override if set, else the value unchanged."""
     env_val = os.environ.get(env_key)
@@ -169,6 +172,7 @@ def _expand_env_var(value: str) -> str:
 
 
 # ─── Public resolver ──────────────────────────────────────────────────
+
 
 def resolve_chat_llm(config: dict[str, Any] | None = None) -> LLMSpec:
     """Resolve a wiki / dict config into a fully-resolved ``LLMSpec``.
@@ -211,11 +215,7 @@ def resolve_chat_llm(config: dict[str, Any] | None = None) -> LLMSpec:
         source = "config"
 
     # Resolve provider with alias.
-    raw_provider = (
-        os.environ.get("LLM_PROVIDER")
-        or llm_cfg.get("provider")
-        or "openai"
-    )
+    raw_provider = os.environ.get("LLM_PROVIDER") or llm_cfg.get("provider") or "openai"
     provider = apply_provider_alias(raw_provider)
 
     # Resolve base URL. Env > config > provider default.

@@ -11,6 +11,7 @@ The 4 actor prompt bodies live in
 ``apps/chat/skills/workflows/actor_prompts/*.md``. They are pure
 markdown with JSON-only output contracts.
 """
+
 from __future__ import annotations
 
 # This file is the loader for built-in workflows. Each workflow is

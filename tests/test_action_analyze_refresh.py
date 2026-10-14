@@ -81,13 +81,15 @@ def mock_wiki(tmp_path):
 @pytest.fixture
 def mock_llm():
     llm = MagicMock()
-    llm.chat.return_value = json.dumps({
-        "context": "test context",
-        "boundaries": "test boundaries",
-        "position": "researcher view",
-        "premises": ["premise 1", "premise 2"],
-        "scope_check": True,
-    })
+    llm.chat.return_value = json.dumps(
+        {
+            "context": "test context",
+            "boundaries": "test boundaries",
+            "position": "researcher view",
+            "premises": ["premise 1", "premise 2"],
+            "scope_check": True,
+        }
+    )
     return llm
 
 
@@ -104,6 +106,7 @@ def engine_with_db(db_with_sources, mock_wiki, mock_llm):
     # a stub to avoid AttributeError when called directly.
     if engine._action_ctx.metrics is None:
         engine._action_ctx.metrics = MagicMock()
+
     # Make analyzer._analyze_one return success so all 3 sources are
     # analyzed in the test (otherwise it fails because mock_wiki.analyze_source
     # returns a MagicMock that doesn't match {"status": ...}).
@@ -114,6 +117,7 @@ def engine_with_db(db_with_sources, mock_wiki, mock_llm):
             "topics": ["test"],
             "entities": ["test"],
         }
+
     engine._action_ctx.analyzer._analyze_one = fake_analyze_one
     return engine, sid
 
@@ -125,7 +129,9 @@ class TestActionAnalyzeRefreshesState:
 
     @pytest.mark.asyncio
     async def test_refreshes_state_sources_after_analysis(
-        self, engine_with_db, db_with_sources,
+        self,
+        engine_with_db,
+        db_with_sources,
     ) -> None:
         """After action_analyze, state.sources should reflect the
         DB state (with analysis populated for all sources).
@@ -161,7 +167,9 @@ class TestActionAnalyzeRefreshesState:
 
     @pytest.mark.asyncio
     async def test_updates_cached_source_count(
-        self, engine_with_db, db_with_sources,
+        self,
+        engine_with_db,
+        db_with_sources,
     ) -> None:
         """state._cached_source_count must be updated so the observer's
         Issue#8 skip optimization doesn't skip the next refresh.
@@ -185,7 +193,9 @@ class TestActionAnalyzeRefreshesState:
 
     @pytest.mark.asyncio
     async def test_analyzed_count_visible_to_subsequent_reasoner(
-        self, engine_with_db, db_with_sources,
+        self,
+        engine_with_db,
+        db_with_sources,
     ) -> None:
         """After action_analyze, computing analyzed_count from
         state.sources (as _llm_reason does) should show all sources
@@ -215,7 +225,9 @@ class TestActionAnalyzeRefreshesState:
 
     @pytest.mark.asyncio
     async def test_no_analyze_no_loop_when_all_already_analyzed(
-        self, engine_with_db, db_with_sources,
+        self,
+        engine_with_db,
+        db_with_sources,
     ) -> None:
         """If all sources are already analyzed, action_analyze should
         not loop or yield source_analyzed events; just the step + progress.

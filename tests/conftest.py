@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 # Add parent directory to path
-sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from llmwikify.foundation.extractors import ExtractedContent
 from llmwikify.kernel import Wiki
@@ -27,6 +27,7 @@ from llmwikify.kernel import Wiki
 @pytest.fixture(autouse=True, scope="session")
 def _isolate_llmwikify_data_dir() -> str:
     import os
+
     tmp_root = Path(tempfile.mkdtemp(prefix="llmwikify_test_data_"))
     os.environ["LLMWIKIFY_DATA_DIR"] = str(tmp_root)
     yield str(tmp_root)
@@ -44,8 +45,8 @@ def temp_wiki():
     wiki_root = Path(temp_dir)
 
     # Initialize directory structure
-    (wiki_root / 'raw').mkdir()
-    (wiki_root / 'wiki').mkdir()
+    (wiki_root / "raw").mkdir()
+    (wiki_root / "wiki").mkdir()
 
     yield wiki_root
 
@@ -57,13 +58,14 @@ def temp_wiki():
 def wiki_instance(temp_wiki):
     """Create a Wiki instance with clean initialization."""
     # Ensure clean state
-    if (temp_wiki / 'wiki').exists():
+    if (temp_wiki / "wiki").exists():
         import shutil
-        shutil.rmtree(temp_wiki / 'wiki')
-        shutil.rmtree(temp_wiki / 'raw')
 
-    (temp_wiki / 'raw').mkdir()
-    (temp_wiki / 'wiki').mkdir()
+        shutil.rmtree(temp_wiki / "wiki")
+        shutil.rmtree(temp_wiki / "raw")
+
+    (temp_wiki / "raw").mkdir()
+    (temp_wiki / "wiki").mkdir()
 
     wiki = Wiki(temp_wiki)
     wiki.index.initialize()
@@ -91,5 +93,5 @@ def sample_pdf_content():
         text="Test PDF content\n\nWith multiple pages",
         source_type="pdf",
         title="Test PDF",
-        metadata={"page_count": 2}
+        metadata={"page_count": 2},
     )

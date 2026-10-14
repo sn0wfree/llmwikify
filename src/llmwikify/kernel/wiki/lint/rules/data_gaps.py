@@ -40,41 +40,55 @@ class DataGapsRule(Rule):
         wiki: Wiki,
         results: list[dict[str, Any]],
     ) -> None:
-        has_sources_section = bool(re.search(r'^#{1,3}\s+Sources', content, re.MULTILINE | re.IGNORECASE))
-        has_inline_citations = bool(re.search(r'\[Source[^\]]*\]\(', content))
+        has_sources_section = bool(
+            re.search(r"^#{1,3}\s+Sources", content, re.MULTILINE | re.IGNORECASE)
+        )
+        has_inline_citations = bool(re.search(r"\[Source[^\]]*\]\(", content))
 
-        lines = content.split('\n')
+        lines = content.split("\n")
         assertion_lines = [
-            line.strip() for line in lines
+            line.strip()
+            for line in lines
             if line.strip()
-            and not line.startswith('#')
-            and not line.startswith('---')
-            and not line.startswith('[')
+            and not line.startswith("#")
+            and not line.startswith("---")
+            and not line.startswith("[")
             and len(line.strip()) > MIN_ASSERTION_LENGTH
         ]
 
-        if len(assertion_lines) >= MIN_ASSERTIONS_FOR_GAP and not has_sources_section and not has_inline_citations:
-            results.append({
-                "type": "unsourced_claims",
-                "page": page_name,
-                "assertion_count": len(assertion_lines),
-                "observation": (
-                    f"'{page_name}' contains {len(assertion_lines)} assertion(s) "
-                    f"without cited sources"
-                ),
-            })
+        if (
+            len(assertion_lines) >= MIN_ASSERTIONS_FOR_GAP
+            and not has_sources_section
+            and not has_inline_citations
+        ):
+            results.append(
+                {
+                    "type": "unsourced_claims",
+                    "page": page_name,
+                    "assertion_count": len(assertion_lines),
+                    "observation": (
+                        f"'{page_name}' contains {len(assertion_lines)} assertion(s) "
+                        f"without cited sources"
+                    ),
+                }
+            )
 
         vague_time_words = re.findall(
-            r'\b(recently|soon|upcoming|former|previous|last year|next year|in the past|currently|nowadays|these days)\b',
-            content, re.IGNORECASE
+            r"\b(recently|soon|upcoming|former|previous|last year|next year|in the past|currently|nowadays|these days)\b",
+            content,
+            re.IGNORECASE,
         )
         if vague_time_words:
-            results.append({
-                "type": "vague_temporal",
-                "page": page_name,
-                "vague_references": list({w.lower() for w in vague_time_words})[:MAX_SUMMARY_ITEMS],
-                "observation": (
-                    f"'{page_name}' uses vague temporal references: "
-                    f"{', '.join({w.lower() for w in vague_time_words[:3]})}"
-                ),
-            })
+            results.append(
+                {
+                    "type": "vague_temporal",
+                    "page": page_name,
+                    "vague_references": list({w.lower() for w in vague_time_words})[
+                        :MAX_SUMMARY_ITEMS
+                    ],
+                    "observation": (
+                        f"'{page_name}' uses vague temporal references: "
+                        f"{', '.join({w.lower() for w in vague_time_words[:3]})}"
+                    ),
+                }
+            )

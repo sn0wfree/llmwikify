@@ -28,6 +28,7 @@ class SearchResult:
 # Provider Protocol
 # ---------------------------------------------------------------------------
 
+
 class SearchProvider(Protocol):
     async def search(self, query: str, num_results: int) -> list[SearchResult]: ...
 
@@ -35,6 +36,7 @@ class SearchProvider(Protocol):
 # ---------------------------------------------------------------------------
 # Jina Provider (AI search + full content extraction)
 # ---------------------------------------------------------------------------
+
 
 class JinaSearchProvider:
     """Jina Reader search (s.jina.ai) — search + auto-extract top results.
@@ -66,11 +68,15 @@ class JinaSearchProvider:
 
             results = []
             for r in data.get("data", [])[:num_results]:
-                results.append(SearchResult(
-                    title=r.get("title", ""),
-                    url=r.get("url", ""),
-                    snippet=(r.get("content", "") or r.get("description", ""))[:500],
-                ))
+                results.append(
+                    SearchResult(
+                        title=r.get("title", ""),
+                        url=r.get("url", ""),
+                        snippet=(r.get("content", "") or r.get("description", ""))[
+                            :500
+                        ],
+                    )
+                )
             return results
         except Exception as exc:
             logger.warning("Jina search failed: %s", exc)
@@ -80,6 +86,7 @@ class JinaSearchProvider:
 # ---------------------------------------------------------------------------
 # SearXNG Provider
 # ---------------------------------------------------------------------------
+
 
 class SearXNGProvider:
     """SearXNG self-hosted meta search engine."""
@@ -112,6 +119,7 @@ class SearXNGProvider:
 # Tavily Provider
 # ---------------------------------------------------------------------------
 
+
 class TavilyProvider:
     """Tavily AI-optimized search API."""
 
@@ -126,7 +134,9 @@ class TavilyProvider:
         client = TavilyClient(api_key=self.api_key)
 
         def _search() -> Any:
-            return client.search(query, max_results=num_results, include_raw_content=False)
+            return client.search(
+                query, max_results=num_results, include_raw_content=False
+            )
 
         response = await asyncio.to_thread(_search)
         return [
@@ -143,6 +153,7 @@ class TavilyProvider:
 # ---------------------------------------------------------------------------
 # DuckDuckGo Provider
 # ---------------------------------------------------------------------------
+
 
 class DuckDuckGoProvider:
     """DuckDuckGo search (free, may fail in restricted networks)."""
@@ -175,6 +186,7 @@ class DuckDuckGoProvider:
 # MiniMax Provider
 # ---------------------------------------------------------------------------
 
+
 class MiniMaxSearchProvider:
     """MiniMax Token Plan web search API (450 req/day).
 
@@ -182,7 +194,9 @@ class MiniMaxSearchProvider:
         POST {api_host}/v1/coding_plan/search
     """
 
-    def __init__(self, api_key: str, api_host: str = "https://api.minimaxi.com") -> None:
+    def __init__(
+        self, api_key: str, api_host: str = "https://api.minimaxi.com"
+    ) -> None:
         self.api_key = api_key
         self.api_host = api_host.rstrip("/")
 
@@ -202,6 +216,7 @@ class MiniMaxSearchProvider:
             if resp.status_code in (401, 402, 429):
                 body = resp.text
                 from llmwikify.foundation.llm.streamable import is_arrearage_response
+
                 if is_arrearage_response(resp.status_code, body):
                     raise RuntimeError(
                         f"MiniMax search quota exhausted (HTTP {resp.status_code}). "
@@ -218,10 +233,10 @@ class MiniMaxSearchProvider:
         if base_resp.get("status_code", 0) != 0:
             status_msg = base_resp.get("status_msg", "unknown")
             # Issue: detect quota-related error messages
-            if any(m in status_msg.lower() for m in ("quota", "limit", "exhausted", "rate")):
-                raise RuntimeError(
-                    f"MiniMax search quota exhausted: {status_msg}"
-                )
+            if any(
+                m in status_msg.lower() for m in ("quota", "limit", "exhausted", "rate")
+            ):
+                raise RuntimeError(f"MiniMax search quota exhausted: {status_msg}")
             raise RuntimeError(
                 f"MiniMax API error {base_resp.get('status_code')}: {status_msg}"
             )
@@ -240,6 +255,7 @@ class MiniMaxSearchProvider:
 # ---------------------------------------------------------------------------
 # Fallback Chain
 # ---------------------------------------------------------------------------
+
 
 class FallbackSearchProvider:
     """Tries providers in order, returns first successful results."""
@@ -322,7 +338,9 @@ def create_search_provider(config: dict[str, Any]) -> FallbackSearchProvider:
             logger.info("Registered SearXNG provider: %s", searxng_url)
 
     if provider_name in ("auto", "minimax"):
-        minimax_key = config.get("minimax_api_key") or _resolve_minimax_key_from_llm_config()
+        minimax_key = (
+            config.get("minimax_api_key") or _resolve_minimax_key_from_llm_config()
+        )
         if minimax_key:
             minimax_host = config.get("minimax_api_host", "https://api.minimaxi.com")
             chain.append(MiniMaxSearchProvider(minimax_key, minimax_host))
@@ -349,6 +367,7 @@ def create_search_provider(config: dict[str, Any]) -> FallbackSearchProvider:
 # WebSearch (backward-compatible wrapper)
 # ---------------------------------------------------------------------------
 
+
 class WebSearch:
     """Web search wrapper — delegates to configured provider chain."""
 
@@ -361,19 +380,34 @@ class WebSearch:
             self._provider = create_search_provider(self.config)
         return self._provider
 
-    async def search(self, query: str, num_results: int | None = None) -> list[SearchResult]:
+    async def search(
+        self, query: str, num_results: int | None = None
+    ) -> list[SearchResult]:
         """Execute search using configured provider chain."""
         num = num_results or self.config.get("web_search_results_per_query", 5)
         return await self._get_provider().search(query, num)
 
-    async def search_with_type(self, query: str, source_type: str) -> list[dict[str, Any]]:
+    async def search_with_type(
+        self, query: str, source_type: str
+    ) -> list[dict[str, Any]]:
         """Search with specific source type routing."""
         if source_type == "web":
             results = await self.search(query)
-            return [{"query": query, "source_type": "web", "url": r.url, "title": r.title} for r in results]
+            return [
+                {"query": query, "source_type": "web", "url": r.url, "title": r.title}
+                for r in results
+            ]
         elif source_type == "youtube":
             results = await self.search(f"site:youtube.com {query}")
-            return [{"query": query, "source_type": "youtube", "url": r.url, "title": r.title} for r in results]
+            return [
+                {
+                    "query": query,
+                    "source_type": "youtube",
+                    "url": r.url,
+                    "title": r.title,
+                }
+                for r in results
+            ]
         elif source_type == "wiki":
             return [{"query": query, "source_type": "wiki", "url": "", "title": query}]
         return []

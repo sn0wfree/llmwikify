@@ -59,14 +59,18 @@ class ReasoningChecker:
         scores: dict[str, float] = {}
         issues: list[dict[str, str]] = []
 
-        scores["conclusion_evidence_alignment"] = self._check_alignment(synthesis, sources, issues)
+        scores["conclusion_evidence_alignment"] = self._check_alignment(
+            synthesis, sources, issues
+        )
         scores["logical_contradiction"] = self._check_contradiction(synthesis, issues)
         scores["causal_coverage"] = self._check_causal(synthesis, issues)
         scores["premise_evidence_alignment"] = self._check_premises(
             synthesis, sources, clarification, issues
         )
         scores["assumption_visibility"] = self._check_assumptions(synthesis, issues)
-        scores["uncertainty_quantification"] = self._check_uncertainty(synthesis, issues)
+        scores["uncertainty_quantification"] = self._check_uncertainty(
+            synthesis, issues
+        )
 
         # Weighted aggregate. 6 dimensions get equal weight by default.
         aggregate = sum(scores.values()) / max(1, len(self.DIMENSIONS))
@@ -93,18 +97,18 @@ class ReasoningChecker:
             return 0.0
         # Citation patterns: [[Source:id]], [Source: ...], (Source: ...), (Ref: ...)
         cite_pattern = re.compile(
-            r"\[\[Source:[^\]]+\]\]|"
-            r"\[Source:|\[Ref:|"
-            r"\(Source:|\(Ref:"
+            r"\[\[Source:[^\]]+\]\]|" r"\[Source:|\[Ref:|" r"\(Source:|\(Ref:"
         )
         cited = sum(1 for s in sentences if cite_pattern.search(s))
         ratio = cited / len(sentences)
         if ratio < 0.3 and sources:
-            issues.append({
-                "dimension": "conclusion_evidence_alignment",
-                "severity": "warning",
-                "message": f"仅 {cited}/{len(sentences)} 句子引用证据（{ratio:.0%}），建议提升至 ≥30%",
-            })
+            issues.append(
+                {
+                    "dimension": "conclusion_evidence_alignment",
+                    "severity": "warning",
+                    "message": f"仅 {cited}/{len(sentences)} 句子引用证据（{ratio:.0%}），建议提升至 ≥30%",
+                }
+            )
         return min(1.0, ratio * 2)  # 50% sentences cited → score 1.0
 
     def _check_contradiction(
@@ -143,11 +147,13 @@ class ReasoningChecker:
         )
         matches = causal_pattern.findall(synthesis)
         if not matches:
-            issues.append({
-                "dimension": "causal_coverage",
-                "severity": "info",
-                "message": "未检测到因果连接词，建议补充 '因为...所以' / 'because...therefore' 等说明",
-            })
+            issues.append(
+                {
+                    "dimension": "causal_coverage",
+                    "severity": "info",
+                    "message": "未检测到因果连接词，建议补充 '因为...所以' / 'because...therefore' 等说明",
+                }
+            )
             return 0.3
         # Map: 0 matches=0.3, 1-2=0.6, 3+=1.0
         if len(matches) <= 2:
@@ -175,11 +181,13 @@ class ReasoningChecker:
                 covered += 1
         ratio = covered / max(1, len(premises))
         if ratio < 0.5:
-            issues.append({
-                "dimension": "premise_evidence_alignment",
-                "severity": "warning",
-                "message": f"仅 {covered}/{len(premises)} 前提在分析中被讨论（{ratio:.0%}）",
-            })
+            issues.append(
+                {
+                    "dimension": "premise_evidence_alignment",
+                    "severity": "warning",
+                    "message": f"仅 {covered}/{len(premises)} 前提在分析中被讨论（{ratio:.0%}）",
+                }
+            )
         return min(1.0, ratio * 1.25)
 
     def _check_assumptions(
@@ -195,11 +203,13 @@ class ReasoningChecker:
         )
         if assumption_pattern.search(synthesis):
             return 1.0
-        issues.append({
-            "dimension": "assumption_visibility",
-            "severity": "info",
-            "message": "未显式标注假设，建议添加 '假设: ...' 段",
-        })
+        issues.append(
+            {
+                "dimension": "assumption_visibility",
+                "severity": "info",
+                "message": "未显式标注假设，建议添加 '假设: ...' 段",
+            }
+        )
         return 0.5
 
     def _check_uncertainty(
@@ -218,9 +228,11 @@ class ReasoningChecker:
             return 1.0
         if len(matches) == 1:
             return 0.7
-        issues.append({
-            "dimension": "uncertainty_quantification",
-            "severity": "info",
-            "message": "未量化不确定性，建议在结论旁标注置信度（如 '可能'/'likely'）",
-        })
+        issues.append(
+            {
+                "dimension": "uncertainty_quantification",
+                "severity": "info",
+                "message": "未量化不确定性，建议在结论旁标注置信度（如 '可能'/'likely'）",
+            }
+        )
         return 0.4

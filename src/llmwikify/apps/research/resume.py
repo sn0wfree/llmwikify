@@ -181,5 +181,7 @@ class ResearchResumeLoader:
 
         logger.info(
             "Resuming session %s from %s (round %d)",
-            state.session_id, current_step, state.round,
+            state.session_id,
+            current_step,
+            state.round,
         )

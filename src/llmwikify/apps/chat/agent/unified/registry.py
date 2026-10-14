@@ -17,6 +17,7 @@
 
     loop = create_agent_loop("validator")
 """
+
 from __future__ import annotations
 
 import logging
@@ -150,32 +151,39 @@ def _register_chat_mode() -> None:
     try:
         from llmwikify.kernel.agent.steps import CheckEmptyStep
 
-        register_mode(AgentModeConfig(
-            name="chat",
-            spec_cls=ChatSpec,
-            reasoner=_make_chat_reasoner,
-            actor=_make_tool_actor,
-            deciders={"after_reason": CheckEmptyStep("tool_calls", "no_tool_calls")},
-            hook_factory=_make_chat_hook,
-            precheck=_chat_precheck,
-            finalize=_chat_finalize,
-        ))
+        register_mode(
+            AgentModeConfig(
+                name="chat",
+                spec_cls=ChatSpec,
+                reasoner=_make_chat_reasoner,
+                actor=_make_tool_actor,
+                deciders={
+                    "after_reason": CheckEmptyStep("tool_calls", "no_tool_calls")
+                },
+                hook_factory=_make_chat_hook,
+                precheck=_chat_precheck,
+                finalize=_chat_finalize,
+            )
+        )
     except ImportError:
         pass  # Phase 6 未实现时跳过
 
 
 def _make_chat_reasoner(**kwargs: Any) -> Any:
     from llmwikify.apps.chat.agent.unified.handlers.chat_reasoner import ChatReasoner
+
     return ChatReasoner(kwargs["chat_service"], kwargs.get("prompt_builder"))
 
 
 def _make_tool_actor(**kwargs: Any) -> Any:
     from llmwikify.apps.chat.agent.unified.handlers.tool_actor import ToolActor
+
     return ToolActor(kwargs["tool_executor"])
 
 
 def _make_chat_hook(**kwargs: Any) -> UnifiedHook:
     from llmwikify.apps.chat.agent.unified.hook_adapter import AgentHookAdapter
+
     return AgentHookAdapter(kwargs.get("hook"))
 
 
@@ -187,18 +195,21 @@ def _register_codegen_mode() -> None:
         )
         from llmwikify.kernel.agent.steps import CheckSuccessStep
 
-        register_mode(AgentModeConfig(
-            name="codegen",
-            reasoner=_make_codegen_reasoner,
-            actor=CodeActor(),
-            deciders={"after_act": CheckSuccessStep()},
-        ))
+        register_mode(
+            AgentModeConfig(
+                name="codegen",
+                reasoner=_make_codegen_reasoner,
+                actor=CodeActor(),
+                deciders={"after_act": CheckSuccessStep()},
+            )
+        )
     except ImportError:
         pass  # Phase 4 未实现时跳过
 
 
 def _make_codegen_reasoner(**kwargs: Any) -> Any:
     from llmwikify.kernel.agent import CodegenReasoner
+
     return CodegenReasoner(kwargs.get("llm_client"))
 
 

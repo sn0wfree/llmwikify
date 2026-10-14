@@ -14,6 +14,7 @@ Tables touched:
     chat_sessions, dream_proposals, notifications, confirmations,
     ingest_log, autoresearch_sessions
 """
+
 from __future__ import annotations
 
 import logging
@@ -66,8 +67,7 @@ class AdminStatsRepository(ChatDBBase):
     def list_all_wikis(self) -> list[dict[str, str]]:
         """Distinct wiki_ids across all relevant tables."""
         with self._connect() as conn:
-            rows = conn.execute(
-                """SELECT DISTINCT wiki_id
+            rows = conn.execute("""SELECT DISTINCT wiki_id
                    FROM chat_sessions
                    WHERE wiki_id IS NOT NULL
                    UNION
@@ -78,8 +78,7 @@ class AdminStatsRepository(ChatDBBase):
                    FROM notifications
                    UNION
                    SELECT DISTINCT wiki_id
-                   FROM autoresearch_sessions"""
-            ).fetchall()
+                   FROM autoresearch_sessions""").fetchall()
             return [{"wiki_id": r["wiki_id"]} for r in rows]
 
     def delete_wiki_data(self, wiki_id: str) -> dict[str, Any]:
@@ -116,8 +115,7 @@ class AdminStatsRepository(ChatDBBase):
                     # Skip if the child table doesn't exist (test
                     # fixtures may not init all facades).
                     exists = conn.execute(
-                        "SELECT 1 FROM sqlite_master "
-                        "WHERE type='table' AND name=?",
+                        "SELECT 1 FROM sqlite_master " "WHERE type='table' AND name=?",
                         (child_table,),
                     ).fetchone()
                     if not exists:
@@ -171,10 +169,16 @@ class AdminStatsRepository(ChatDBBase):
         """Per-table counts across the whole DB + file size in MB."""
         with self._connect() as conn:
             tables = [
-                "autoresearch_sessions", "autoresearch_sub_queries",
-                "autoresearch_sources", "research_steps",
-                "chat_sessions", "chat_messages", "tool_calls",
-                "dream_proposals", "notifications", "confirmations",
+                "autoresearch_sessions",
+                "autoresearch_sub_queries",
+                "autoresearch_sources",
+                "research_steps",
+                "chat_sessions",
+                "chat_messages",
+                "tool_calls",
+                "dream_proposals",
+                "notifications",
+                "confirmations",
                 "ingest_log",
             ]
             stats = {}

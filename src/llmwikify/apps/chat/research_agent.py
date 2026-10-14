@@ -20,6 +20,7 @@ Per the design doc §3.5, this file is **~50 LOC** of
 adapter code; the real research logic remains in
 ``engine.py``.
 """
+
 from __future__ import annotations
 
 import asyncio

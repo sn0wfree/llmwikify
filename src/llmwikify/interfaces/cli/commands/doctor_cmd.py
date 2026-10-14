@@ -40,19 +40,23 @@ def _check(label: str, ok: bool, detail: str = "", silent: bool = False) -> bool
 def _check_config(silent: bool = False) -> tuple[bool, dict]:
     """Check ~/.llmwikify/llmwikify.json. Returns (ok, data_for_json)."""
     if not CONFIG_PATH.exists():
-        _check("~/.llmwikify/llmwikify.json", False,
-               "not found — run: llmwikify init-llm", silent=silent)
+        _check(
+            "~/.llmwikify/llmwikify.json",
+            False,
+            "not found — run: llmwikify init-llm",
+            silent=silent,
+        )
         return False, {
             "category": "config",
             "name": str(CONFIG_PATH),
             "status": "missing",
             "fix": {
                 "commands": ["llmwikify init-llm"],
-                "docs":     "docs/ONBOARDING.md#configure-llm",
-                "hint":     "Or set LLMWIKIFY_LLM_API_KEY env var",
-                "cost":     "~30s",
-                "risk":     "low",
-                "auto":     False,
+                "docs": "docs/ONBOARDING.md#configure-llm",
+                "hint": "Or set LLMWIKIFY_LLM_API_KEY env var",
+                "cost": "~30s",
+                "risk": "low",
+                "auto": False,
             },
         }
 
@@ -67,27 +71,45 @@ def _check_config(silent: bool = False) -> tuple[bool, dict]:
             "detail": str(e),
             "fix": {
                 "commands": ["llmwikify init-llm --force"],
-                "docs":     "docs/ONBOARDING.md#configure-llm",
-                "hint":     "Or edit ~/.llmwikify/llmwikify.json manually",
-                "cost":     "~30s",
-                "risk":     "medium",
-                "auto":     False,
+                "docs": "docs/ONBOARDING.md#configure-llm",
+                "hint": "Or edit ~/.llmwikify/llmwikify.json manually",
+                "cost": "~30s",
+                "risk": "medium",
+                "auto": False,
             },
         }
 
     llm = data.get("llm", {})
     if not llm.get("enabled"):
-        _check("~/.llmwikify/llmwikify.json", True, "LLM disabled (offline mode)", silent=silent)
-        return True, {"category": "config", "name": str(CONFIG_PATH),
-                      "status": "ok", "enabled": False}
+        _check(
+            "~/.llmwikify/llmwikify.json",
+            True,
+            "LLM disabled (offline mode)",
+            silent=silent,
+        )
+        return True, {
+            "category": "config",
+            "name": str(CONFIG_PATH),
+            "status": "ok",
+            "enabled": False,
+        }
 
     provider = llm.get("provider", "unknown")
     model = llm.get("model", "unknown")
-    _check("~/.llmwikify/llmwikify.json", True,
-           f"provider={provider}, model={model}", silent=silent)
-    return True, {"category": "config", "name": str(CONFIG_PATH),
-                  "status": "ok", "enabled": True,
-                  "provider": provider, "model": model}
+    _check(
+        "~/.llmwikify/llmwikify.json",
+        True,
+        f"provider={provider}, model={model}",
+        silent=silent,
+    )
+    return True, {
+        "category": "config",
+        "name": str(CONFIG_PATH),
+        "status": "ok",
+        "enabled": True,
+        "provider": provider,
+        "model": model,
+    }
 
 
 # Fix recipes (D5=A: hardcoded). Each fix dict follows the schema:
@@ -96,12 +118,12 @@ def _check_config(silent: bool = False) -> tuple[bool, dict]:
 # (D6, deferred) could safely auto-run.
 _PYTHON_FIX: dict[str, Any] = {
     "commands": ["pyenv install 3.11 && pyenv global 3.11"],
-    "docs":     "README.md#requirements",
-    "hint":     "Or use conda: conda create -n llmwikify python=3.11 "
-               "Or use Docker image",
-    "cost":     "~2 min (download + install)",
-    "risk":     "medium",
-    "auto":     False,
+    "docs": "README.md#requirements",
+    "hint": "Or use conda: conda create -n llmwikify python=3.11 "
+    "Or use Docker image",
+    "cost": "~2 min (download + install)",
+    "risk": "medium",
+    "auto": False,
 }
 
 
@@ -109,24 +131,28 @@ def _check_python(silent: bool = False) -> bool:
     """Check Python version >= 3.10."""
     v = sys.version_info
     ok = v >= (3, 10)
-    _check(f"Python {v.major}.{v.minor}.{v.micro}", ok, "requires >= 3.10", silent=silent)
+    _check(
+        f"Python {v.major}.{v.minor}.{v.micro}", ok, "requires >= 3.10", silent=silent
+    )
     if not ok:
         # Print fix hint inline (D6 deferred: only text mode hint, no auto)
         if not silent:
             print(f"      Fix:   {' | '.join(_PYTHON_FIX['commands'])}")
             print(f"      Docs:  {_PYTHON_FIX['docs']}")
-            print(f"      Cost:  {_PYTHON_FIX['cost']}    "
-                  f"Risk: {_PYTHON_FIX['risk']}    Auto: {_PYTHON_FIX['auto']}")
+            print(
+                f"      Cost:  {_PYTHON_FIX['cost']}    "
+                f"Risk: {_PYTHON_FIX['risk']}    Auto: {_PYTHON_FIX['auto']}"
+            )
     return ok
 
 
 _CORE_DEPS_FIX: dict[str, Any] = {
     "commands": ["pip install -e '.[dev]'"],
-    "docs":     "pyproject.toml#project.dependencies",
-    "hint":     "Or pip install <missing-pkg> for each individually",
-    "cost":     "~30s",
-    "risk":     "low",
-    "auto":     False,
+    "docs": "pyproject.toml#project.dependencies",
+    "hint": "Or pip install <missing-pkg> for each individually",
+    "cost": "~30s",
+    "risk": "low",
+    "auto": False,
 }
 
 
@@ -143,8 +169,10 @@ def _check_core_deps(silent: bool = False) -> int:
     if failures > 0 and not silent:
         print(f"      Fix:   {' | '.join(_CORE_DEPS_FIX['commands'])}")
         print(f"      Docs:  {_CORE_DEPS_FIX['docs']}")
-        print(f"      Cost:  {_CORE_DEPS_FIX['cost']}    "
-              f"Risk: {_CORE_DEPS_FIX['risk']}    Auto: {_CORE_DEPS_FIX['auto']}")
+        print(
+            f"      Cost:  {_CORE_DEPS_FIX['cost']}    "
+            f"Risk: {_CORE_DEPS_FIX['risk']}    Auto: {_CORE_DEPS_FIX['auto']}"
+        )
     return failures
 
 
@@ -164,17 +192,21 @@ def _check_optional_deps(silent: bool = False) -> None:
             importlib.import_module(mod_name)
             _check(f"{mod_name}", True, extra, silent=silent)
         except ImportError:
-            _check(f"{mod_name}", False,
-                   f"{extra} — pip install 'llmwikify[{extra}]'", silent=silent)
+            _check(
+                f"{mod_name}",
+                False,
+                f"{extra} — pip install 'llmwikify[{extra}]'",
+                silent=silent,
+            )
 
 
 _LLM_FIX: dict[str, Any] = {
     "commands": ["llmwikify init-llm"],
-    "docs":     "docs/ONBOARDING.md#configure-llm",
-    "hint":     "Check API key validity / network / provider status",
-    "cost":     "~30s",
-    "risk":     "low",
-    "auto":     False,
+    "docs": "docs/ONBOARDING.md#configure-llm",
+    "hint": "Check API key validity / network / provider status",
+    "cost": "~30s",
+    "risk": "low",
+    "auto": False,
 }
 
 
@@ -234,6 +266,7 @@ def _check_llm_connectivity() -> tuple[bool, float, str]:
 
     try:
         import httpx
+
         start = time.monotonic()
         resp = httpx.post(url, json=body, headers=headers, timeout=LLM_TEST_TIMEOUT)
         latency = time.monotonic() - start
@@ -250,11 +283,11 @@ def _check_llm_connectivity() -> tuple[bool, float, str]:
 
 _WEBUI_FIX: dict[str, Any] = {
     "commands": ["cd ui/webui && pnpm install && pnpm build"],
-    "docs":     "AGENTS.md#webui-构建",
-    "hint":     "Or: cd ui/webui && npm install && npm run build",
-    "cost":     "~2 min (npm install) + ~30s (build)",
-    "risk":     "medium",
-    "auto":     False,
+    "docs": "AGENTS.md#webui-构建",
+    "hint": "Or: cd ui/webui && npm install && npm run build",
+    "cost": "~2 min (npm install) + ~30s (build)",
+    "risk": "medium",
+    "auto": False,
 }
 
 
@@ -262,19 +295,26 @@ def _check_webui_bundle(silent: bool = False) -> bool:
     """Check if WebUI bundle is built."""
     try:
         import llmwikify
+
         pkg_dir = Path(llmwikify.__file__).parent.parent.parent
         dist_path = pkg_dir / "ui" / "webui" / "dist"
         if dist_path.exists() and (dist_path / "index.html").exists():
             _check("ui/webui/dist/", True, "found", silent=silent)
             return True
         else:
-            _check("ui/webui/dist/", False,
-                   "not built — cd ui/webui && pnpm build", silent=silent)
+            _check(
+                "ui/webui/dist/",
+                False,
+                "not built — cd ui/webui && pnpm build",
+                silent=silent,
+            )
             if not silent:
                 print(f"      Fix:   {' | '.join(_WEBUI_FIX['commands'])}")
                 print(f"      Docs:  {_WEBUI_FIX['docs']}")
-                print(f"      Cost:  {_WEBUI_FIX['cost']}    "
-                      f"Risk: {_WEBUI_FIX['risk']}    Auto: {_WEBUI_FIX['auto']}")
+                print(
+                    f"      Cost:  {_WEBUI_FIX['cost']}    "
+                    f"Risk: {_WEBUI_FIX['risk']}    Auto: {_WEBUI_FIX['auto']}"
+                )
             return False
     except Exception:
         _check("ui/webui/dist/", False, "cannot locate", silent=silent)
@@ -299,8 +339,9 @@ def _check_wiki_dir(wiki: Any, silent: bool = False) -> dict[str, Any]:
     and to render the "Recommended actions" block (D9=C).
     """
     if wiki is None or not hasattr(wiki, "layout_diff"):
-        _check("wiki object", False,
-               "not provided — pass a Wiki instance", silent=silent)
+        _check(
+            "wiki object", False, "not provided — pass a Wiki instance", silent=silent
+        )
         return {
             "ok": False,
             "missing_required": ["raw/", "wiki/", ".llmwikify.db", "wiki.md"],
@@ -366,8 +407,10 @@ def _check_permissions(wiki_root: Path, silent: bool = False) -> bool:
     if not ok and not silent:
         print(f"      Fix:   {' | '.join(_PERMISSIONS_FIX['commands'])}")
         print(f"      Docs:  {_PERMISSIONS_FIX['docs']}")
-        print(f"      Cost:  {_PERMISSIONS_FIX['cost']}    "
-              f"Risk: {_PERMISSIONS_FIX['risk']}    Auto: {_PERMISSIONS_FIX['auto']}")
+        print(
+            f"      Cost:  {_PERMISSIONS_FIX['cost']}    "
+            f"Risk: {_PERMISSIONS_FIX['risk']}    Auto: {_PERMISSIONS_FIX['auto']}"
+        )
     return ok
 
 
@@ -375,18 +418,27 @@ def _check_server(server_url: str, silent: bool = False) -> bool:
     """Check if server is reachable."""
     try:
         import httpx
+
         resp = httpx.get(f"{server_url}/api/health", timeout=3.0)
         if resp.status_code == 200:
             data = resp.json()
-            _check("Server reachable", True,
-                   f"status={data.get('status', '?')}", silent=silent)
+            _check(
+                "Server reachable",
+                True,
+                f"status={data.get('status', '?')}",
+                silent=silent,
+            )
             return True
         else:
             _check("Server reachable", False, f"HTTP {resp.status_code}", silent=silent)
             return False
     except Exception:
-        _check("Server reachable", False,
-               "not running (start with: llmwikify serve --web)", silent=silent)
+        _check(
+            "Server reachable",
+            False,
+            "not running (start with: llmwikify serve --web)",
+            silent=silent,
+        )
         if not silent:
             print("      Fix:   llmwikify serve --web --port 8765")
             print("      Docs:  AGENTS.md#服务器")
@@ -396,23 +448,22 @@ def _check_server(server_url: str, silent: bool = False) -> bool:
 
 _SERVER_FIX: dict[str, Any] = {
     "commands": ["llmwikify serve --web --port 8765"],
-    "docs":     "AGENTS.md#服务器",
-    "hint":     "AGENTS.md: 不加 --reload (会 reload 重启). "
-               "Health check: curl http://localhost:8765/api/health",
-    "cost":     "startup (~2s)",
-    "risk":     "low",
-    "auto":     True,
+    "docs": "AGENTS.md#服务器",
+    "hint": "AGENTS.md: 不加 --reload (会 reload 重启). "
+    "Health check: curl http://localhost:8765/api/health",
+    "cost": "startup (~2s)",
+    "risk": "low",
+    "auto": True,
 }
 
 
 _PERMISSIONS_FIX: dict[str, Any] = {
     "commands": ["chmod u+w ~/.llmwikify <wiki_root>"],
-    "docs":     "docs/ONBOARDING.md#permissions",
-    "hint":     "Or run as the wiki owner (avoid root): "
-               "sudo -u <user> llmwikify doctor",
-    "cost":     "<1s",
-    "risk":     "medium",
-    "auto":     True,
+    "docs": "docs/ONBOARDING.md#permissions",
+    "hint": "Or run as the wiki owner (avoid root): " "sudo -u <user> llmwikify doctor",
+    "cost": "<1s",
+    "risk": "medium",
+    "auto": True,
 }
 
 
@@ -432,6 +483,7 @@ def run_doctor(wiki: Any, wiki_root: Any, args: Any) -> int:
     # In JSON mode, suppress noisy library logs (httpx, numexpr, etc.)
     if json_mode:
         import logging
+
         logging.getLogger("httpx").setLevel(logging.WARNING)
         logging.getLogger("httpcore").setLevel(logging.WARNING)
         logging.getLogger("numexpr").setLevel(logging.WARNING)
@@ -454,7 +506,9 @@ def run_doctor(wiki: Any, wiki_root: Any, args: Any) -> int:
             elif errors == 0:
                 print(f"⚠️  All critical checks passed. {warnings} warning(s).")
             else:
-                print(f"❌ {errors} error(s), {warnings} warning(s). See above for details.")
+                print(
+                    f"❌ {errors} error(s), {warnings} warning(s). See above for details."
+                )
 
     if not json_mode:
         print("🔍 llmwikify doctor")
@@ -480,8 +534,13 @@ def run_doctor(wiki: Any, wiki_root: Any, args: Any) -> int:
     # --- 3. Core dependencies ---
     _section("Core dependencies:")
     failures = _check_core_deps(silent=json_mode)
-    results.append({"category": "core_deps", "status": "ok" if failures == 0 else "fail",
-                    "failures": failures})
+    results.append(
+        {
+            "category": "core_deps",
+            "status": "ok" if failures == 0 else "fail",
+            "failures": failures,
+        }
+    )
     errors += failures
 
     # --- 4. Optional extras ---
@@ -496,8 +555,14 @@ def run_doctor(wiki: Any, wiki_root: Any, args: Any) -> int:
     else:
         ok, latency, detail = _check_llm_connectivity()
         _check("LLM test", ok, detail, silent=json_mode)
-        results.append({"category": "llm", "status": "ok" if ok else "fail",
-                        "latency_s": round(latency, 2), "detail": detail})
+        results.append(
+            {
+                "category": "llm",
+                "status": "ok" if ok else "fail",
+                "latency_s": round(latency, 2),
+                "detail": detail,
+            }
+        )
         if not ok:
             warnings += 1
 
@@ -516,12 +581,12 @@ def run_doctor(wiki: Any, wiki_root: Any, args: Any) -> int:
     if not wiki_result["ok"]:
         wiki_entry["fix"] = {
             "commands": ["llmwikify init"],
-            "docs":     "docs/ONBOARDING.md#init",
-            "hint":     "init 自动创建 raw/, wiki/, .llmwikify.db, wiki.md, "
-                       "index.md, log.md",
-            "cost":     "~5s",
-            "risk":     "low",
-            "auto":     True,
+            "docs": "docs/ONBOARDING.md#init",
+            "hint": "init 自动创建 raw/, wiki/, .llmwikify.db, wiki.md, "
+            "index.md, log.md",
+            "cost": "~5s",
+            "risk": "low",
+            "auto": True,
         }
     results.append(wiki_entry)
     if not wiki_result["ok"]:
@@ -623,8 +688,10 @@ def _print_recommended_actions(results: list[dict]) -> None:
         fix = r["fix"]
         level_label = level.upper()
         n = len(actionable)
-        print(f"  [{level_label} {i}/{n}] {r['category']} "
-              f"({r.get('detail') or r.get('status')})")
+        print(
+            f"  [{level_label} {i}/{n}] {r['category']} "
+            f"({r.get('detail') or r.get('status')})"
+        )
         print(f"      Fix:   {' | '.join(fix.get('commands', []))}")
         if fix.get("docs"):
             print(f"      Docs:  {fix['docs']}")
@@ -645,19 +712,26 @@ class DoctorCommand(Command):
 
     def setup_parser(self, subparsers: Any) -> None:
         from argparse import _SubParsersAction
+
         if not isinstance(subparsers, _SubParsersAction):
             raise TypeError("setup_parser requires an argparse subparsers action")
         p = subparsers.add_parser(self.name, help=self.help)
         p.add_argument(
-            "--wiki-root", dest="wiki_root", default=None,
+            "--wiki-root",
+            dest="wiki_root",
+            default=None,
             help="Path to wiki directory to check (default: current dir)",
         )
         p.add_argument(
-            "--skip-llm", dest="skip_llm", action="store_true",
+            "--skip-llm",
+            dest="skip_llm",
+            action="store_true",
             help="Skip LLM connectivity test (faster, no API call)",
         )
         p.add_argument(
-            "--json", dest="json", action="store_true",
+            "--json",
+            dest="json",
+            action="store_true",
             help="Output results as JSON (for scripts/CI)",
         )
 
@@ -673,6 +747,7 @@ class DoctorCommand(Command):
             try:
                 if Path(custom_root).resolve() != Path(wiki.root).resolve():
                     from llmwikify.kernel import Wiki as _Wiki
+
                     wiki = _Wiki(Path(custom_root), config=config)
             except (OSError, RuntimeError):
                 pass  # fall back to original wiki on path error

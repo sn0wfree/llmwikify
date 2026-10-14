@@ -71,11 +71,17 @@ def build_microcompact_fn(
     :func:`microcompact_serialize`. The optional ``counter`` dict is
     updated in place so callers can aggregate microcompact stats.
     """
+
     def _fn(
-        result: Any, tool_name: str, call_id: str,
+        result: Any,
+        tool_name: str,
+        call_id: str,
     ) -> tuple[str, bool, int]:
         content, compacted, saved = microcompact_serialize(
-            result, tool_name, call_id, spec,
+            result,
+            tool_name,
+            call_id,
+            spec,
         )
         if compacted and counter is not None:
             counter["count"] = counter.get("count", 0) + 1

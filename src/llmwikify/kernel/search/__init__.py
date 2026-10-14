@@ -4,6 +4,7 @@ index used as an alternative to the SQLite FTS5 index.
 The ``search`` subpackage wraps a ``qmd`` binary (if installed)
 and exposes a ``QmdClient`` with a simple search interface.
 """
+
 from .qmd_client import QmdClient
 from .qmd_index import QmdIndex
 

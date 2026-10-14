@@ -1,4 +1,5 @@
 """Tests for foundation.config — Config singleton class."""
+
 from __future__ import annotations
 
 import json
@@ -45,7 +46,9 @@ class TestConfigSingleton:
         c2 = Config()
         assert c1 is not c2
 
-    def test_home_property(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_home_property(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """home property returns ~/.llmwikify path."""
         monkeypatch.setenv("LLMWIKIFY_HOME", str(tmp_path))
         # Must reset singleton AFTER setting env var
@@ -53,7 +56,9 @@ class TestConfigSingleton:
         c = Config()
         assert c.home == tmp_path / ".llmwikify"
 
-    def test_path_property(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_path_property(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """path property returns ~/.llmwikify/llmwikify.json."""
         monkeypatch.setenv("LLMWIKIFY_HOME", str(tmp_path))
         # Must reset singleton AFTER setting env var
@@ -61,7 +66,9 @@ class TestConfigSingleton:
         c = Config()
         assert c.path == tmp_path / ".llmwikify" / "llmwikify.json"
 
-    def test_env_var_override(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_env_var_override(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """LLMWIKIFY_HOME env var overrides default home."""
         custom_home = tmp_path / "custom"
         monkeypatch.setenv("LLMWIKIFY_HOME", str(custom_home))
@@ -73,7 +80,9 @@ class TestConfigSingleton:
 class TestConfigGet:
     """Tests for Config.get() method."""
 
-    def test_get_full_config_empty(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_get_full_config_empty(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """get() with no file returns empty dict."""
         monkeypatch.setenv("LLMWIKIFY_HOME", str(tmp_path))
         Config._instance = None
@@ -81,7 +90,9 @@ class TestConfigGet:
         result = c.get()
         assert result == {}
 
-    def test_get_section_missing(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_get_section_missing(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """get(section) with missing section returns empty dict."""
         monkeypatch.setenv("LLMWIKIFY_HOME", str(tmp_path))
         Config._instance = None
@@ -89,7 +100,9 @@ class TestConfigGet:
         result = c.get("llm")
         assert result == {}
 
-    def test_get_section_with_default(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_get_section_with_default(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """get(section, default) returns default when section missing."""
         monkeypatch.setenv("LLMWIKIFY_HOME", str(tmp_path))
         Config._instance = None
@@ -97,7 +110,9 @@ class TestConfigGet:
         result = c.get("llm", {"provider": "minimax"})
         assert result == {"provider": "minimax"}
 
-    def test_get_from_file(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_get_from_file(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """get() reads from llmwikify.json."""
         monkeypatch.setenv("LLMWIKIFY_HOME", str(tmp_path))
         config_dir = tmp_path / ".llmwikify"
@@ -110,7 +125,9 @@ class TestConfigGet:
         result = c.get("llm")
         assert result == {"provider": "openai"}
 
-    def test_get_caches_result(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_get_caches_result(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """get() caches the result after first read."""
         monkeypatch.setenv("LLMWIKIFY_HOME", str(tmp_path))
         config_dir = tmp_path / ".llmwikify"
@@ -184,7 +201,9 @@ class TestConfigGetDefault:
 class TestConfigSave:
     """Tests for Config.save() method."""
 
-    def test_save_creates_file(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_save_creates_file(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """save() creates the config file."""
         monkeypatch.setenv("LLMWIKIFY_HOME", str(tmp_path))
         Config._instance = None
@@ -196,7 +215,9 @@ class TestConfigSave:
         data = json.loads(config_file.read_text())
         assert data["llm"] == {"provider": "openai"}
 
-    def test_save_merges_with_existing(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_save_merges_with_existing(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """save(section) merges with existing config."""
         monkeypatch.setenv("LLMWIKIFY_HOME", str(tmp_path))
         config_dir = tmp_path / ".llmwikify"
@@ -212,7 +233,9 @@ class TestConfigSave:
         assert data["llm"] == {"provider": "openai"}
         assert data["research"] == {"max_sources": 10}
 
-    def test_save_invalidates_cache(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_save_invalidates_cache(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """save() invalidates the cache."""
         monkeypatch.setenv("LLMWIKIFY_HOME", str(tmp_path))
         Config._instance = None
@@ -230,7 +253,9 @@ class TestConfigSave:
 class TestConfigReload:
     """Tests for Config.reload() method."""
 
-    def test_reload_clears_cache(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_reload_clears_cache(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """reload() clears all caches."""
         monkeypatch.setenv("LLMWIKIFY_HOME", str(tmp_path))
         Config._instance = None
@@ -251,7 +276,9 @@ class TestConfigReload:
 class TestConfigEnsureDir:
     """Tests for Config.ensure_dir() method."""
 
-    def test_creates_directory(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_creates_directory(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """ensure_dir() creates the home directory."""
         monkeypatch.setenv("LLMWIKIFY_HOME", str(tmp_path))
         Config._instance = None

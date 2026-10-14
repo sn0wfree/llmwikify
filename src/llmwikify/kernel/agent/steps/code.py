@@ -9,6 +9,7 @@
 
 历史: 从 apps/chat/agent/unified/steps/code.py 搬迁。
 """
+
 from __future__ import annotations
 
 import logging
@@ -101,27 +102,35 @@ class ExecuteCodeStep(StepHandler):
             series = execute_code(code, df)
         except Exception as exc:
             import traceback
-            return StepResult.ok(CodeExecResult(
-                success=False,
-                code=code,
-                error=f"{type(exc).__name__}: {exc}\n{traceback.format_exc()}",
-                error_kind="execute_error",
-            ))
+
+            return StepResult.ok(
+                CodeExecResult(
+                    success=False,
+                    code=code,
+                    error=f"{type(exc).__name__}: {exc}\n{traceback.format_exc()}",
+                    error_kind="execute_error",
+                )
+            )
 
         import polars as pl
-        if not isinstance(series, pl.Series):
-            return StepResult.ok(CodeExecResult(
-                success=False,
-                code=code,
-                error=f"expected pl.Series, got {type(series).__name__}",
-                error_kind="output_invalid",
-            ))
 
-        return StepResult.ok(CodeExecResult(
-            success=True,
-            code=code,
-            series=series,
-        ))
+        if not isinstance(series, pl.Series):
+            return StepResult.ok(
+                CodeExecResult(
+                    success=False,
+                    code=code,
+                    error=f"expected pl.Series, got {type(series).__name__}",
+                    error_kind="output_invalid",
+                )
+            )
+
+        return StepResult.ok(
+            CodeExecResult(
+                success=True,
+                code=code,
+                series=series,
+            )
+        )
 
 
 class ValidateAndExecuteStep(Pipeline):

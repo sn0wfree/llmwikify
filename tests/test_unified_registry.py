@@ -1,4 +1,5 @@
 """Tests for unified/registry.py — register_mode + create_agent_loop。"""
+
 from __future__ import annotations
 
 import pytest
@@ -26,11 +27,13 @@ def test_register_and_list():
     """注册后 list_modes 可见。"""
     modes_before = set(list_modes())
 
-    register_mode(AgentModeConfig(
-        name="__test_mode__",
-        reasoner=_SimpleStep(),
-        actor=_SimpleStep(),
-    ))
+    register_mode(
+        AgentModeConfig(
+            name="__test_mode__",
+            reasoner=_SimpleStep(),
+            actor=_SimpleStep(),
+        )
+    )
 
     modes_after = list_modes()
     assert "__test_mode__" in modes_after
@@ -69,11 +72,13 @@ def test_create_agent_loop_with_factory():
         received_kwargs.update(kwargs)
         return _SimpleStep()
 
-    register_mode(AgentModeConfig(
-        name="__test_factory__",
-        reasoner=_capture_reasoner,
-        actor=_SimpleStep(),
-    ))
+    register_mode(
+        AgentModeConfig(
+            name="__test_factory__",
+            reasoner=_capture_reasoner,
+            actor=_SimpleStep(),
+        )
+    )
 
     create_agent_loop("__test_factory__", custom_arg="hello")
     assert received_kwargs.get("custom_arg") == "hello"

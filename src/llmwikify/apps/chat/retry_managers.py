@@ -51,16 +51,17 @@ async def retry_async(
     last_exception: Exception | None = None
     for attempt in range(max_attempts):
         try:
-            return await asyncio.wait_for(
-                func(*args, **kwargs), timeout=call_timeout
-            )
+            return await asyncio.wait_for(func(*args, **kwargs), timeout=call_timeout)
         except exceptions as e:
             last_exception = e
             if attempt < max_attempts - 1:
-                delay = min(base_delay * (2 ** attempt), max_delay)
+                delay = min(base_delay * (2**attempt), max_delay)
                 logger.warning(
                     "Attempt %d/%d failed: %s. Retrying in %.1fs...",
-                    attempt + 1, max_attempts, e, delay,
+                    attempt + 1,
+                    max_attempts,
+                    e,
+                    delay,
                 )
                 await asyncio.sleep(delay)
     assert last_exception is not None
@@ -117,9 +118,7 @@ class StageRetryManager:
             try:
                 value = await func(*args, **kwargs)
                 if attempt > 1:
-                    logger.info(
-                        "%s succeeded on attempt %d", self.stage_name, attempt
-                    )
+                    logger.info("%s succeeded on attempt %d", self.stage_name, attempt)
                 return {
                     "ok": True,
                     "value": value,
@@ -131,7 +130,10 @@ class StageRetryManager:
                 last_error = e
                 logger.warning(
                     "%s attempt %d/%d failed: %s",
-                    self.stage_name, attempt, self.max_attempts, e,
+                    self.stage_name,
+                    attempt,
+                    self.max_attempts,
+                    e,
                 )
                 if attempt < self.max_attempts:
                     await asyncio.sleep(self.base_delay * (2 ** (attempt - 1)))
@@ -232,7 +234,8 @@ class LLMRetryManager:
         for attempt in range(1, self.max_attempts + 1):
             try:
                 return await asyncio.wait_for(
-                    func(*args, **kwargs), timeout=self.call_timeout,
+                    func(*args, **kwargs),
+                    timeout=self.call_timeout,
                 )
             except Exception as e:  # noqa: BLE001
                 last_error = e
@@ -245,7 +248,10 @@ class LLMRetryManager:
                     delay = min(self.base_delay * (2 ** (attempt - 1)), 30.0)
                     logger.warning(
                         "LLM transient error attempt %d/%d: %s. Retrying in %.1fs...",
-                        attempt, self.max_attempts, e, delay,
+                        attempt,
+                        self.max_attempts,
+                        e,
+                        delay,
                     )
                     await asyncio.sleep(delay)
         assert last_error is not None
@@ -305,10 +311,14 @@ class DBRetryManager:
                     raise
                 if attempt < self.max_attempts:
                     import time as time_mod
+
                     delay = min(self.base_delay * (2 ** (attempt - 1)), 2.0)
                     logger.warning(
                         "DB transient error attempt %d/%d: %s. Retrying in %.2fs...",
-                        attempt, self.max_attempts, e, delay,
+                        attempt,
+                        self.max_attempts,
+                        e,
+                        delay,
                     )
                     time_mod.sleep(delay)
         assert last_error is not None

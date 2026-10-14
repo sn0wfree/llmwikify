@@ -10,6 +10,7 @@ The fix:
 - A new ``include_details`` flag is opt-in for getting the full
   final report (autoresearch) or full per-phase outputs (workflow).
 """
+
 from __future__ import annotations
 
 import json
@@ -47,8 +48,7 @@ def _make_fake_state(run_id: str = "wf_test_001") -> MagicMock:
             "output": {
                 "findings": [{"id": f"f-{i}", "claim": "x" * 200} for i in range(34)],
                 "instances": [
-                    {"id": f"e-{i}", "evidence_items": [{}] * 10}
-                    for i in range(6)
+                    {"id": f"e-{i}", "evidence_items": [{}] * 10} for i in range(6)
                 ],
             },
         },
@@ -95,7 +95,8 @@ def test_autoresearch_status_default_is_compact(
     from llmwikify.apps.chat.skills import autoresearch_compound_skill as mod
 
     monkeypatch.setattr(
-        mod.RunStore, "default",
+        mod.RunStore,
+        "default",
         lambda: MagicMock(load=MagicMock(return_value=_make_fake_state())),
     )
     result = ar_status({"run_id": "wf_test_001"}, ctx)
@@ -120,12 +121,11 @@ def test_autoresearch_status_include_details_returns_final_report(
     from llmwikify.apps.chat.skills import autoresearch_compound_skill as mod
 
     monkeypatch.setattr(
-        mod.RunStore, "default",
+        mod.RunStore,
+        "default",
         lambda: MagicMock(load=MagicMock(return_value=_make_fake_state())),
     )
-    result = ar_status(
-        {"run_id": "wf_test_001", "include_details": True}, ctx
-    )
+    result = ar_status({"run_id": "wf_test_001", "include_details": True}, ctx)
     data = result.data
     assert "final_report" in data
     assert "phases" not in data
@@ -145,7 +145,8 @@ def test_autoresearch_status_phase_summary_includes_errors(
         "output": {"_error": "X" * 1000},  # longer than 300 char limit
     }
     monkeypatch.setattr(
-        mod.RunStore, "default",
+        mod.RunStore,
+        "default",
         lambda: MagicMock(load=MagicMock(return_value=state)),
     )
     result = ar_status({"run_id": "wf_test_001"}, ctx)
@@ -169,7 +170,8 @@ def test_autoresearch_status_unknown_run_id_fails(
     from llmwikify.apps.chat.skills import autoresearch_compound_skill as mod
 
     monkeypatch.setattr(
-        mod.RunStore, "default",
+        mod.RunStore,
+        "default",
         lambda: MagicMock(load=MagicMock(return_value=None)),
     )
     result = ar_status({"run_id": "wf_does_not_exist"}, ctx)
@@ -187,7 +189,8 @@ def test_workflow_status_default_is_compact(
     from llmwikify.apps.chat.skills.workflows import skill as mod
 
     monkeypatch.setattr(
-        mod.RunStore, "default",
+        mod.RunStore,
+        "default",
         lambda: MagicMock(load=MagicMock(return_value=_make_fake_state())),
     )
     result = wf_status({"run_id": "wf_test_001"}, ctx)
@@ -205,12 +208,11 @@ def test_workflow_status_include_details_returns_phases(
     from llmwikify.apps.chat.skills.workflows import skill as mod
 
     monkeypatch.setattr(
-        mod.RunStore, "default",
+        mod.RunStore,
+        "default",
         lambda: MagicMock(load=MagicMock(return_value=_make_fake_state())),
     )
-    result = wf_status(
-        {"run_id": "wf_test_001", "include_details": True}, ctx
-    )
+    result = wf_status({"run_id": "wf_test_001", "include_details": True}, ctx)
     data = result.data
     assert "phases" in data
     assert len(data["phases"]) == 12

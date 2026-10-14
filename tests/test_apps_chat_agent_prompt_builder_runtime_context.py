@@ -91,7 +91,8 @@ class TestPromptSectionsHaveRuntimeContextTags:
             metadata={"goal_state": {"status": "active", "objective": "Reach M3"}}
         )
         builder = PromptBuilder(
-            wiki_service=_StubWiki(), chat_db=chat_db,
+            wiki_service=_StubWiki(),
+            chat_db=chat_db,
         )
         ctx = BuildContext(session_id="s1")
         prompt = await builder.build_with_context(ctx)
@@ -189,11 +190,9 @@ class TestPersistenceCanStripBlock:
 
     def test_user_authored_goal_section_not_stripped(self) -> None:
         """User-authored ``## Goal`` sections survive the strip."""
-        body = (
-            "## Goal\nUser wrote this goal\n\n"
-            + wrap_runtime_context(
-                "## Sustained goal\nReach M3", label="goal_state",
-            )
+        body = "## Goal\nUser wrote this goal\n\n" + wrap_runtime_context(
+            "## Sustained goal\nReach M3",
+            label="goal_state",
         )
         import re
 

@@ -48,7 +48,9 @@ def create_wiki(path: str | Path, config: dict | None = None) -> Wiki:
     return Wiki(Path(path), config=config)
 
 
-def create_multi_wiki(config: dict | None = None, wiki_root: str | Path | None = None) -> WikiRegistry:
+def create_multi_wiki(
+    config: dict | None = None, wiki_root: str | Path | None = None
+) -> WikiRegistry:
     """Create a WikiRegistry with multiple wikis.
 
     Args:
@@ -71,7 +73,6 @@ def create_multi_wiki(config: dict | None = None, wiki_root: str | Path | None =
 __all__ = [
     # Version
     "__version__",
-
     # Main classes
     "Wiki",
     "WikiIndex",
@@ -84,17 +85,14 @@ __all__ = [
     "WikiDiscovery",
     "create_mcp_server",
     "serve_mcp",
-
     # Data classes
     "ExtractedContent",
     "Link",
-
     # Configuration
     "load_config",
     "get_default_config",
     "get_mcp_config",
     "get_wikis_config",
-
     # Convenience functions
     "create_wiki",
     "create_multi_wiki",

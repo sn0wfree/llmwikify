@@ -21,6 +21,7 @@ Methods (9):
     get_session_metadata       — Phase 8: parsed JSON metadata or {}
     set_session_metadata       — Phase 8: write JSON metadata
 """
+
 from __future__ import annotations
 
 import json
@@ -39,28 +40,22 @@ class ChatSessionRepository(ChatDBBase):
 
     def _init_schema(self) -> None:
         with self._mgr.transaction() as conn:
-            conn.execute(
-                """
+            conn.execute("""
                 CREATE TABLE IF NOT EXISTS chat_sessions (
                     id TEXT PRIMARY KEY,
                     wiki_id TEXT,
                     created_at TEXT DEFAULT (datetime('now')),
                     updated_at TEXT DEFAULT (datetime('now'))
                 )
-                """
-            )
+                """)
             # v0.40: title column for session auto-naming
             try:
-                conn.execute(
-                    "ALTER TABLE chat_sessions ADD COLUMN title TEXT"
-                )
+                conn.execute("ALTER TABLE chat_sessions ADD COLUMN title TEXT")
             except sqlite3.OperationalError:
                 pass  # column already exists
             # Phase 8: metadata JSON blob (goal_state, etc.)
             try:
-                conn.execute(
-                    "ALTER TABLE chat_sessions ADD COLUMN metadata TEXT"
-                )
+                conn.execute("ALTER TABLE chat_sessions ADD COLUMN metadata TEXT")
             except sqlite3.OperationalError:
                 pass  # column already exists
             # Remove jwt_token column if it exists (security fix)
@@ -69,19 +64,15 @@ class ChatSessionRepository(ChatDBBase):
             except sqlite3.OperationalError:
                 pass  # column doesn't exist or can't be dropped
             # Index for ORDER BY created_at DESC (list_chat_sessions)
-            conn.execute(
-                """
+            conn.execute("""
                 CREATE INDEX IF NOT EXISTS idx_chat_sessions_created_at
                 ON chat_sessions(created_at)
-                """
-            )
+                """)
             # Index for wiki_id filtering (admin/CLI queries)
-            conn.execute(
-                """
+            conn.execute("""
                 CREATE INDEX IF NOT EXISTS idx_chat_sessions_wiki_id
                 ON chat_sessions(wiki_id)
-                """
-            )
+                """)
 
     def create_chat_session(
         self,
@@ -103,9 +94,7 @@ class ChatSessionRepository(ChatDBBase):
             (session_id,),
         )
 
-    def update_chat_session_wiki(
-        self, session_id: str, wiki_id: str
-    ) -> None:
+    def update_chat_session_wiki(self, session_id: str, wiki_id: str) -> None:
         """Update a session's wiki binding."""
         self._mgr.execute_write(
             """UPDATE chat_sessions
@@ -114,9 +103,7 @@ class ChatSessionRepository(ChatDBBase):
             (wiki_id, session_id),
         )
 
-    def update_chat_session_title(
-        self, session_id: str, title: str
-    ) -> None:
+    def update_chat_session_title(self, session_id: str, title: str) -> None:
         """Update a session's auto-derived title (v0.40)."""
         self._mgr.execute_write(
             """UPDATE chat_sessions
@@ -188,7 +175,9 @@ class ChatSessionRepository(ChatDBBase):
         return parsed if isinstance(parsed, dict) else {}
 
     def set_session_metadata(
-        self, session_id: str, metadata: dict[str, Any],
+        self,
+        session_id: str,
+        metadata: dict[str, Any],
     ) -> None:
         """Replace the ``metadata`` JSON blob for one session.
 
@@ -220,7 +209,9 @@ class ChatSessionRepository(ChatDBBase):
             )
 
     def update_session_metadata(
-        self, session_id: str, **patch: Any,
+        self,
+        session_id: str,
+        **patch: Any,
     ) -> dict[str, Any]:
         """Merge ``patch`` into the existing metadata, persist, return new dict.
 

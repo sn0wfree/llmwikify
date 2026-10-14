@@ -47,12 +47,18 @@ class AgentHook:
         pass
 
     def after_tool_executed(
-        self, ctx: AgentHookContext, tool_call: Any, result: Any,
+        self,
+        ctx: AgentHookContext,
+        tool_call: Any,
+        result: Any,
     ) -> None:
         pass
 
     def on_tool_error(
-        self, ctx: AgentHookContext, tool_call: Any, error: BaseException,
+        self,
+        ctx: AgentHookContext,
+        tool_call: Any,
+        error: BaseException,
     ) -> None:
         pass
 
@@ -62,7 +68,9 @@ class AgentHook:
     def after_iteration(self, ctx: AgentHookContext) -> None:
         pass
 
-    def finalize_content(self, ctx: AgentHookContext, content: str | None) -> str | None:
+    def finalize_content(
+        self, ctx: AgentHookContext, content: str | None
+    ) -> str | None:
         return content
 
     def on_error(self, ctx: AgentHookContext, error: BaseException) -> None:
@@ -98,11 +106,17 @@ class CompositeHook(AgentHook):
                 await _maybe_await(method(*args, **kwargs))
             except Exception:
                 logger.warning(
-                    "Hook %s.%s failed", hook.name, method_name, exc_info=True,
+                    "Hook %s.%s failed",
+                    hook.name,
+                    method_name,
+                    exc_info=True,
                 )
 
     async def _fire_pipeline(
-        self, method_name: str, ctx: AgentHookContext, content: str | None,
+        self,
+        method_name: str,
+        ctx: AgentHookContext,
+        content: str | None,
     ) -> str | None:
         current = content
         for hook in self._hooks:
@@ -113,7 +127,9 @@ class CompositeHook(AgentHook):
                     current = result
             except Exception:
                 logger.exception(
-                    "Hook %s.%s raised in pipeline", hook.name, method_name,
+                    "Hook %s.%s raised in pipeline",
+                    hook.name,
+                    method_name,
                 )
                 raise
         return current
@@ -140,12 +156,18 @@ class CompositeHook(AgentHook):
         await self._fire("before_execute_tools", ctx)
 
     async def after_tool_executed(
-        self, ctx: AgentHookContext, tool_call: Any, result: Any,
+        self,
+        ctx: AgentHookContext,
+        tool_call: Any,
+        result: Any,
     ) -> None:
         await self._fire("after_tool_executed", ctx, tool_call, result)
 
     async def on_tool_error(
-        self, ctx: AgentHookContext, tool_call: Any, error: BaseException,
+        self,
+        ctx: AgentHookContext,
+        tool_call: Any,
+        error: BaseException,
     ) -> None:
         await self._fire("on_tool_error", ctx, tool_call, error)
 
@@ -156,7 +178,9 @@ class CompositeHook(AgentHook):
         await self._fire("after_iteration", ctx)
 
     async def finalize_content(
-        self, ctx: AgentHookContext, content: str | None,
+        self,
+        ctx: AgentHookContext,
+        content: str | None,
     ) -> str | None:
         return await self._fire_pipeline("finalize_content", ctx, content)
 

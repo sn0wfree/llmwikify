@@ -38,7 +38,9 @@ def run_knowledge_gaps(wiki: Any, args: Any) -> int:
     if outdated:
         print(f"📅 Potentially Outdated Pages ({len(outdated)})")
         for page in outdated:
-            print(f"  • {page['page']} (latest: {page.get('latest_year_mentioned', 'unknown')})")
+            print(
+                f"  • {page['page']} (latest: {page.get('latest_year_mentioned', 'unknown')})"
+            )
         print()
     else:
         print("✅ No outdated pages detected")
@@ -91,7 +93,9 @@ class KnowledgeGapsCommand(Command):
         p = subparsers.add_parser(self.name, help=self.help)
         p.add_argument("--json", action="store_true", help="Output as JSON")
         p.add_argument(
-            "--include-suggestions", "-s", action="store_true",
+            "--include-suggestions",
+            "-s",
+            action="store_true",
             help="Include suggested sources to fill gaps",
         )
 

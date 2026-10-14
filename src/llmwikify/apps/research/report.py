@@ -1,5 +1,5 @@
-
 """Report generation from research synthesis results."""
+
 from __future__ import annotations
 
 import logging
@@ -23,7 +23,9 @@ class _ReportCtx:
     """
 
     def __init__(
-        self, llm_client: Any, config: dict[str, Any],
+        self,
+        llm_client: Any,
+        config: dict[str, Any],
         metrics: Any = None,
     ):
         self.default_llm = llm_client
@@ -37,7 +39,10 @@ class ReportGenerator:
     """Generates structured markdown research reports with inline source citations."""
 
     def __init__(
-        self, wiki: Any, llm_client: Any, config: dict[str, Any],
+        self,
+        wiki: Any,
+        llm_client: Any,
+        config: dict[str, Any],
         metrics: Any = None,
     ):
         self.wiki = wiki
@@ -49,7 +54,9 @@ class ReportGenerator:
         """Build a ctx-like object for run_prompt."""
         return _ReportCtx(self.llm_client, self.config, metrics=self.metrics)
 
-    def _build_source_map(self, sources: list[dict[str, Any]]) -> dict[str, dict[str, str]]:
+    def _build_source_map(
+        self, sources: list[dict[str, Any]]
+    ) -> dict[str, dict[str, str]]:
         """Build hash → source info mapping for inline citations."""
         source_map: dict[str, dict[str, str]] = {}
         for s in sources:
@@ -62,7 +69,8 @@ class ReportGenerator:
         return source_map
 
     def _build_source_contents(
-        self, sources: list[dict[str, Any]],
+        self,
+        sources: list[dict[str, Any]],
     ) -> list[dict[str, Any]]:
         """Build the per-source content dicts for the YAML template.
 
@@ -83,14 +91,16 @@ class ReportGenerator:
             content_limit = min(max_per_source, remaining)
             truncated = full_content[:content_limit]
             total_content += len(truncated)
-            source_contents.append({
-                "hash": _source_hash(s),
-                "title": s.get("title", ""),
-                "source_type": s.get("source_type", ""),
-                "url": s.get("url", ""),
-                "content": truncated,
-                "analysis_summary": _summarize_analysis(s.get("analysis", {})),
-            })
+            source_contents.append(
+                {
+                    "hash": _source_hash(s),
+                    "title": s.get("title", ""),
+                    "source_type": s.get("source_type", ""),
+                    "url": s.get("url", ""),
+                    "content": truncated,
+                    "analysis_summary": _summarize_analysis(s.get("analysis", {})),
+                }
+            )
         return source_contents
 
     def _build_prompt_kwargs(
@@ -135,7 +145,9 @@ class ReportGenerator:
         from llmwikify.apps.chat.prompts import render_framework_block
         from llmwikify.kernel.wiki.prompt_registry import PromptRegistry
 
-        registry = PromptRegistry(provider=getattr(self.llm_client, "provider", "openai"))
+        registry = PromptRegistry(
+            provider=getattr(self.llm_client, "provider", "openai")
+        )
         source_contents = self._build_source_contents(sources)
 
         wiki_index = ""
@@ -158,7 +170,10 @@ class ReportGenerator:
             ]
 
         llm_params = resolve_llm_params(
-            registry, self.config, "research_report", "llm_params",
+            registry,
+            self.config,
+            "research_report",
+            "llm_params",
         )
 
         return messages, llm_params
@@ -184,10 +199,15 @@ class ReportGenerator:
         response — a fundamentally different interface.
         """
         kwargs = self._build_prompt_kwargs(
-            query, sources, synthesis, six_step_context,
+            query,
+            sources,
+            synthesis,
+            six_step_context,
         )
         report_md = await run_prompt(
-            self._as_ctx(), "research_report", **kwargs,
+            self._as_ctx(),
+            "research_report",
+            **kwargs,
         )
 
         # Validate citations
@@ -216,20 +236,26 @@ class ReportGenerator:
                   {"type": "done", "content": str} or
                   {"type": "error", "error": str}
         """
-        messages, llm_params = self._build_messages(query, sources, synthesis, six_step_context)
+        messages, llm_params = self._build_messages(
+            query, sources, synthesis, six_step_context
+        )
 
         # Try streaming first, fall back to non-streaming
-        if hasattr(self.llm_client, 'stream_chat'):
+        if hasattr(self.llm_client, "stream_chat"):
             try:
                 accumulated = ""
                 for chunk in self.llm_client.stream_chat(
-                    messages, **llm_params,
+                    messages,
+                    **llm_params,
                 ):
                     if chunk["type"] == "content":
                         accumulated += chunk["text"]
                         yield {"type": "chunk", "text": chunk["text"]}
                     elif chunk["type"] == "thinking":
-                        yield {"type": "progress", "message": f"Thinking... ({len(accumulated)} chars)"}
+                        yield {
+                            "type": "progress",
+                            "message": f"Thinking... ({len(accumulated)} chars)",
+                        }
                     elif chunk["type"] == "done":
                         self._validate_citations(accumulated, sources)
                         yield {"type": "done", "content": accumulated}
@@ -241,24 +267,37 @@ class ReportGenerator:
         # so we just await — no asyncio.run / no thread bridge).
         try:
             kwargs = self._build_prompt_kwargs(
-                query, sources, synthesis, six_step_context,
+                query,
+                sources,
+                synthesis,
+                six_step_context,
             )
             report_md = await run_prompt(
-                self._as_ctx(), "research_report", **kwargs,
+                self._as_ctx(),
+                "research_report",
+                **kwargs,
             )
             self._validate_citations(report_md, sources)
             yield {"type": "done", "content": report_md}
         except Exception as e:
             yield {"type": "error", "error": str(e)}
 
-    def _validate_citations(self, report_md: str, sources: list[dict[str, Any]]) -> None:
+    def _validate_citations(
+        self, report_md: str, sources: list[dict[str, Any]]
+    ) -> None:
         """Validate citations in the report."""
         import re
-        citations = re.findall(r'\[\[Source:([a-f0-9]+)\]\]', report_md)
+
+        citations = re.findall(r"\[\[Source:([a-f0-9]+)\]\]", report_md)
         source_hashes = {_source_hash(s) for s in sources}
         invalid = [c for c in citations if c not in source_hashes]
         if invalid:
-            logger.warning("Report has %d invalid citations (out of %d total): %s", len(invalid), len(citations), invalid[:5])
+            logger.warning(
+                "Report has %d invalid citations (out of %d total): %s",
+                len(invalid),
+                len(citations),
+                invalid[:5],
+            )
 
 
 def _summarize_analysis(analysis: dict[str, Any]) -> str:

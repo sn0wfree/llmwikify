@@ -2,14 +2,59 @@
 
 # Common English stop words used for keyword extraction and similarity matching.
 # Used by: WikiAnalyzer._detect_query_page_overlap, WikiQueryMixin._find_similar_query_page
-STOP_WORDS: frozenset[str] = frozenset({
-    "what", "is", "the", "a", "an", "how", "do", "does", "why",
-    "can", "could", "would", "should", "will", "did", "are", "was",
-    "were", "be", "been", "being", "have", "has", "had", "of", "to",
-    "in", "for", "on", "with", "at", "by", "from", "and", "or", "not",
-    "but", "if", "then", "than", "so", "as", "about", "compare",
-    "what's", "how's", "tell", "me", "explain",
-})
+STOP_WORDS: frozenset[str] = frozenset(
+    {
+        "what",
+        "is",
+        "the",
+        "a",
+        "an",
+        "how",
+        "do",
+        "does",
+        "why",
+        "can",
+        "could",
+        "would",
+        "should",
+        "will",
+        "did",
+        "are",
+        "was",
+        "were",
+        "be",
+        "been",
+        "being",
+        "have",
+        "has",
+        "had",
+        "of",
+        "to",
+        "in",
+        "for",
+        "on",
+        "with",
+        "at",
+        "by",
+        "from",
+        "and",
+        "or",
+        "not",
+        "but",
+        "if",
+        "then",
+        "than",
+        "so",
+        "as",
+        "about",
+        "compare",
+        "what's",
+        "how's",
+        "tell",
+        "me",
+        "explain",
+    }
+)
 
 # Thresholds for query similarity matching
 SIMILARITY_THRESHOLD: float = 0.3

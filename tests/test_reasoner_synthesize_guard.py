@@ -19,11 +19,15 @@ from llmwikify.apps.research.reasoner import ResearchReasoner
 def _make_engine():
     """Minimal mock engine for reasoner tests."""
     engine = type("Engine", (), {})()
-    engine.db = type("DB", (), {
-        "get_sources": lambda self, sid: [
-            {"id": "src1", "analysis": {"status": "ok"}},
-        ]
-    })()
+    engine.db = type(
+        "DB",
+        (),
+        {
+            "get_sources": lambda self, sid: [
+                {"id": "src1", "analysis": {"status": "ok"}},
+            ]
+        },
+    )()
     engine.config = {"max_replan_attempts": 2}
     engine._action_ctx = type("Ctx", (), {})()
     engine._max_replan = 2
@@ -62,6 +66,7 @@ async def test_llm_synthesize_when_synthesis_exists_falls_back():
 
     # Direct approach: patch the function in the reasoner module's globals
     import llmwikify.apps.research.reasoner as mod
+
     mock_run = AsyncMock(return_value={"action": "synthesize", "thought": "test"})
     old = mod.run_prompt
     mod.run_prompt = mock_run
@@ -86,6 +91,7 @@ async def test_llm_plan_when_report_exists_falls_back():
     )
 
     import llmwikify.apps.research.reasoner as mod
+
     mock_run = AsyncMock(return_value={"action": "plan", "thought": "replan"})
     old = mod.run_prompt
     mod.run_prompt = mock_run
@@ -105,7 +111,10 @@ async def test_vars_dict_includes_synthesis_exists():
     state = _state(synthesis={"key": "val"})
 
     import llmwikify.apps.research.reasoner as mod
-    mock_run = AsyncMock(return_value={"action": "report", "thought": "time for report"})
+
+    mock_run = AsyncMock(
+        return_value={"action": "report", "thought": "time for report"}
+    )
     old = mod.run_prompt
     mod.run_prompt = mock_run
     try:
@@ -125,6 +134,7 @@ async def test_vars_dict_synthesis_exists_false():
     state = _state(synthesis=None)
 
     import llmwikify.apps.research.reasoner as mod
+
     mock_run = AsyncMock(return_value={"action": "report", "thought": "test"})
     old = mod.run_prompt
     mod.run_prompt = mock_run

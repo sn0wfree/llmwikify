@@ -1,4 +1,5 @@
 """Tests for foundation.io — file I/O utilities."""
+
 from __future__ import annotations
 
 import json
@@ -6,7 +7,13 @@ from pathlib import Path
 
 import pytest
 
-from llmwikify.foundation.io import read_json, read_yaml, safe_read_text, safe_write_text, write_json
+from llmwikify.foundation.io import (
+    read_json,
+    read_yaml,
+    safe_read_text,
+    safe_write_text,
+    write_json,
+)
 
 
 class TestReadJson:
@@ -103,13 +110,16 @@ class TestReadYaml:
         result = read_yaml(path)
         assert result == {"a": {"b": {"c": 1}}}
 
-    def test_yaml_import_error(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_yaml_import_error(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Returns default when yaml module not available."""
         path = tmp_path / "test.yaml"
         path.write_text("key: value")
 
         # Mock yaml import to fail
         import builtins
+
         original_import = builtins.__import__
 
         def mock_import(name, *args, **kwargs):

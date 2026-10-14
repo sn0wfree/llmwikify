@@ -8,7 +8,6 @@ a new build. The fix is two cache headers:
   - ``index.html`` (entry point)  — ``no-cache, must-revalidate``
 """
 
-
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient

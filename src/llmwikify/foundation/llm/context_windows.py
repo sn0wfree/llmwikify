@@ -64,6 +64,7 @@ def _get_context_windows() -> dict[str, int]:
     """Get all context windows (providers.yaml + extras)."""
     return _load_all_context_windows()
 
+
 # Regex to extract context window from model name (e.g. "llama3-8k" -> 8192)
 _MODEL_CTX_RE = re.compile(r"[-_](\d+)[kK]$")
 
@@ -76,9 +77,7 @@ def _extract_ctx_from_name(model: str) -> int | None:
     return None
 
 
-def probe_provider_api(
-    model: str, base_url: str, api_key: str
-) -> int | None:
+def probe_provider_api(model: str, base_url: str, api_key: str) -> int | None:
     """Call provider's /v1/models/{model} to probe context window.
 
     Returns context window size if found, None otherwise.

@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 
 # ─── Config helper ─────────────────────────────────────────────
 
+
 async def _get_config_data() -> dict:
     """组装配置数据（mutable + research_mutable + system_prompt）。"""
     from llmwikify.apps.chat.config import get_mutable_defaults
@@ -35,7 +36,12 @@ async def _get_config_data() -> dict:
     result["chat_mutable"] = mutable_defaults
     # research_mutable 直接读取 YAML
     try:
-        _research_yaml = Path(__file__).parent.parent.parent.parent.parent / "apps" / "research" / "config_defaults.yaml"
+        _research_yaml = (
+            Path(__file__).parent.parent.parent.parent.parent
+            / "apps"
+            / "research"
+            / "config_defaults.yaml"
+        )
         if _research_yaml.exists():
             raw = yaml.safe_load(_research_yaml.read_text(encoding="utf-8"))
             result["research_mutable"] = raw.get("mutable", {})
@@ -57,6 +63,7 @@ async def _get_config_data() -> dict:
 
 # ─── Config 端点 ───────────────────────────────────────────────
 
+
 @router.get("/config")
 async def get_llm_config() -> Any:
     """GET /config — return mutable LLM config + chat_mutable + research_mutable.
@@ -74,6 +81,7 @@ async def save_llm_config(request: Request) -> dict[str, Any]:
     v0.41: 只接受 mutable 字段。immutable 字段（如果客户端发送）会被忽略。
     """
     from llmwikify.apps.chat.config_manager import get_global_config_manager
+
     req = await JsonBodyHelper.execute(request, SaveConfigRequest)
     manager = get_global_config_manager()
     # Preserve real api_key: if the incoming key is masked (contains ***),
@@ -95,7 +103,9 @@ async def save_llm_config(request: Request) -> dict[str, Any]:
             service = get_agent_service()
             if service.memory_manager:
                 await service.memory_manager.preferences.aset(
-                    "default", "system_prompt", system_prompt,
+                    "default",
+                    "system_prompt",
+                    system_prompt,
                 )
         except Exception as e:
             logger.warning("Failed to save system prompt: %s", e)
@@ -122,6 +132,7 @@ async def get_llm_config_debug() -> Any:
 @router.post("/config/reload")
 async def reload_llm_config() -> dict[str, Any]:
     from llmwikify.apps.chat.config_manager import get_global_config_manager
+
     manager = get_global_config_manager()
     manager.reload()
     return {"reloaded": True}

@@ -54,14 +54,23 @@ class PotentialContradictionsRule(CrossPageRule):
     ) -> None:
         entity_facts: dict[str, dict[str, list[tuple]]] = {}
         for page_name, content in pages.items():
-            for line in content.split('\n'):
-                line = line.strip().lstrip('- ').strip()
-                if ':' in line and not line.startswith('#') and not line.startswith('http'):
-                    parts = line.split(':', 1)
+            for line in content.split("\n"):
+                line = line.strip().lstrip("- ").strip()
+                if (
+                    ":" in line
+                    and not line.startswith("#")
+                    and not line.startswith("http")
+                ):
+                    parts = line.split(":", 1)
                     if len(parts) == 2:
                         key = parts[0].strip().lower()
                         value = parts[1].strip()
-                        if len(key) >= 2 and len(key) <= 30 and len(value) >= 2 and len(value) <= 50:
+                        if (
+                            len(key) >= 2
+                            and len(key) <= 30
+                            and len(value) >= 2
+                            and len(value) <= 50
+                        ):
                             if key not in entity_facts:
                                 entity_facts[key] = {}
                             if page_name not in entity_facts[key]:
@@ -82,12 +91,16 @@ class PotentialContradictionsRule(CrossPageRule):
                 if pair_key not in seen_pairs:
                     seen_pairs.add(pair_key)
                     values_str = ", ".join(f"{p}={v}" for p, v in all_values[:3])
-                    results.append({
-                        "type": "value_conflict",
-                        "attribute": attr,
-                        "pages": [{"page": p, "value": v} for p, v in all_values[:4]],
-                        "observation": f"Pages reference different values for '{attr}': {values_str}",
-                    })
+                    results.append(
+                        {
+                            "type": "value_conflict",
+                            "attribute": attr,
+                            "pages": [
+                                {"page": p, "value": v} for p, v in all_values[:4]
+                            ],
+                            "observation": f"Pages reference different values for '{attr}': {values_str}",
+                        }
+                    )
 
             if len(results) >= self.max_results:
                 break
@@ -99,11 +112,11 @@ class PotentialContradictionsRule(CrossPageRule):
     ) -> None:
         year_claims: dict[str, list[dict]] = {}
         year_pattern = re.compile(
-            r'([^\n]{3,30}?)\s+(?:launched|founded|started|established|created|born|died|closed|shutdown|ended)\s+(?:in\s+)?(20\d{2}|19\d{2})',
-            re.IGNORECASE
+            r"([^\n]{3,30}?)\s+(?:launched|founded|started|established|created|born|died|closed|shutdown|ended)\s+(?:in\s+)?(20\d{2}|19\d{2})",
+            re.IGNORECASE,
         )
         for page_name, content in pages.items():
-            for line in content.split('\n'):
+            for line in content.split("\n"):
                 for match in year_pattern.finditer(line):
                     entity = match.group(1).strip()
                     year = match.group(2)
@@ -116,12 +129,14 @@ class PotentialContradictionsRule(CrossPageRule):
             years = {c["year"] for c in claims}
             if len(years) >= 2:
                 claims_str = ", ".join(f"{c['page']}={c['year']}" for c in claims[:3])
-                results.append({
-                    "type": "year_conflict",
-                    "entity": entity,
-                    "claims": claims,
-                    "observation": f"'{entity}' has conflicting year claims: {claims_str}",
-                })
+                results.append(
+                    {
+                        "type": "year_conflict",
+                        "entity": entity,
+                        "claims": claims,
+                        "observation": f"'{entity}' has conflicting year claims: {claims_str}",
+                    }
+                )
 
             if len(results) >= self.max_results:
                 break
@@ -133,39 +148,47 @@ class PotentialContradictionsRule(CrossPageRule):
     ) -> None:
         negation_claims: dict[str, list[dict]] = {}
         for page_name, content in pages.items():
-            for line in content.split('\n'):
+            for line in content.split("\n"):
                 line = line.strip()
-                if not line or line.startswith('#'):
+                if not line or line.startswith("#"):
                     continue
                 assertion_pattern = re.compile(
-                    r'([\w\s]{3,25}?)\s+(?:is|are|was|were)\s+(?:not\s+|no\s+longer\s+)?([\w\s]{3,30}?)(?:\.|,|;|$)',
-                    re.IGNORECASE
+                    r"([\w\s]{3,25}?)\s+(?:is|are|was|were)\s+(?:not\s+|no\s+longer\s+)?([\w\s]{3,30}?)(?:\.|,|;|$)",
+                    re.IGNORECASE,
                 )
                 for match in assertion_pattern.finditer(line):
                     subject = match.group(1).strip()
                     predicate = match.group(2).strip()
                     full_match = match.group(0).lower()
-                    is_negated = bool(re.search(r'\b(?:is|are|was|were)\s+(?:not|no longer)', full_match))
+                    is_negated = bool(
+                        re.search(
+                            r"\b(?:is|are|was|were)\s+(?:not|no longer)", full_match
+                        )
+                    )
 
                     key = subject.lower()
                     if key not in negation_claims:
                         negation_claims[key] = []
-                    negation_claims[key].append({
-                        "page": page_name,
-                        "predicate": predicate,
-                        "negated": is_negated,
-                    })
+                    negation_claims[key].append(
+                        {
+                            "page": page_name,
+                            "predicate": predicate,
+                            "negated": is_negated,
+                        }
+                    )
 
         for subject, claims in negation_claims.items():
             has_positive = any(not c["negated"] for c in claims)
             has_negative = any(c["negated"] for c in claims)
             if has_positive and has_negative:
-                results.append({
-                    "type": "negation_pattern",
-                    "subject": subject,
-                    "claims": claims,
-                    "observation": f"'{subject}' has both affirmative and negative claims across pages",
-                })
+                results.append(
+                    {
+                        "type": "negation_pattern",
+                        "subject": subject,
+                        "claims": claims,
+                        "observation": f"'{subject}' has both affirmative and negative claims across pages",
+                    }
+                )
 
             if len(results) >= self.max_results:
                 break

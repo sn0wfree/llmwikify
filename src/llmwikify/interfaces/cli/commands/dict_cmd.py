@@ -28,7 +28,9 @@ def run_dict(wiki: Any, args: Any) -> int:
     from ....kernel.storage.jieba_dict_gen import generate_user_dict
 
     result = generate_user_dict(wiki.db_path, wiki.root)
-    print(f"Fast terms: {result['fast']}  Slow terms: {result['slow']}  Pages: {result['page_count']}")
+    print(
+        f"Fast terms: {result['fast']}  Slow terms: {result['slow']}  Pages: {result['page_count']}"
+    )
     return 0
 
 
@@ -45,16 +47,20 @@ class DictCommand(Command):
             raise TypeError("setup_parser requires an argparse subparsers action")
         p = subparsers.add_parser(self.name, help=self.help)
         p.add_argument(
-            "action", nargs="?", default="update",
+            "action",
+            nargs="?",
+            default="update",
             choices=["update", "status"],
             help="update: regenerate dict (default) | status: show meta",
         )
         p.add_argument(
-            "--fast", action="store_true",
+            "--fast",
+            action="store_true",
             help="Only run fast generation (frequency + TF-IDF)",
         )
         p.add_argument(
-            "--pmi", action="store_true",
+            "--pmi",
+            action="store_true",
             help="Only run slow generation (PMI collocations)",
         )
 

@@ -101,6 +101,7 @@ class TestIterWithMetrics:
             async def _src():
                 for i in range(5):
                     yield {"type": "content", "text": str(i)}
+
             return _src()
 
         async def _collect():

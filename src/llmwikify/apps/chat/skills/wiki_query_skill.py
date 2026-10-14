@@ -149,16 +149,22 @@ async def _lint(args: dict, ctx: SkillContext) -> SkillResult:
     )
     fmt = args.get("format", "full")
     if fmt == "brief":
-        return SkillResult.ok({
-            "hints": result.get("hints", {}),
-            "issue_count": result.get("issue_count", 0),
-            "total_pages": result.get("total_pages", 0),
-        })
+        return SkillResult.ok(
+            {
+                "hints": result.get("hints", {}),
+                "issue_count": result.get("issue_count", 0),
+                "total_pages": result.get("total_pages", 0),
+            }
+        )
     elif fmt == "recommendations":
-        return SkillResult.ok({
-            "missing_pages": result.get("investigations", {}).get("missing_pages", []),
-            "orphan_pages": result.get("issues", []),
-        })
+        return SkillResult.ok(
+            {
+                "missing_pages": result.get("investigations", {}).get(
+                    "missing_pages", []
+                ),
+                "orphan_pages": result.get("issues", []),
+            }
+        )
     return SkillResult.ok({"result": result})
 
 
@@ -307,8 +313,10 @@ async def _graph(args: dict, ctx: SkillContext) -> SkillResult:
     if isinstance(wiki, SkillResult):
         return wiki
     from llmwikify.kernel.graph.visualizer import build_visualization_data
+
     result = build_visualization_data(
-        wiki.index, wiki,
+        wiki.index,
+        wiki,
         args.get("current_page"),
         args.get("mode", "auto"),
     )
@@ -323,10 +331,12 @@ async def _wiki_list(args: dict, ctx: SkillContext) -> SkillResult:
     if registry is None:
         return SkillResult.fail("wiki_registry not configured")
     wikis = registry.list_wikis()
-    return SkillResult.ok({
-        "wikis": [w.to_dict() for w in wikis],
-        "default_wiki_id": registry.get_default_wiki_id(),
-    })
+    return SkillResult.ok(
+        {
+            "wikis": [w.to_dict() for w in wikis],
+            "default_wiki_id": registry.get_default_wiki_id(),
+        }
+    )
 
 
 async def _wiki_switch(args: dict, ctx: SkillContext) -> SkillResult:
@@ -338,10 +348,12 @@ async def _wiki_switch(args: dict, ctx: SkillContext) -> SkillResult:
         return SkillResult.fail("wiki_id is required")
     try:
         instance = registry.get_wiki_instance(wiki_id)
-        return SkillResult.ok({
-            "message": f"Switched to wiki: {instance.name}",
-            "wiki": instance.to_dict(),
-        })
+        return SkillResult.ok(
+            {
+                "message": f"Switched to wiki: {instance.name}",
+                "wiki": instance.to_dict(),
+            }
+        )
     except KeyError:
         return SkillResult.fail(f"Wiki not found: {wiki_id}")
 
@@ -361,21 +373,28 @@ async def _wiki_register(args: dict, ctx: SkillContext) -> SkillResult:
             if not url:
                 return SkillResult.fail("url required for remote wiki")
             instance = registry.register_remote(
-                wiki_id=wiki_id, name=name, url=url,
+                wiki_id=wiki_id,
+                name=name,
+                url=url,
                 api_key=args.get("api_key"),
             )
         else:
             from pathlib import Path
+
             root = args.get("root", "")
             if not root:
                 return SkillResult.fail("root required for local wiki")
             instance = registry.register_wiki(
-                wiki_id=wiki_id, name=name, root=Path(root),
+                wiki_id=wiki_id,
+                name=name,
+                root=Path(root),
             )
-        return SkillResult.ok({
-            "message": f"Registered wiki: {wiki_id}",
-            "wiki": instance.to_dict(),
-        })
+        return SkillResult.ok(
+            {
+                "message": f"Registered wiki: {wiki_id}",
+                "wiki": instance.to_dict(),
+            }
+        )
     except Exception as e:
         return SkillResult.fail(f"register failed: {e!r}")
 
@@ -424,6 +443,7 @@ async def _wiki_search_by_id(args: dict, ctx: SkillContext) -> SkillResult:
     try:
         if wiki_id:
             from llmwikify.kernel.multi_wiki.instance import WikiType
+
             instance = registry.get_wiki_instance(wiki_id)
             if instance.wiki_type == WikiType.REMOTE:
                 client = registry._remote_clients.get(wiki_id)
@@ -452,11 +472,13 @@ async def _wiki_search_cross(args: dict, ctx: SkillContext) -> SkillResult:
     ids = [x.strip() for x in wiki_ids_str.split(",")] if wiki_ids_str else None
     limit = args.get("limit", 10)
     results = registry.cross_wiki_search(query, ids, limit)
-    return SkillResult.ok({
-        "results": results,
-        "total_results": len(results),
-        "searched_wikis": ids or [w.wiki_id for w in registry.list_wikis()],
-    })
+    return SkillResult.ok(
+        {
+            "results": results,
+            "total_results": len(results),
+            "searched_wikis": ids or [w.wiki_id for w in registry.list_wikis()],
+        }
+    )
 
 
 async def _wiki_scan(args: dict, ctx: SkillContext) -> SkillResult:
@@ -467,10 +489,12 @@ async def _wiki_scan(args: dict, ctx: SkillContext) -> SkillResult:
     scan_depth = args.get("scan_depth", 2)
     paths = [p.strip() for p in scan_paths_str.split(",")]
     new_wikis = registry.scan_directories(paths, scan_depth)
-    return SkillResult.ok({
-        "new_wikis": [w.to_dict() for w in new_wikis],
-        "count": len(new_wikis),
-    })
+    return SkillResult.ok(
+        {
+            "new_wikis": [w.to_dict() for w in new_wikis],
+            "count": len(new_wikis),
+        }
+    )
 
 
 # ─── Skill declaration ─────────────────────────────────────────
@@ -491,50 +515,101 @@ class WikiQuerySkill(Skill):
             name="init",
             description="Initialize a wiki",
             handler=_init,
-            input_schema={"type": "object", "properties": {"overwrite": {"type": "boolean", "default": False}}},
+            input_schema={
+                "type": "object",
+                "properties": {"overwrite": {"type": "boolean", "default": False}},
+            },
         ),
         "ingest": SkillAction(
             name="ingest",
             description="Ingest a source file, extract content",
             handler=_ingest,
-            input_schema={"type": "object", "properties": {"source": {"type": "string"}}, "required": ["source"]},
+            input_schema={
+                "type": "object",
+                "properties": {"source": {"type": "string"}},
+                "required": ["source"],
+            },
         ),
         "write_page": SkillAction(
             name="write_page",
             description="Write a wiki page",
             handler=_write_page,
-            input_schema={"type": "object", "properties": {"page_name": {"type": "string"}, "content": {"type": "string"}}, "required": ["page_name", "content"]},
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "page_name": {"type": "string"},
+                    "content": {"type": "string"},
+                },
+                "required": ["page_name", "content"],
+            },
             action_type="write",
         ),
         "read_page": SkillAction(
             name="read_page",
             description="Read a wiki page (supports wiki/.sink/ files)",
             handler=_read_page,
-            input_schema={"type": "object", "properties": {"page_name": {"type": "string"}}, "required": ["page_name"]},
+            input_schema={
+                "type": "object",
+                "properties": {"page_name": {"type": "string"}},
+                "required": ["page_name"],
+            },
         ),
         "search": SkillAction(
             name="search",
             description="Full-text search across wiki pages (fts5 or qmd backend)",
             handler=_search,
-            input_schema={"type": "object", "properties": {"query": {"type": "string"}, "limit": {"type": "integer", "default": 10}, "backend": {"type": "string", "default": "fts5"}}, "required": ["query"]},
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string"},
+                    "limit": {"type": "integer", "default": 10},
+                    "backend": {"type": "string", "default": "fts5"},
+                },
+                "required": ["query"],
+            },
         ),
         "lint": SkillAction(
             name="lint",
             description="Health-check wiki (broken links, orphans, schema gaps)",
             handler=_lint,
-            input_schema={"type": "object", "properties": {"generate_investigations": {"type": "boolean", "default": False}, "format": {"type": "string", "default": "full"}, "mode": {"type": "string", "default": "check"}, "limit": {"type": "integer", "default": 10}, "force": {"type": "boolean", "default": False}}},
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "generate_investigations": {"type": "boolean", "default": False},
+                    "format": {"type": "string", "default": "full"},
+                    "mode": {"type": "string", "default": "check"},
+                    "limit": {"type": "integer", "default": 10},
+                    "force": {"type": "boolean", "default": False},
+                },
+            },
         ),
         "analyze_source": SkillAction(
             name="analyze_source",
             description="Analyze a source file and cache structured extraction results",
             handler=_analyze_source,
-            input_schema={"type": "object", "properties": {"source_path": {"type": "string"}, "force": {"type": "boolean", "default": False}}, "required": ["source_path"]},
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "source_path": {"type": "string"},
+                    "force": {"type": "boolean", "default": False},
+                },
+                "required": ["source_path"],
+            },
         ),
         "references": SkillAction(
             name="references",
             description="Show page references (inbound and outbound wikilinks)",
             handler=_references,
-            input_schema={"type": "object", "properties": {"page_name": {"type": "string"}, "detail": {"type": "boolean", "default": False}, "inbound": {"type": "boolean", "default": False}, "outbound": {"type": "boolean", "default": False}}, "required": ["page_name"]},
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "page_name": {"type": "string"},
+                    "detail": {"type": "boolean", "default": False},
+                    "inbound": {"type": "boolean", "default": False},
+                    "outbound": {"type": "boolean", "default": False},
+                },
+                "required": ["page_name"],
+            },
         ),
         "status": SkillAction(
             name="status",
@@ -546,7 +621,14 @@ class WikiQuerySkill(Skill):
             name="log",
             description="Append entry to wiki log",
             handler=_log,
-            input_schema={"type": "object", "properties": {"operation": {"type": "string"}, "details": {"type": "string"}}, "required": ["operation", "details"]},
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "operation": {"type": "string"},
+                    "details": {"type": "string"},
+                },
+                "required": ["operation", "details"],
+            },
             action_type="write",
         ),
         "recommend": SkillAction(
@@ -572,14 +654,31 @@ class WikiQuerySkill(Skill):
             name="update_schema",
             description="Update the wiki.md schema file",
             handler=_update_schema,
-            input_schema={"type": "object", "properties": {"content": {"type": "string"}}, "required": ["content"]},
+            input_schema={
+                "type": "object",
+                "properties": {"content": {"type": "string"}},
+                "required": ["content"],
+            },
             action_type="write",
         ),
         "synthesize": SkillAction(
             name="synthesize",
             description="Save a query answer as a persistent wiki page",
             handler=_synthesize,
-            input_schema={"type": "object", "properties": {"query": {"type": "string"}, "answer": {"type": "string"}, "source_pages": {"type": "array", "items": {"type": "string"}}, "raw_sources": {"type": "array", "items": {"type": "string"}}, "page_name": {"type": "string"}, "auto_link": {"type": "boolean", "default": True}, "auto_log": {"type": "boolean", "default": True}, "merge_or_replace": {"type": "string", "default": "sink"}}, "required": ["query", "answer"]},
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string"},
+                    "answer": {"type": "string"},
+                    "source_pages": {"type": "array", "items": {"type": "string"}},
+                    "raw_sources": {"type": "array", "items": {"type": "string"}},
+                    "page_name": {"type": "string"},
+                    "auto_link": {"type": "boolean", "default": True},
+                    "auto_log": {"type": "boolean", "default": True},
+                    "merge_or_replace": {"type": "string", "default": "sink"},
+                },
+                "required": ["query", "answer"],
+            },
             action_type="write",
         ),
         "sink_status": SkillAction(
@@ -592,13 +691,19 @@ class WikiQuerySkill(Skill):
             name="suggest_synthesis",
             description="Analyze sources and generate cross-source synthesis suggestions",
             handler=_suggest_synthesis,
-            input_schema={"type": "object", "properties": {"source_name": {"type": "string"}}},
+            input_schema={
+                "type": "object",
+                "properties": {"source_name": {"type": "string"}},
+            },
         ),
         "knowledge_gaps": SkillAction(
             name="knowledge_gaps",
             description="Detect knowledge gaps, outdated pages, and redundancy across the wiki",
             handler=_knowledge_gaps,
-            input_schema={"type": "object", "properties": {"limit": {"type": "integer", "default": 20}}},
+            input_schema={
+                "type": "object",
+                "properties": {"limit": {"type": "integer", "default": 20}},
+            },
         ),
         "graph_analyze": SkillAction(
             name="graph_analyze",
@@ -610,7 +715,13 @@ class WikiQuerySkill(Skill):
             name="graph",
             description="Return graph data optimized for visualization",
             handler=_graph,
-            input_schema={"type": "object", "properties": {"current_page": {"type": "string"}, "mode": {"type": "string", "default": "auto"}}},
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "current_page": {"type": "string"},
+                    "mode": {"type": "string", "default": "auto"},
+                },
+            },
         ),
         # Multi-wiki (8)
         "wiki_list": SkillAction(
@@ -623,45 +734,89 @@ class WikiQuerySkill(Skill):
             name="wiki_switch",
             description="Switch to a different wiki",
             handler=_wiki_switch,
-            input_schema={"type": "object", "properties": {"wiki_id": {"type": "string"}}, "required": ["wiki_id"]},
+            input_schema={
+                "type": "object",
+                "properties": {"wiki_id": {"type": "string"}},
+                "required": ["wiki_id"],
+            },
         ),
         "wiki_register": SkillAction(
             name="wiki_register",
             description="Register a new wiki (local or remote)",
             handler=_wiki_register,
-            input_schema={"type": "object", "properties": {"wiki_id": {"type": "string"}, "name": {"type": "string"}, "wiki_type": {"type": "string", "default": "local"}, "root": {"type": "string"}, "url": {"type": "string"}, "api_key": {"type": "string"}}, "required": ["wiki_id", "name"]},
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "wiki_id": {"type": "string"},
+                    "name": {"type": "string"},
+                    "wiki_type": {"type": "string", "default": "local"},
+                    "root": {"type": "string"},
+                    "url": {"type": "string"},
+                    "api_key": {"type": "string"},
+                },
+                "required": ["wiki_id", "name"],
+            },
             action_type="write",
         ),
         "wiki_unregister": SkillAction(
             name="wiki_unregister",
             description="Unregister a wiki",
             handler=_wiki_unregister,
-            input_schema={"type": "object", "properties": {"wiki_id": {"type": "string"}}, "required": ["wiki_id"]},
+            input_schema={
+                "type": "object",
+                "properties": {"wiki_id": {"type": "string"}},
+                "required": ["wiki_id"],
+            },
             action_type="write",
         ),
         "wiki_status": SkillAction(
             name="wiki_status",
             description="Get wiki status by ID (or default wiki)",
             handler=_wiki_status_by_id,
-            input_schema={"type": "object", "properties": {"wiki_id": {"type": "string"}}},
+            input_schema={
+                "type": "object",
+                "properties": {"wiki_id": {"type": "string"}},
+            },
         ),
         "wiki_search": SkillAction(
             name="wiki_search",
             description="Search wiki pages by wiki ID (or cross-wiki search)",
             handler=_wiki_search_by_id,
-            input_schema={"type": "object", "properties": {"query": {"type": "string"}, "limit": {"type": "integer", "default": 10}, "wiki_id": {"type": "string"}}, "required": ["query"]},
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string"},
+                    "limit": {"type": "integer", "default": 10},
+                    "wiki_id": {"type": "string"},
+                },
+                "required": ["query"],
+            },
         ),
         "wiki_search_cross": SkillAction(
             name="wiki_search_cross",
             description="Search across multiple wikis",
             handler=_wiki_search_cross,
-            input_schema={"type": "object", "properties": {"query": {"type": "string"}, "limit": {"type": "integer", "default": 10}, "wiki_ids": {"type": "string"}}, "required": ["query"]},
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string"},
+                    "limit": {"type": "integer", "default": 10},
+                    "wiki_ids": {"type": "string"},
+                },
+                "required": ["query"],
+            },
         ),
         "wiki_scan": SkillAction(
             name="wiki_scan",
             description="Scan directories for wikis",
             handler=_wiki_scan,
-            input_schema={"type": "object", "properties": {"scan_paths": {"type": "string", "default": "."}, "scan_depth": {"type": "integer", "default": 2}}},
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "scan_paths": {"type": "string", "default": "."},
+                    "scan_depth": {"type": "integer", "default": 2},
+                },
+            },
         ),
     }
 

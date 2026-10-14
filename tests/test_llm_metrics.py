@@ -55,8 +55,9 @@ def _make_llm(chat_return, side_effect=None):
     return llm
 
 
-def _make_ctx(metrics=None, default_llm=None, planning_llm=None,
-              report_llm=None, config=None):
+def _make_ctx(
+    metrics=None, default_llm=None, planning_llm=None, report_llm=None, config=None
+):
     """Build a minimal ctx with optional metrics collector."""
     ctx = MagicMock()
     ctx.default_llm = default_llm or _make_llm(json.dumps({"x": 1}))
@@ -64,7 +65,8 @@ def _make_ctx(metrics=None, default_llm=None, planning_llm=None,
     ctx.report_llm = report_llm or _make_llm(json.dumps({"x": 1}))
     ctx.metrics = metrics  # may be None
     ctx.config = config or {
-        "max_retry_attempts": 1, "llm_call_timeout_seconds": 30,
+        "max_retry_attempts": 1,
+        "llm_call_timeout_seconds": 30,
     }
     return ctx
 
@@ -127,15 +129,28 @@ class TestMetricsCollectorLLMCallIntegration:
 
     def test_summary_includes_llm_call_section(self):
         mc = MetricsCollector(session_id="s1")
-        mc.record_llm_call(LLMCallMetrics(
-            prompt_name="research_clarify", llm_role="planning",
-            attempt_count=1, latency_ms=100, chars_in=500, chars_out=200,
-        ))
-        mc.record_llm_call(LLMCallMetrics(
-            prompt_name="research_report", llm_role="report",
-            attempt_count=3, latency_ms=5000, chars_in=8000, chars_out=4000,
-            success=False, error="timeout",
-        ))
+        mc.record_llm_call(
+            LLMCallMetrics(
+                prompt_name="research_clarify",
+                llm_role="planning",
+                attempt_count=1,
+                latency_ms=100,
+                chars_in=500,
+                chars_out=200,
+            )
+        )
+        mc.record_llm_call(
+            LLMCallMetrics(
+                prompt_name="research_report",
+                llm_role="report",
+                attempt_count=3,
+                latency_ms=5000,
+                chars_in=8000,
+                chars_out=4000,
+                success=False,
+                error="timeout",
+            )
+        )
         s = mc.summary()
         assert "LLM calls: 2 total" in s
         assert "research_clarify" in s
@@ -172,15 +187,22 @@ class TestRunPromptRecordsMetrics:
 
     def test_records_attempt_count_3_on_transient_retry_success(self):
         mc = MetricsCollector(session_id="s1")
-        llm = _make_llm("anything", side_effect=[
-            Exception("503 service unavailable"),  # 1st attempt
-            Exception("503 service unavailable"),  # 2nd attempt
-            json.dumps({"x": 1}),                  # 3rd attempt succeeds
-        ])
+        llm = _make_llm(
+            "anything",
+            side_effect=[
+                Exception("503 service unavailable"),  # 1st attempt
+                Exception("503 service unavailable"),  # 2nd attempt
+                json.dumps({"x": 1}),  # 3rd attempt succeeds
+            ],
+        )
         ctx = _make_ctx(
-            metrics=mc, planning_llm=llm,
-            config={"max_retry_attempts": 3, "llm_retry_base_delay": 0.001,
-                    "llm_call_timeout_seconds": 30},
+            metrics=mc,
+            planning_llm=llm,
+            config={
+                "max_retry_attempts": 3,
+                "llm_retry_base_delay": 0.001,
+                "llm_call_timeout_seconds": 30,
+            },
         )
         _run(run_prompt(ctx, "research_clarify", query="q"))
         assert mc.llm_calls[0].attempt_count == 3
@@ -190,7 +212,8 @@ class TestRunPromptRecordsMetrics:
         mc = MetricsCollector(session_id="s1")
         llm = _make_llm("not valid json {{")  # JSON parse error
         ctx = _make_ctx(
-            metrics=mc, planning_llm=llm,
+            metrics=mc,
+            planning_llm=llm,
             config={"max_retry_attempts": 3, "llm_call_timeout_seconds": 30},
         )
         with pytest.raises(Exception):
@@ -202,9 +225,13 @@ class TestRunPromptRecordsMetrics:
         mc = MetricsCollector(session_id="s1")
         llm = _make_llm("anything", side_effect=Exception("503 unavailable"))
         ctx = _make_ctx(
-            metrics=mc, planning_llm=llm,
-            config={"max_retry_attempts": 3, "llm_retry_base_delay": 0.001,
-                    "llm_call_timeout_seconds": 30},
+            metrics=mc,
+            planning_llm=llm,
+            config={
+                "max_retry_attempts": 3,
+                "llm_retry_base_delay": 0.001,
+                "llm_call_timeout_seconds": 30,
+            },
         )
         with pytest.raises(Exception):
             _run(run_prompt(ctx, "research_clarify", query="q"))
@@ -219,20 +246,38 @@ class TestRunPromptRecordsMetrics:
         _run(run_prompt(ctx, "research_clarify", query="q"))
         # reason → default
         ctx2 = _make_ctx(
-            metrics=mc, default_llm=_make_llm(json.dumps({"a": "done"})),
+            metrics=mc,
+            default_llm=_make_llm(json.dumps({"a": "done"})),
         )
-        _run(run_prompt(ctx2, "research_reason", query="q", round=0,
-                        max_rounds=5, phase="x", quality_score=0,
-                        budget_remaining=1.0, sub_queries_count=0,
-                        failed_sq=0, sources_count=0, analyzed_count=0,
-                        report_exists=False, review_exists=False,
-                        observations_text="(none)"))
+        _run(
+            run_prompt(
+                ctx2,
+                "research_reason",
+                query="q",
+                round=0,
+                max_rounds=5,
+                phase="x",
+                quality_score=0,
+                budget_remaining=1.0,
+                sub_queries_count=0,
+                failed_sq=0,
+                sources_count=0,
+                analyzed_count=0,
+                report_exists=False,
+                review_exists=False,
+                observations_text="(none)",
+            )
+        )
         # report → report
         ctx3 = _make_ctx(
-            metrics=mc, report_llm=_make_llm("# Report"),
+            metrics=mc,
+            report_llm=_make_llm("# Report"),
         )
-        _run(run_prompt(ctx3, "research_report", query="q",
-                        source_contents=[], synthesis={}))
+        _run(
+            run_prompt(
+                ctx3, "research_report", query="q", source_contents=[], synthesis={}
+            )
+        )
 
         assert mc.llm_calls[0].llm_role == "planning"
         assert mc.llm_calls[1].llm_role == "default"
@@ -257,11 +302,16 @@ class TestRunPromptRecordsMetrics:
             "reasoning_check": {"aggregate_score": 0.8},
             "structure_check": {"aggregate_score": 0.7},
         }
-        _run(run_prompt(
-            ctx, "research_report",
-            six_step_context=six_step_context,
-            query="q", source_contents=[], synthesis={},
-        ))
+        _run(
+            run_prompt(
+                ctx,
+                "research_report",
+                six_step_context=six_step_context,
+                query="q",
+                source_contents=[],
+                synthesis={},
+            )
+        )
         # chars_in should be > 24 (just YAML) because framework block was added
         assert mc.llm_calls[0].chars_in > 24
 
@@ -272,14 +322,19 @@ class TestRunPromptRecordsMetrics:
         _run(run_prompt(ctx, "research_clarify", query="q"))
         # chars_out = len(json.dumps({"x": 1, "y": 2}, ensure_ascii=False))
         # = len('{"x": 1, "y": 2}') = 16
-        assert mc.llm_calls[0].chars_out == len(json.dumps({"x": 1, "y": 2}, ensure_ascii=False))
+        assert mc.llm_calls[0].chars_out == len(
+            json.dumps({"x": 1, "y": 2}, ensure_ascii=False)
+        )
 
     def test_records_chars_out_for_markdown(self):
         mc = MetricsCollector(session_id="s1")
         report_llm = _make_llm("# Hello\n\nWorld")
         ctx = _make_ctx(metrics=mc, report_llm=report_llm)
-        _run(run_prompt(ctx, "research_report", query="q",
-                        source_contents=[], synthesis={}))
+        _run(
+            run_prompt(
+                ctx, "research_report", query="q", source_contents=[], synthesis={}
+            )
+        )
         assert mc.llm_calls[0].chars_out == len("# Hello\n\nWorld")
 
     def test_records_latency_ms(self):
@@ -314,8 +369,11 @@ class TestRunPromptRecordsMetrics:
         mc = MetricsCollector(session_id="s1")
         report_llm = _make_llm("# R")
         ctx = _make_ctx(metrics=mc, report_llm=report_llm)
-        _run(run_prompt(ctx, "research_report", query="q",
-                        source_contents=[], synthesis={}))
+        _run(
+            run_prompt(
+                ctx, "research_report", query="q", source_contents=[], synthesis={}
+            )
+        )
         # For markdown steps, json_parsed is set to False in the
         # success path (it's a no-op field, kept False for clarity).
         assert mc.llm_calls[0].json_parsed is False
@@ -348,7 +406,8 @@ class TestRunPromptMetricsRobustness:
         mc = MagicMock()
         mc.record_llm_call = MagicMock(side_effect=RuntimeError("boom"))
         ctx = _make_ctx(
-            metrics=mc, planning_llm=_make_llm("not json {{"),
+            metrics=mc,
+            planning_llm=_make_llm("not json {{"),
             config={"max_retry_attempts": 1, "llm_call_timeout_seconds": 30},
         )
         with pytest.raises(Exception, match="Expecting"):
@@ -362,6 +421,7 @@ class TestBackwardCompatWithExistingMetrics:
     def test_action_metrics_still_work(self):
         """The legacy action-level metrics path is unchanged."""
         from llmwikify.apps.chat import ActionMetrics
+
         mc = MetricsCollector(session_id="s1")
         a = ActionMetrics(action="plan", start_time=0.0)
         a.finish()
@@ -372,6 +432,7 @@ class TestBackwardCompatWithExistingMetrics:
     def test_session_metrics_alias_still_works(self):
         """SessionMetrics is an alias for MetricsCollector."""
         from llmwikify.apps.chat import SessionMetrics
+
         assert SessionMetrics is MetricsCollector
 
 
@@ -387,29 +448,34 @@ class TestSubmoduleMetricsKwarg:
 
     def test_clarifier_accepts_metrics(self):
         from llmwikify.apps.chat.clarifier import ResearchClarifier
+
         mc = MetricsCollector(session_id="s")
         c = ResearchClarifier(MagicMock(), config={}, metrics=mc)
         assert c.metrics is mc
 
     def test_clarifier_metrics_defaults_to_none(self):
         from llmwikify.apps.chat.clarifier import ResearchClarifier
+
         c = ResearchClarifier(MagicMock())
         assert c.metrics is None
 
     def test_report_accepts_metrics(self):
         from llmwikify.apps.chat.research_engine.report import ReportGenerator
+
         mc = MetricsCollector(session_id="s")
         r = ReportGenerator(MagicMock(), MagicMock(), config={}, metrics=mc)
         assert r.metrics is mc
 
     def test_reviewer_accepts_metrics(self):
         from llmwikify.apps.chat.harness.review import ResearchReviewer
+
         mc = MetricsCollector(session_id="s")
         rv = ResearchReviewer(MagicMock(), MagicMock(), config={}, metrics=mc)
         assert rv.metrics is mc
 
     def test_revisor_accepts_metrics(self):
         from llmwikify.apps.chat.harness.review import ResearchRevisor
+
         mc = MetricsCollector(session_id="s")
         rs = ResearchRevisor(MagicMock(), MagicMock(), config={}, metrics=mc)
         assert rs.metrics is mc
@@ -422,13 +488,21 @@ class TestSubmoduleMetricsKwarg:
         # Submodule's own MetricsCollector
         sub_mc = MetricsCollector(session_id="sub")
         # LLM returns a proper clarification JSON
-        c = ResearchClarifier(_make_llm(json.dumps({
-            "context": "C", "boundaries": "B", "position": "P",
-            "premises": ["p1"], "scope_check": True,
-        })),
-                              config={"max_retry_attempts": 1,
-                                      "llm_call_timeout_seconds": 30},
-                              metrics=sub_mc)
+        c = ResearchClarifier(
+            _make_llm(
+                json.dumps(
+                    {
+                        "context": "C",
+                        "boundaries": "B",
+                        "position": "P",
+                        "premises": ["p1"],
+                        "scope_check": True,
+                    }
+                )
+            ),
+            config={"max_retry_attempts": 1, "llm_call_timeout_seconds": 30},
+            metrics=sub_mc,
+        )
         result = _run(c.clarify("q"))
         # Result succeeded (clarify normalizes the response)
         assert result["context"] == "C"

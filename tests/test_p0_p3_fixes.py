@@ -26,7 +26,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 # Add src to path
-sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 import llmwikify
 from llmwikify.kernel import Wiki
@@ -43,11 +43,11 @@ class TestVersionConsistency:
         except ImportError:
             import tomli as tomllib
 
-        pyproject_path = Path(__file__).parent.parent / 'pyproject.toml'
-        with open(pyproject_path, 'rb') as f:
+        pyproject_path = Path(__file__).parent.parent / "pyproject.toml"
+        with open(pyproject_path, "rb") as f:
             pyproject = tomllib.load(f)
 
-        pyproject_version = pyproject['project']['version']
+        pyproject_version = pyproject["project"]["version"]
         init_version = llmwikify.__version__
 
         assert init_version == pyproject_version, (
@@ -57,7 +57,7 @@ class TestVersionConsistency:
 
     def test_version_format(self):
         """Version should follow semver-like format."""
-        assert re.match(r'^\d+\.\d+\.\d+', llmwikify.__version__)
+        assert re.match(r"^\d+\.\d+\.\d+", llmwikify.__version__)
 
 
 # ============================================================
@@ -66,7 +66,7 @@ class TestVersionConsistency:
 class TestDeadCodeRemoval:
     def test_no_unreachable_code_after_raise(self):
         """_call_llm_with_retry should not have unreachable code after raise."""
-        wiki_path = Path(__file__).parent.parent / 'src/llmwikify/kernel/wiki/wiki.py'
+        wiki_path = Path(__file__).parent.parent / "src/llmwikify/kernel/wiki/wiki.py"
         content = wiki_path.read_text()
 
         # Find the raise statement in _call_llm_with_retry
@@ -77,10 +77,11 @@ class TestDeadCodeRemoval:
         if match:
             after_raise = match.group(0)
             # Check if there's non-comment, non-whitespace code after raise
-            lines = after_raise.split('\n')
+            lines = after_raise.split("\n")
             code_after_raise = [
-                line for line in lines[1:]
-                if line.strip() and not line.strip().startswith('#')
+                line
+                for line in lines[1:]
+                if line.strip() and not line.strip().startswith("#")
             ]
             assert len(code_after_raise) == 0, (
                 f"Found unreachable code after raise in _call_llm_with_retry: "
@@ -94,26 +95,29 @@ class TestDeadCodeRemoval:
 class TestOrphanHtmlFile:
     def test_html_file_not_importable(self):
         """The orphan html.py should not exist or should be safe to import."""
-        html_path = Path(__file__).parent.parent / 'src/llmwikify/extractors/html.py'
+        html_path = Path(__file__).parent.parent / "src/llmwikify/extractors/html.py"
 
         if html_path.exists():
             # If it exists, it should be importable without errors
             content = html_path.read_text()
             # Should have proper imports
-            assert 'import' in content, "html.py should have import statements"
+            assert "import" in content, "html.py should have import statements"
             # Should not call non-existent functions
-            assert '_html_to_text' not in content or 'def _html_to_text' in content, (
-                "html.py calls undefined _html_to_text function"
-            )
+            assert (
+                "_html_to_text" not in content or "def _html_to_text" in content
+            ), "html.py calls undefined _html_to_text function"
 
     def test_extractors_init_does_not_import_orphan_html(self):
         """foundation/extractors/__init__.py should not import the orphan html module."""
-        init_path = Path(__file__).parent.parent / 'src/llmwikify/foundation/extractors/__init__.py'
+        init_path = (
+            Path(__file__).parent.parent
+            / "src/llmwikify/foundation/extractors/__init__.py"
+        )
         content = init_path.read_text()
 
         # Should not import from .html
-        assert 'from .html import' not in content
-        assert 'import html' not in content
+        assert "from .html import" not in content
+        assert "import html" not in content
 
 
 # ============================================================
@@ -130,20 +134,20 @@ class TestCLIDefaultWikiRoot:
         """
         commands_path = (
             Path(__file__).parent.parent
-            / 'src/llmwikify/interfaces/cli/commands/init_cmd.py'
+            / "src/llmwikify/interfaces/cli/commands/init_cmd.py"
         )
         content = commands_path.read_text()
 
         # Should not have hardcoded developer path as default
-        assert "WIKI_ROOT', '/home/ll/" not in content, (
-            "CLI has hardcoded developer path /home/ll/... as default"
-        )
+        assert (
+            "WIKI_ROOT', '/home/ll/" not in content
+        ), "CLI has hardcoded developer path /home/ll/... as default"
 
     def test_wiki_root_env_override(self):
         """WIKI_ROOT env var should be respected."""
-        test_path = '/tmp/test_wiki'
-        with patch.dict(os.environ, {'WIKI_ROOT': test_path}):
-            assert os.environ.get('WIKI_ROOT') == test_path
+        test_path = "/tmp/test_wiki"
+        with patch.dict(os.environ, {"WIKI_ROOT": test_path}):
+            assert os.environ.get("WIKI_ROOT") == test_path
 
 
 # ============================================================
@@ -159,13 +163,13 @@ class TestMarkItDownPlugins:
         cross-subpackage import, violating L1 isolation). The
         caller passes a pre-constructed ``llm_client``.
         """
-        pytest.importorskip('markitdown', reason="markitdown not installed")
+        pytest.importorskip("markitdown", reason="markitdown not installed")
 
         from llmwikify.foundation.extractors.markitdown_extractor import (
             MarkItDownExtractor,
         )
 
-        with patch('markitdown.MarkItDown') as MockMD:
+        with patch("markitdown.MarkItDown") as MockMD:
             MockMD.return_value = MagicMock()
 
             extractor = MarkItDownExtractor(
@@ -176,27 +180,39 @@ class TestMarkItDownPlugins:
 
             if MockMD.called:
                 call_kwargs = MockMD.call_args
-                enable_plugins = call_kwargs.kwargs.get('enable_plugins',
-                                  call_kwargs[1].get('enable_plugins', None) if call_kwargs[1] else None)
+                enable_plugins = call_kwargs.kwargs.get(
+                    "enable_plugins",
+                    (
+                        call_kwargs[1].get("enable_plugins", None)
+                        if call_kwargs[1]
+                        else None
+                    ),
+                )
                 assert enable_plugins == True
 
     def test_enable_plugins_false_without_llm(self):
         """MarkItDown should disable plugins when LLM is not configured."""
-        pytest.importorskip('markitdown', reason="markitdown not installed")
+        pytest.importorskip("markitdown", reason="markitdown not installed")
 
         from llmwikify.foundation.extractors.markitdown_extractor import (
             MarkItDownExtractor,
         )
 
-        with patch('markitdown.MarkItDown') as MockMD:
+        with patch("markitdown.MarkItDown") as MockMD:
             MockMD.return_value = MagicMock()
 
             extractor = MarkItDownExtractor({})
 
             if MockMD.called:
                 call_kwargs = MockMD.call_args
-                enable_plugins = call_kwargs.kwargs.get('enable_plugins',
-                                  call_kwargs[1].get('enable_plugins', None) if call_kwargs[1] else None)
+                enable_plugins = call_kwargs.kwargs.get(
+                    "enable_plugins",
+                    (
+                        call_kwargs[1].get("enable_plugins", None)
+                        if call_kwargs[1]
+                        else None
+                    ),
+                )
                 assert enable_plugins == False
 
 
@@ -207,22 +223,23 @@ class TestFallbackBehavior:
     def test_fallback_to_text_for_unknown_formats(self, temp_wiki):
         """Unknown formats should fall back to text extraction, not fail silently."""
         # Create a test file with unknown extension
-        test_file = temp_wiki / 'test.unknown'
+        test_file = temp_wiki / "test.unknown"
         test_file.write_text("Some text content")
 
         from llmwikify.foundation.extractors.base import extract
+
         result = extract(str(test_file), temp_wiki)
 
         # Should not return empty text for existing files
-        assert result.text != "" or result.source_type == "error", (
-            "Should either extract text or return error, not silent empty"
-        )
+        assert (
+            result.text != "" or result.source_type == "error"
+        ), "Should either extract text or return error, not silent empty"
 
     def test_extract_handles_missing_file_gracefully(self):
         """Extract should handle missing files gracefully."""
         from llmwikify.foundation.extractors.base import extract
 
-        result = extract('/nonexistent/file.xyz')
+        result = extract("/nonexistent/file.xyz")
 
         assert result.source_type == "error"
         assert "error" in result.metadata
@@ -235,28 +252,33 @@ class TestMCPToolCount:
     def test_mcp_tool_count_matches_readme(self):
         """MCP tool count in README should match actual implementation."""
         # Count tools in tools.py (single source of truth)
-        tools_path = Path(__file__).parent.parent / 'src/llmwikify/interfaces/mcp/tools.py'
+        tools_path = (
+            Path(__file__).parent.parent / "src/llmwikify/interfaces/mcp/tools.py"
+        )
         content = tools_path.read_text()
-        actual_count = content.count('@mcp.tool')
+        actual_count = content.count("@mcp.tool")
 
         # Count tools in README
-        readme_path = Path(__file__).parent.parent / 'README.md'
+        readme_path = Path(__file__).parent.parent / "README.md"
         readme_content = readme_path.read_text()
 
         # Find the MCP tools table
         # Count rows in the table (excluding header and separator)
         table_match = re.search(
-            r'## 🗄️ MCP Server.*?\n\| Tool \|.*?\n\|[-| ]+\|(.*?)(?=\n##|\n###|$)',
+            r"## 🗄️ MCP Server.*?\n\| Tool \|.*?\n\|[-| ]+\|(.*?)(?=\n##|\n###|$)",
             readme_content,
-            re.DOTALL
+            re.DOTALL,
         )
 
         if table_match:
             table_body = table_match.group(1)
-            readme_count = len([
-                line for line in table_body.split('\n')
-                if line.strip().startswith('|') and '`wiki_' in line
-            ])
+            readme_count = len(
+                [
+                    line
+                    for line in table_body.split("\n")
+                    if line.strip().startswith("|") and "`wiki_" in line
+                ]
+            )
 
             assert actual_count == readme_count, (
                 f"MCP tool count mismatch: README says {readme_count}, "
@@ -277,7 +299,7 @@ class TestSinkCLI:
         """
         commands_path = (
             Path(__file__).parent.parent
-            / 'src/llmwikify/interfaces/cli/commands/sink_status.py'
+            / "src/llmwikify/interfaces/cli/commands/sink_status.py"
         )
         content = commands_path.read_text()
 
@@ -293,16 +315,16 @@ class TestSinkCLI:
         )
 
         # Also check if the command handler exists
-        has_sink_handler = 'def sink' in content
+        has_sink_handler = "def sink" in content
 
-        assert has_sink_cmd or has_sink_handler, (
-            "No sink-related CLI command found in sink_status.py"
-        )
+        assert (
+            has_sink_cmd or has_sink_handler
+        ), "No sink-related CLI command found in sink_status.py"
 
     def test_wiki_has_read_sink_method(self):
         """Wiki class should have read_sink method."""
         wiki = Wiki.__new__(Wiki)
-        assert hasattr(wiki, 'read_sink') or hasattr(wiki, 'sink_status')
+        assert hasattr(wiki, "read_sink") or hasattr(wiki, "sink_status")
 
 
 # ============================================================
@@ -318,7 +340,7 @@ class TestSynthesizeCLI:
         """
         commands_path = (
             Path(__file__).parent.parent
-            / 'src/llmwikify/interfaces/cli/commands/synthesize.py'
+            / "src/llmwikify/interfaces/cli/commands/synthesize.py"
         )
         content = commands_path.read_text()
 
@@ -329,9 +351,7 @@ class TestSynthesizeCLI:
             or "name = 'synthesize'" in content
             or "class SynthesizeCommand" in content
         )
-        assert has_synthesize, (
-            "No 'synthesize' CLI command found in synthesize.py"
-        )
+        assert has_synthesize, "No 'synthesize' CLI command found in synthesize.py"
 
 
 # ============================================================
@@ -346,16 +366,17 @@ class TestLintInvestigations:
         """
         commands_path = (
             Path(__file__).parent.parent
-            / 'src/llmwikify/interfaces/cli/commands/lint.py'
+            / "src/llmwikify/interfaces/cli/commands/lint.py"
         )
         content = commands_path.read_text()
 
         # Check for --generate-investigations in argparse setup
-        has_inv_flag = '--generate-investigations' in content or 'generate_investigations' in content
-
-        assert has_inv_flag, (
-            "lint command missing --generate-investigations flag"
+        has_inv_flag = (
+            "--generate-investigations" in content
+            or "generate_investigations" in content
         )
+
+        assert has_inv_flag, "lint command missing --generate-investigations flag"
 
 
 # ============================================================
@@ -373,14 +394,14 @@ class TestBatchSmart:
         """
         commands_path = (
             Path(__file__).parent.parent
-            / 'src/llmwikify/interfaces/cli/commands/batch.py'
+            / "src/llmwikify/interfaces/cli/commands/batch.py"
         )
         content = commands_path.read_text()
 
         # Verify the batch command exists (via class name,
         # argparse name, or setup_parser call).
         has_batch_cmd = (
-            "name = \"batch\"" in content
+            'name = "batch"' in content
             or "name = 'batch'" in content
             or "'batch'" in content
             or '"batch"' in content
@@ -390,12 +411,10 @@ class TestBatchSmart:
         # batch command's setup_parser.
         has_self_create = "--self-create" in content
 
-        assert has_batch_cmd, (
-            "batch command not found in batch.py"
-        )
-        assert has_self_create, (
-            "batch command missing --self-create flag in argparse setup"
-        )
+        assert has_batch_cmd, "batch command not found in batch.py"
+        assert (
+            has_self_create
+        ), "batch command missing --self-create flag in argparse setup"
 
 
 # ============================================================
@@ -404,14 +423,14 @@ class TestBatchSmart:
 class TestReadTheDocs:
     def test_readthedocs_yaml_exists(self):
         """.readthedocs.yaml should exist if documentation URL is configured."""
-        pyproject_path = Path(__file__).parent.parent / 'pyproject.toml'
+        pyproject_path = Path(__file__).parent.parent / "pyproject.toml"
         content = pyproject_path.read_text()
 
-        if 'readthedocs' in content or 'Documentation' in content:
-            rtd_path = Path(__file__).parent.parent / '.readthedocs.yaml'
-            assert rtd_path.exists(), (
-                "pyproject.toml references documentation but .readthedocs.yaml is missing"
-            )
+        if "readthedocs" in content or "Documentation" in content:
+            rtd_path = Path(__file__).parent.parent / ".readthedocs.yaml"
+            assert (
+                rtd_path.exists()
+            ), "pyproject.toml references documentation but .readthedocs.yaml is missing"
 
 
 # ============================================================
@@ -423,31 +442,32 @@ class TestPromptsInit:
         from llmwikify.foundation import prompts
 
         # Should have some exports beyond just a docstring
-        module_attrs = [
-            attr for attr in dir(prompts)
-            if not attr.startswith('_')
-        ]
+        module_attrs = [attr for attr in dir(prompts) if not attr.startswith("_")]
 
         # Should export at least something useful
-        assert len(module_attrs) > 0, (
-            "prompts/__init__.py should export classes or functions"
-        )
+        assert (
+            len(module_attrs) > 0
+        ), "prompts/__init__.py should export classes or functions"
 
     def test_defaults_init_has_content(self):
         """foundation/prompts/_defaults/__init__.py should have meaningful content."""
-        defaults_path = Path(__file__).parent.parent / 'src/llmwikify/foundation/prompts/_defaults/__init__.py'
+        defaults_path = (
+            Path(__file__).parent.parent
+            / "src/llmwikify/foundation/prompts/_defaults/__init__.py"
+        )
         content = defaults_path.read_text()
 
         # Should have more than just a docstring
-        lines = [line.strip() for line in content.split('\n') if line.strip()]
+        lines = [line.strip() for line in content.split("\n") if line.strip()]
         non_comment_lines = [
-            line for line in lines
-            if not line.startswith('#') and not line.startswith('"""') and line != '"""'
+            line
+            for line in lines
+            if not line.startswith("#") and not line.startswith('"""') and line != '"""'
         ]
 
-        assert len(non_comment_lines) > 0, (
-            "prompts/_defaults/__init__.py should export default prompts"
-        )
+        assert (
+            len(non_comment_lines) > 0
+        ), "prompts/_defaults/__init__.py should export default prompts"
 
 
 # ============================================================
@@ -456,18 +476,18 @@ class TestPromptsInit:
 class TestPytestAsyncio:
     def test_async_tests_exist_if_dep_declared(self):
         """If pytest-asyncio is a dependency, there should be async tests."""
-        pyproject_path = Path(__file__).parent.parent / 'pyproject.toml'
+        pyproject_path = Path(__file__).parent.parent / "pyproject.toml"
         content = pyproject_path.read_text()
 
-        has_asyncio_dep = 'pytest-asyncio' in content
+        has_asyncio_dep = "pytest-asyncio" in content
 
         if has_asyncio_dep:
             # Check for async test functions
             tests_dir = Path(__file__).parent
             async_test_count = 0
-            for test_file in tests_dir.glob('test_*.py'):
+            for test_file in tests_dir.glob("test_*.py"):
                 file_content = test_file.read_text()
-                async_test_count += len(re.findall(r'async def test_', file_content))
+                async_test_count += len(re.findall(r"async def test_", file_content))
 
             # Either have async tests or remove the dep
             assert async_test_count > 0, (

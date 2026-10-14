@@ -30,9 +30,13 @@ def test_insights_page_loads(page, wiki_server):
     expect(rec_section).to_be_visible()
 
     # Should show either recommendations or "No recommendations" message
-    has_items = page.locator('section:has-text("Recommendations") .space-y-2 > div').count()
-    has_empty = page.locator('text=No recommendations').count()
-    assert has_items > 0 or has_empty > 0, "Recommendations section should show content or empty message"
+    has_items = page.locator(
+        'section:has-text("Recommendations") .space-y-2 > div'
+    ).count()
+    has_empty = page.locator("text=No recommendations").count()
+    assert (
+        has_items > 0 or has_empty > 0
+    ), "Recommendations section should show content or empty message"
 
     # Check for JS errors
     assert len(errors) == 0, f"JavaScript errors found: {errors}"

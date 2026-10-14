@@ -54,9 +54,7 @@ def client(registry: WikiRegistry) -> TestClient:
     ``raise_server_exceptions=False`` lets us assert on 500 responses that
     would otherwise re-raise (e.g. the reload_wiki KeyError path).
     """
-    server = WikiServer(
-        registry, enable_mcp=False, enable_webui=False, local_mode=True
-    )
+    server = WikiServer(registry, enable_mcp=False, enable_webui=False, local_mode=True)
     return TestClient(server.app, raise_server_exceptions=False)
 
 
@@ -216,9 +214,7 @@ class TestLogClientError:
         assert response.status_code == 200
         assert response.json() == {"ok": True}
         # At least one log record was emitted under client.errors
-        assert any(
-            "api-error" in record.message for record in caplog.records
-        )
+        assert any("api-error" in record.message for record in caplog.records)
 
     def test_fetch_error_log(
         self, client: TestClient, caplog: pytest.LogCaptureFixture
@@ -236,9 +232,7 @@ class TestLogClientError:
             )
         assert response.status_code == 200
         assert response.json() == {"ok": True}
-        assert any(
-            "fetch-error" in record.message for record in caplog.records
-        )
+        assert any("fetch-error" in record.message for record in caplog.records)
 
     def test_unknown_error_log(
         self, client: TestClient, caplog: pytest.LogCaptureFixture
@@ -259,9 +253,7 @@ class TestLogClientError:
             )
         assert response.status_code == 200
         assert response.json() == {"ok": True}
-        assert any(
-            "ReferenceError" in record.message for record in caplog.records
-        )
+        assert any("ReferenceError" in record.message for record in caplog.records)
 
     def test_invalid_json_body(
         self, client: TestClient, caplog: pytest.LogCaptureFixture

@@ -31,7 +31,9 @@ def _maybe_prompt_llm_setup() -> int:
         return 0
 
     print()
-    print("💡 LLM features (analyze-source, synthesize, chat) need ~/.llmwikify/llmwikify.json")
+    print(
+        "💡 LLM features (analyze-source, synthesize, chat) need ~/.llmwikify/llmwikify.json"
+    )
     print("   No LLM config detected. Set one up now? [y/N]: ", end="", flush=True)
     try:
         answer = input().strip().lower()
@@ -48,9 +50,15 @@ def _maybe_prompt_llm_setup() -> int:
     detected_env = _PROVIDER_ENV_KEY.get(detected, "API_KEY") if detected else None
     default = detected or "openai"
     if detected:
-        print(f"  Detected {detected_env or 'API key'} in env vars. Provider: {default}")
+        print(
+            f"  Detected {detected_env or 'API key'} in env vars. Provider: {default}"
+        )
     else:
-        print("  Provider [openai/anthropic/minimax/xiaomi] [openai]: ", end="", flush=True)
+        print(
+            "  Provider [openai/anthropic/minimax/xiaomi] [openai]: ",
+            end="",
+            flush=True,
+        )
         try:
             provider_input = input().strip().lower()
         except (EOFError, KeyboardInterrupt):
@@ -61,7 +69,11 @@ def _maybe_prompt_llm_setup() -> int:
         if not detected_env or default != detected:
             detected_env = _PROVIDER_ENV_KEY.get(default)
             if detected_env and not os.environ.get(detected_env):
-                print(f"  API key for {default} (or set {detected_env} first): ", end="", flush=True)
+                print(
+                    f"  API key for {default} (or set {detected_env} first): ",
+                    end="",
+                    flush=True,
+                )
                 try:
                     api_key = input().strip()
                 except (EOFError, KeyboardInterrupt):
@@ -73,7 +85,7 @@ def _maybe_prompt_llm_setup() -> int:
                 # Use create_llm_config with explicit key
                 return create_llm_config(
                     provider=default,
-model=_get_default_model(default),
+                    model=_get_default_model(default),
                     api_key=api_key,
                 )
 
@@ -154,9 +166,9 @@ def run_init(wiki: Any, wiki_root: Any, args: Any) -> int:
             f"    {raw_stats['total']} files in "
             f"{len(raw_stats.get('categories', {}))} categories"
         )
-        top_cats = sorted(
-            raw_stats.get("categories", {}).items(), key=lambda x: -x[1]
-        )[:5]
+        top_cats = sorted(raw_stats.get("categories", {}).items(), key=lambda x: -x[1])[
+            :5
+        ]
         print(f"    Top: {', '.join(f'{k} ({v})' for k, v in top_cats)}")
 
     print()
@@ -173,11 +185,14 @@ def run_init(wiki: Any, wiki_root: Any, args: Any) -> int:
     else:
         print("    1. Drop sources into raw/")
         print("    2. Run: llmwikify ingest <filename>")
-        print("    3. Or use an AI agent: llmwikify init --agent <opencode|claude|codex>")
+        print(
+            "    3. Or use an AI agent: llmwikify init --agent <opencode|claude|codex>"
+        )
 
     # --- LLM setup (P3) ---
     if getattr(args, "llm", False):
         from .init_llm_cmd import create_llm_config
+
         rc = create_llm_config(
             provider=getattr(args, "llm_provider", None),
             model=getattr(args, "llm_model", None),
@@ -206,50 +221,63 @@ class InitCommand(Command):
             raise TypeError("setup_parser requires an argparse subparsers action")
         p = subparsers.add_parser(self.name, help=self.help)
         p.add_argument(
-            "--overwrite", action="store_true",
+            "--overwrite",
+            action="store_true",
             help="Recreate index.md and log.md if they exist",
         )
         p.add_argument(
-            "--agent", type=str,
+            "--agent",
+            type=str,
             choices=["opencode", "claude", "codex", "generic"],
             help="Generate agent-specific config files (required for MCP setup)",
         )
         p.add_argument(
-            "--force", action="store_true",
+            "--force",
+            action="store_true",
             help="Overwrite existing files without prompting",
         )
         p.add_argument(
-            "--merge", action="store_true",
+            "--merge",
+            action="store_true",
             help="Merge into existing wiki.md instead of skipping",
         )
         # LLM setup (P3)
         p.add_argument(
-            "--llm", action="store_true",
+            "--llm",
+            action="store_true",
             help="Also set up global LLM config (~/.llmwikify/llmwikify.json)",
         )
         p.add_argument(
-            "--llm-provider", dest="llm_provider",
+            "--llm-provider",
+            dest="llm_provider",
             choices=["openai", "anthropic", "minimax", "xiaomi"],
             help="LLM provider (default: auto-detect from env)",
         )
         p.add_argument(
-            "--llm-model", dest="llm_model",
+            "--llm-model",
+            dest="llm_model",
             help="Model name (default: provider-specific)",
         )
         p.add_argument(
-            "--llm-api-key", dest="llm_api_key",
+            "--llm-api-key",
+            dest="llm_api_key",
             help="API key (default: from env var)",
         )
         p.add_argument(
-            "--llm-base-url", dest="llm_base_url",
+            "--llm-base-url",
+            dest="llm_base_url",
             help="Custom API base URL",
         )
         p.add_argument(
-            "--llm-overwrite", dest="llm_overwrite", action="store_true",
+            "--llm-overwrite",
+            dest="llm_overwrite",
+            action="store_true",
             help="Overwrite existing LLM config",
         )
         p.add_argument(
-            "--no-llm-prompt", dest="no_llm_prompt", action="store_true",
+            "--no-llm-prompt",
+            dest="no_llm_prompt",
+            action="store_true",
             help="Skip interactive LLM setup prompt (for non-tty/CI)",
         )
 

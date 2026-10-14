@@ -12,6 +12,7 @@ and ``from llmwikify.apps.research.engine`` refer to the same module.
 
 New code should import from ``llmwikify.apps.research.engine`` directly.
 """
+
 import sys as _sys
 
 from llmwikify.apps.research import engine as _canonical  # noqa: F401

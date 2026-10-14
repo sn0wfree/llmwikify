@@ -101,7 +101,10 @@ class ResearchGates:
             return {"missing": "synthesize", "reason": "step 5 (synthesis) missing"}
         if state.reasoning_check is None:
             # reasoning_check is part of synthesize action
-            return {"missing": "synthesize", "reason": "step 3 (reasoning check) missing"}
+            return {
+                "missing": "synthesize",
+                "reason": "step 3 (reasoning check) missing",
+            }
         if state.report_md is None:
             return {"missing": "report", "reason": "step 5 (report) missing"}
         if state.structure_check is None:
@@ -237,7 +240,10 @@ class ResearchGates:
                     synth_text,
                     evidence_sources=state.sources,
                     clarification=state.clarification,
-                    reasoning_threshold=self._config.get("gate_min_reasoning_score", 0.5) / 10.0,
+                    reasoning_threshold=self._config.get(
+                        "gate_min_reasoning_score", 0.5
+                    )
+                    / 10.0,
                 )
                 if not rs.passed:
                     return rs
@@ -251,7 +257,9 @@ class ResearchGates:
                     state.report_md,
                     synthesis=state.synthesis,
                     evidence_sources=state.sources,
-                    structure_threshold=self._config.get("gate_min_structure_score", 0.5),
+                    structure_threshold=self._config.get(
+                        "gate_min_structure_score", 0.5
+                    ),
                 )
                 if not st.passed:
                     return st

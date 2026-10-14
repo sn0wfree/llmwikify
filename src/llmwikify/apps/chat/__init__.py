@@ -51,6 +51,7 @@ see ``llmwikify.foundation.*``.
 For **L2 domain abstractions** (wiki engine, knowledge graph, search,
 storage, multi-wiki), see ``llmwikify.kernel.*``.
 """
+
 from .base import ChatBase, ChatMessage, ChatSession
 from .clarifier import ResearchClarifier
 from .config import DEFAULT_SIX_STEP_CONFIG, merge_six_step_config
@@ -100,8 +101,7 @@ def __getattr__(name: str):
             globals()[name] = value
             return value
         raise AttributeError(
-            f"module {__name__!r} has no attribute {name!r} "
-            f"(looked in {mod_path})"
+            f"module {__name__!r} has no attribute {name!r} " f"(looked in {mod_path})"
         )
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 

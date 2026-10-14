@@ -56,8 +56,7 @@ class WikiDatabase(BaseDatabase):
         construct.
         """
         with self._mgr.transaction() as conn:
-            conn.execute(
-                """
+            conn.execute("""
                 CREATE TABLE IF NOT EXISTS dream_proposals (
                     id TEXT PRIMARY KEY,
                     wiki_id TEXT NOT NULL,
@@ -71,16 +70,12 @@ class WikiDatabase(BaseDatabase):
                     created_at TEXT DEFAULT (datetime('now')),
                     reviewed_at TEXT
                 )
-                """
-            )
-            conn.execute(
-                """
+                """)
+            conn.execute("""
                 CREATE INDEX IF NOT EXISTS idx_dream_proposals_wiki_status
                 ON dream_proposals(wiki_id, status)
-                """
-            )
-            conn.execute(
-                """
+                """)
+            conn.execute("""
                 CREATE TABLE IF NOT EXISTS notifications (
                     id TEXT PRIMARY KEY,
                     wiki_id TEXT NOT NULL,
@@ -90,16 +85,12 @@ class WikiDatabase(BaseDatabase):
                     read INTEGER DEFAULT 0,
                     timestamp TEXT DEFAULT (datetime('now'))
                 )
-                """
-            )
-            conn.execute(
-                """
+                """)
+            conn.execute("""
                 CREATE INDEX IF NOT EXISTS idx_notifications_wiki_read
                 ON notifications(wiki_id, read)
-                """
-            )
-            conn.execute(
-                """
+                """)
+            conn.execute("""
                 CREATE TABLE IF NOT EXISTS confirmations (
                     id TEXT PRIMARY KEY,
                     wiki_id TEXT NOT NULL,
@@ -111,16 +102,12 @@ class WikiDatabase(BaseDatabase):
                     status TEXT NOT NULL DEFAULT 'pending',
                     created_at TEXT DEFAULT (datetime('now'))
                 )
-                """
-            )
-            conn.execute(
-                """
+                """)
+            conn.execute("""
                 CREATE INDEX IF NOT EXISTS idx_confirmations_wiki_status
                 ON confirmations(wiki_id, status)
-                """
-            )
-            conn.execute(
-                """
+                """)
+            conn.execute("""
                 CREATE TABLE IF NOT EXISTS ingest_log (
                     id TEXT PRIMARY KEY,
                     wiki_id TEXT NOT NULL,
@@ -130,14 +117,11 @@ class WikiDatabase(BaseDatabase):
                     status TEXT NOT NULL,
                     timestamp TEXT DEFAULT (datetime('now'))
                 )
-                """
-            )
-            conn.execute(
-                """
+                """)
+            conn.execute("""
                 CREATE INDEX IF NOT EXISTS idx_ingest_log_wiki
                 ON ingest_log(wiki_id, timestamp DESC)
-                """
-            )
+                """)
 
     # ─── Dream proposals (4 methods) ───────────────────────────
 
@@ -148,17 +132,22 @@ class WikiDatabase(BaseDatabase):
                 reason, content_length, source_entries,
                 status, reviewed_at)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (proposal.get("id", uuid.uuid4().hex),
-             proposal.get("wiki_id", ""),
-             proposal.get("page_name", ""),
-             proposal.get("edit_type", ""),
-             proposal.get("content", ""),
-             proposal.get("reason"),
-             proposal.get("content_length"),
-             json.dumps(proposal.get("source_entries", []))
-             if proposal.get("source_entries") else None,
-             proposal.get("status", "pending"),
-             proposal.get("reviewed_at")),
+            (
+                proposal.get("id", uuid.uuid4().hex),
+                proposal.get("wiki_id", ""),
+                proposal.get("page_name", ""),
+                proposal.get("edit_type", ""),
+                proposal.get("content", ""),
+                proposal.get("reason"),
+                proposal.get("content_length"),
+                (
+                    json.dumps(proposal.get("source_entries", []))
+                    if proposal.get("source_entries")
+                    else None
+                ),
+                proposal.get("status", "pending"),
+                proposal.get("reviewed_at"),
+            ),
         )
 
     def get_dream_proposals(
@@ -182,9 +171,7 @@ class WikiDatabase(BaseDatabase):
                 (wiki_id, limit),
             )
 
-    def update_dream_proposal_status(
-        self, proposal_id: str, status: str
-    ) -> None:
+    def update_dream_proposal_status(self, proposal_id: str, status: str) -> None:
         self._mgr.execute_write(
             """UPDATE dream_proposals
                SET status = ?, reviewed_at = datetime('now')
@@ -209,19 +196,22 @@ class WikiDatabase(BaseDatabase):
             """INSERT OR REPLACE INTO notifications
                (id, wiki_id, type, message, data, read, timestamp)
                VALUES (?, ?, ?, ?, ?, ?, ?)""",
-            (n.get("id", uuid.uuid4().hex),
-             n.get("wiki_id", ""),
-             n.get("type", "info"),
-             n.get("message", ""),
-             json.dumps(n.get("data", {}), ensure_ascii=False)
-             if n.get("data") else None,
-             1 if n.get("read") else 0,
-             n.get("timestamp")),
+            (
+                n.get("id", uuid.uuid4().hex),
+                n.get("wiki_id", ""),
+                n.get("type", "info"),
+                n.get("message", ""),
+                (
+                    json.dumps(n.get("data", {}), ensure_ascii=False)
+                    if n.get("data")
+                    else None
+                ),
+                1 if n.get("read") else 0,
+                n.get("timestamp"),
+            ),
         )
 
-    def list_notifications(
-        self, wiki_id: str, unread_only: bool = False
-    ) -> list[dict]:
+    def list_notifications(self, wiki_id: str, unread_only: bool = False) -> list[dict]:
         if unread_only:
             return self._mgr.select_all(
                 """SELECT * FROM notifications
@@ -262,20 +252,23 @@ class WikiDatabase(BaseDatabase):
                (id, wiki_id, tool, arguments, action_type,
                 impact, group_name, status)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-            (c.get("id", uuid.uuid4().hex),
-             c.get("wiki_id", ""),
-             c.get("tool", ""),
-             json.dumps(c.get("arguments", {}), ensure_ascii=False),
-             c.get("action_type"),
-             json.dumps(c.get("impact"), ensure_ascii=False)
-             if c.get("impact") else None,
-             c.get("group_name"),
-             c.get("status", "pending")),
+            (
+                c.get("id", uuid.uuid4().hex),
+                c.get("wiki_id", ""),
+                c.get("tool", ""),
+                json.dumps(c.get("arguments", {}), ensure_ascii=False),
+                c.get("action_type"),
+                (
+                    json.dumps(c.get("impact"), ensure_ascii=False)
+                    if c.get("impact")
+                    else None
+                ),
+                c.get("group_name"),
+                c.get("status", "pending"),
+            ),
         )
 
-    def get_confirmations(
-        self, wiki_id: str, status: str | None = None
-    ) -> list[dict]:
+    def get_confirmations(self, wiki_id: str, status: str | None = None) -> list[dict]:
         if status:
             return self._mgr.select_all(
                 """SELECT * FROM confirmations
@@ -291,9 +284,7 @@ class WikiDatabase(BaseDatabase):
                 (wiki_id,),
             )
 
-    def update_confirmation_status(
-        self, confirmation_id: str, status: str
-    ) -> None:
+    def update_confirmation_status(self, confirmation_id: str, status: str) -> None:
         self._mgr.execute_write(
             """UPDATE confirmations
                SET status = ?
@@ -308,21 +299,16 @@ class WikiDatabase(BaseDatabase):
             """UPDATE confirmations
                SET arguments = ?
                WHERE id = ?""",
-            (json.dumps(arguments, ensure_ascii=False),
-             confirmation_id),
+            (json.dumps(arguments, ensure_ascii=False), confirmation_id),
         )
-    def get_confirmation(
-        self,
-        confirmation_id: str
-    ) -> dict | None:
+
+    def get_confirmation(self, confirmation_id: str) -> dict | None:
         return self._mgr.select_one(
             "SELECT * FROM confirmations WHERE id = ?",
             (confirmation_id,),
         )
 
-    def get_confirmation_with_decoded_args(
-        self, confirmation_id: str
-    ) -> dict | None:
+    def get_confirmation_with_decoded_args(self, confirmation_id: str) -> dict | None:
         """Get confirmation with arguments JSON-decoded.
 
         Returns a new dict with arguments parsed from JSON. Returns None if
@@ -417,17 +403,17 @@ class WikiDatabase(BaseDatabase):
             """INSERT INTO ingest_log
                (id, wiki_id, tool, arguments, result_summary, status)
                VALUES (?, ?, ?, ?, ?, ?)""",
-            (entry.get("id", uuid.uuid4().hex),
-             entry.get("wiki_id", ""),
-             entry.get("tool", ""),
-             json.dumps(entry.get("arguments", {}), ensure_ascii=False),
-             entry.get("result_summary"),
-             entry.get("status", "ok")),
+            (
+                entry.get("id", uuid.uuid4().hex),
+                entry.get("wiki_id", ""),
+                entry.get("tool", ""),
+                json.dumps(entry.get("arguments", {}), ensure_ascii=False),
+                entry.get("result_summary"),
+                entry.get("status", "ok"),
+            ),
         )
 
-    def get_ingest_log(
-        self, wiki_id: str, limit: int = 20
-    ) -> list[dict]:
+    def get_ingest_log(self, wiki_id: str, limit: int = 20) -> list[dict]:
         return self._mgr.select_all(
             """SELECT * FROM ingest_log
                WHERE wiki_id = ?

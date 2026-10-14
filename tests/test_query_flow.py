@@ -21,11 +21,11 @@ class TestSynthesizeQueryBasic:
             answer="# Gold Mining\n\nGold mining is the process of extracting gold.",
         )
 
-        assert result['status'] == 'created'
-        assert result['page_name'].startswith('Query:')
-        assert 'Gold Mining' in result['page_name']
+        assert result["status"] == "created"
+        assert result["page_name"].startswith("Query:")
+        assert "Gold Mining" in result["page_name"]
 
-        page_path = temp_wiki / 'wiki' / f"{result['page_name']}.md"
+        page_path = temp_wiki / "wiki" / f"{result['page_name']}.md"
         assert page_path.exists()
 
         content = page_path.read_text()
@@ -45,8 +45,8 @@ class TestSynthesizeQueryBasic:
             page_name="My Custom Analysis",
         )
 
-        assert result['page_name'] == 'My Custom Analysis'
-        page = temp_wiki / 'wiki' / 'My Custom Analysis.md'
+        assert result["page_name"] == "My Custom Analysis"
+        page = temp_wiki / "wiki" / "My Custom Analysis.md"
         assert page.exists()
 
         wiki.close()
@@ -61,9 +61,9 @@ class TestSynthesizeQueryBasic:
             answer="# Test",
         )
 
-        assert 'page_path' in result
-        assert result['page_path'].startswith('wiki/')
-        assert result['page_path'].endswith('.md')
+        assert "page_path" in result
+        assert result["page_path"].startswith("wiki/")
+        assert result["page_path"].endswith(".md")
 
         wiki.close()
 
@@ -84,14 +84,14 @@ class TestSynthesizeWithSources:
             source_pages=["Gold Mining", "Economics"],
         )
 
-        content = (temp_wiki / 'wiki' / f"{result['page_name']}.md").read_text()
+        content = (temp_wiki / "wiki" / f"{result['page_name']}.md").read_text()
 
-        assert '## Sources' in content
-        assert '[[Gold Mining]]' in content
-        assert '[[Economics]]' in content
-        assert '### Query' in content
-        assert 'Gold economics?' in content
-        assert '### Wiki Pages Referenced' in content
+        assert "## Sources" in content
+        assert "[[Gold Mining]]" in content
+        assert "[[Economics]]" in content
+        assert "### Query" in content
+        assert "Gold economics?" in content
+        assert "### Wiki Pages Referenced" in content
 
         wiki.close()
 
@@ -101,7 +101,7 @@ class TestSynthesizeWithSources:
         wiki.init()
 
         # Create a raw source file
-        raw_file = temp_wiki / 'raw' / 'research-article.md'
+        raw_file = temp_wiki / "raw" / "research-article.md"
         raw_file.write_text("# Research\n\nContent")
 
         result = wiki.synthesize_query(
@@ -110,11 +110,11 @@ class TestSynthesizeWithSources:
             raw_sources=["raw/research-article.md"],
         )
 
-        content = (temp_wiki / 'wiki' / f"{result['page_name']}.md").read_text()
+        content = (temp_wiki / "wiki" / f"{result['page_name']}.md").read_text()
 
-        assert '## Sources' in content
-        assert '### Raw Sources' in content
-        assert '[Source: research-article.md](raw/research-article.md)' in content
+        assert "## Sources" in content
+        assert "### Raw Sources" in content
+        assert "[Source: research-article.md](raw/research-article.md)" in content
 
         wiki.close()
 
@@ -131,13 +131,13 @@ class TestSynthesizeWithSources:
             raw_sources=["raw/data.csv", "raw/report.pdf"],
         )
 
-        content = (temp_wiki / 'wiki' / f"{result['page_name']}.md").read_text()
+        content = (temp_wiki / "wiki" / f"{result['page_name']}.md").read_text()
 
-        assert '[[Topic A]]' in content
-        assert '[Source: data.csv](raw/data.csv)' in content
-        assert '[Source: report.pdf](raw/report.pdf)' in content
-        assert '### Wiki Pages Referenced' in content
-        assert '### Raw Sources' in content
+        assert "[[Topic A]]" in content
+        assert "[Source: data.csv](raw/data.csv)" in content
+        assert "[Source: report.pdf](raw/report.pdf)" in content
+        assert "### Wiki Pages Referenced" in content
+        assert "### Raw Sources" in content
 
         wiki.close()
 
@@ -154,9 +154,9 @@ class TestSynthesizeWithSources:
             auto_link=False,
         )
 
-        content = (temp_wiki / 'wiki' / f"{result['page_name']}.md").read_text()
-        assert '[[Source]]' not in content
-        assert '## Sources' not in content
+        content = (temp_wiki / "wiki" / f"{result['page_name']}.md").read_text()
+        assert "[[Source]]" not in content
+        assert "## Sources" not in content
 
         wiki.close()
 
@@ -170,8 +170,8 @@ class TestSynthesizeWithSources:
             answer="# Simple Answer\n\nJust the answer.",
         )
 
-        content = (temp_wiki / 'wiki' / f"{result['page_name']}.md").read_text()
-        assert '## Sources' not in content
+        content = (temp_wiki / "wiki" / f"{result['page_name']}.md").read_text()
+        assert "## Sources" not in content
 
         wiki.close()
 
@@ -190,9 +190,9 @@ class TestSynthesizeLogging:
             auto_log=True,
         )
 
-        log = (temp_wiki / 'wiki' / 'log.md').read_text()
-        assert 'query' in log
-        assert 'Test question about mining' in log
+        log = (temp_wiki / "wiki" / "log.md").read_text()
+        assert "query" in log
+        assert "Test question about mining" in log
 
         wiki.close()
 
@@ -201,7 +201,7 @@ class TestSynthesizeLogging:
         wiki = Wiki(temp_wiki)
         wiki.init()
 
-        original_log = (temp_wiki / 'wiki' / 'log.md').read_text()
+        original_log = (temp_wiki / "wiki" / "log.md").read_text()
 
         wiki.synthesize_query(
             query="Question",
@@ -209,7 +209,7 @@ class TestSynthesizeLogging:
             auto_log=False,
         )
 
-        new_log = (temp_wiki / 'wiki' / 'log.md').read_text()
+        new_log = (temp_wiki / "wiki" / "log.md").read_text()
         assert original_log == new_log
 
         wiki.close()
@@ -225,9 +225,9 @@ class TestSynthesizeLogging:
             page_name="Query: A vs B",
         )
 
-        log = (temp_wiki / 'wiki' / 'log.md').read_text()
-        assert 'query | Compare A and B' in log
-        assert '[[Query: A vs B]]' in log
+        log = (temp_wiki / "wiki" / "log.md").read_text()
+        assert "query | Compare A and B" in log
+        assert "[[Query: A vs B]]" in log
 
         wiki.close()
 
@@ -250,10 +250,10 @@ class TestSynthesizeDuplicateDetection:
             answer="# Answer 2",
         )
 
-        assert result1['status'] == 'created'
-        assert result2['status'] == 'sunk'
+        assert result1["status"] == "created"
+        assert result2["status"] == "sunk"
 
-        sink_file = temp_wiki / 'wiki' / '.sink' / f"{result1['page_name']}.sink.md"
+        sink_file = temp_wiki / "wiki" / ".sink" / f"{result1['page_name']}.sink.md"
         assert sink_file.exists()
         assert "# Answer 2" in sink_file.read_text()
 
@@ -274,12 +274,13 @@ class TestSynthesizeDuplicateDetection:
             answer="# Answer 2",
         )
 
-        assert result['hint'] != ""
+        assert result["hint"] != ""
         import json
-        hint_data = json.loads(result['hint'])
-        assert hint_data['action_taken'] == 'appended_to_sink'
-        assert 'sink_path' in hint_data
-        assert 'similar_page_exists' in hint_data['type']
+
+        hint_data = json.loads(result["hint"])
+        assert hint_data["action_taken"] == "appended_to_sink"
+        assert "sink_path" in hint_data
+        assert "similar_page_exists" in hint_data["type"]
 
         wiki.close()
 
@@ -299,11 +300,11 @@ class TestSynthesizeDuplicateDetection:
             merge_or_replace="replace",
         )
 
-        assert result2['status'] == 'updated'
-        assert result2['page_name'] == result1['page_name']
+        assert result2["status"] == "updated"
+        assert result2["page_name"] == result1["page_name"]
 
         # Page should have updated content
-        page = temp_wiki / 'wiki' / f"{result2['page_name']}.md"
+        page = temp_wiki / "wiki" / f"{result2['page_name']}.md"
         content = page.read_text()
         assert "New, improved content" in content
         assert "Old content" not in content
@@ -328,8 +329,8 @@ class TestSynthesizeDuplicateDetection:
         )
 
         # Should detect similarity and add suffix
-        assert result['hint'] != ""
-        assert 'Gold vs Silver Mining' in result['hint']
+        assert result["hint"] != ""
+        assert "Gold vs Silver Mining" in result["hint"]
 
         wiki.close()
 
@@ -339,7 +340,7 @@ class TestSynthesizeDuplicateDetection:
         wiki.init()
 
         # Create a Query page in a subdirectory
-        subdir = temp_wiki / 'wiki' / 'queries'
+        subdir = temp_wiki / "wiki" / "queries"
         subdir.mkdir(parents=True)
         (subdir / "Query: Gold Mining Methods.md").write_text(
             "# Gold Mining Methods\n\nOverview of mining methods.\n\n- Keywords: gold, mining, methods"
@@ -348,7 +349,10 @@ class TestSynthesizeDuplicateDetection:
         result = wiki._find_similar_query_page("Open pit gold mining techniques")
 
         assert result is not None
-        assert 'mining' in result['page_name'].lower() or 'gold' in result['page_name'].lower()
+        assert (
+            "mining" in result["page_name"].lower()
+            or "gold" in result["page_name"].lower()
+        )
 
         wiki.close()
 
@@ -368,8 +372,8 @@ class TestSynthesizeDuplicateDetection:
         )
 
         # No hint about existing pages
-        assert result['hint'] == ""
-        assert result['page_name'] == 'Query: How Does Photosynthesis Work'
+        assert result["hint"] == ""
+        assert result["page_name"] == "Query: How Does Photosynthesis Work"
 
         wiki.close()
 
@@ -382,8 +386,8 @@ class TestSynthesizeDuplicateDetection:
         result2 = wiki.synthesize_query(query="Same question", answer="# 2")
         result3 = wiki.synthesize_query(query="Same question", answer="# 3")
 
-        assert result2['status'] == 'sunk'
-        assert result3['status'] == 'sunk'
+        assert result2["status"] == "sunk"
+        assert result3["status"] == "sunk"
 
         wiki.close()
 
@@ -401,8 +405,8 @@ class TestQueryPageNaming:
             answer="# Mining Economics",
         )
 
-        assert 'Query:' in result['page_name']
-        assert 'Compare' in result['page_name'] or 'Gold' in result['page_name']
+        assert "Query:" in result["page_name"]
+        assert "Compare" in result["page_name"] or "Gold" in result["page_name"]
 
         wiki.close()
 
@@ -418,7 +422,7 @@ class TestQueryPageNaming:
         )
 
         # Topic portion should be <= 50 chars
-        topic = result['page_name'].replace('Query: ', '')
+        topic = result["page_name"].replace("Query: ", "")
         assert len(topic) <= 50
 
         wiki.close()
@@ -435,8 +439,8 @@ class TestQueryPageNaming:
             answer="# Answer",
         )
 
-        assert result['status'] == 'sunk'
-        sink_file = temp_wiki / 'wiki' / '.sink' / 'Query: Test Page.sink.md'
+        assert result["status"] == "sunk"
+        sink_file = temp_wiki / "wiki" / ".sink" / "Query: Test Page.sink.md"
         assert sink_file.exists()
 
         wiki.close()
@@ -449,17 +453,21 @@ class TestFullQueryFlow:
         """End-to-end query flow with real search and synthesis."""
         wiki = Wiki(temp_wiki)
         wiki.init()
-        wiki.write_page("Gold Mining", "# Gold Mining\n\nGold mining is profitable and growing.")
-        wiki.write_page("Copper Mining", "# Copper Mining\n\nCopper mining is expanding rapidly.")
+        wiki.write_page(
+            "Gold Mining", "# Gold Mining\n\nGold mining is profitable and growing."
+        )
+        wiki.write_page(
+            "Copper Mining", "# Copper Mining\n\nCopper mining is expanding rapidly."
+        )
 
         # 1. Search
         results = wiki.search("mining", limit=5)
-        source_names = [r['page_name'] for r in results]
+        source_names = [r["page_name"] for r in results]
 
         # 2. Read (simulated — in practice LLM reads content)
         for name in source_names:
             page_data = wiki.read_page(name)
-            assert 'content' in page_data
+            assert "content" in page_data
 
         # 3. Synthesize (LLM-generated answer)
         answer = (
@@ -476,20 +484,20 @@ class TestFullQueryFlow:
         )
 
         # 4. Verify page created
-        assert result['status'] == 'created'
-        page = temp_wiki / 'wiki' / f"{result['page_name']}.md"
+        assert result["status"] == "created"
+        page = temp_wiki / "wiki" / f"{result['page_name']}.md"
         assert page.exists()
 
         # 5. Verify sources section
         content = page.read_text()
-        assert '## Sources' in content
-        assert '### Wiki Pages Referenced' in content
-        assert '[[Gold Mining]]' in content
-        assert '[[Copper Mining]]' in content
+        assert "## Sources" in content
+        assert "### Wiki Pages Referenced" in content
+        assert "[[Gold Mining]]" in content
+        assert "[[Copper Mining]]" in content
 
         # 6. Verify log
-        log = (temp_wiki / 'wiki' / 'log.md').read_text()
-        assert 'query | Compare gold and copper mining' in log
+        log = (temp_wiki / "wiki" / "log.md").read_text()
+        assert "query | Compare gold and copper mining" in log
         assert f"[[{result['page_name']}]]" in log
 
         wiki.close()
@@ -501,8 +509,8 @@ class TestFullQueryFlow:
         wiki.write_page("Market Analysis", "# Market Analysis\n\nData from reports.")
 
         # Create raw sources
-        (temp_wiki / 'raw' / 'report-2024.md').write_text("# 2024 Report\n\nData")
-        (temp_wiki / 'raw' / 'article.md').write_text("# Article\n\nAnalysis")
+        (temp_wiki / "raw" / "report-2024.md").write_text("# 2024 Report\n\nData")
+        (temp_wiki / "raw" / "article.md").write_text("# Article\n\nAnalysis")
 
         answer = "# Market Trends\n\nBased on 2024 data."
 
@@ -513,12 +521,12 @@ class TestFullQueryFlow:
             raw_sources=["raw/report-2024.md", "raw/article.md"],
         )
 
-        content = (temp_wiki / 'wiki' / f"{result['page_name']}.md").read_text()
+        content = (temp_wiki / "wiki" / f"{result['page_name']}.md").read_text()
 
-        assert '[[Market Analysis]]' in content
-        assert '[Source: report-2024.md](raw/report-2024.md)' in content
-        assert '[Source: article.md](raw/article.md)' in content
-        assert '### Raw Sources' in content
+        assert "[[Market Analysis]]" in content
+        assert "[Source: report-2024.md](raw/report-2024.md)" in content
+        assert "[Source: article.md](raw/article.md)" in content
+        assert "### Raw Sources" in content
 
         wiki.close()
 
@@ -535,8 +543,10 @@ class TestFullQueryFlow:
         # The query page should be findable via search
         results = wiki.search("xyz specifically", limit=10)
 
-        page_names = [r['page_name'] for r in results]
-        assert any('Unique Topic' in name or 'Unique Topic' in name for name in page_names)
+        page_names = [r["page_name"] for r in results]
+        assert any(
+            "Unique Topic" in name or "Unique Topic" in name for name in page_names
+        )
 
         wiki.close()
 
@@ -556,9 +566,9 @@ class TestSynthesizeEdgeCases:
             raw_sources=[],
         )
 
-        assert result['status'] == 'created'
-        assert result['source_pages'] == []
-        assert result['raw_sources'] == []
+        assert result["status"] == "created"
+        assert result["source_pages"] == []
+        assert result["raw_sources"] == []
 
         wiki.close()
 
@@ -574,7 +584,7 @@ class TestSynthesizeEdgeCases:
             raw_sources=None,
         )
 
-        assert result['status'] == 'created'
+        assert result["status"] == "created"
 
         wiki.close()
 
@@ -588,8 +598,8 @@ class TestSynthesizeEdgeCases:
             answer="# Comparison",
         )
 
-        assert result['status'] == 'created'
-        page = temp_wiki / 'wiki' / f"{result['page_name']}.md"
+        assert result["status"] == "created"
+        page = temp_wiki / "wiki" / f"{result['page_name']}.md"
         assert page.exists()
 
         wiki.close()
@@ -621,9 +631,9 @@ More content with `code` and **bold** text.
             answer=answer,
         )
 
-        content = (temp_wiki / 'wiki' / f"{result['page_name']}.md").read_text()
-        assert '## Section 1' in content
-        assert '### Subsection' in content
-        assert '`code`' in content
+        content = (temp_wiki / "wiki" / f"{result['page_name']}.md").read_text()
+        assert "## Section 1" in content
+        assert "### Subsection" in content
+        assert "`code`" in content
 
         wiki.close()

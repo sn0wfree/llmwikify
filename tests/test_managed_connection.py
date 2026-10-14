@@ -105,9 +105,7 @@ class TestManagedConnectionTransaction:
         db = tmp_path / "test.db"
         mc = ManagedConnection(db)
         with mc.transaction() as conn:
-            conn.execute(
-                "CREATE TABLE test (id INTEGER PRIMARY KEY, val TEXT)"
-            )
+            conn.execute("CREATE TABLE test (id INTEGER PRIMARY KEY, val TEXT)")
             conn.execute("INSERT INTO test VALUES (1, 'hello')")
         row = mc.conn.execute("SELECT * FROM test WHERE id = 1").fetchone()
         assert row["val"] == "hello"
@@ -117,9 +115,7 @@ class TestManagedConnectionTransaction:
         mc = ManagedConnection(db)
         with pytest.raises(ValueError):
             with mc.transaction() as conn:
-                conn.execute(
-                    "CREATE TABLE test (id INTEGER PRIMARY KEY, val TEXT)"
-                )
+                conn.execute("CREATE TABLE test (id INTEGER PRIMARY KEY, val TEXT)")
                 conn.execute("INSERT INTO test VALUES (1, 'hello')")
                 raise ValueError("boom")
         row = mc.conn.execute("SELECT * FROM test WHERE id = 1").fetchone()
@@ -132,9 +128,7 @@ class TestManagedConnectionSelectOne:
     def test_returns_dict(self, tmp_path: Path) -> None:
         db = tmp_path / "test.db"
         mc = ManagedConnection(db)
-        mc.conn.execute(
-            "CREATE TABLE test (id INTEGER PRIMARY KEY, val TEXT)"
-        )
+        mc.conn.execute("CREATE TABLE test (id INTEGER PRIMARY KEY, val TEXT)")
         mc.conn.execute("INSERT INTO test VALUES (1, 'hello')")
         mc.conn.commit()
         row = mc.select_one("SELECT * FROM test WHERE id = ?", (1,))
@@ -143,9 +137,7 @@ class TestManagedConnectionSelectOne:
     def test_returns_none_when_not_found(self, tmp_path: Path) -> None:
         db = tmp_path / "test.db"
         mc = ManagedConnection(db)
-        mc.conn.execute(
-            "CREATE TABLE test (id INTEGER PRIMARY KEY, val TEXT)"
-        )
+        mc.conn.execute("CREATE TABLE test (id INTEGER PRIMARY KEY, val TEXT)")
         mc.conn.commit()
         row = mc.select_one("SELECT * FROM test WHERE id = ?", (999,))
         assert row is None
@@ -157,9 +149,7 @@ class TestManagedConnectionSelectAll:
     def test_returns_list_of_dicts(self, tmp_path: Path) -> None:
         db = tmp_path / "test.db"
         mc = ManagedConnection(db)
-        mc.conn.execute(
-            "CREATE TABLE test (id INTEGER PRIMARY KEY, val TEXT)"
-        )
+        mc.conn.execute("CREATE TABLE test (id INTEGER PRIMARY KEY, val TEXT)")
         mc.conn.execute("INSERT INTO test VALUES (1, 'a')")
         mc.conn.execute("INSERT INTO test VALUES (2, 'b')")
         mc.conn.commit()
@@ -169,9 +159,7 @@ class TestManagedConnectionSelectAll:
     def test_returns_empty_list(self, tmp_path: Path) -> None:
         db = tmp_path / "test.db"
         mc = ManagedConnection(db)
-        mc.conn.execute(
-            "CREATE TABLE test (id INTEGER PRIMARY KEY, val TEXT)"
-        )
+        mc.conn.execute("CREATE TABLE test (id INTEGER PRIMARY KEY, val TEXT)")
         mc.conn.commit()
         rows = mc.select_all("SELECT * FROM test")
         assert rows == []
@@ -183,9 +171,7 @@ class TestManagedConnectionExecuteWrite:
     def test_auto_commits(self, tmp_path: Path) -> None:
         db = tmp_path / "test.db"
         mc = ManagedConnection(db)
-        mc.conn.execute(
-            "CREATE TABLE test (id INTEGER PRIMARY KEY, val TEXT)"
-        )
+        mc.conn.execute("CREATE TABLE test (id INTEGER PRIMARY KEY, val TEXT)")
         mc.conn.commit()
         mc.execute_write("INSERT INTO test VALUES (1, 'hello')")
         row = mc.conn.execute("SELECT * FROM test WHERE id = 1").fetchone()
@@ -194,9 +180,7 @@ class TestManagedConnectionExecuteWrite:
     def test_returns_cursor(self, tmp_path: Path) -> None:
         db = tmp_path / "test.db"
         mc = ManagedConnection(db)
-        mc.conn.execute(
-            "CREATE TABLE test (id INTEGER PRIMARY KEY, val TEXT)"
-        )
+        mc.conn.execute("CREATE TABLE test (id INTEGER PRIMARY KEY, val TEXT)")
         mc.conn.commit()
         cursor = mc.execute_write("INSERT INTO test VALUES (1, 'hello')")
         assert cursor.rowcount == 1
@@ -208,9 +192,7 @@ class TestManagedConnectionExecuteMany:
     def test_inserts_multiple_rows(self, tmp_path: Path) -> None:
         db = tmp_path / "test.db"
         mc = ManagedConnection(db)
-        mc.conn.execute(
-            "CREATE TABLE test (id INTEGER PRIMARY KEY, val TEXT)"
-        )
+        mc.conn.execute("CREATE TABLE test (id INTEGER PRIMARY KEY, val TEXT)")
         mc.conn.commit()
         mc.execute_many(
             "INSERT INTO test VALUES (?, ?)",
@@ -381,9 +363,7 @@ class TestSelectOneEdgeCases:
     def test_with_params(self, tmp_path: Path) -> None:
         db = tmp_path / "test.db"
         mc = ManagedConnection(db)
-        mc.conn.execute(
-            "CREATE TABLE test (id INTEGER PRIMARY KEY, val TEXT)"
-        )
+        mc.conn.execute("CREATE TABLE test (id INTEGER PRIMARY KEY, val TEXT)")
         mc.conn.execute("INSERT INTO test VALUES (1, 'a')")
         mc.conn.execute("INSERT INTO test VALUES (2, 'b')")
         mc.conn.commit()
@@ -393,9 +373,7 @@ class TestSelectOneEdgeCases:
     def test_with_aggregate(self, tmp_path: Path) -> None:
         db = tmp_path / "test.db"
         mc = ManagedConnection(db)
-        mc.conn.execute(
-            "CREATE TABLE test (id INTEGER PRIMARY KEY, val TEXT)"
-        )
+        mc.conn.execute("CREATE TABLE test (id INTEGER PRIMARY KEY, val TEXT)")
         mc.conn.execute("INSERT INTO test VALUES (1, 'a')")
         mc.conn.execute("INSERT INTO test VALUES (2, 'b')")
         mc.conn.execute("INSERT INTO test VALUES (3, 'c')")
@@ -406,9 +384,7 @@ class TestSelectOneEdgeCases:
     def test_with_null_value(self, tmp_path: Path) -> None:
         db = tmp_path / "test.db"
         mc = ManagedConnection(db)
-        mc.conn.execute(
-            "CREATE TABLE test (id INTEGER PRIMARY KEY, val TEXT)"
-        )
+        mc.conn.execute("CREATE TABLE test (id INTEGER PRIMARY KEY, val TEXT)")
         mc.conn.execute("INSERT INTO test VALUES (1, NULL)")
         mc.conn.commit()
         row = mc.select_one("SELECT * FROM test WHERE id = ?", (1,))
@@ -421,9 +397,7 @@ class TestSelectAllEdgeCases:
     def test_with_limit(self, tmp_path: Path) -> None:
         db = tmp_path / "test.db"
         mc = ManagedConnection(db)
-        mc.conn.execute(
-            "CREATE TABLE test (id INTEGER PRIMARY KEY, val TEXT)"
-        )
+        mc.conn.execute("CREATE TABLE test (id INTEGER PRIMARY KEY, val TEXT)")
         for i in range(5):
             mc.conn.execute(f"INSERT INTO test VALUES ({i}, 'val{i}')")
         mc.conn.commit()
@@ -433,16 +407,12 @@ class TestSelectAllEdgeCases:
     def test_with_where_clause(self, tmp_path: Path) -> None:
         db = tmp_path / "test.db"
         mc = ManagedConnection(db)
-        mc.conn.execute(
-            "CREATE TABLE test (id INTEGER PRIMARY KEY, val TEXT)"
-        )
+        mc.conn.execute("CREATE TABLE test (id INTEGER PRIMARY KEY, val TEXT)")
         mc.conn.execute("INSERT INTO test VALUES (1, 'a')")
         mc.conn.execute("INSERT INTO test VALUES (2, 'b')")
         mc.conn.execute("INSERT INTO test VALUES (3, 'a')")
         mc.conn.commit()
-        rows = mc.select_all(
-            "SELECT * FROM test WHERE val = ? ORDER BY id", ("a",)
-        )
+        rows = mc.select_all("SELECT * FROM test WHERE val = ? ORDER BY id", ("a",))
         assert len(rows) == 2
         assert rows[0]["id"] == 1
         assert rows[1]["id"] == 3
@@ -454,14 +424,10 @@ class TestExecuteWriteEdgeCases:
     def test_update(self, tmp_path: Path) -> None:
         db = tmp_path / "test.db"
         mc = ManagedConnection(db)
-        mc.conn.execute(
-            "CREATE TABLE test (id INTEGER PRIMARY KEY, val TEXT)"
-        )
+        mc.conn.execute("CREATE TABLE test (id INTEGER PRIMARY KEY, val TEXT)")
         mc.conn.execute("INSERT INTO test VALUES (1, 'old')")
         mc.conn.commit()
-        cursor = mc.execute_write(
-            "UPDATE test SET val = ? WHERE id = ?", ("new", 1)
-        )
+        cursor = mc.execute_write("UPDATE test SET val = ? WHERE id = ?", ("new", 1))
         assert cursor.rowcount == 1
         row = mc.select_one("SELECT * FROM test WHERE id = ?", (1,))
         assert row["val"] == "new"
@@ -469,9 +435,7 @@ class TestExecuteWriteEdgeCases:
     def test_delete(self, tmp_path: Path) -> None:
         db = tmp_path / "test.db"
         mc = ManagedConnection(db)
-        mc.conn.execute(
-            "CREATE TABLE test (id INTEGER PRIMARY KEY, val TEXT)"
-        )
+        mc.conn.execute("CREATE TABLE test (id INTEGER PRIMARY KEY, val TEXT)")
         mc.conn.execute("INSERT INTO test VALUES (1, 'a')")
         mc.conn.execute("INSERT INTO test VALUES (2, 'b')")
         mc.conn.commit()
@@ -484,13 +448,9 @@ class TestExecuteWriteEdgeCases:
     def test_no_rows_affected(self, tmp_path: Path) -> None:
         db = tmp_path / "test.db"
         mc = ManagedConnection(db)
-        mc.conn.execute(
-            "CREATE TABLE test (id INTEGER PRIMARY KEY, val TEXT)"
-        )
+        mc.conn.execute("CREATE TABLE test (id INTEGER PRIMARY KEY, val TEXT)")
         mc.conn.commit()
-        cursor = mc.execute_write(
-            "UPDATE test SET val = ? WHERE id = ?", ("new", 999)
-        )
+        cursor = mc.execute_write("UPDATE test SET val = ? WHERE id = ?", ("new", 999))
         assert cursor.rowcount == 0
 
 
@@ -500,9 +460,7 @@ class TestExecuteManyEdgeCases:
     def test_empty_list(self, tmp_path: Path) -> None:
         db = tmp_path / "test.db"
         mc = ManagedConnection(db)
-        mc.conn.execute(
-            "CREATE TABLE test (id INTEGER PRIMARY KEY, val TEXT)"
-        )
+        mc.conn.execute("CREATE TABLE test (id INTEGER PRIMARY KEY, val TEXT)")
         mc.conn.commit()
         mc.execute_many("INSERT INTO test VALUES (?, ?)", [])
         rows = mc.select_all("SELECT * FROM test")
@@ -511,9 +469,7 @@ class TestExecuteManyEdgeCases:
     def test_with_update(self, tmp_path: Path) -> None:
         db = tmp_path / "test.db"
         mc = ManagedConnection(db)
-        mc.conn.execute(
-            "CREATE TABLE test (id INTEGER PRIMARY KEY, val TEXT)"
-        )
+        mc.conn.execute("CREATE TABLE test (id INTEGER PRIMARY KEY, val TEXT)")
         mc.conn.execute("INSERT INTO test VALUES (1, 'a')")
         mc.conn.execute("INSERT INTO test VALUES (2, 'b')")
         mc.conn.commit()
@@ -534,9 +490,7 @@ class TestAddColumnIfMissingEdgeCases:
         mc = ManagedConnection(db)
         mc.conn.execute("CREATE TABLE test (id INTEGER)")
         mc.conn.commit()
-        result = mc.add_column_if_missing(
-            "test", "val", "TEXT", default="'default'"
-        )
+        result = mc.add_column_if_missing("test", "val", "TEXT", default="'default'")
         assert result is True
         mc.conn.execute("INSERT INTO test (id) VALUES (1)")
         mc.conn.commit()
@@ -565,9 +519,7 @@ class TestTransactionEdgeCases:
         db = tmp_path / "test.db"
         mc = ManagedConnection(db)
         with mc.transaction() as conn:
-            conn.execute(
-                "CREATE TABLE test (id INTEGER PRIMARY KEY, val TEXT)"
-            )
+            conn.execute("CREATE TABLE test (id INTEGER PRIMARY KEY, val TEXT)")
             conn.execute("INSERT INTO test VALUES (1, 'hello')")
             # Inner transaction should work (SQLite savepoints)
             with mc.transaction() as conn2:
@@ -578,9 +530,7 @@ class TestTransactionEdgeCases:
     def test_transaction_isolation(self, tmp_path: Path) -> None:
         db = tmp_path / "test.db"
         mc = ManagedConnection(db)
-        mc.conn.execute(
-            "CREATE TABLE test (id INTEGER PRIMARY KEY, val TEXT)"
-        )
+        mc.conn.execute("CREATE TABLE test (id INTEGER PRIMARY KEY, val TEXT)")
         mc.conn.commit()
         # Before transaction, no data
         rows = mc.select_all("SELECT * FROM test")
@@ -644,9 +594,7 @@ class TestThreadSafetyEdgeCases:
     def test_concurrent_reads(self, tmp_path: Path) -> None:
         db = tmp_path / "test.db"
         mc = ManagedConnection(db)
-        mc.conn.execute(
-            "CREATE TABLE test (id INTEGER PRIMARY KEY, val TEXT)"
-        )
+        mc.conn.execute("CREATE TABLE test (id INTEGER PRIMARY KEY, val TEXT)")
         for i in range(10):
             mc.conn.execute(f"INSERT INTO test VALUES ({i}, 'val{i}')")
         mc.conn.commit()
@@ -670,9 +618,7 @@ class TestThreadSafetyEdgeCases:
     def test_concurrent_writes(self, tmp_path: Path) -> None:
         db = tmp_path / "test.db"
         mc = ManagedConnection(db)
-        mc.conn.execute(
-            "CREATE TABLE test (id INTEGER PRIMARY KEY, val TEXT)"
-        )
+        mc.conn.execute("CREATE TABLE test (id INTEGER PRIMARY KEY, val TEXT)")
         mc.conn.commit()
 
         errors = []
@@ -680,16 +626,12 @@ class TestThreadSafetyEdgeCases:
 
         def write_data(i):
             try:
-                mc.execute_write(
-                    "INSERT INTO test VALUES (?, ?)", (i, f"val{i}")
-                )
+                mc.execute_write("INSERT INTO test VALUES (?, ?)", (i, f"val{i}"))
             except Exception as e:
                 with lock:
                     errors.append(str(e))
 
-        threads = [
-            threading.Thread(target=write_data, args=(i,)) for i in range(5)
-        ]
+        threads = [threading.Thread(target=write_data, args=(i,)) for i in range(5)]
         for t in threads:
             t.start()
         for t in threads:
@@ -738,14 +680,12 @@ class TestIntegration:
 
         # Create table
         with mc.transaction() as conn:
-            conn.execute(
-                """CREATE TABLE users (
+            conn.execute("""CREATE TABLE users (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     name TEXT NOT NULL,
                     email TEXT UNIQUE,
                     age INTEGER
-                )"""
-            )
+                )""")
 
         # Insert
         mc.execute_write(
@@ -791,9 +731,7 @@ class TestIntegration:
 
         # Create and insert initial data
         with mc.transaction() as conn:
-            conn.execute(
-                "CREATE TABLE test (id INTEGER PRIMARY KEY, val TEXT)"
-            )
+            conn.execute("CREATE TABLE test (id INTEGER PRIMARY KEY, val TEXT)")
             conn.execute("INSERT INTO test VALUES (1, 'original')")
 
         # Failed transaction should not affect data

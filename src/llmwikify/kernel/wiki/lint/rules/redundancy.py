@@ -33,18 +33,20 @@ class RedundancyRule(Rule):
         results: list[dict[str, Any]] = []
 
         for i, name1 in enumerate(page_names):
-            for name2 in page_names[i+1:]:
-                if (name1.lower() in name2.lower() or name2.lower() in name1.lower()):
+            for name2 in page_names[i + 1 :]:
+                if name1.lower() in name2.lower() or name2.lower() in name1.lower():
                     if len(name1) > 5 and len(name2) > 5:
-                        results.append({
-                            "type": "similar_page_names",
-                            "page_a": name1,
-                            "page_b": name2,
-                            "observation": (
-                                f"Pages '{name1}' and '{name2}' have similar names. "
-                                f"Consider merging if they cover the same topic."
-                            ),
-                        })
+                        results.append(
+                            {
+                                "type": "similar_page_names",
+                                "page_a": name1,
+                                "page_b": name2,
+                                "observation": (
+                                    f"Pages '{name1}' and '{name2}' have similar names. "
+                                    f"Consider merging if they cover the same topic."
+                                ),
+                            }
+                        )
 
             if len(results) >= self.max_results:
                 break

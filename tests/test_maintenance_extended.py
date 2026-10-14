@@ -125,7 +125,10 @@ def test_web_extractor_falls_back_on_short_trafilatura():
     jina_result.metadata = {"via": "jina"}
 
     with patch.dict("sys.modules", {"trafilatura": mock_trafilatura}):
-        with patch("llmwikify.foundation.extractors.jina.extract_via_jina", return_value=jina_result):
+        with patch(
+            "llmwikify.foundation.extractors.jina.extract_via_jina",
+            return_value=jina_result,
+        ):
             result = _extract_url("https://example.com/short")
 
     assert result is not None
@@ -140,7 +143,9 @@ def test_web_extractor_handles_both_failure():
     mock_trafilatura.fetch_url.return_value = None
 
     with patch.dict("sys.modules", {"trafilatura": mock_trafilatura}):
-        with patch("llmwikify.foundation.extractors.jina.extract_via_jina", return_value=None):
+        with patch(
+            "llmwikify.foundation.extractors.jina.extract_via_jina", return_value=None
+        ):
             result = _extract_url("https://example.com/dead")
 
     assert result is not None
@@ -165,7 +170,10 @@ def test_web_extractor_skips_jina_on_good_trafilatura():
         return None
 
     with patch.dict("sys.modules", {"trafilatura": mock_trafilatura}):
-        with patch("llmwikify.foundation.extractors.jina.extract_via_jina", side_effect=jina_should_not_be_called):
+        with patch(
+            "llmwikify.foundation.extractors.jina.extract_via_jina",
+            side_effect=jina_should_not_be_called,
+        ):
             result = _extract_url("https://example.com/good")
 
     assert result is not None
@@ -184,10 +192,12 @@ def test_create_provider_with_jina_key():
         create_search_provider,
     )
 
-    provider = create_search_provider({
-        "search_provider": "auto",
-        "jina_api_key": "test-key-123",
-    })
+    provider = create_search_provider(
+        {
+            "search_provider": "auto",
+            "jina_api_key": "test-key-123",
+        }
+    )
     assert isinstance(provider.providers[0], JinaSearchProvider)
     assert provider.providers[0].api_key == "test-key-123"
 
@@ -257,8 +267,12 @@ def test_dream_proposal_approve_reject(tmp_path):
     db = _make_dream_db(tmp_path)
     mgr = WikiDreamProposalManager(db=db, wiki_id="w1")
 
-    p1 = mgr.create_proposal(page_name="P1", edit_type="create", content="x", reason="r")
-    p2 = mgr.create_proposal(page_name="P2", edit_type="create", content="y", reason="r")
+    p1 = mgr.create_proposal(
+        page_name="P1", edit_type="create", content="x", reason="r"
+    )
+    p2 = mgr.create_proposal(
+        page_name="P2", edit_type="create", content="y", reason="r"
+    )
 
     mgr.approve(p1["id"])
     mgr.reject(p2["id"])
@@ -304,7 +318,9 @@ def test_dream_proposal_apply_writes_to_wiki(tmp_path):
     wiki.init()
 
     db = _make_dream_db(tmp_path)
-    editor = WikiDreamEditor(wiki=wiki, data_dir=tmp_path / "agent-data", db=db, wiki_id="w1")
+    editor = WikiDreamEditor(
+        wiki=wiki, data_dir=tmp_path / "agent-data", db=db, wiki_id="w1"
+    )
 
     editor.proposal_manager.create_proposal(
         page_name="New Page",
@@ -335,13 +351,17 @@ def _make_svc_for_concurrent(tmp_path, wiki):
         raw_dir=tmp_path / "raw",
         config={"llm": {"enabled": False}},
         ingest_source=lambda p: {
-            "title": "t", "source_name": "s", "content": "x", "error": None,
+            "title": "t",
+            "source_name": "s",
+            "content": "x",
+            "error": None,
         },
         _llm_process_source=lambda r: {"operations": []},
         execute_operations=lambda ops: {"operations_executed": 0},
     )
     return AutoIngestService(
-        wiki=wiki, wiki_id="t",
+        wiki=wiki,
+        wiki_id="t",
         config=AutoIngestConfig(debounce_seconds=0.05),
         llm_semaphore=asyncio.Semaphore(3),
     )
@@ -357,8 +377,10 @@ def test_concurrent_same_file_serialized(tmp_path):
         return {"title": "t", "source_name": "s", "content": "x", "error": None}
 
     from types import SimpleNamespace as NS
+
     wiki = NS(
-        root=tmp_path, raw_dir=tmp_path / "raw",
+        root=tmp_path,
+        raw_dir=tmp_path / "raw",
         config={"llm": {"enabled": False}},
         ingest_source=track,
         _llm_process_source=lambda r: {"operations": []},
@@ -395,7 +417,8 @@ def test_concurrent_different_files_parallel(tmp_path):
         return {"title": "t", "source_name": "s", "content": "x", "error": None}
 
     wiki = NS(
-        root=tmp_path, raw_dir=tmp_path / "raw",
+        root=tmp_path,
+        raw_dir=tmp_path / "raw",
         config={"llm": {"enabled": False}},
         ingest_source=track,
         _llm_process_source=lambda r: {"operations": []},
@@ -408,10 +431,7 @@ def test_concurrent_different_files_parallel(tmp_path):
     svc = _make_svc_for_concurrent(tmp_path, wiki)
 
     async def scenario():
-        tasks = [
-            svc._process_file(tmp_path / "raw" / f"f{i}.md")
-            for i in range(3)
-        ]
+        tasks = [svc._process_file(tmp_path / "raw" / f"f{i}.md") for i in range(3)]
         start = time.monotonic()
         await asyncio.gather(*tasks)
         elapsed = time.monotonic() - start
@@ -434,7 +454,8 @@ def test_extraction_cache_hit_skips_ingest(tmp_path):
         return {"title": "t", "source_name": "s", "content": "x", "error": None}
 
     wiki = NS(
-        root=tmp_path, raw_dir=tmp_path / "raw",
+        root=tmp_path,
+        raw_dir=tmp_path / "raw",
         config={"llm": {"enabled": False}},
         ingest_source=counting_ingest,
         _llm_process_source=lambda r: {"operations": []},
@@ -462,10 +483,14 @@ def test_extraction_cache_eviction(tmp_path):
     from llmwikify.apps.agent.maintenance.config import AutoIngestConfig
 
     wiki = SimpleNamespace(
-        root=tmp_path, raw_dir=tmp_path / "raw",
+        root=tmp_path,
+        raw_dir=tmp_path / "raw",
         config={"llm": {"enabled": False}},
         ingest_source=lambda p: {
-            "title": "t", "source_name": "s", "content": "x", "error": None,
+            "title": "t",
+            "source_name": "s",
+            "content": "x",
+            "error": None,
         },
         _llm_process_source=lambda r: {"operations": []},
         execute_operations=lambda ops: {"operations_executed": 0},
@@ -473,7 +498,8 @@ def test_extraction_cache_eviction(tmp_path):
     (tmp_path / "raw").mkdir()
 
     svc = AutoIngestService(
-        wiki=wiki, wiki_id="t",
+        wiki=wiki,
+        wiki_id="t",
         config=AutoIngestConfig(),
         llm_semaphore=asyncio.Semaphore(3),
     )

@@ -32,7 +32,9 @@ def run_community_detect(wiki: Any, args: Any) -> int:
 
     if args.json:
         output = {
-            "communities": {str(k): v for k, v in result.get("communities", {}).items()},
+            "communities": {
+                str(k): v for k, v in result.get("communities", {}).items()
+            },
             "num_communities": result["num_communities"],
             "modularity": result["modularity"],
             "total_nodes": result["total_nodes"],
@@ -85,10 +87,17 @@ class CommunityDetectCommand(Command):
             raise TypeError("setup_parser requires an argparse subparsers action")
         p = subparsers.add_parser(self.name, help=self.help)
         p.add_argument(
-            "--algorithm", choices=["leiden", "louvain"], default="leiden",
+            "--algorithm",
+            choices=["leiden", "louvain"],
+            default="leiden",
             help="Detection algorithm (default: leiden)",
         )
-        p.add_argument("--resolution", type=float, default=1.0, help="Resolution parameter (default: 1.0)")
+        p.add_argument(
+            "--resolution",
+            type=float,
+            default=1.0,
+            help="Resolution parameter (default: 1.0)",
+        )
         p.add_argument("--json", action="store_true", help="Output as JSON")
         p.add_argument("--dry-run", "-n", action="store_true", help="Only print stats")
 

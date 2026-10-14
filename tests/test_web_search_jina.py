@@ -20,15 +20,23 @@ def test_jina_search_returns_results():
     mock_response.raise_for_status = MagicMock()
     mock_response.json.return_value = {
         "data": [
-            {"title": "Page 1", "url": "https://example.com/1", "content": "Content about AI"},
-            {"title": "Page 2", "url": "https://example.com/2", "content": "Content about ML"},
+            {
+                "title": "Page 1",
+                "url": "https://example.com/1",
+                "content": "Content about AI",
+            },
+            {
+                "title": "Page 2",
+                "url": "https://example.com/2",
+                "content": "Content about ML",
+            },
         ]
     }
 
     with patch("httpx.AsyncClient") as mock_client:
-        mock_client.return_value.__aenter__ = AsyncMock(return_value=AsyncMock(
-            get=AsyncMock(return_value=mock_response)
-        ))
+        mock_client.return_value.__aenter__ = AsyncMock(
+            return_value=AsyncMock(get=AsyncMock(return_value=mock_response))
+        )
         mock_client.return_value.__aexit__ = AsyncMock(return_value=False)
         results = asyncio.run(provider.search("AI research", 2))
 
@@ -44,9 +52,11 @@ def test_jina_search_returns_empty_on_failure():
     provider = JinaSearchProvider()
 
     with patch("httpx.AsyncClient") as mock_client:
-        mock_client.return_value.__aenter__ = AsyncMock(return_value=AsyncMock(
-            get=AsyncMock(side_effect=Exception("network error"))
-        ))
+        mock_client.return_value.__aenter__ = AsyncMock(
+            return_value=AsyncMock(
+                get=AsyncMock(side_effect=Exception("network error"))
+            )
+        )
         mock_client.return_value.__aexit__ = AsyncMock(return_value=False)
         results = asyncio.run(provider.search("test", 5))
 
@@ -67,9 +77,9 @@ def test_jina_search_truncates_snippet():
     }
 
     with patch("httpx.AsyncClient") as mock_client:
-        mock_client.return_value.__aenter__ = AsyncMock(return_value=AsyncMock(
-            get=AsyncMock(return_value=mock_response)
-        ))
+        mock_client.return_value.__aenter__ = AsyncMock(
+            return_value=AsyncMock(get=AsyncMock(return_value=mock_response))
+        )
         mock_client.return_value.__aexit__ = AsyncMock(return_value=False)
         results = asyncio.run(provider.search("q", 1))
 
@@ -143,7 +153,10 @@ def test_web_extractor_falls_back_to_jina():
     mock_jina_result.metadata = {"via": "jina"}
 
     with patch.dict("sys.modules", {"trafilatura": mock_trafilatura}):
-        with patch("llmwikify.foundation.extractors.jina.extract_via_jina", return_value=mock_jina_result):
+        with patch(
+            "llmwikify.foundation.extractors.jina.extract_via_jina",
+            return_value=mock_jina_result,
+        ):
             result = _extract_url("https://example.com/article")
 
     assert result is not None

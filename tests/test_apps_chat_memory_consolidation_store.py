@@ -43,14 +43,18 @@ class TestMemoryConsolidationStoreInit:
         s = MemoryConsolidationStore(tmp_path / "test.db")
         s.init_schema()
         with sqlite3.connect(s.db_path) as conn:
-            cols = conn.execute(
-                "PRAGMA table_info(memory_consolidations)"
-            ).fetchall()
+            cols = conn.execute("PRAGMA table_info(memory_consolidations)").fetchall()
         col_names = {c[1] for c in cols}
         expected = {
-            "id", "session_id", "start_msg_idx", "end_msg_idx",
-            "summary", "md_file_path", "tokens_before",
-            "tokens_after", "created_at",
+            "id",
+            "session_id",
+            "start_msg_idx",
+            "end_msg_idx",
+            "summary",
+            "md_file_path",
+            "tokens_before",
+            "tokens_after",
+            "created_at",
         }
         assert expected.issubset(col_names)
 
@@ -130,23 +134,17 @@ class TestMemoryConsolidationStoreQueries:
         assert records[1].summary == "second"
         assert records[2].summary == "first"
 
-    def test_list_by_session_with_limit(
-        self, store: MemoryConsolidationStore
-    ) -> None:
+    def test_list_by_session_with_limit(self, store: MemoryConsolidationStore) -> None:
         for i in range(5):
             store.add("s1", i, i + 1, f"summary {i}")
         records = store.list_by_session("s1", limit=2)
         assert len(records) == 2
 
-    def test_list_by_session_empty(
-        self, store: MemoryConsolidationStore
-    ) -> None:
+    def test_list_by_session_empty(self, store: MemoryConsolidationStore) -> None:
         records = store.list_by_session("nonexistent")
         assert records == []
 
-    def test_list_since_cursor(
-        self, store: MemoryConsolidationStore
-    ) -> None:
+    def test_list_since_cursor(self, store: MemoryConsolidationStore) -> None:
         store.add("s1", 0, 1, "before-cursor")
         time.sleep(0.05)
         cursor = time.time()
@@ -157,18 +155,14 @@ class TestMemoryConsolidationStoreQueries:
         assert len(records) == 1
         assert records[0].summary == "after-cursor"
 
-    def test_list_since_with_limit(
-        self, store: MemoryConsolidationStore
-    ) -> None:
+    def test_list_since_with_limit(self, store: MemoryConsolidationStore) -> None:
         for i in range(10):
             store.add("s1", i, i + 1, f"x{i}")
             time.sleep(0.005)
         records = store.list_since(0, limit=3)
         assert len(records) == 3
 
-    def test_latest_for_session(
-        self, store: MemoryConsolidationStore
-    ) -> None:
+    def test_latest_for_session(self, store: MemoryConsolidationStore) -> None:
         store.add("s1", 0, 1, "old")
         time.sleep(0.01)
         store.add("s1", 1, 2, "new")
@@ -176,14 +170,10 @@ class TestMemoryConsolidationStoreQueries:
         assert latest is not None
         assert latest.summary == "new"
 
-    def test_latest_for_session_empty(
-        self, store: MemoryConsolidationStore
-    ) -> None:
+    def test_latest_for_session_empty(self, store: MemoryConsolidationStore) -> None:
         assert store.latest_for_session("nonexistent") is None
 
-    def test_count_by_session(
-        self, store: MemoryConsolidationStore
-    ) -> None:
+    def test_count_by_session(self, store: MemoryConsolidationStore) -> None:
         store.add("s1", 0, 1, "a")
         store.add("s1", 1, 2, "b")
         store.add("s2", 0, 1, "c")
@@ -191,9 +181,7 @@ class TestMemoryConsolidationStoreQueries:
         assert store.count_by_session("s2") == 1
         assert store.count_by_session("nope") == 0
 
-    def test_to_dict_serialization(
-        self, store: MemoryConsolidationStore
-    ) -> None:
+    def test_to_dict_serialization(self, store: MemoryConsolidationStore) -> None:
         cid = store.add("s1", 0, 1, "x")
         rec = store.get(cid)
         assert rec is not None

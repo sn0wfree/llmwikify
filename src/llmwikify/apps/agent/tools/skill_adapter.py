@@ -40,7 +40,12 @@ class SkillToolAdapter:
         # (caller's responsibility) — children cannot grandchild.
         self.subagent_manager = subagent_manager
         self.child_tool_registry = child_tool_registry
-        default_exposed = ["dynamic_workflow", "autoresearch_compound", "web_search", "web_fetch"]
+        default_exposed = [
+            "dynamic_workflow",
+            "autoresearch_compound",
+            "web_search",
+            "web_fetch",
+        ]
         if subagent_manager is not None:
             default_exposed.append("subagent")
         self.exposed_skills = set(exposed_skills or default_exposed)
@@ -71,7 +76,9 @@ class SkillToolAdapter:
             self._tools[tool_name] = {
                 "description": action.description,
                 "action_type": action.action_type,
-                "requires_confirmation": self._normalize_confirmation(action.requires_confirmation),
+                "requires_confirmation": self._normalize_confirmation(
+                    action.requires_confirmation
+                ),
                 "parameters": action.input_schema,
                 "output_schema": action.output_schema,
             }
@@ -79,6 +86,7 @@ class SkillToolAdapter:
     def _register_get_skill_commands(self) -> None:
         """Register the get_skill_commands tool."""
         from llmwikify.apps.agent.tools import handle_get_skill_commands
+
         self._tools["get_skill_commands"] = {
             "description": "List all available skill commands and triggers",
             "action_type": "read",
@@ -95,7 +103,9 @@ class SkillToolAdapter:
                 "description": info["description"],
                 "action_type": info["action_type"],
                 "requires_confirmation": info["requires_confirmation"],
-                "parameters": info.get("parameters", {"type": "object", "properties": {}, "required": []}),
+                "parameters": info.get(
+                    "parameters", {"type": "object", "properties": {}, "required": []}
+                ),
             }
             for name, info in self._tools.items()
         ]
@@ -103,7 +113,9 @@ class SkillToolAdapter:
     async def execute(self, name: str, arguments: dict[str, Any]) -> Any:
         if name not in self._name_map:
             available = ", ".join(sorted(self._name_map.keys()))
-            raise ValueError(f"Unknown skill tool: {name!r}. Available tools: [{available}]")
+            raise ValueError(
+                f"Unknown skill tool: {name!r}. Available tools: [{available}]"
+            )
         # Handle get_skill_commands specially
         if name == "get_skill_commands":
             return await self._get_skill_commands_handler(arguments, None)
@@ -114,10 +126,13 @@ class SkillToolAdapter:
             # chat_permissions row written by approve_confirmation()
             # was dead code (db.has_always_permission() had no caller).
             if self.db and self.db.has_always_permission(
-                name, session_id=self.session_id,
+                name,
+                session_id=self.session_id,
             ):
                 return await self._execute_direct(name, arguments)
-            confirmation_id = WikiDatabase.make_confirmation_id()  # 8-char hex (single source of truth)
+            confirmation_id = (
+                WikiDatabase.make_confirmation_id()
+            )  # 8-char hex (single source of truth)
             confirmation = {
                 "id": confirmation_id,
                 "tool": name,
@@ -145,7 +160,9 @@ class SkillToolAdapter:
             "change_type": "skill_action",
             "tool": name,
             "skill_action": ".".join(self._name_map[name]),
-            "arguments_preview": json.dumps(arguments, ensure_ascii=False, default=str)[:500],
+            "arguments_preview": json.dumps(arguments, ensure_ascii=False, default=str)[
+                :500
+            ],
         }
 
     async def _execute_direct(self, name: str, arguments: dict[str, Any]) -> Any:
@@ -156,7 +173,9 @@ class SkillToolAdapter:
             try:
                 llm_spec = self.wiki_service.get_llm_spec()
             except Exception:
-                logger.debug("Failed to resolve llm_spec from wiki_service", exc_info=True)
+                logger.debug(
+                    "Failed to resolve llm_spec from wiki_service", exc_info=True
+                )
         config: dict[str, Any] = {"wiki_id": self.wiki_id} if self.wiki_id else {}
         # Phase 10-E (2026-06-20): expose SubagentManager + safe child
         # tool registry to subagent_skill via SkillContext.config.
@@ -185,15 +204,24 @@ class SkillToolAdapter:
     def get_tool(self, name: str) -> dict[str, Any] | None:
         return self._tools.get(name)
 
-    def confirm_execution(self, confirmation_id: str, arguments: dict | None = None) -> Any:
+    def confirm_execution(
+        self, confirmation_id: str, arguments: dict | None = None
+    ) -> Any:
         confirmation = self._pending_confirmations.pop(confirmation_id, None)
         if confirmation is None:
-            return {"status": "error", "error": f"Unknown confirmation ID: {confirmation_id}"}
+            return {
+                "status": "error",
+                "error": f"Unknown confirmation ID: {confirmation_id}",
+            }
         args = arguments if arguments is not None else confirmation["arguments"]
         try:
             result = self._execute_confirmed(confirmation["tool"], args)
             confirmation["status"] = "approved"
-            return {"status": "executed", "confirmation_id": confirmation_id, "result": result}
+            return {
+                "status": "executed",
+                "confirmation_id": confirmation_id,
+                "result": result,
+            }
         except Exception as e:
             confirmation["status"] = "rejected"
             return {"status": "error", "error": str(e)}
@@ -206,7 +234,9 @@ class SkillToolAdapter:
             try:
                 llm_spec = self.wiki_service.get_llm_spec()
             except Exception:
-                logger.debug("Failed to resolve llm_spec from wiki_service", exc_info=True)
+                logger.debug(
+                    "Failed to resolve llm_spec from wiki_service", exc_info=True
+                )
         config: dict[str, Any] = {"wiki_id": self.wiki_id} if self.wiki_id else {}
         if self.subagent_manager is not None:
             config["subagent_manager"] = self.subagent_manager
@@ -222,7 +252,9 @@ class SkillToolAdapter:
         _, action = self.skill_service.registry.find_action(skill_name, action_name)
         result = action.handler(arguments, ctx)
         if inspect.isawaitable(result):
-            raise RuntimeError("Async skill confirmation requires async confirmation support")
+            raise RuntimeError(
+                "Async skill confirmation requires async confirmation support"
+            )
         if isinstance(result, SkillResult):
             return result.to_dict()
         if hasattr(result, "to_dict"):
@@ -234,7 +266,10 @@ class SkillToolAdapter:
     def reject_execution(self, confirmation_id: str) -> dict[str, Any]:
         confirmation = self._pending_confirmations.pop(confirmation_id, None)
         if confirmation is None:
-            return {"status": "error", "error": f"Unknown confirmation ID: {confirmation_id}"}
+            return {
+                "status": "error",
+                "error": f"Unknown confirmation ID: {confirmation_id}",
+            }
         confirmation["status"] = "rejected"
         return {"status": "rejected", "confirmation_id": confirmation_id}
 
@@ -246,14 +281,17 @@ class SkillToolAdapter:
 
     def get_pending_confirmations(self) -> list[dict[str, Any]]:
         return [
-            c for c in self._pending_confirmations.values()
+            c
+            for c in self._pending_confirmations.values()
             if c.get("status") == "pending"
         ]
 
     def get_pending_by_group(self) -> dict[str, list[dict[str, Any]]]:
         grouped: dict[str, list[dict[str, Any]]] = {}
         for confirmation in self.get_pending_confirmations():
-            grouped.setdefault(confirmation.get("group", "skill_actions"), []).append(confirmation)
+            grouped.setdefault(confirmation.get("group", "skill_actions"), []).append(
+                confirmation
+            )
         return grouped
 
 
@@ -291,21 +329,30 @@ class CompositeToolRegistry:
         from llmwikify.apps.chat.agent.confirmation_manager import (
             ConfirmationManager as _CM,
         )
+
         return _CM.is_unknown_confirmation(result)
 
-    def confirm_execution(self, confirmation_id: str, arguments: dict | None = None) -> Any:
+    def confirm_execution(
+        self, confirmation_id: str, arguments: dict | None = None
+    ) -> Any:
         for registry in self.registries:
             result = registry.confirm_execution(confirmation_id, arguments)
             if not self._is_unknown_confirmation(result):
                 return result
-        return {"status": "error", "error": f"Invalid confirmation ID: {confirmation_id}"}
+        return {
+            "status": "error",
+            "error": f"Invalid confirmation ID: {confirmation_id}",
+        }
 
     def reject_execution(self, confirmation_id: str) -> dict[str, Any]:
         for registry in self.registries:
             result = registry.reject_execution(confirmation_id)
             if not self._is_unknown_confirmation(result):
                 return result
-        return {"status": "error", "error": f"Invalid confirmation ID: {confirmation_id}"}
+        return {
+            "status": "error",
+            "error": f"Invalid confirmation ID: {confirmation_id}",
+        }
 
     def confirm_batch(self, confirmation_ids: list[str]) -> list[dict[str, Any]]:
         return [self.confirm_execution(cid) for cid in confirmation_ids]

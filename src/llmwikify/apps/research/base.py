@@ -171,7 +171,9 @@ class BaseQualityGate:
         self.max_knowledge_gaps = config.get("gate_max_knowledge_gaps", 3)
         self.min_reinforced_claims = config.get("gate_min_reinforced_claims", 2)
 
-    def check_after_gathering(self, sources: list[dict], sub_queries: list[dict]) -> BaseGateResult:
+    def check_after_gathering(
+        self, sources: list[dict], sub_queries: list[dict]
+    ) -> BaseGateResult:
         """Check after gathering: enough sources and type diversity."""
         source_count = len(sources)
 
@@ -182,7 +184,8 @@ class BaseQualityGate:
         type_diversity = len(type_set)
 
         long_content = sum(
-            1 for s in sources
+            1
+            for s in sources
             if len(s.get("content") or s.get("content_preview") or "") > 500
         )
 
@@ -190,7 +193,9 @@ class BaseQualityGate:
         if source_count < self.min_sources:
             issues.append(f"Need {self.min_sources}+ sources, have {source_count}")
         if type_diversity < self.min_type_diversity:
-            issues.append(f"Need {self.min_type_diversity}+ source types, have {type_diversity}")
+            issues.append(
+                f"Need {self.min_type_diversity}+ source types, have {type_diversity}"
+            )
         if long_content == 0 and source_count > 0:
             issues.append("No sources with substantial content (>500 chars)")
 
@@ -222,15 +227,21 @@ class BaseQualityGate:
         avg_cred = 0.0
 
         if analyzed_count < self.min_analyzed:
-            issues.append(f"Need {self.min_analyzed}+ analyzed sources, have {analyzed_count}")
+            issues.append(
+                f"Need {self.min_analyzed}+ analyzed sources, have {analyzed_count}"
+            )
         else:
             cred_scores = [
-                s.get("analysis", {}).get("quality_assessment", {}).get("credibility", 5)
+                s.get("analysis", {})
+                .get("quality_assessment", {})
+                .get("credibility", 5)
                 for s in analyzed
             ]
             avg_cred = sum(cred_scores) / len(cred_scores) if cred_scores else 0
             if avg_cred < self.min_avg_credibility:
-                issues.append(f"Avg credibility {avg_cred:.1f}/{self.min_avg_credibility}")
+                issues.append(
+                    f"Avg credibility {avg_cred:.1f}/{self.min_avg_credibility}"
+                )
 
         passed = len(issues) == 0
         summary = (
@@ -262,9 +273,13 @@ class BaseQualityGate:
 
         issues: list[str] = []
         if len(reinforced) < self.min_reinforced_claims:
-            issues.append(f"Need {self.min_reinforced_claims}+ reinforced claims, have {len(reinforced)}")
+            issues.append(
+                f"Need {self.min_reinforced_claims}+ reinforced claims, have {len(reinforced)}"
+            )
         if len(gaps) > self.max_knowledge_gaps:
-            issues.append(f"Too many knowledge gaps: {len(gaps)} > {self.max_knowledge_gaps}")
+            issues.append(
+                f"Too many knowledge gaps: {len(gaps)} > {self.max_knowledge_gaps}"
+            )
 
         passed = len(issues) == 0
         summary = (
@@ -284,7 +299,9 @@ class BaseQualityGate:
             suggestion="proceed" if passed else "replan_for_gaps",
         )
 
-    def check_before_report(self, synthesis: dict | None, sources: list[dict]) -> BaseGateResult:
+    def check_before_report(
+        self, synthesis: dict | None, sources: list[dict]
+    ) -> BaseGateResult:
         """Check before report: synthesis exists and enough sources."""
         issues: list[str] = []
 
@@ -304,7 +321,10 @@ class BaseQualityGate:
             passed=passed,
             gate_name="before_report",
             summary=summary,
-            details={"has_synthesis": synthesis is not None, "source_count": len(sources)},
+            details={
+                "has_synthesis": synthesis is not None,
+                "source_count": len(sources),
+            },
             suggestion="proceed" if passed else "synthesize_again",
         )
 
@@ -454,6 +474,7 @@ class BaseResearchTaskManager:
         """
         lock = await _get_wiki_lock(engine)
         wakeup = self._wakeup_events.get(session_id)
+
         # Issue#2: emit callback that puts events onto the same queue
         # the outer for-loop reads from. Safe because asyncio.Queue.put
         # is awaitable and we just need to schedule it on this loop.
@@ -462,10 +483,14 @@ class BaseResearchTaskManager:
             self._on_event(session_id, ev)
             if wakeup is not None:
                 wakeup.set()
+
         async with lock:
             try:
                 async for event in engine.run(
-                    session_id, query, resume=resume, emit=_emit,
+                    session_id,
+                    query,
+                    resume=resume,
+                    emit=_emit,
                 ):
                     await queue.put(event)
                     self._on_event(session_id, event)
@@ -476,13 +501,27 @@ class BaseResearchTaskManager:
                 try:
                     db = engine.db
                     session = db.get_research_session(session_id)
-                    if session and session.get("status") not in ("done", "cancelled", "paused", "timeout", "error"):
-                        db.update_research_status(session_id, "paused", session.get("current_step"))
+                    if session and session.get("status") not in (
+                        "done",
+                        "cancelled",
+                        "paused",
+                        "timeout",
+                        "error",
+                    ):
+                        db.update_research_status(
+                            session_id, "paused", session.get("current_step")
+                        )
                 except Exception:
-                    logger.debug("Failed to pause research session %s on cancel", session_id, exc_info=True)
+                    logger.debug(
+                        "Failed to pause research session %s on cancel",
+                        session_id,
+                        exc_info=True,
+                    )
                 raise
             except Exception as e:
-                logger.error("Research task %s failed: %s", session_id, e, exc_info=True)
+                logger.error(
+                    "Research task %s failed: %s", session_id, e, exc_info=True
+                )
                 err_event = {"type": "error", "error": str(e)}
                 await queue.put(err_event)
                 self._on_event(session_id, err_event)

@@ -22,7 +22,6 @@ graph LR
 - export-graph blank: install graphviz system package
 """
 
-
 import subprocess
 
 import pytest
@@ -128,8 +127,14 @@ class TestKnowledgeGraph:
         output_path = temp_dir / "graph.html"
         result = subprocess.run(
             [
-                "python3", "-m", "llmwikify", "export-graph",
-                "--format", "html", "--output", str(output_path),
+                "python3",
+                "-m",
+                "llmwikify",
+                "export-graph",
+                "--format",
+                "html",
+                "--output",
+                str(output_path),
             ],
             capture_output=True,
             text=True,

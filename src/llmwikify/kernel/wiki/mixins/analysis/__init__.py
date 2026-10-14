@@ -5,6 +5,7 @@ class performs: lint rule delegation, LLM-backed analysis,
 querying, relation handling, synthesis generation, and
 status reports.
 """
+
 from .lint import WikiLintMixin
 from .llm import WikiLLMMixin
 from .query import WikiQueryMixin

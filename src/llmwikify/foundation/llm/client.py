@@ -15,6 +15,7 @@ Canonical imports:
     from llmwikify.foundation.llm.client import build_llm_client, load_llm_config
     from llmwikify.foundation.llm.client import CONFIG_PATH
 """
+
 from __future__ import annotations
 
 import json

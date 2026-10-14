@@ -30,14 +30,26 @@ def test_extract_gaps_dedup_and_sort():
     lint_result = {
         "hints": {
             "informational": [
-                {"type": "missing_cross_ref", "concept": "Alpha", "mention_count": 4, "mentioning_pages": ["p1", "p2", "p3", "p4"]},
-                {"type": "topic_overlap", "concept": "Noise", "mention_count": 9},  # not a gap type
+                {
+                    "type": "missing_cross_ref",
+                    "concept": "Alpha",
+                    "mention_count": 4,
+                    "mentioning_pages": ["p1", "p2", "p3", "p4"],
+                },
+                {
+                    "type": "topic_overlap",
+                    "concept": "Noise",
+                    "mention_count": 9,
+                },  # not a gap type
             ],
         },
         "investigations": {
             "knowledge_gaps": [
                 {"type": "unreferenced_entity", "concept": "Beta"},
-                {"type": "unreferenced_entity", "concept": "Alpha"},  # dedup vs hints impossible: different type
+                {
+                    "type": "unreferenced_entity",
+                    "concept": "Alpha",
+                },  # dedup vs hints impossible: different type
                 {"type": "isolated_source", "page": "lonely"},
             ],
         },
@@ -67,12 +79,16 @@ def test_fix_missing_cross_ref_inserts_wikilink(wiki_instance):
         config=GapFillerConfig(auto_approve_mechanical=True),
         llm_semaphore=asyncio.Semaphore(1),
     )
-    gap = type("G", (), {
-        "gap_type": "missing_cross_ref",
-        "concept": "Concept Alpha",
-        "priority": 50,
-        "data": {"mentioning_pages": ["Page One", "Page Two"]},
-    })()
+    gap = type(
+        "G",
+        (),
+        {
+            "gap_type": "missing_cross_ref",
+            "concept": "Concept Alpha",
+            "priority": 50,
+            "data": {"mentioning_pages": ["Page One", "Page Two"]},
+        },
+    )()
 
     fixed = asyncio.run(filler._fix_missing_cross_ref(gap))
     assert fixed == 2
@@ -89,11 +105,16 @@ def test_fix_missing_cross_ref_inserts_wikilink(wiki_instance):
 
 def test_link_first_occurrence_skips_existing_wikilinks():
     from llmwikify.apps.agent.maintenance.gap_filler import GapFiller as GF
+
     content = "See [[Concept Alpha|the docs]] first. Concept Alpha later.\n"
-    pattern = __import__("re").compile(r"\bConcept Alpha\b", __import__("re").IGNORECASE)
+    pattern = __import__("re").compile(
+        r"\bConcept Alpha\b", __import__("re").IGNORECASE
+    )
     out = GF._link_first_occurrence(content, pattern, "Concept Alpha")
     # first occurrence is INSIDE an existing wikilink → must be skipped
-    assert out.startswith("See [[Concept Alpha|the docs]] first. [[Concept Alpha]] later.")
+    assert out.startswith(
+        "See [[Concept Alpha|the docs]] first. [[Concept Alpha]] later."
+    )
 
 
 def test_fix_missing_cross_ref_respects_auto_approve_off(wiki_instance):
@@ -104,12 +125,16 @@ def test_fix_missing_cross_ref_respects_auto_approve_off(wiki_instance):
         config=GapFillerConfig(auto_approve_mechanical=False),
         llm_semaphore=asyncio.Semaphore(1),
     )
-    gap = type("G", (), {
-        "gap_type": "missing_cross_ref",
-        "concept": "Concept X",
-        "priority": 50,
-        "data": {"mentioning_pages": ["Solo"]},
-    })()
+    gap = type(
+        "G",
+        (),
+        {
+            "gap_type": "missing_cross_ref",
+            "concept": "Concept X",
+            "priority": 50,
+            "data": {"mentioning_pages": ["Solo"]},
+        },
+    )()
     fixed = asyncio.run(filler._fix_missing_cross_ref(gap))
     assert fixed == 0
     assert "[[" not in wiki_instance.read_page("Solo")["content"]
@@ -122,12 +147,16 @@ def test_entity_gap_creates_proposal_stub_path(wiki_instance):
         config=GapFillerConfig(use_llm_draft=False),
         llm_semaphore=asyncio.Semaphore(1),
     )
-    gap = type("G", (), {
-        "gap_type": "unreferenced_entity",
-        "concept": "Orphan Idea",
-        "priority": 60,
-        "data": {"concept": "Orphan Idea"},
-    })()
+    gap = type(
+        "G",
+        (),
+        {
+            "gap_type": "unreferenced_entity",
+            "concept": "Orphan Idea",
+            "priority": 60,
+            "data": {"concept": "Orphan Idea"},
+        },
+    )()
     created = asyncio.run(filler._propose_entity_page(gap))
     assert created == 1
     stats = filler._proposal_manager.get_stats()
@@ -146,21 +175,26 @@ def test_entity_gap_llm_synthesizes_when_enabled():
 
     class FakeWiki:
         config = {"llm": {"enabled": True, "provider": "none", "base_url": "http://x"}}
+
         def search(self, q, limit=5):
             return [{"page_name": "Page A", "content": "related info"}]
 
     filler = GF(
-        wiki=FakeWiki(), wiki_id="test",
+        wiki=FakeWiki(),
+        wiki_id="test",
         config=GapFillerConfig(use_llm_draft=True, web_search_enabled=False),
         llm_semaphore=asyncio.Semaphore(1),
     )
     # patch _llm_synthesize_draft to use FakeClient
     import llmwikify.foundation.llm as llm_mod
+
     original = getattr(llm_mod, "LLMClient", None)
+
     class _FakeLLMClient:
         @staticmethod
         def from_config(cfg):
             return FakeClient()
+
     llm_mod.LLMClient = _FakeLLMClient
     try:
         draft = filler._llm_synthesize_draft("Fake Entity", ["- Page A: info"], [])
@@ -189,7 +223,9 @@ def isolated_llmwikify_home(tmp_path, monkeypatch):
 
 
 def test_web_search_passes_config_to_websearch(
-    wiki_instance, monkeypatch, isolated_llmwikify_home,
+    wiki_instance,
+    monkeypatch,
+    isolated_llmwikify_home,
 ):
     """Regression: `WebSearch()` missed its required config arg, so the
     TypeError was swallowed and every gap cycle ran without web sources."""
@@ -202,9 +238,15 @@ def test_web_search_passes_config_to_websearch(
         async def search(self, query, num_results=None):
             assert query == "Attention"
             return [
-                type("R", (), {
-                    "title": "T", "url": "http://x", "snippet": "facts",
-                })(),
+                type(
+                    "R",
+                    (),
+                    {
+                        "title": "T",
+                        "url": "http://x",
+                        "snippet": "facts",
+                    },
+                )(),
             ]
 
     import llmwikify.apps.research.web_search as ws_module
@@ -228,12 +270,14 @@ def test_search_config_reads_research_section(isolated_llmwikify_home):
     home = isolated_llmwikify_home / ".llmwikify"
     home.mkdir(exist_ok=True)
     (home / "llmwikify.json").write_text(
-        json.dumps({
-            "research": {
-                "search_provider": "searxng",
-                "searxng_url": "http://localhost:8888",
-            },
-        }),
+        json.dumps(
+            {
+                "research": {
+                    "search_provider": "searxng",
+                    "searxng_url": "http://localhost:8888",
+                },
+            }
+        ),
     )
 
     filler = GapFiller(

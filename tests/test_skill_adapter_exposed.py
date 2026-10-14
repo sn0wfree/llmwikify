@@ -36,26 +36,30 @@ def skill_service() -> SkillService:
 
 class TestDefaultExposure:
     def test_default_exposed_includes_web_search(
-        self, skill_service: SkillService,
+        self,
+        skill_service: SkillService,
     ) -> None:
         adapter = SkillToolAdapter(skill_service)
         assert "web_search" in adapter.exposed_skills
 
     def test_default_exposed_includes_web_fetch(
-        self, skill_service: SkillService,
+        self,
+        skill_service: SkillService,
     ) -> None:
         adapter = SkillToolAdapter(skill_service)
         assert "web_fetch" in adapter.exposed_skills
 
     def test_default_exposed_includes_workflow_and_compound(
-        self, skill_service: SkillService,
+        self,
+        skill_service: SkillService,
     ) -> None:
         adapter = SkillToolAdapter(skill_service)
         assert "dynamic_workflow" in adapter.exposed_skills
         assert "autoresearch_compound" in adapter.exposed_skills
 
     def test_subagent_added_when_subagent_manager_provided(
-        self, skill_service: SkillService,
+        self,
+        skill_service: SkillService,
     ) -> None:
         adapter = SkillToolAdapter(skill_service, subagent_manager=MagicMock())
         assert "subagent" in adapter.exposed_skills
@@ -68,7 +72,8 @@ class TestDefaultExposure:
 
 class TestToolBuilding:
     def test_web_search_actions_exposed_as_tools(
-        self, skill_service: SkillService,
+        self,
+        skill_service: SkillService,
     ) -> None:
         adapter = SkillToolAdapter(skill_service)
         tools = adapter.list_tools()
@@ -80,7 +85,8 @@ class TestToolBuilding:
         assert "web_search_search_news" in tool_names
 
     def test_web_fetch_action_exposed_as_tool(
-        self, skill_service: SkillService,
+        self,
+        skill_service: SkillService,
     ) -> None:
         adapter = SkillToolAdapter(skill_service)
         tools = adapter.list_tools()
@@ -89,7 +95,8 @@ class TestToolBuilding:
         assert "web_fetch_fetch_url" in tool_names
 
     def test_unknown_skills_not_exposed(
-        self, skill_service: SkillService,
+        self,
+        skill_service: SkillService,
     ) -> None:
         """Skills outside the exposed list aren't built into tools."""
         adapter = SkillToolAdapter(skill_service)
@@ -104,7 +111,8 @@ class TestToolBuilding:
 
 class TestExplicitOverride:
     def test_explicit_exposed_skills_overrides_default(
-        self, skill_service: SkillService,
+        self,
+        skill_service: SkillService,
     ) -> None:
         """When exposed_skills is given, default is ignored."""
         adapter = SkillToolAdapter(
@@ -116,7 +124,8 @@ class TestExplicitOverride:
         assert "dynamic_workflow" not in adapter.exposed_skills
 
     def test_empty_exposed_skills_means_default(
-        self, skill_service: SkillService,
+        self,
+        skill_service: SkillService,
     ) -> None:
         """When ``exposed_skills=[]`` is passed, the ``or default``
         in the constructor triggers — empty list is falsy."""

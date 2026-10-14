@@ -64,17 +64,22 @@ def _run_startup_migration(wiki: Any) -> None:
                 logger.warning(
                     "[migrate] Auto-migrated .wiki-config.yaml in %s "
                     "(backup: %s, %d fields changed)",
-                    root, result.backup_path, len(result.changes),
+                    root,
+                    result.backup_path,
+                    len(result.changes),
                 )
             elif result.conflicts and not result.dry_run:
                 logger.warning(
                     "[migrate] Conflicts detected in %s but skipped "
                     "(%d conflicts). Run `llmwikify migrate-config` manually.",
-                    root, len(result.conflicts),
+                    root,
+                    len(result.conflicts),
                 )
         except Exception as exc:
             logger.warning(
-                "[migrate] Auto-migration failed for %s: %s", root, exc,
+                "[migrate] Auto-migration failed for %s: %s",
+                root,
+                exc,
             )
 
 
@@ -113,6 +118,7 @@ def run_serve(wiki: Any, config: dict, args: Any) -> int:
     provider: Any = None
     try:
         from llmwikify.apps.chat.providers.registry import get_default_provider
+
         provider = get_default_provider()
         if provider is not None:
             logger.info(
@@ -155,6 +161,7 @@ def run_serve(wiki: Any, config: dict, args: Any) -> int:
     # Phase 2a decision 13: host precedence is
     #   --host > LLMWIKIFY_HOST env > mcp.host config > 127.0.0.1
     from llmwikify.foundation.auth import env_host, is_local_default
+
     final_host = (
         host
         or os.environ.get("LLMWIKIFY_HOST")
@@ -175,6 +182,7 @@ def run_serve(wiki: Any, config: dict, args: Any) -> int:
             local_token_path,
             prompt_first_admin,
         )
+
         repo = UserRepository(db_path=auth_db_path())
         if not repo.exists():
             try:
@@ -198,12 +206,13 @@ def run_serve(wiki: Any, config: dict, args: Any) -> int:
             print(f"  {result.pat}")
             print()
             print(f"  WebUI: open http://{final_host}:{port}")
-            print("  CLI:   export LLMWIKIFY_AUTH_TOKEN=\"<pat-above>\"")
+            print('  CLI:   export LLMWIKIFY_AUTH_TOKEN="<pat-above>"')
             print()
 
         # Show PAT info on every startup (not just first time).
         from llmwikify.foundation.auth.db import ApiKeyRepository
         from llmwikify.foundation.auth.utils import pat_file_path, save_pat
+
         pf = pat_file_path()
         if pf.exists():
             print(f"  PAT file: {pf}")
@@ -213,6 +222,7 @@ def run_serve(wiki: Any, config: dict, args: Any) -> int:
         try:
             for row in _repo._connect().execute("SELECT * FROM users LIMIT 1"):
                 from llmwikify.foundation.auth.db import _row_to_user
+
                 _first_user = _row_to_user(row)
                 break
         except Exception:
@@ -225,6 +235,7 @@ def run_serve(wiki: Any, config: dict, args: Any) -> int:
             # If user exists but has no PATs, auto-create one.
             if not _active:
                 from llmwikify.foundation.auth._pat import generate_pat
+
                 _pat, _pat_hash = generate_pat()
                 _ak_repo.create(
                     user_id=_first_user.id,
@@ -256,8 +267,9 @@ def run_serve(wiki: Any, config: dict, args: Any) -> int:
     # switch so deployments can require authentication for reads too.
     # Default stays True (backward compatible). Set
     # LLMWIKIFY_PUBLIC_READ=false to make token-less GETs return 401.
-    server_public_read = os.environ.get("LLMWIKIFY_PUBLIC_READ", "true") \
-        .strip().lower() not in {"0", "false", "no", "off"}
+    server_public_read = os.environ.get(
+        "LLMWIKIFY_PUBLIC_READ", "true"
+    ).strip().lower() not in {"0", "false", "no", "off"}
 
     try:
         # Check if multi-wiki mode is enabled
@@ -266,6 +278,7 @@ def run_serve(wiki: Any, config: dict, args: Any) -> int:
 
         if multi_wiki or has_wikis_config:
             from llmwikify.kernel.multi_wiki.registry import WikiRegistry
+
             registry = WikiRegistry(config)
             registry.initialize()
 
@@ -301,6 +314,7 @@ def run_serve(wiki: Any, config: dict, args: Any) -> int:
                 # Warn if WebUI bundle not built
                 try:
                     import llmwikify
+
                     pkg_dir = Path(llmwikify.__file__).parent.parent.parent
                     dist_path = pkg_dir / "ui" / "webui" / "dist" / "index.html"
                     if not dist_path.exists():
@@ -325,10 +339,14 @@ def run_serve(wiki: Any, config: dict, args: Any) -> int:
                     provider=provider,
                 )
 
-                print(f"Starting Unified Server '{service_name}' on {final_host}:{port}")
+                print(
+                    f"Starting Unified Server '{service_name}' on {final_host}:{port}"
+                )
                 print("  Transport: http")
                 if server_local_mode:
-                    print(f"  Auth: DISABLED (local mode, host {final_host} is loopback)")
+                    print(
+                        f"  Auth: DISABLED (local mode, host {final_host} is loopback)"
+                    )
                 else:
                     print(f"  Auth: ENFORCED (host {final_host} is non-loopback)")
                 print(f"  Web UI: http://{final_host}:{port}")
@@ -392,7 +410,9 @@ def setup_serve_parser(subparsers: Any) -> None:
         help="Start MCP server with optional Web UI (alias: mcp)",
         aliases=["mcp"],
     )
-    p.add_argument("--transport", "-t", choices=["stdio", "http", "sse"], help="Transport protocol")
+    p.add_argument(
+        "--transport", "-t", choices=["stdio", "http", "sse"], help="Transport protocol"
+    )
     p.add_argument(
         "--host",
         help=(
@@ -404,7 +424,9 @@ def setup_serve_parser(subparsers: Any) -> None:
     p.add_argument("--mcp-port", type=int, help="MCP server port")
     p.add_argument("--port", "-p", type=int, help="[Deprecated] Use --mcp-port instead")
     p.add_argument("--name", "-n", help="Service name (defaults to directory name)")
-    p.add_argument("--web", action="store_true", help="Start unified Web UI (single process)")
+    p.add_argument(
+        "--web", action="store_true", help="Start unified Web UI (single process)"
+    )
     p.add_argument(
         "--auth-token",
         help=(

@@ -9,6 +9,7 @@ Microcompact is **on by default** (2026-06-17 user decision) so the
 common case — large ``read_file`` results — saves tokens without any
 caller opt-in.
 """
+
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -16,14 +17,16 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-DEFAULT_COMPACTABLE_TOOLS: frozenset[str] = frozenset({
-    "read_file",
-    "exec",
-    "grep",
-    "find_files",
-    "web_search",
-    "list_dir",
-})
+DEFAULT_COMPACTABLE_TOOLS: frozenset[str] = frozenset(
+    {
+        "read_file",
+        "exec",
+        "grep",
+        "find_files",
+        "web_search",
+        "list_dir",
+    }
+)
 
 
 @dataclass
