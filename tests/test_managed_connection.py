@@ -266,6 +266,10 @@ class TestManagedConnectionThreadSafety:
     def test_different_connections_per_thread(self, tmp_path: Path) -> None:
         db = tmp_path / "test.db"
         mc = ManagedConnection(db)
+        # 主线程先建连: 消除 3 线程并发首连同一 SQLite 文件的
+        # "database is locked" 竞态 (测试目标 = 每线程连接相互独立,
+        # 而非并发首连)。否则败者线程抛 OperationalError 静默死亡 → flaky。
+        _ = mc.conn
         conns = []
         lock = threading.Lock()
 
