@@ -117,7 +117,14 @@ class MarkItDownExtractor:
             if not text_content or not text_content.strip():
                 return None
 
-            title = self._extract_title(text_content, path)
+            # 2026-10-14: markitdown >=0.1.8 会在元数据里给 title（如 html
+            # <title>），优先使用；非字符串/空值回退到启发式提取
+            md_title = getattr(result, "title", None)
+            title = (
+                md_title
+                if isinstance(md_title, str) and md_title.strip()
+                else self._extract_title(text_content, path)
+            )
             ext = path.suffix.lower()
 
             return ExtractedContent(

@@ -89,8 +89,9 @@ class TestWritePage:
         assert exc_info.value.status_code == 400
 
     def test_success(self) -> None:
-        """Returns success dict."""
+        """Returns success dict (新页面 — 不触发二次确认流)."""
         mock_wiki = MagicMock()
+        mock_wiki.read_page.return_value = {"error": "Page not found"}
         mock_wiki.write_page.return_value = "Page written"
         result = write_page(mock_wiki, "test_page", "content")
         assert result == {"message": "Page written", "page_name": "test_page"}
@@ -98,6 +99,7 @@ class TestWritePage:
     def test_value_error_raises_400(self) -> None:
         """Raises 400 on ValueError."""
         mock_wiki = MagicMock()
+        mock_wiki.read_page.return_value = {"error": "Page not found"}
         mock_wiki.write_page.side_effect = ValueError("invalid name")
         with pytest.raises(HTTPException) as exc_info:
             write_page(mock_wiki, "bad/name", "content")

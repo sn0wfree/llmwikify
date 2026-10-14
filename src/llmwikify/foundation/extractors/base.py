@@ -142,7 +142,9 @@ def extract(source: str, wiki_root: Path | None = None) -> ExtractedContent:
     _, handlers = _EXTRACTOR_REGISTRY.get(ext, ("text", ["text"]))
 
     # Try each handler in priority order
+    attempted: list[str] = []
     for handler in handlers:
+        attempted.append(handler)
         if handler == "markitdown":
             from .markitdown_extractor import MarkItDownExtractor
 
@@ -169,5 +171,10 @@ def extract(source: str, wiki_root: Path | None = None) -> ExtractedContent:
         text="",
         source_type="error",
         title=str(path),
-        metadata={"error": f"All extractors failed for '{ext}' files."},
+        metadata={
+            "error": (
+                f"All extractors failed for '{ext}' files "
+                f"(tried: {', '.join(attempted) or 'none'})."
+            )
+        },
     )

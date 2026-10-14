@@ -91,17 +91,18 @@ class WikiPageIOMixin(WikiProtocol):
 
         Args:
             page_name: Page name. Can be pure name or path.
-            page_type: Page type to resolve directory (same as write_page).
+                Sink 文件支持 ``.sink/`` / ``sink/`` / ``wiki/.sink/`` 前缀，
+                文件名带或不带 ``.md`` 后缀均可（2026-10-14 修复：此前先剥
+                ``.md`` 再匹配 sink 分支，导致 ``X.sink.md`` 永远找不到）。
         """
-        if page_name.endswith(".md"):
-            page_name = page_name[:-3]
-
         if page_name.startswith("sink/"):
             page_name = page_name.replace("sink/", ".sink/", 1)
 
         if page_name.startswith(".sink/") or page_name.startswith("wiki/.sink/"):
             sink_name = page_name.rsplit("/", 1)[-1]
             sink_file = self.sink_dir / sink_name
+            if not sink_file.exists() and not sink_name.endswith(".md"):
+                sink_file = self.sink_dir / f"{sink_name}.md"
             if not sink_file.exists():
                 return {"error": f"Sink file not found: {page_name}"}
             raw_name = sink_file.name
@@ -116,6 +117,9 @@ class WikiPageIOMixin(WikiProtocol):
                 "file": str(sink_file),
                 "is_sink": True,
             }
+
+        if page_name.endswith(".md"):
+            page_name = page_name[:-3]
 
         if page_type and "/" not in page_name:
             type_to_dir = self._load_page_type_mapping()
