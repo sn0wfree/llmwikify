@@ -27,6 +27,9 @@
 "公网小圈子"方案部署：nginx + Let's Encrypt **IP 证书**（2026-01 GA，无需域名/备案）+
 8443 + `LLMWIKIFY_PUBLIC_READ=false`。
 
+**2026-10-14 部署验证期追加**：又发现第 3 个隐藏缺陷 —— `trusted_proxies` 因死引用
+`get_config` 从未生效（详见 §9），已 2 行修复并本地实证。
+
 ## 2. 缺陷 #1：MCP over HTTP 500
 
 ### 2.1 症状与证据
@@ -221,6 +224,52 @@ nginx（服务器宿主）
 | MCP 组合 lifespan 引入生命周期副作用 | `mcp_asgi_app=None` 时零操作；5 个既有测试覆盖 lifespan 场景 |
 | `public_read=false` 影响本地开发 | 默认仍 `True`，仅显式设置 env 才改变 |
 | 共享 PAT 的审计缺失 | 记录为已知限制；多用户支持（§4 后续项）|
+
+---
+
+## 9. 部署验证期追加发现（2026-10-14）：trusted_proxies 死引用
+
+**症状**：nginx 反代上线后，应用日志的 client IP 始终为 docker 网桥地址（172.18.0.1），
+即使正确配置了 `server.trusted_proxies` 也不解析 `X-Forwarded-For`；应用内限流将把
+**所有用户**合并在同一个 60 req/min 桶里（多用户浏览会互相挤占）。
+
+**根因**：`interfaces/server/http/middleware.py:_load_trusted_proxies` 中
+`from llmwikify.foundation.config import get_config` —— **该符号在 `foundation.config`
+中不存在**（模块导出的是单例 `config = Config()`，见 `config.py:223`）。ImportError 被
+外层 `except Exception: return []` 静默吞掉（debug 级日志不可见）→ `trusted_proxies`
+自引入以来从未生效。
+
+**修复**（2 行）：
+
+```python
+        from llmwikify.foundation.config import config as _llmwikify_config
+        cfg = _llmwikify_config.get()
+```
+
+**验证**（本地实弹，`LLMWIKIFY_PUBLIC_READ=false` 使 401 可观测）：
+- `X-Forwarded-For: 203.0.113.7, 127.0.0.1` → 日志 `client=203.0.113.7` ✅
+  （右侧回溯：跳过可信 127.0.0.1，取不可信真实 IP）
+- 无 XFF → `client=127.0.0.1` ✅（回退 direct peer）
+- `tests/test_interfaces_server_routes.py` 39 passed；ruff 通过
+
+**影响**：修复后 nginx 反代下应用日志显示真实客户端 IP、应用内限流按真实客户端分桶
+（此前全员共享一个桶）；服务器部署随后重建镜像并复验。
+
+---
+
+## 10. 上线完成记录（2026-10-14）
+
+| 项 | 状态 |
+|---|---|
+| 正式服务 | `llmwikify-server:0.40.2-slim` @ `~/CKbase/deploy/docker-compose.yml`（`restart: unless-stopped`）— healthy |
+| 读保护 | `LLMWIKIFY_PUBLIC_READ=false` — 无 token **401** / PAT **200**（经 nginx 实测） |
+| MCP | `/mcp/mcp` 容器内实连 **20 tools** ✓（lifespan 修复生效） |
+| trusted_proxies | 修复后经 nginx 实测 `client=203.0.113.7`（真实 IP 透传）✓ |
+| nginx | 1.20.1；`:80` 仅 ACME 验证路径 + 301 跳转（非服务端口，用户决策保留）；`:8443` TLS 反代（SSE 直通 + `limit_req 300r/m`） |
+| 证书 | **Let's Encrypt IP 证书**（`--ip-address` + `shortlived` profile，ECDSA），已签发并服务；浏览器零警告 |
+| 续期 | root cron `17 */12 * * *` + `--deploy-hook "systemctl reload nginx"`；staging `renew --dry-run` 全链路成功 |
+| 回滚点 | 本地 `llmwikify-server:0.40.2-slim-r0`（MCP 修复前版本） |
+| 运维入口 | `docker logs/compose` @ `~/CKbase/deploy`；证书 `/opt/certbot/bin/certbot certificates` |
 
 ---
 
