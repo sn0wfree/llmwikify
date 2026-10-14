@@ -1,6 +1,7 @@
 """Tests for P1.3: Graph analyzer features."""
 
 import shutil
+import sys
 import tempfile
 from pathlib import Path
 
@@ -93,6 +94,23 @@ class TestGraphAnalyzer:
         assert isinstance(result, dict)
         assert "status" in result
         # May be "empty" if no relations yet, but structure should exist
+
+    def test_analyze_missing_dependency_branch(self, graph_wiki, monkeypatch):
+        """Regression (slim image, 2026-10-14): when networkx ([graph]
+        extra) is absent, analyze() must return a clear
+        ``missing_dependency`` status instead of a misleading
+        "no pages" / "empty" message."""
+        wiki, _tmp = graph_wiki
+        analyzer = GraphAnalyzer(wiki)
+
+        # sys.modules[key] = None makes `import networkx` raise ImportError
+        monkeypatch.setitem(sys.modules, "networkx", None)
+        result = analyzer.analyze()
+
+        assert result["status"] == "missing_dependency"
+        assert result["missing"] == ["networkx"]
+        assert "llmwikify[graph]" in result["fix"]
+        assert "[graph] extra" in result["message"]
 
     def test_suggest_pages_for_concepts(self, graph_wiki):
         """Test suggestion of pages for high-degree concepts."""

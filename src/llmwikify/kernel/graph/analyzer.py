@@ -39,6 +39,20 @@ class GraphAnalyzer:
             - suggestions: Suggested pages to create
             - stats: Graph statistics
         """
+        # Distinguish "no data" from "missing dependency" (networkx is in
+        # the [graph] extra which the slim image omits). Without this,
+        # users see a misleading "no pages" message when their KB has
+        # hundreds of pages but networkx isn't installed.
+        try:
+            import networkx as nx  # noqa: F401  (used by _build_graph etc.)
+        except ImportError:
+            return {
+                "status": "missing_dependency",
+                "missing": ["networkx"],
+                "fix": "pip install 'llmwikify[graph]'  # or rebuild the image with LLMWIKIFY_EXTRAS including 'graph'",
+                "message": "wiki_graph_analyze requires the [graph] extra (networkx). The wiki_graph visualization works; only the analysis (PageRank / community detection) needs networkx.",
+            }
+
         graph_data = self._get_graph_data()
         G = self._build_graph(graph_data)
 
