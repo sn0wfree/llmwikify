@@ -82,13 +82,15 @@ if [ -n "${PIP_PACKAGES:-}" ]; then
         # shellcheck disable=SC2206
         pkgs=($actual)
         pip install --no-cache-dir --no-deps --timeout 600 "${pkgs[@]}"
-        # Then install the minimal extra deps for [web,mcp] manually
+        # Then install the minimal extra deps for [web,mcp] manually.
+        # 2026-10-14: 补 jieba (v0.41 起的 base 依赖, 缺失则 server 启动
+        # ImportError); fastmcp/starlette 加上界对齐 B2 栈 (漂移防护)。
         pip install --no-cache-dir --timeout 600 \
             'jinja2>=3.1.0' 'pyyaml>=6.0' 'requests>=2.28.0' \
-            'duckdb>=1.0.0' 'pyjwt>=2.0,<3' \
-            'fastapi>=0.104.0' 'starlette>=0.27.0' \
+            'duckdb>=1.0.0' 'pyjwt>=2.0,<3' 'jieba>=0.42' \
+            'fastapi>=0.104.0' 'starlette>=0.45,<1' \
             'uvicorn>=0.23.0' 'httpx>=0.24.0' \
-            'fastmcp>=3.0.0' 'tiktoken>=0.7.0' \
+            'fastmcp>=3.0,<3.3' 'tiktoken>=0.7.0' \
             'rich>=13' 'rich-rst' 'cyclopts>=4.0' \
             'pydantic-settings>=2.0' 'joserfc>=1.0' \
             'pyperclip'

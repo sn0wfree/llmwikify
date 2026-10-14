@@ -43,7 +43,7 @@ jobs:
           docker run --rm \
             -e IN_DOCKER=1 \
             -e PIP_PACKAGES="/app/dist/$(ls dist/llmwikify-*.whl | head -1 | xargs basename) httpx" \
-            -e TEST_SCRIPT="python3 /app/examples/09_wiki_build_e2e/scripts/run_all.sh" \
+            -e TEST_SCRIPT="bash /app/examples/09_wiki_build_e2e/scripts/run_all.sh" \
             -v ${{ github.workspace }}/dist:/app/dist \
             -v ${{ github.workspace }}/examples:/app/examples \
             -v ${{ github.workspace }}/docker-tests/test-results:/app/test-results \
