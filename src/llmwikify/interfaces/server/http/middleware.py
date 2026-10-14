@@ -59,8 +59,12 @@ def _load_trusted_proxies() -> list[str]:
         Empty list = no trusted proxies = fall back to direct TCP peer.
     """
     try:
-        from llmwikify.foundation.config import get_config
-        cfg = get_config()
+        # 2026-10-14 fix: `get_config` never existed in foundation.config —
+        # the ImportError was silently swallowed by the except below, so
+        # trusted_proxies has been dead code since its introduction. Use
+        # the module's actual singleton (foundation.config.config).
+        from llmwikify.foundation.config import config as _llmwikify_config
+        cfg = _llmwikify_config.get()
         server_cfg = cfg.get("server", {})
         proxies = server_cfg.get("trusted_proxies", None)
         if proxies is None:
