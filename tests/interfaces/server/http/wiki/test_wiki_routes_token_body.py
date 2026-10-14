@@ -203,13 +203,20 @@ class TestWikiWritePageTokenInBody:
                 )
         assert r.status_code == 200, r.text
         # Exactly one INFO line on the override event
-        matching = [
+        # 只检查 wiki_routes 自己的 logger — caplog 会顺带捕获 httpx 等
+        # 第三方 INFO 日志（访问行含完整 query string, 属正常行为）
+        routes_records = [
             rec
             for rec in caplog.records
+            if rec.name == "llmwikify.interfaces.server.http.wiki.wiki_routes"
+        ]
+        matching = [
+            rec
+            for rec in routes_records
             if rec.levelno == logging.INFO and "overriding body" in rec.getMessage()
         ]
         assert len(matching) == 1
         # The actual token strings must NOT appear in any log message
-        full_log = "\n".join(rec.getMessage() for rec in caplog.records)
+        full_log = "\n".join(rec.getMessage() for rec in routes_records)
         assert "tok_query_leak_test" not in full_log
         assert "tok_body_leak_test" not in full_log
