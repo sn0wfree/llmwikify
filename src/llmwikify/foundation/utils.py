@@ -84,9 +84,15 @@ def _load_ssrf_config() -> dict[str, Any]:
         Dict with 'blocked_networks' and 'blocked_hostnames' keys.
     """
     try:
-        from .config import get_config
-        config = get_config()
-        ssrf_config = config.get("ssrf_protection", {})
+        # 2026-10-14 fix (Bug 1b): `get_config` never existed in
+        # foundation.config — the ImportError was silently swallowed by the
+        # except below, so the `ssrf_protection` section of
+        # ~/.llmwikify/llmwikify.json has never been applied and
+        # is_safe_url() always allowed every URL. Use the module's real
+        # singleton (same pattern as the middleware trusted_proxies fix,
+        # commit dd63e70).
+        from .config import config as _llmwikify_config
+        ssrf_config = _llmwikify_config.get("ssrf_protection", {})
         return {
             "blocked_networks": ssrf_config.get("blocked_networks", _DEFAULT_BLOCKED_NETWORKS),
             "blocked_hostnames": ssrf_config.get("blocked_hostnames", _DEFAULT_BLOCKED_HOSTNAMES),

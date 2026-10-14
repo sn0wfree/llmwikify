@@ -201,7 +201,7 @@ fastmcp>=3.0               → fastmcp-slim[client,server]==X
 
 | # | 位置 | 问题 | 影响 |
 |---|---|---|---|
-| 1 | `foundation/utils.py:87` | `from .config import get_config` — **该函数不存在**（只有 `load_config`/`get_default_config`），调用被 try/except 吞掉 | 用户配置 `ssrf_protection` 段永远不生效 |
+| 1 | `foundation/utils.py:87` | `from .config import get_config` — **该函数不存在**（只有 `load_config`/`get_default_config`），调用被 try/except 吞掉 | 用户配置 `ssrf_protection` 段永远不生效 · ✅ **已修复（2026-10-14，见 [ssrf-config-fix-2026-10.md](ssrf-config-fix-2026-10.md)）** |
 | 2 | `apps/agent/maintenance/gap_filler.py:305` | `WebSearch()` 缺必填 `config`（签名 `WebSearch(config: dict)`） | gap filler 的 web 搜索永远静默失败 |
 | 3 | `apps/chat/research_agent.py:70` | `ResearchEngine(llm_client=...)` 缺必填 `wiki`/`db` | 该路径执行即 TypeError |
 | 4 | `interfaces/server/__init__.py:13` | `create_unified_server` 传 `agent=` 给 `WikiServer`（无此参数） | 弃用包装器完全不可用 |
