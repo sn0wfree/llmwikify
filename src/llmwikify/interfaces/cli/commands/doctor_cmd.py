@@ -522,6 +522,26 @@ def run_doctor(wiki: Any, wiki_root: Any, args: Any) -> int:
     if not ok:
         errors += 1
         if data.get("status") == "missing":
+            if json_mode:
+                # --json 契约: 任何返回路径都必须输出可解析 JSON
+                # (2026-10-15 修复: 此前早退无输出, e2e/脚本拿到空 stdout)
+                print(
+                    json.dumps(
+                        {
+                            "checks": results,
+                            "summary": {
+                                "total": len(results),
+                                "passed": sum(
+                                    1 for r in results if r.get("status") == "ok"
+                                ),
+                                "failed": errors,
+                                "warnings": warnings,
+                            },
+                        },
+                        indent=2,
+                        ensure_ascii=False,
+                    )
+                )
             return 2
 
     # --- 2. Python version ---

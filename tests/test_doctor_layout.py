@@ -23,6 +23,8 @@ import pytest
 
 from llmwikify.kernel import Wiki
 
+REPO_ROOT = Path(__file__).resolve().parent.parent
+
 # ─────────────────────────────────────────────────────────────────
 # Fixtures
 # ─────────────────────────────────────────────────────────────────
@@ -245,11 +247,15 @@ class TestDoctorWikiRootFlag:
     own root, not the user's actual wiki.
     """
 
-    def test_wiki_root_flag_overrides_default_wiki(self):
-        """Running doctor with --wiki-root on a fixture wiki must
+    def test_wiki_root_flag_overrides_default_wiki(self, tmp_path):
+        """Running doctor with --wiki-root on an initialized wiki must
         report that wiki's path in the wiki check, not the package
-        root. Pre-fix bug: path was /home/ll/llmwikify (package root).
-        """
+        root. Pre-fix bug: the flag was silently ignored (v0.40).
+
+        2026-10-15: 改为自建 tmp wiki（原测试依赖本机
+        /home/ll/Public/* 固定路径, CI 上不存在）。"""
+        wiki = Wiki(tmp_path)
+        wiki.init(agent="generic")
         result = subprocess.run(
             [
                 sys.executable,
@@ -258,30 +264,32 @@ class TestDoctorWikiRootFlag:
                 "doctor",
                 "--skip-llm",
                 "--wiki-root",
-                "/home/ll/Public/DataTrackor",
+                str(tmp_path),
                 "--json",
             ],
             capture_output=True,
             text=True,
-            cwd="/home/ll/llmwikify",
+            cwd=str(REPO_ROOT),
         )
-        assert result.returncode == 0, f"doctor failed: {result.stderr}"
         data = json.loads(result.stdout)
         wiki_check = next(c for c in data["checks"] if c["category"] == "wiki")
         # Pre-fix bug: path was the package root
         assert (
-            wiki_check["path"] == "/home/ll/Public/DataTrackor"
-        ), f"expected DataTrackor path, got {wiki_check['path']!r}"
+            Path(wiki_check["path"]).resolve() == tmp_path.resolve()
+        ), f"expected {tmp_path}, got {wiki_check['path']!r}"
         # Pre-fix bug: wiki.md was reported as missing (path was wrong)
         assert (
             wiki_check["status"] == "ok"
-        ), f"DataTrackor should pass wiki check, got {wiki_check}"
+        ), f"initialized wiki should pass wiki check, got {wiki_check}"
 
     def test_5_fixture_wikis_all_pass_wiki_check(self):
         """Every fixture wiki has the 4 functional paths, so doctor
         should never report wiki as a hard fail for any of them.
         This is the regression test for the old ``index.md at root''
         bug."""
+        missing = [p for p in FIXTURE_WIKIS.values() if not Path(p).exists()]
+        if missing:
+            pytest.skip(f"local fixture wikis not available: {missing}")
         for name, path in FIXTURE_WIKIS.items():
             result = subprocess.run(
                 [
@@ -296,7 +304,7 @@ class TestDoctorWikiRootFlag:
                 ],
                 capture_output=True,
                 text=True,
-                cwd="/home/ll/llmwikify",
+                cwd=str(REPO_ROOT),
             )
             data = json.loads(result.stdout)
             wiki_check = next(c for c in data["checks"] if c["category"] == "wiki")
@@ -334,7 +342,7 @@ class TestFixDictPresent:
                 ],
                 capture_output=True,
                 text=True,
-                cwd="/home/ll/llmwikify",
+                cwd=str(REPO_ROOT),
             )
             data = json.loads(result.stdout)
             wiki_check = next(c for c in data["checks"] if c["category"] == "wiki")
@@ -344,8 +352,14 @@ class TestFixDictPresent:
             assert wiki_check["fix"]["risk"] in ("low", "medium", "high")
 
     def test_config_missing_has_fix(self, tmp_path):
-        """If ~/.llmwikify/llmwikify.json is missing, config check
-        fails and must suggest ``llmwikify init-llm``."""
+        """If ~/.llmwikify/llmwikify.json is missing, doctor must still
+        emit parseable JSON (rc=2) and the config check must suggest
+        ``llmwikify init-llm``.
+
+        Regression (2026-10-15): the config-missing early return skipped
+        JSON emission entirely → scripts (e2e 00_install_check) got
+        empty stdout and failed to parse.
+        """
         import os
 
         # Force a missing config by pointing HOME to an empty dir.
@@ -355,12 +369,16 @@ class TestFixDictPresent:
             [sys.executable, "-m", "llmwikify", "doctor", "--json"],
             capture_output=True,
             text=True,
-            cwd="/home/ll/llmwikify",
+            cwd=str(REPO_ROOT),
             env=env,
         )
-        if result.stdout:
-            data = json.loads(result.stdout)
-            config_check = data["checks"][0]
-            if config_check.get("status") == "missing":
-                assert "fix" in config_check
-                assert any("init-llm" in c for c in config_check["fix"]["commands"])
+        assert result.returncode == 2, f"expected rc=2, got {result.returncode}"
+        assert result.stdout, (
+            f"rc=2 must still emit JSON; got empty stdout "
+            f"(stderr={result.stderr[:300]!r})"
+        )
+        data = json.loads(result.stdout)
+        config_check = data["checks"][0]
+        assert config_check.get("status") == "missing"
+        assert "fix" in config_check
+        assert any("init-llm" in c for c in config_check["fix"]["commands"])

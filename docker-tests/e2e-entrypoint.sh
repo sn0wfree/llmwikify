@@ -88,6 +88,7 @@ if [ -n "${PIP_PACKAGES:-}" ]; then
         pip install --no-cache-dir --timeout 600 \
             'jinja2>=3.1.0' 'pyyaml>=6.0' 'requests>=2.28.0' \
             'duckdb>=1.0.0' 'pyjwt>=2.0,<3' 'jieba>=0.42' \
+            'watchdog>=3.0.0' \
             'fastapi>=0.104.0' 'starlette>=0.45,<1' \
             'uvicorn>=0.23.0' 'httpx>=0.24.0' \
             'fastmcp>=3.0,<3.3' 'tiktoken>=0.7.0' \

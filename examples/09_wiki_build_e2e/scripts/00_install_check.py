@@ -122,7 +122,21 @@ def check_doctor() -> None:
     try:
         data = json.loads(proc.stdout)
     except json.JSONDecodeError as e:
-        record("parse doctor json", False, str(e))
+        record(
+            "parse doctor json",
+            False,
+            f"{e} | stdout={proc.stdout[:200]!r} stderr={proc.stderr[:300]!r}",
+        )
+        return
+
+    if proc.returncode == 2:
+        # 全新容器: ~/.llmwikify 配置尚未 provision (wiki 由后续脚本创建);
+        # doctor 以 rc=2 报告 config missing 属预期状态 — JSON 契约已验证
+        record(
+            "doctor --skip-llm",
+            True,
+            "config not provisioned yet (fresh container, expected)",
+        )
         return
 
     summary_block = data.get("summary", {})
