@@ -13,6 +13,12 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 from llmwikify.foundation.extractors import ExtractedContent
 from llmwikify.kernel import Wiki
 
+# 2026-10-15: test_llm_comparison.py 是人工实验脚本（无 test 函数;
+# module 级 mkdir 硬编码 /home/ll 本机路径）——CI collection 阶段
+# PermissionError 直接崩掉整个 Tests 门禁。排除收集; 手动运行不受影响:
+#   python tests/test_llm_comparison.py
+collect_ignore = ["test_llm_comparison.py"]
+
 
 # Phase 19-D (2026-06-22): redirect all chat/agent DB writes to a
 # per-session tmp dir so test runs no longer pollute the production

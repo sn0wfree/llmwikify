@@ -1,9 +1,9 @@
 name: E2E (wiki build + chat SSE)
 
-> **Generic e2e runner.** This job uses the same `python-e2e-runner`
-> image as the local `docker-tests/run-e2e.sh`. It builds the local
-> wheel, mounts it in the generic container, and runs the 4-script
-> chain (`00 -> 01 -> 02 -> 03`).
+# Generic e2e runner. This job uses the same `python-e2e-runner`
+# image as the local `docker-tests/run-e2e.sh`. It builds the local
+# wheel, mounts it in the generic container, and runs the 4-script
+# chain (00 -> 01 -> 02 -> 03).
 
 on:
   push:
