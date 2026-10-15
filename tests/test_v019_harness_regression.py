@@ -31,7 +31,12 @@ GOLDEN_DIR = Path(__file__).parent / "fixtures" / "golden_sources"
 
 
 class TestPromptRegression:
-    """Core regression tests for prompt behavior."""
+    """Prompt 回归测试 — 直连本机 LLM (localhost:11434), 默认跳过 (CI 无 LLM).
+
+    Core regression tests for prompt behavior.
+    """
+
+    pytestmark = pytest.mark.llm
 
     @pytest.fixture
     def temp_wiki(self, tmp_path):

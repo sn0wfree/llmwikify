@@ -97,6 +97,9 @@ async def test_code_actor_syntax_error():
 @pytest.mark.asyncio
 async def test_code_actor_success():
     """Test with a valid compute_factor that returns a Series."""
+    # v0.40 quant 分离: 生成的因子代码 import QuantNodes, 该包已迁出本仓
+    # (可选依赖) — 未安装则跳过
+    pytest.importorskip("QuantNodes")
     import polars as pl
 
     code = """
