@@ -7,15 +7,12 @@ import os
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
+from fastapi import APIRouter, FastAPI, HTTPException
 
 from llmwikify.apps.chat.channels.websocket import _register_websocket_routes
-from llmwikify.kernel import Wiki
-from llmwikify.kernel.multi_wiki.instance import WikiType
 from llmwikify.kernel.multi_wiki.registry import WikiRegistry
 
 logger = logging.getLogger(__name__)
-
 
 
 def register_routes(
@@ -39,20 +36,47 @@ def register_routes(
             handshake can validate ``?token=`` against the same
             key as the REST ``AuthMiddleware``. Pass ``None`` to
             disable WS auth (dev mode).
-
-    Phase 19-B: also wires the ``AgentService`` (created by
-    ``_register_agent_routes``) into the WS router so the
-    ``message`` handler routes to the real ``ChatOrchestrator``
-    instead of echoing.
     """
-    _register_wiki_routes(app, registry, provider=provider)
+    # Wiki 路由
+    from llmwikify.interfaces.server.http.wiki.wiki_routes import register_wiki_routes
+
+    register_wiki_routes(app, registry)
+
+    # Wikis 注册路由
+    from llmwikify.interfaces.server.http.wiki.registry_routes import (
+        register_registry_routes,
+    )
+
+    register_registry_routes(app, registry)
+
+    # 搜索路由
+    from llmwikify.interfaces.server.http.wiki.search_routes import (
+        register_search_routes,
+    )
+
+    register_search_routes(app, registry)
+
+    # 日志路由
+    from llmwikify.interfaces.server.http.wiki.log_routes import register_log_routes
+
+    register_log_routes(app)
+
+    # 自维护路由（manager 由 lifespan 挂载到 app.state）
+    from llmwikify.interfaces.server.http.maintenance_routes import (
+        register_maintenance_routes,
+    )
+
+    register_maintenance_routes(app)
+
+    # Agent 路由
     _register_agent_routes(app, registry, provider=provider)
-    # Phase 19-B: pass the freshly-created AgentService so the WS
-    # handler can route ``message`` to ChatOrchestrator.chat(). We
-    # resolve via the global set by ``_register_agent_routes`` →
-    # ``chat_sse.set_agent_service`` to avoid refactoring its
-    # private signature.
-    from llmwikify.interfaces.server.http.chat_sse import get_agent_service
+
+    # Skills 路由
+    _register_skills_routes(app)
+
+    # WebSocket 路由
+    from llmwikify.interfaces.server.http.agent._common import get_agent_service
+
     agent_svc = None
     try:
         agent_svc = get_agent_service()
@@ -60,461 +84,13 @@ def register_routes(
         # Agent service not initialized — WS falls back to echo
         pass
     _register_websocket_routes(
-        app, api_key=api_key or "", chat_service=agent_svc,
+        app,
+        api_key=api_key or "",
+        chat_service=agent_svc,
     )
 
 
-def _register_wiki_routes(
-    app: FastAPI,
-    registry: WikiRegistry,
-    provider: Any = None,
-) -> None:
-    """Register unified wiki routes with WikiRegistry."""
-
-    def _get_default_or_first_wiki_id() -> str:
-        """Get default wiki_id or first registered wiki if only one exists."""
-        default_id = registry.get_default_wiki_id()
-        if default_id:
-            return default_id
-        wikis = registry.list_wikis()
-        if len(wikis) == 1:
-            return wikis[0].wiki_id
-        elif len(wikis) == 0:
-            raise HTTPException(status_code=400, detail="No wiki registered")
-        raise HTTPException(status_code=400, detail="No default wiki configured")
-
-    def get_wiki_by_id(wiki_id: str) -> Wiki:
-        instance = registry.get_wiki_instance(wiki_id)
-        if instance.wiki_type == WikiType.REMOTE:
-            raise HTTPException(status_code=400, detail="Cannot access remote wiki directly")
-        return registry.get_wiki(wiki_id)
-
-    def get_wiki() -> Wiki:
-        wiki_id = _get_default_or_first_wiki_id()
-        return registry.get_wiki(wiki_id)
-
-    # --- Wiki Management Routes ---
-    wiki_router = APIRouter(prefix="/api/wiki", tags=["wiki"])
-
-    @wiki_router.get("/status")
-    async def wiki_status(wiki: Wiki = Depends(get_wiki)):  # noqa: B008
-        """Get wiki status summary."""
-        status = wiki.status()
-        if "pages_by_type" in status:
-            status["all_types"] = list(status["pages_by_type"].keys())
-        return status
-
-    @wiki_router.get("/search")
-    async def wiki_search(q: str, limit: int = 10, backend: str = "fts5", wiki: Wiki = Depends(get_wiki)):  # noqa: B008
-        """Full-text search across wiki pages."""
-        return wiki.search(q, limit, backend=backend)
-
-    @wiki_router.get("/page/{page_name:path}")
-    async def wiki_read_page(page_name: str, wiki: Wiki = Depends(get_wiki)):  # noqa: B008
-        """Read a wiki page."""
-        try:
-            page_data = wiki.read_page(page_name)
-            if isinstance(page_data, dict) and "error" in page_data:
-                raise HTTPException(status_code=404, detail=page_data["error"])
-            sink_info = wiki.query_sink.get_info_for_page(page_name)
-            if isinstance(page_data, dict):
-                return {**page_data, **sink_info}
-            return page_data
-        except Exception as e:
-            raise HTTPException(status_code=404, detail=str(e))
-
-    @wiki_router.post("/page")
-    async def wiki_write_page(request: Request, wiki: Wiki = Depends(get_wiki)):  # noqa: B008
-        """Write a wiki page."""
-        body = await request.json()
-        page_name = body.get("page_name", "")
-        content = body.get("content", "")
-        if not page_name:
-            raise HTTPException(status_code=400, detail="page_name required")
-        result = wiki.write_page(page_name, content)
-        return {"message": result, "page_name": page_name}
-
-    @wiki_router.get("/sink/status")
-    async def wiki_sink_status(wiki: Wiki = Depends(get_wiki)):  # noqa: B008
-        """Get sink buffer status."""
-        return wiki.sink_status()
-
-    @wiki_router.get("/lint")
-    async def wiki_lint(
-        mode: str = "check",
-        limit: int = 10,
-        force: bool = False,
-        wiki: Wiki = Depends(get_wiki),  # noqa: B008
-
-    ):
-        """Health-check the wiki."""
-        return wiki.lint(mode=mode, limit=limit, force=force)
-
-    @wiki_router.get("/recommend")
-    async def wiki_recommend(wiki: Wiki = Depends(get_wiki)):  # noqa: B008
-        """Get wiki recommendations."""
-        return wiki.recommend()
-
-    @wiki_router.get("/suggest_synthesis")
-    async def wiki_suggest_synthesis(source_name: str | None = None, wiki: Wiki = Depends(get_wiki)):  # noqa: B008
-        """Get cross-source synthesis suggestions."""
-        return wiki.suggest_synthesis(source_name=source_name)
-
-    @wiki_router.get("/graph_analyze")
-    async def wiki_graph_analyze(wiki: Wiki = Depends(get_wiki)):  # noqa: B008
-        """Analyze knowledge graph structure."""
-        return wiki.graph_analyze()
-
-    @wiki_router.get("/graph")
-    async def wiki_graph(
-        current_page: str | None = None,
-        mode: str = "auto",
-        wiki: Wiki = Depends(get_wiki),  # noqa: B008
-
-    ):
-        """Return graph data optimized for visualization."""
-        from llmwikify.kernel.graph.visualizer import build_visualization_data
-        return build_visualization_data(wiki.index, wiki, current_page, mode)
-
-    app.include_router(wiki_router)
-
-    # --- Wiki Management Routes ---
-    wikis_router = APIRouter(prefix="/api/wikis", tags=["wikis"])
-
-    @wikis_router.get("")
-    async def list_wikis():
-        """List all registered wikis."""
-        wikis = registry.list_wikis()
-        return {
-            "wikis": [w.to_dict() for w in wikis],
-            "default_wiki_id": registry.get_default_wiki_id(),
-        }
-
-    @wikis_router.post("")
-    async def register_wiki(request: Request):
-        """Register a new wiki."""
-        body = await request.json()
-        wiki_id = body.get("wiki_id")
-        name = body.get("name", wiki_id)
-        wiki_type = body.get("type", "local")
-
-        if not wiki_id:
-            raise HTTPException(status_code=400, detail="wiki_id required")
-
-        if wiki_type == "remote":
-            url = body.get("url")
-            if not url:
-                raise HTTPException(status_code=400, detail="url required for remote wiki")
-            instance = registry.register_remote(
-                wiki_id=wiki_id,
-                name=name,
-                url=url,
-                api_key=body.get("api_key"),
-                timeout=body.get("timeout", 30),
-                verify_ssl=body.get("verify_ssl", True),
-            )
-        else:
-            root = body.get("root")
-            if not root:
-                raise HTTPException(status_code=400, detail="root required for local wiki")
-            from pathlib import Path
-            instance = registry.register_wiki(
-                wiki_id=wiki_id,
-                name=name,
-                root=Path(root),
-            )
-
-        return instance.to_dict()
-
-    @wikis_router.get("/{wiki_id}")
-    async def get_wiki_info(wiki_id: str):
-        """Get wiki details."""
-        try:
-            instance = registry.get_wiki_instance(wiki_id)
-            return instance.to_dict()
-        except KeyError:
-            raise HTTPException(status_code=404, detail=f"Wiki not found: {wiki_id}")
-
-    @wikis_router.put("/{wiki_id}")
-    async def update_wiki(wiki_id: str, request: Request):
-        """Update wiki configuration."""
-        body = await request.json()
-        try:
-            instance = registry.get_wiki_instance(wiki_id)
-            # Update allowed fields
-            if "name" in body:
-                instance.name = body["name"]
-            if "is_default" in body and body["is_default"]:
-                registry.set_default_wiki(wiki_id)
-            return instance.to_dict()
-        except KeyError:
-            raise HTTPException(status_code=404, detail=f"Wiki not found: {wiki_id}")
-
-    @wikis_router.delete("/{wiki_id}")
-    async def unregister_wiki(wiki_id: str):
-        """Unregister a wiki."""
-        try:
-            registry.unregister_wiki(wiki_id)
-            return {"message": f"Wiki {wiki_id} unregistered"}
-        except KeyError:
-            raise HTTPException(status_code=404, detail=f"Wiki not found: {wiki_id}")
-
-    @wikis_router.post("/{wiki_id}/reload")
-    async def reload_wiki(wiki_id: str):
-        """Reload/re-index a wiki."""
-        result = registry.reload_wiki(wiki_id)
-        if result.get("status") == "error":
-            raise HTTPException(status_code=500, detail=result.get("message"))
-        return result
-
-    @wikis_router.get("/{wiki_id}/health")
-    async def wiki_health(wiki_id: str):
-        """Check wiki health."""
-        try:
-            status = registry.get_wiki_status(wiki_id)
-            return status
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
-
-    @wikis_router.post("/scan")
-    async def scan_wikis(request: Request):
-        """Trigger directory scan for wikis."""
-        body = await request.json()
-        scan_paths = body.get("scan_paths", ["."])
-        scan_depth = body.get("scan_depth", 2)
-        new_wikis = registry.scan_directories(scan_paths, scan_depth)
-        return {
-            "new_wikis": [w.to_dict() for w in new_wikis],
-            "count": len(new_wikis),
-        }
-
-    app.include_router(wikis_router)
-
-    # --- Wiki-Scoped Routes ---
-
-    wiki_router = APIRouter(prefix="/api/wiki", tags=["wiki"])
-
-    @wiki_router.get("/{wiki_id}/status")
-    async def wiki_status_by_id(wiki_id: str):
-        """Get wiki status by ID."""
-        try:
-            status = registry.get_wiki_status(wiki_id)
-            if "pages_by_type" in status:
-                status["all_types"] = list(status["pages_by_type"].keys())
-            return status
-        except KeyError:
-            raise HTTPException(status_code=404, detail=f"Wiki not found: {wiki_id}")
-
-    @wiki_router.get("/{wiki_id}/pages")
-    async def wiki_pages_by_id(wiki_id: str):
-        """Get list of all pages in a specific wiki."""
-        try:
-            wiki = get_wiki_by_id(wiki_id)
-            page_names = wiki._get_existing_page_names()
-            return {"pages": page_names, "count": len(page_names)}
-        except KeyError:
-            raise HTTPException(status_code=404, detail=f"Wiki not found: {wiki_id}")
-
-    @wiki_router.get("/{wiki_id}/search")
-    async def wiki_search_by_id(wiki_id: str, q: str, limit: int = 10, backend: str = "fts5"):
-        """Search within a specific wiki."""
-        try:
-            wiki = get_wiki_by_id(wiki_id)
-            return wiki.search(q, limit, backend=backend)
-        except KeyError:
-            raise HTTPException(status_code=404, detail=f"Wiki not found: {wiki_id}")
-
-    @wiki_router.get("/{wiki_id}/page/{page_name:path}")
-    async def wiki_read_page_by_id(wiki_id: str, page_name: str):
-        """Read a page from a specific wiki."""
-        try:
-            wiki = get_wiki_by_id(wiki_id)
-            page_data = wiki.read_page(page_name)
-            if isinstance(page_data, dict) and "error" in page_data:
-                raise HTTPException(status_code=404, detail=page_data["error"])
-            sink_info = wiki.query_sink.get_info_for_page(page_name)
-            if isinstance(page_data, dict):
-                return {**page_data, **sink_info}
-            return page_data
-        except KeyError:
-            raise HTTPException(status_code=404, detail=f"Wiki not found: {wiki_id}")
-        except Exception as e:
-            raise HTTPException(status_code=404, detail=str(e))
-
-    @wiki_router.post("/{wiki_id}/page")
-    async def wiki_write_page_by_id(wiki_id: str, request: Request):
-        """Write a page to a specific wiki."""
-        try:
-            wiki = get_wiki_by_id(wiki_id)
-            body = await request.json()
-            page_name = body.get("page_name", "")
-            content = body.get("content", "")
-            if not page_name:
-                raise HTTPException(status_code=400, detail="page_name required")
-            result = wiki.write_page(page_name, content)
-            return {"message": result, "page_name": page_name}
-        except KeyError:
-            raise HTTPException(status_code=404, detail=f"Wiki not found: {wiki_id}")
-
-    @wiki_router.get("/{wiki_id}/lint")
-    async def wiki_lint_by_id(
-        wiki_id: str,
-        mode: str = "check",
-        limit: int = 10,
-        force: bool = False,
-    ):
-        """Health-check a specific wiki."""
-        try:
-            wiki = get_wiki_by_id(wiki_id)
-            return wiki.lint(mode=mode, limit=limit, force=force)
-        except KeyError:
-            raise HTTPException(status_code=404, detail=f"Wiki not found: {wiki_id}")
-
-    @wiki_router.get("/{wiki_id}/recommend")
-    async def wiki_recommend_by_id(wiki_id: str):
-        """Get recommendations for a specific wiki."""
-        try:
-            wiki = get_wiki_by_id(wiki_id)
-            return wiki.recommend()
-        except KeyError:
-            raise HTTPException(status_code=404, detail=f"Wiki not found: {wiki_id}")
-
-    @wiki_router.get("/{wiki_id}/graph")
-    async def wiki_graph_by_id(
-        wiki_id: str,
-        current_page: str | None = None,
-        mode: str = "auto",
-    ):
-        """Get graph data for a specific wiki."""
-        try:
-            wiki = get_wiki_by_id(wiki_id)
-            from llmwikify.kernel.graph.visualizer import build_visualization_data
-            return build_visualization_data(wiki.index, wiki, current_page, mode)
-        except KeyError:
-            raise HTTPException(status_code=404, detail=f"Wiki not found: {wiki_id}")
-
-    @wiki_router.get("/{wiki_id}/sink/status")
-    async def wiki_sink_status_by_id(wiki_id: str):
-        """Get sink buffer status for a specific wiki."""
-        try:
-            wiki = get_wiki_by_id(wiki_id)
-            return wiki.sink_status()
-        except KeyError:
-            raise HTTPException(status_code=404, detail=f"Wiki not found: {wiki_id}")
-
-    # Legacy fallback routes (backward compatible - use default wiki)
-    @wiki_router.get("/status")
-    async def wiki_status_legacy():
-        """Get wiki status (legacy - uses default wiki)."""
-        if not registry.get_default_wiki_id():
-            raise HTTPException(status_code=400, detail="No default wiki configured")
-        return await wiki_status_by_id(registry.get_default_wiki_id())
-
-    @wiki_router.get("/search")
-    async def wiki_search_legacy(q: str, limit: int = 10, backend: str = "fts5"):
-        """Search wiki (legacy - uses default wiki)."""
-        if not registry.get_default_wiki_id():
-            raise HTTPException(status_code=400, detail="No default wiki configured")
-        return await wiki_search_by_id(registry.get_default_wiki_id(), q, limit, backend)
-
-    app.include_router(wiki_router)
-
-    # --- Cross-Wiki Search ---
-
-    search_router = APIRouter(prefix="/api/search", tags=["search"])
-
-    @search_router.get("/cross")
-    async def cross_wiki_search(
-        q: str,
-        limit: int = 10,
-        wikis: str | None = None,
-        backend: str = "fts5",
-    ):
-        """Search across multiple wikis.
-
-        Args:
-            q: Search query
-            limit: Results per wiki
-            wikis: Comma-separated wiki IDs (empty = all)
-            backend: Search backend
-        """
-        wiki_ids = wikis.split(",") if wikis else None
-        results = registry.cross_wiki_search(q, wiki_ids, limit)
-        return {
-            "results": results,
-            "total_results": len(results),
-            "searched_wikis": wiki_ids or [w.wiki_id for w in registry.list_wikis()],
-        }
-
-    app.include_router(search_router)
-
-    # --- Client Error Logging ---
-    log_router = APIRouter(tags=["log"])
-    _log_logger = logging.getLogger("client.errors")
-
-    @log_router.post("/api/log/error")
-    async def log_client_error(request: Request):
-        """Receive frontend error reports and write to server log."""
-        try:
-            body = await request.json()
-        except Exception:
-            body = {}
-        err_type = body.get("type", "unknown")
-        message = body.get("message", "")
-        url = body.get("url", "")
-        filename = body.get("filename", "")
-        lineno = body.get("lineno", "")
-        colno = body.get("colno", "")
-        stack = body.get("stack", "")
-        status = body.get("status", "")
-        method = body.get("method", "")
-        req_body = body.get("requestBody", "")
-        content_type = body.get("contentType", "")
-        body_snippet = body.get("bodySnippet", "")
-        endpoint = body.get("endpoint", "")
-        client_ip = request.client.host if request.client else "unknown"
-
-        if err_type == "api-error":
-            parts = [f"[api-error] {method} {url} → {status}"]
-            if content_type:
-                parts.append(f"resp-ct={content_type}")
-            if client_ip:
-                parts.append(f"client={client_ip}")
-            _log_logger.error(" | ".join(parts))
-            if req_body:
-                _log_logger.error(f"  req-body: {req_body}")
-            if body_snippet:
-                _log_logger.error(f"  resp-body: {body_snippet[:500]}")
-        elif err_type == "fetch-error":
-            parts = [f"[fetch-error] {method} {endpoint}"]
-            if message:
-                parts.append(f"err={message[:200]}")
-            if client_ip:
-                parts.append(f"client={client_ip}")
-            _log_logger.error(" | ".join(parts))
-        else:
-            parts = [f"[{err_type}] {message}"]
-            if url:
-                parts.append(f"url={url}")
-            if filename:
-                parts.append(f"file={filename}:{lineno}:{colno}")
-            if client_ip:
-                parts.append(f"client={client_ip}")
-            _log_logger.error(" | ".join(parts))
-            if stack:
-                _log_logger.error(f"Stack: {stack[:2000]}")
-        return {"ok": True}
-
-    app.include_router(log_router)
-
-    # --- Agent Routes (Phase 7: provider forwarded to MemoryManager) ---
-    _register_agent_routes(app, registry, provider=provider)
-
-    # --- Skills introspection (Phase 11-F2) ---
-    # Surfaces registered skills + their plugin frontmatter
-    # (version / author / triggers / tags) so the webui and operators
-    # can introspect what's loaded without grepping logs.
-    _register_skills_routes(app)
+# ─── Config loading helpers ────────────────────────────────────
 
 
 def _load_research_config() -> dict[str, Any] | None:
@@ -537,18 +113,26 @@ def _load_research_config() -> dict[str, Any] | None:
 def _load_llm_config() -> dict[str, Any] | None:
     """Load llm config from global config file (~/.llmwikify/llmwikify.json).
 
+    Thin wrapper over ``foundation.llm.client.load_llm_config`` that
+    preserves the legacy ``None``-on-missing contract (the foundation
+    helper returns ``{}`` instead) AND the legacy call-time
+    ``Path.home()`` resolution (the foundation helper uses a module-
+    level ``CONFIG_PATH`` constant evaluated at import time, which
+    breaks tests that monkeypatch ``Path.home``). One source of truth
+    lives in ``foundation/llm/client.py``; this shim exists for
+    backward compat with the two test files and one in-tree caller in
+    this module.
+
     Reads the "llm" section if present. Returns None if file doesn't exist.
     """
-    import json as _json
+    from llmwikify.foundation.llm.client import load_llm_config
 
-    config_file = Path.home() / ".llmwikify" / "llmwikify.json"
-    if not config_file.exists():
-        return None
-    try:
-        data = _json.loads(config_file.read_text())
-        return data.get("llm")
-    except Exception:
-        return None
+    return (
+        load_llm_config(
+            config_path=Path.home() / ".llmwikify" / "llmwikify.json",
+        )
+        or None
+    )
 
 
 def _build_research_config_overrides() -> dict[str, Any]:
@@ -558,13 +142,18 @@ def _build_research_config_overrides() -> dict[str, Any]:
     existing deployments get a working web-search provider without any
     config change:
 
-    - If ``research.minimax_api_key`` is unset and the LLM provider is
-      ``minimax``, reuse ``llm.api_key``. Most users with a MiniMax Coding
-      Plan key use it for both chat and search; explicitly setting
-      ``research.minimax_api_key`` always wins.
     - If ``research.minimax_api_host`` is unset, derive it from
       ``llm.base_url`` (stripping the ``/v1`` suffix) so the search
       endpoint resolves to the same host as chat.
+    - If ``research.minimax_api_key`` is unset AND the user has not
+      pinned a different ``research.search_provider``, reuse
+      ``llm.api_key`` so a single credential covers both chat and
+      search. Skipped for non-minimax LLM providers to avoid injecting
+      a stranger's minimax key into another vendor's search config.
+
+    The injected ``minimax_api_key`` is only used to construct the
+    search provider client inside the request handler — the override
+    dict itself is logged at DEBUG, not INFO/WARNING.
 
     Returns an empty dict when no overrides apply or the config file is
     missing. Never raises.
@@ -573,26 +162,36 @@ def _build_research_config_overrides() -> dict[str, Any]:
         user_cfg = _load_research_config() or {}
         out: dict[str, Any] = {k: v for k, v in user_cfg.items() if v is not None}
 
-        needs_key = (
-            out.get("minimax_api_key") is None
-            and (out.get("search_provider", "auto") in (None, "auto", "minimax"))
-        )
-        if needs_key:
+        # Derive minimax_api_host from llm.base_url when not explicitly set.
+        if "minimax_api_host" not in out:
             llm_cfg = _load_llm_config() or {}
-            if llm_cfg.get("provider") == "minimax":
-                api_key = llm_cfg.get("api_key")
-                if api_key:
-                    out["minimax_api_key"] = api_key
-                base_url = llm_cfg.get("base_url")
-                if base_url and "minimax_api_host" not in out:
-                    host = base_url.rstrip("/")
-                    if host.endswith("/v1"):
-                        host = host[: -len("/v1")]
-                    out["minimax_api_host"] = host
+            base_url = llm_cfg.get("base_url")
+            if base_url:
+                host = base_url.rstrip("/")
+                if host.endswith("/v1"):
+                    host = host[: -len("/v1")]
+                out["minimax_api_host"] = host
+
+        # Derive minimax_api_key from llm.api_key when not explicitly set,
+        # and the user has not pinned a non-minimax search provider.
+        # "auto" is treated as minimax-compatible (it picks a provider at
+        # runtime, defaulting to minimax), so the fallback still applies.
+        if "minimax_api_key" not in out:
+            llm_cfg = _load_llm_config() or {}
+            search_provider = out.get("search_provider")
+            if (
+                llm_cfg.get("provider") == "minimax"
+                and llm_cfg.get("api_key")
+                and (not search_provider or search_provider in {"minimax", "auto"})
+            ):
+                out["minimax_api_key"] = llm_cfg["api_key"]
         return out
     except Exception as e:
         logger.warning("Failed to build research config overrides: %s", e)
         return {}
+
+
+# ─── Agent routes ──────────────────────────────────────────────
 
 
 def _register_agent_routes(
@@ -613,7 +212,7 @@ def _register_agent_routes(
     to the production database (which ``Path.home()`` ignores on Linux).
     """
     from llmwikify.apps.chat.agent.agent_service import AgentService
-    from llmwikify.interfaces.server.http.chat_sse import set_agent_service
+    from llmwikify.interfaces.server.http.agent._common import set_agent_service
 
     # Phase 19-D: prefer explicit LLMWIKIFY_DATA_DIR; fall back to
     # the previous ``~/.llmwikify/agent`` default. Without this,
@@ -645,7 +244,9 @@ def _register_agent_routes(
         try:
             autoresearch_llm = agent_service._get_llm()
         except Exception:
-            pass
+            logger.debug(
+                "agent_service._get_llm() unavailable, proceeding without LLM client for autoresearch"
+            )
     research_overrides = _build_research_config_overrides()
     set_autoresearch_deps(
         db=db,
@@ -656,7 +257,7 @@ def _register_agent_routes(
     )
     app.include_router(autoresearch_router)
 
-    from llmwikify.interfaces.server.http.chat_sse import router as agent_router
+    from llmwikify.interfaces.server.http.agent._common import router as agent_router
 
     app.include_router(agent_router)
 
@@ -676,19 +277,18 @@ def _register_agent_routes(
     model_name = "llmwikify-chat"
     try:
         from llmwikify.apps.chat.providers.registry import get_default_provider
+
         provider = get_default_provider()
         if provider and getattr(provider, "model", None):
             model_name = provider.model
     except Exception:
-        pass
+        logger.debug(
+            "Could not resolve default provider model, using fallback %r", model_name
+        )
     app.include_router(create_openai_router(model=model_name))
 
-    try:
-        _register_reproduction_routes(app, registry, agent_service, data_dir=data_dir)
-    except ImportError as e:
-        logger.warning("Reproduction routes disabled (missing dependency: %s)", e)
 
-    _mount_agent_spa(app)
+# ─── Skills routes ─────────────────────────────────────────────
 
 
 def _register_skills_routes(app: FastAPI) -> None:
@@ -751,95 +351,3 @@ def _register_skills_routes(app: FastAPI) -> None:
         return entry
 
     app.include_router(skills_router)
-
-
-def _register_reproduction_routes(
-    app: FastAPI,
-    registry: WikiRegistry,
-    agent_service: Any,
-    data_dir: Path | None = None,
-) -> None:
-    """Register paper/factor/strategy/reproduction routers and inject deps.
-
-    Lives here (not in ``_register_wiki_routes``) because the reproduction
-    routers need access to the LLM client and the reproduction session DB
-    that the agent service owns. v0.4.0 — end-to-end reproduction pipeline.
-    """
-    from llmwikify.interfaces.server.http.factor import (
-        router as factor_router,
-    )
-    from llmwikify.interfaces.server.http.factor import (
-        set_factor_deps,
-    )
-    from llmwikify.interfaces.server.http.paper import (
-        router as paper_router,
-    )
-    from llmwikify.interfaces.server.http.paper import (
-        set_paper_deps,
-    )
-    from llmwikify.interfaces.server.http.reproduction import (
-        router as reproduction_router,
-    )
-    from llmwikify.interfaces.server.http.reproduction import (
-        set_repro_deps,
-    )
-    from llmwikify.interfaces.server.http.strategy import (
-        router as strategy_router,
-    )
-    from llmwikify.interfaces.server.http.strategy import (
-        set_strategy_deps,
-    )
-    from llmwikify.reproduction.persist.sessions import ReproductionDatabase
-
-    if data_dir is None:
-        data_dir = Path.home() / ".llmwikify" / "agent"
-    data_dir.mkdir(parents=True, exist_ok=True)
-    repro_db = ReproductionDatabase(data_dir / "reproduction.db")
-    logger.info("Reproduction DB initialized at: %s", repro_db.db_path)
-
-    # raw_dir: use the default wiki's raw directory, not the code repo path
-    try:
-        raw_dir = registry.get_default_wiki().raw_dir
-    except Exception:
-        raw_dir = Path.home() / ".llmwikify" / "raw"
-    upload_dir = raw_dir
-    logger.info("paper raw_dir: %s, upload_dir: %s", raw_dir, upload_dir)
-
-    # Read parquet path from config
-    try:
-        _cfg_file = Path.home() / ".llmwikify" / "llmwikify.json"
-        _parquet_path = __import__("json").loads(_cfg_file.read_text()).get("parquet", {}).get("path") if _cfg_file.exists() else None
-    except Exception:
-        _parquet_path = None
-
-    set_paper_deps(
-        wiki_registry=registry,
-        llm_client=agent_service._get_llm(),
-        db=repro_db,
-        raw_dir=raw_dir,
-        upload_dir=upload_dir,
-        parquet_path=_parquet_path,
-    )
-    set_factor_deps(
-        wiki_registry=registry,
-        llm_client=agent_service._get_llm(),
-    )
-    set_strategy_deps(wiki_registry=registry)
-    set_repro_deps(db=repro_db, wiki_registry=registry)
-
-    app.include_router(paper_router)
-    app.include_router(factor_router)
-    app.include_router(strategy_router)
-    app.include_router(reproduction_router)
-    logger.info(
-        "Reproduction routers registered: paper, factor, strategy, reproduction"
-    )
-
-
-def _mount_agent_spa(app: FastAPI) -> None:
-    """Unified SPA handles /agent routes via client-side routing.
-
-    The SPA at ui/webui/dist/ handles both / and /agent routes.
-    No separate mount is needed — the SPA's BrowserRouter handles routing.
-    """
-    pass

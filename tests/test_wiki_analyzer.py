@@ -2,11 +2,11 @@
 
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from llmwikify.kernel.wiki.engines.analyzer import WikiAnalyzer
 
@@ -24,6 +24,7 @@ def mock_wiki(tmp_path):
     wiki.wiki_md_file.write_text("# Wiki Schema\n")
     wiki.index = MagicMock()
     wiki.index.get_inbound_links.return_value = []
+    wiki.index.count_inbound_for_pages.return_value = {}
     wiki.query_sink = MagicMock()
     wiki.query_sink.status.return_value = {"sinks": []}
     wiki._wiki_pages.return_value = []
@@ -32,14 +33,21 @@ def mock_wiki(tmp_path):
     wiki._log_page_name = "Log"
     wiki._should_exclude_orphan.return_value = False
     wiki._resolve_wikilink_target.return_value = None
-    wiki._parse_wikilink_target.side_effect = lambda link: link.split('|')[0].split('#')[0].strip()
+    wiki._parse_wikilink_target.side_effect = (
+        lambda link: link.split("|")[0].split("#")[0].strip()
+    )
     wiki._get_existing_page_names.return_value = []
     wiki._find_source_summary_page.return_value = None
     wiki._get_cached_source_analysis.return_value = None
     wiki.get_relation_engine.side_effect = Exception("No relation engine")
     wiki.config = {}
     wiki._get_prompt_registry.side_effect = Exception("No prompt registry")
-    wiki.fix_wikilinks.return_value = {"fixed": 0, "skipped": 0, "ambiguous": 0, "changes": []}
+    wiki.fix_wikilinks.return_value = {
+        "fixed": 0,
+        "skipped": 0,
+        "ambiguous": 0,
+        "changes": [],
+    }
     wiki._update_index_file.return_value = None
     return wiki
 
@@ -143,7 +151,9 @@ class TestRecommend:
 
         mock_wiki._wiki_pages.return_value = [page_a]
         mock_wiki._resolve_wikilink_target.return_value = None
-        mock_wiki._parse_wikilink_target.side_effect = lambda link: link.split('|')[0].split('#')[0].strip()
+        mock_wiki._parse_wikilink_target.side_effect = (
+            lambda link: link.split("|")[0].split("#")[0].strip()
+        )
 
         analyzer = WikiAnalyzer(mock_wiki)
         result = analyzer.recommend()
@@ -173,7 +183,9 @@ class TestLint:
 
         mock_wiki._wiki_pages.return_value = [page]
         mock_wiki._resolve_wikilink_target.return_value = None
-        mock_wiki._parse_wikilink_target.side_effect = lambda link: link.split('|')[0].split('#')[0].strip()
+        mock_wiki._parse_wikilink_target.side_effect = (
+            lambda link: link.split("|")[0].split("#")[0].strip()
+        )
         mock_wiki.index.get_inbound_links.return_value = ["some_link"]
 
         analyzer = WikiAnalyzer(mock_wiki)

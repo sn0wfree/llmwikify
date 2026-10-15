@@ -21,9 +21,7 @@ def run_search(wiki: Any, args: Any) -> int:
         0 always.
     """
     backend = getattr(args, "backend", "fts5")
-    results = wiki.search(
-        args.query, getattr(args, "limit", 10), backend=backend
-    )
+    results = wiki.search(args.query, getattr(args, "limit", 10), backend=backend)
 
     if not results:
         print(f"No results found for: {args.query}")
@@ -55,7 +53,8 @@ class SearchCommand(Command):
         p.add_argument("query", help="Search query")
         p.add_argument("--limit", "-l", type=int, default=10)
         p.add_argument(
-            "--backend", "-b",
+            "--backend",
+            "-b",
             choices=["fts5", "qmd"],
             default="fts5",
             help="Search backend: fts5 (default, fast) or qmd (hybrid semantic)",

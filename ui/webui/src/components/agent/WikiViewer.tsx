@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { api, type WikiPage } from '../../api';
+import { Dialog, DialogContent, DialogTitle } from '../ui/dialog';
+import { X } from 'lucide-react';
 
 interface Props {
   pageName: string;
@@ -33,17 +35,17 @@ export function WikiViewer({ pageName, wikiId, onClose }: Props) {
   }, [pageName, wikiId]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
-      <div
-        className="w-full max-w-3xl max-h-[85vh] mx-4 bg-card rounded-lg shadow-xl border border-border flex flex-col overflow-hidden"
-        onClick={e => e.stopPropagation()}
+    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent
+        className="max-w-3xl sm:max-w-3xl max-h-[85vh] flex flex-col"
+        showCloseButton={false}
       >
         {/* Header */}
-        <div className="px-4 py-3 border-b border-border flex items-center gap-3 shrink-0">
+        <div className="flex items-center gap-3 shrink-0 -mt-4 -mx-4 px-4 py-3 border-b border-border">
           <div className="flex-1 min-w-0">
-            <h3 className="text-sm font-medium text-foreground truncate">
+            <DialogTitle className="text-sm font-medium text-foreground truncate">
               {pageName}
-            </h3>
+            </DialogTitle>
             {page?.file && (
               <div className="text-[10px] text-muted-foreground mt-0.5 opacity-60 truncate">
                 {page.file}
@@ -56,15 +58,14 @@ export function WikiViewer({ pageName, wikiId, onClose }: Props) {
           <button
             onClick={onClose}
             className="text-muted-foreground hover:text-foreground shrink-0 ml-1"
+            aria-label="Close"
           >
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-              <path d="M4 4l8 8M12 4l-8 8" />
-            </svg>
+            <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-4">
+        <div className="flex-1 overflow-y-auto min-h-0">
           {loading && (
             <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
               Loading wiki page...
@@ -83,7 +84,7 @@ export function WikiViewer({ pageName, wikiId, onClose }: Props) {
             </div>
           )}
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

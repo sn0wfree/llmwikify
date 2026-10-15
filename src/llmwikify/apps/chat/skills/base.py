@@ -201,9 +201,7 @@ class SkillAction:
 
     def __post_init__(self) -> None:
         if self.handler is None:
-            raise ValueError(
-                f"SkillAction {self.name!r} requires a handler"
-            )
+            raise ValueError(f"SkillAction {self.name!r} requires a handler")
         if self.action_type not in ("read", "write"):
             raise ValueError(
                 f"SkillAction {self.name!r}: action_type must be "
@@ -285,13 +283,9 @@ class Skill(ABC):  # noqa: B024
 
     def __init__(self) -> None:
         if not self.name:
-            raise ValueError(
-                f"{type(self).__name__} must set class attribute 'name'"
-            )
+            raise ValueError(f"{type(self).__name__} must set class attribute 'name'")
         if not self.actions:
-            raise ValueError(
-                f"{self.name!r} skill must declare at least one action"
-            )
+            raise ValueError(f"{self.name!r} skill must declare at least one action")
         # Fill in action.name from the dict key if not set
         # explicitly. This means most skills just write
         # ``actions = {"search": SkillAction(handler=..., ...)}``

@@ -16,7 +16,6 @@ mode for full link metadata, section-level references with
 - Detail mode shows nothing: wiki has no pages yet
 """
 
-
 import subprocess
 
 

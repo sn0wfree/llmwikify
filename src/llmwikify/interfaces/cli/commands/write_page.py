@@ -67,7 +67,8 @@ class WritePageCommand(Command):
         p = subparsers.add_parser(self.name, help=self.help)
         p.add_argument("name", help="Page name")
         p.add_argument(
-            "--type", "-t",
+            "--type",
+            "-t",
             help="Page type from wiki.md Page Types table (e.g., concept, model, source)",
         )
         p.add_argument("--file", "-f", help="Read content from file")

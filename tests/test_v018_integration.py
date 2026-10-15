@@ -7,6 +7,9 @@ import pytest
 from llmwikify.kernel.wiki.prompt_registry import PromptRegistry
 from llmwikify.kernel.wiki.wiki import Wiki
 
+# 本文件全部用例直连真实 LLM (本机 Ollama / OpenAI), 默认跳过 (CI 无 LLM):
+pytestmark = pytest.mark.llm
+
 
 class TestWikiContextMethods:
     """Tests for Wiki's context injection methods."""
@@ -24,7 +27,9 @@ class TestWikiContextMethods:
 
     def test_get_index_summary_short(self, initialized_wiki):
         wiki = initialized_wiki
-        wiki.index_file.write_text("# Wiki Index\n\n- Page 1: Summary one\n- Page 2: Summary two\n")
+        wiki.index_file.write_text(
+            "# Wiki Index\n\n- Page 1: Summary one\n- Page 2: Summary two\n"
+        )
 
         result = wiki._get_index_summary()
 
@@ -49,7 +54,9 @@ class TestWikiContextMethods:
 
     def test_get_recent_log_limited(self, initialized_wiki):
         wiki = initialized_wiki
-        lines = "\n".join(f"## [2026-04-{i:02d}] ingest | Source {i}" for i in range(1, 11))
+        lines = "\n".join(
+            f"## [2026-04-{i:02d}] ingest | Source {i}" for i in range(1, 11)
+        )
         wiki.log_file.write_text(lines)
 
         result = wiki._get_recent_log(limit=3)
@@ -61,7 +68,9 @@ class TestWikiContextMethods:
 
     def test_get_recent_log_default_limit(self, initialized_wiki):
         wiki = initialized_wiki
-        lines = "\n".join(f"## [2026-04-{i:02d}] ingest | Source {i}" for i in range(1, 8))
+        lines = "\n".join(
+            f"## [2026-04-{i:02d}] ingest | Source {i}" for i in range(1, 8)
+        )
         wiki.log_file.write_text(lines)
 
         result = wiki._get_recent_log()
@@ -106,15 +115,22 @@ class TestLLMRetryMechanism:
         wiki = Wiki(tmp_path)
         wiki.init()
         wiki.config["llm"] = {
-            "enabled": True, "provider": "openai", "model": "gpt-4",
-            "base_url": "http://localhost:11434", "api_key": "test", "timeout": 120,
+            "enabled": True,
+            "provider": "openai",
+            "model": "gpt-4",
+            "base_url": "http://localhost:11434",
+            "api_key": "test",
+            "timeout": 120,
             "prompt_chaining": {"ingest": False},
         }
         return wiki
 
     def test_call_llm_with_retry_success_first(self, temp_wiki):
         wiki = temp_wiki
-        messages = [{"role": "system", "content": "test"}, {"role": "user", "content": "test"}]
+        messages = [
+            {"role": "system", "content": "test"},
+            {"role": "user", "content": "test"},
+        ]
         params = {"temperature": 0.1}
 
         with patch("llmwikify.foundation.llm_client.LLMClient") as MockClient:
@@ -140,7 +156,10 @@ class TestLLMRetryMechanism:
 
     def test_call_llm_with_retry_success_second(self, temp_wiki):
         wiki = temp_wiki
-        messages = [{"role": "system", "content": "test"}, {"role": "user", "content": "test"}]
+        messages = [
+            {"role": "system", "content": "test"},
+            {"role": "user", "content": "test"},
+        ]
         params = {"temperature": 0.1}
 
         call_count = 0
@@ -175,7 +194,10 @@ class TestLLMRetryMechanism:
 
     def test_call_llm_with_retry_exhausted(self, temp_wiki):
         wiki = temp_wiki
-        messages = [{"role": "system", "content": "test"}, {"role": "user", "content": "test"}]
+        messages = [
+            {"role": "system", "content": "test"},
+            {"role": "user", "content": "test"},
+        ]
         params = {"temperature": 0.1}
 
         with patch("llmwikify.foundation.llm_client.LLMClient") as MockClient:
@@ -188,7 +210,10 @@ class TestLLMRetryMechanism:
 
     def test_call_llm_with_retry_connection_error(self, temp_wiki):
         wiki = temp_wiki
-        messages = [{"role": "system", "content": "test"}, {"role": "user", "content": "test"}]
+        messages = [
+            {"role": "system", "content": "test"},
+            {"role": "user", "content": "test"},
+        ]
         params = {"temperature": 0.1}
 
         call_count = 0
@@ -223,7 +248,10 @@ class TestLLMRetryMechanism:
 
     def test_retry_messages_include_errors(self, temp_wiki):
         wiki = temp_wiki
-        messages = [{"role": "system", "content": "test"}, {"role": "user", "content": "test"}]
+        messages = [
+            {"role": "system", "content": "test"},
+            {"role": "user", "content": "test"},
+        ]
         params = {"temperature": 0.1}
 
         captured_messages = []
@@ -265,14 +293,23 @@ class TestChainingMode:
         wiki = Wiki(tmp_path)
         wiki.init()
         wiki.config["llm"] = {
-            "enabled": True, "provider": "openai", "model": "gpt-4",
-            "base_url": "http://localhost:11434", "api_key": "test", "timeout": 120,
+            "enabled": True,
+            "provider": "openai",
+            "model": "gpt-4",
+            "base_url": "http://localhost:11434",
+            "api_key": "test",
+            "timeout": 120,
         }
         return wiki
 
     def test_llm_process_source_uses_chained_mode(self, temp_wiki):
         wiki = temp_wiki
-        source_data = {"content": "Test content", "title": "Test", "source_type": "markdown", "current_index": ""}
+        source_data = {
+            "content": "Test content",
+            "title": "Test",
+            "source_type": "markdown",
+            "current_index": "",
+        }
 
         captured_messages = []
         analysis_result = {
@@ -317,7 +354,12 @@ class TestChainingMode:
     def test_chained_mode_with_context_injection(self, temp_wiki):
         wiki = temp_wiki
         (wiki.wiki_dir / "Existing.md").write_text("# Existing")
-        source_data = {"content": "Test content", "title": "Test", "source_type": "markdown", "current_index": ""}
+        source_data = {
+            "content": "Test content",
+            "title": "Test",
+            "source_type": "markdown",
+            "current_index": "",
+        }
 
         captured_messages = []
         analysis_result = {
@@ -367,28 +409,49 @@ class TestValidationIntegration:
         wiki = Wiki(tmp_path)
         wiki.init()
         wiki.config["llm"] = {
-            "enabled": True, "provider": "openai", "model": "gpt-4",
-            "base_url": "http://localhost:11434", "api_key": "test", "timeout": 120,
+            "enabled": True,
+            "provider": "openai",
+            "model": "gpt-4",
+            "base_url": "http://localhost:11434",
+            "api_key": "test",
+            "timeout": 120,
         }
         return wiki
 
     def test_analysis_validation_failure(self, temp_wiki):
         wiki = temp_wiki
-        source_data = {"content": "Test", "title": "Test", "source_type": "markdown", "current_index": ""}
+        source_data = {
+            "content": "Test",
+            "title": "Test",
+            "source_type": "markdown",
+            "current_index": "",
+        }
 
         with patch("llmwikify.foundation.llm_client.LLMClient") as MockClient:
             mock_instance = MagicMock()
             mock_instance.chat_json.return_value = {"missing": "required_keys"}
             MockClient.from_config.return_value = mock_instance
 
-            with pytest.raises(ValueError, match="Analysis validation failed|failed after 2 attempts"):
+            with pytest.raises(
+                ValueError, match="Analysis validation failed|failed after 2 attempts"
+            ):
                 wiki._llm_process_source(source_data)
 
     def test_operations_validation_failure(self, temp_wiki):
         wiki = temp_wiki
-        source_data = {"content": "Test", "title": "Test", "source_type": "markdown", "current_index": ""}
+        source_data = {
+            "content": "Test",
+            "title": "Test",
+            "source_type": "markdown",
+            "current_index": "",
+        }
 
-        analysis_result = {"topics": ["AI"], "entities": [], "key_facts": [], "suggested_pages": []}
+        analysis_result = {
+            "topics": ["AI"],
+            "entities": [],
+            "key_facts": [],
+            "suggested_pages": [],
+        }
 
         call_count = 0
 
@@ -404,7 +467,9 @@ class TestValidationIntegration:
             mock_instance.chat_json.side_effect = side_effect
             MockClient.from_config.return_value = mock_instance
 
-            with pytest.raises(ValueError, match="Operations validation failed|failed after 2 attempts"):
+            with pytest.raises(
+                ValueError, match="Operations validation failed|failed after 2 attempts"
+            ):
                 wiki._llm_process_source(source_data)
 
 
@@ -415,10 +480,19 @@ class TestConfiguration:
         wiki = Wiki(tmp_path)
         wiki.init()
         wiki.config["llm"] = {
-            "enabled": True, "provider": "openai", "model": "gpt-4",
-            "base_url": "http://localhost:11434", "api_key": "test", "timeout": 120,
+            "enabled": True,
+            "provider": "openai",
+            "model": "gpt-4",
+            "base_url": "http://localhost:11434",
+            "api_key": "test",
+            "timeout": 120,
         }
-        source_data = {"content": "Test", "title": "Test", "source_type": "md", "current_index": ""}
+        source_data = {
+            "content": "Test",
+            "title": "Test",
+            "source_type": "md",
+            "current_index": "",
+        }
 
         call_count = 0
 
@@ -460,14 +534,18 @@ class TestProviderRendering:
 
     def test_ollama_provider_in_messages(self):
         registry = PromptRegistry(provider="ollama")
-        messages = registry.get_messages("analyze_source", title="Test", content="content", current_index="")
+        messages = registry.get_messages(
+            "analyze_source", title="Test", content="content", current_index=""
+        )
 
         system_content = messages[0]["content"]
         assert "Output ONLY valid JSON" in system_content
 
     def test_openai_provider_no_ollama_instruction(self):
         registry = PromptRegistry(provider="openai")
-        messages = registry.get_messages("analyze_source", title="Test", content="content", current_index="")
+        messages = registry.get_messages(
+            "analyze_source", title="Test", content="content", current_index=""
+        )
 
         system_content = messages[0]["content"]
         assert "Output ONLY valid JSON" not in system_content
@@ -481,21 +559,33 @@ class TestFullIngestFlow:
         wiki = Wiki(tmp_path)
         wiki.init()
         wiki.config["llm"] = {
-            "enabled": True, "provider": "openai", "model": "gpt-4",
-            "base_url": "http://localhost:11434", "api_key": "test", "timeout": 120,
+            "enabled": True,
+            "provider": "openai",
+            "model": "gpt-4",
+            "base_url": "http://localhost:11434",
+            "api_key": "test",
+            "timeout": 120,
         }
         return wiki
 
     def test_full_ingest_flow(self, temp_wiki):
         wiki = temp_wiki
         source_file = wiki.raw_dir / "test_article.md"
-        source_file.write_text("# Test Article\n\nThis is a test article about AI.\n\n## Key Points\n- AI is transformative\n- Machine learning is important\n")
+        source_file.write_text(
+            "# Test Article\n\nThis is a test article about AI.\n\n## Key Points\n- AI is transformative\n- Machine learning is important\n"
+        )
 
         analysis_result = {
             "topics": ["AI"],
             "entities": [],
             "key_facts": ["AI is transformative"],
-            "suggested_pages": [{"name": "Artificial Intelligence", "summary": "About AI", "priority": "high"}],
+            "suggested_pages": [
+                {
+                    "name": "Artificial Intelligence",
+                    "summary": "About AI",
+                    "priority": "high",
+                }
+            ],
             "cross_refs": [],
             "content_type": "technical_article",
             "quality_assessment": {
@@ -507,9 +597,21 @@ class TestFullIngestFlow:
         }
 
         operations_data = [
-            {"action": "write_page", "page_name": "Artificial Intelligence", "content": "# Artificial Intelligence\n\nTransformative.\n\nSee also: [[Machine Learning]]"},
-            {"action": "write_page", "page_name": "Machine Learning", "content": "# Machine Learning\n\nImportant field."},
-            {"action": "log", "operation": "ingest", "details": "Ingested test_article.md, created 2 pages"},
+            {
+                "action": "write_page",
+                "page_name": "Artificial Intelligence",
+                "content": "# Artificial Intelligence\n\nTransformative.\n\nSee also: [[Machine Learning]]",
+            },
+            {
+                "action": "write_page",
+                "page_name": "Machine Learning",
+                "content": "# Machine Learning\n\nImportant field.",
+            },
+            {
+                "action": "log",
+                "operation": "ingest",
+                "details": "Ingested test_article.md, created 2 pages",
+            },
         ]
 
         call_count = 0
@@ -551,7 +653,13 @@ class TestFullIngestFlow:
             "topics": ["AI"],
             "entities": [{"name": "AI", "type": "concept", "attributes": {}}],
             "key_facts": ["AI is transformative"],
-            "suggested_pages": [{"name": "Artificial Intelligence", "summary": "About AI", "priority": "high"}],
+            "suggested_pages": [
+                {
+                    "name": "Artificial Intelligence",
+                    "summary": "About AI",
+                    "priority": "high",
+                }
+            ],
             "cross_refs": [],
             "content_type": "technical_article",
             "quality_assessment": {
@@ -563,8 +671,16 @@ class TestFullIngestFlow:
         }
 
         operations_data = [
-            {"action": "write_page", "page_name": "Artificial Intelligence", "content": "# Artificial Intelligence\n\nTransformative."},
-            {"action": "log", "operation": "ingest", "details": "Ingested test_article.md"},
+            {
+                "action": "write_page",
+                "page_name": "Artificial Intelligence",
+                "content": "# Artificial Intelligence\n\nTransformative.",
+            },
+            {
+                "action": "log",
+                "operation": "ingest",
+                "details": "Ingested test_article.md",
+            },
         ]
 
         call_count = 0

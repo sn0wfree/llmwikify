@@ -3,6 +3,7 @@
 C1: extracted from `reproduction/codegen/feedback_templates.py`. Pure
 string constant — no imports beyond `__future__`. No external deps.
 """
+
 from __future__ import annotations
 
 OBSERVE_FEEDBACK_TEMPLATE = """[ReAct OBSERVE] Your previous code failed at stage: {stage}

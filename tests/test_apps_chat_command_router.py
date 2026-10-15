@@ -12,7 +12,6 @@ Covers:
 from __future__ import annotations
 
 import asyncio
-from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
@@ -237,10 +236,13 @@ class TestHandlerReturnShapes:
     @pytest.mark.asyncio
     async def test_handler_returns_list(self):
         r = CommandRouter()
-        r.exact("/multi", lambda ctx: [
-            {"type": "ev1"},
-            {"type": "ev2"},
-        ])
+        r.exact(
+            "/multi",
+            lambda ctx: [
+                {"type": "ev1"},
+                {"type": "ev2"},
+            ],
+        )
         ctx = _ctx("/multi")
         result = await r.dispatch(ctx)
         assert result == [{"type": "ev1"}, {"type": "ev2"}]

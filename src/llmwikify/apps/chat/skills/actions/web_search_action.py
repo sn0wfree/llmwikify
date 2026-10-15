@@ -104,7 +104,10 @@ async def _search_youtube(args: dict[str, Any], ctx: SkillContext) -> SkillResul
         return num_results
 
     return await _do_search(
-        f"site:youtube.com {query}", num_results, ctx, prefix="youtube",
+        f"site:youtube.com {query}",
+        num_results,
+        ctx,
+        prefix="youtube",
     )
 
 
@@ -132,7 +135,10 @@ async def _search_news(args: dict[str, Any], ctx: SkillContext) -> SkillResult:
         return num_results
 
     return await _do_search(
-        f"site:news.google.com {query}", num_results, ctx, prefix="news",
+        f"site:news.google.com {query}",
+        num_results,
+        ctx,
+        prefix="news",
     )
 
 
@@ -178,20 +184,21 @@ async def _do_search(
     except Exception as e:
         logger.warning(
             "web_search failed (prefix=%s, query=%r): %s",
-            prefix, query[:60], e,
+            prefix,
+            query[:60],
+            e,
         )
         return SkillResult.fail(f"web_search failed: {e!r}")
 
-    payload = [
-        {"title": r.title, "url": r.url, "snippet": r.snippet}
-        for r in results
-    ]
-    return SkillResult.ok({
-        "results": payload,
-        "count": len(payload),
-        "query": query,
-        "source_prefix": prefix or "web",
-    })
+    payload = [{"title": r.title, "url": r.url, "snippet": r.snippet} for r in results]
+    return SkillResult.ok(
+        {
+            "results": payload,
+            "count": len(payload),
+            "query": query,
+            "source_prefix": prefix or "web",
+        }
+    )
 
 
 # ─── Skill declaration ──────────────────────────────────────────

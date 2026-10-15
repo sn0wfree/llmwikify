@@ -27,30 +27,15 @@ import pytest
 from llmwikify.apps.chat.skills import (
     SkillContext,
     SkillRegistry,
-    SkillResult,
     SkillRuntime,
 )
 from llmwikify.apps.chat.skills.actions import (
     ALL_ACTIONS,
     ALL_DETECT_SKILLS,
-    analyze_skill,
     clarify_skill,
-    extract_skill,
-    filter_skill,
-    graph_skill,
-    lint_skill,
-    observe_skill,
-    plan_skill,
-    read_skill,
-    reason_skill,
     register_all_actions,
-    revise_skill,
-    score_skill,
-    search_skill,
-    summarize_skill,
     unregister_all_actions,
     web_search_skill,
-    write_skill,
 )
 from llmwikify.apps.chat.skills.actions.clarify_action import _clarify_fallback
 from llmwikify.apps.chat.skills.actions.detect import (
@@ -113,6 +98,7 @@ class TestInventory:
     def test_web_fetch_in_inventory(self) -> None:
         """v0.41: web_fetch_skill is the 25th base skill."""
         from llmwikify.apps.chat.skills.actions import web_fetch_skill
+
         assert web_fetch_skill in ALL_ACTIONS
 
     def test_all_action_names_unique(self) -> None:
@@ -133,11 +119,11 @@ class TestInventory:
         assert n == 25
         assert len(populated_registry) == 0
 
-    def test_all_skills_have_unique_qualified_actions(self, populated_registry: SkillRegistry) -> None:
+    def test_all_skills_have_unique_qualified_actions(
+        self, populated_registry: SkillRegistry
+    ) -> None:
         qualified = [
-            f"{s.name}.{a.name}"
-            for s in populated_registry
-            for a in s.actions.values()
+            f"{s.name}.{a.name}" for s in populated_registry for a in s.actions.values()
         ]
         # 23 single-action skills + web_search (3 actions) + web_fetch (1 action) = 27 actions
         assert len(qualified) == 27
@@ -151,7 +137,9 @@ class TestBaseActionNoWiki:
     """All wiki-bound actions must gracefully fail when ctx.wiki is None."""
 
     @pytest.mark.asyncio
-    async def test_search_no_wiki(self, runtime: SkillRuntime, ctx: SkillContext) -> None:
+    async def test_search_no_wiki(
+        self, runtime: SkillRuntime, ctx: SkillContext
+    ) -> None:
         r = await runtime.execute("search", "search", {"query": "x"}, ctx)
         assert r.status == "error"
         assert "wiki" in r.error.lower()
@@ -162,8 +150,12 @@ class TestBaseActionNoWiki:
         assert r.status == "error"
 
     @pytest.mark.asyncio
-    async def test_write_no_wiki(self, runtime: SkillRuntime, ctx: SkillContext) -> None:
-        r = await runtime.execute("write", "write", {"page_name": "x", "content": "y"}, ctx)
+    async def test_write_no_wiki(
+        self, runtime: SkillRuntime, ctx: SkillContext
+    ) -> None:
+        r = await runtime.execute(
+            "write", "write", {"page_name": "x", "content": "y"}, ctx
+        )
         assert r.status == "error"
 
     @pytest.mark.asyncio
@@ -172,12 +164,16 @@ class TestBaseActionNoWiki:
         assert r.status == "error"
 
     @pytest.mark.asyncio
-    async def test_analyze_no_wiki(self, runtime: SkillRuntime, ctx: SkillContext) -> None:
+    async def test_analyze_no_wiki(
+        self, runtime: SkillRuntime, ctx: SkillContext
+    ) -> None:
         r = await runtime.execute("analyze", "analyze", {"source_path": "x"}, ctx)
         assert r.status == "error"
 
     @pytest.mark.asyncio
-    async def test_graph_no_wiki(self, runtime: SkillRuntime, ctx: SkillContext) -> None:
+    async def test_graph_no_wiki(
+        self, runtime: SkillRuntime, ctx: SkillContext
+    ) -> None:
         r = await runtime.execute("graph", "graph", {}, ctx)
         assert r.status == "error"
 
@@ -187,7 +183,9 @@ class TestBaseActionNoWiki:
 
 class TestStandaloneActions:
     @pytest.mark.asyncio
-    async def test_clarify_minimal(self, runtime: SkillRuntime, ctx: SkillContext) -> None:
+    async def test_clarify_minimal(
+        self, runtime: SkillRuntime, ctx: SkillContext
+    ) -> None:
         r = await runtime.execute("clarify", "clarify", {"query": "What is X?"}, ctx)
         assert r.status == "ok"
         d = r.data
@@ -198,7 +196,9 @@ class TestStandaloneActions:
         assert d["_source"] == "rule_based_fallback"
 
     @pytest.mark.asyncio
-    async def test_clarify_missing_query(self, runtime: SkillRuntime, ctx: SkillContext) -> None:
+    async def test_clarify_missing_query(
+        self, runtime: SkillRuntime, ctx: SkillContext
+    ) -> None:
         r = await runtime.execute("clarify", "clarify", {}, ctx)
         assert r.status == "error"
         assert "query" in r.error.lower()
@@ -211,14 +211,19 @@ class TestStandaloneActions:
         assert "rationale" in r.data
 
     @pytest.mark.asyncio
-    async def test_plan_missing_query(self, runtime: SkillRuntime, ctx: SkillContext) -> None:
+    async def test_plan_missing_query(
+        self, runtime: SkillRuntime, ctx: SkillContext
+    ) -> None:
         r = await runtime.execute("plan", "plan", {}, ctx)
         assert r.status == "error"
 
     @pytest.mark.asyncio
-    async def test_summarize_minimal(self, runtime: SkillRuntime, ctx: SkillContext) -> None:
+    async def test_summarize_minimal(
+        self, runtime: SkillRuntime, ctx: SkillContext
+    ) -> None:
         r = await runtime.execute(
-            "summarize", "summarize",
+            "summarize",
+            "summarize",
             {"sources": [{"id": "s1", "content": "x"}]},
             ctx,
         )
@@ -227,12 +232,16 @@ class TestStandaloneActions:
         assert "narrative" in r.data
 
     @pytest.mark.asyncio
-    async def test_summarize_empty(self, runtime: SkillRuntime, ctx: SkillContext) -> None:
+    async def test_summarize_empty(
+        self, runtime: SkillRuntime, ctx: SkillContext
+    ) -> None:
         r = await runtime.execute("summarize", "summarize", {"sources": []}, ctx)
         assert r.status == "error"
 
     @pytest.mark.asyncio
-    async def test_score_short_text(self, runtime: SkillRuntime, ctx: SkillContext) -> None:
+    async def test_score_short_text(
+        self, runtime: SkillRuntime, ctx: SkillContext
+    ) -> None:
         r = await runtime.execute("score", "score", {"text": "hello"}, ctx)
         assert r.status == "ok"
         d = r.data
@@ -242,14 +251,18 @@ class TestStandaloneActions:
         assert "citations" in d["by_dimension"]
 
     @pytest.mark.asyncio
-    async def test_score_with_citations(self, runtime: SkillRuntime, ctx: SkillContext) -> None:
+    async def test_score_with_citations(
+        self, runtime: SkillRuntime, ctx: SkillContext
+    ) -> None:
         text = "## Section\n\n[[Source:abc-123]]\nSee http://example.com"
         r = await runtime.execute("score", "score", {"text": text}, ctx)
         assert r.status == "ok"
         assert r.data["by_dimension"]["citations"] >= 0.7
 
     @pytest.mark.asyncio
-    async def test_score_empty_text(self, runtime: SkillRuntime, ctx: SkillContext) -> None:
+    async def test_score_empty_text(
+        self, runtime: SkillRuntime, ctx: SkillContext
+    ) -> None:
         r = await runtime.execute("score", "score", {"text": ""}, ctx)
         assert r.status == "error"
 
@@ -258,7 +271,8 @@ class TestStandaloneActions:
         self, runtime: SkillRuntime, ctx: SkillContext
     ) -> None:
         r = await runtime.execute(
-            "revise", "revise",
+            "revise",
+            "revise",
             {"text": "raw text", "score": 0.3},
             ctx,
         )
@@ -272,7 +286,8 @@ class TestStandaloneActions:
         self, runtime: SkillRuntime, ctx: SkillContext
     ) -> None:
         r = await runtime.execute(
-            "revise", "revise",
+            "revise",
+            "revise",
             {"text": "good text", "score": 0.9},
             ctx,
         )
@@ -290,12 +305,15 @@ class TestFilterAction:
         self, runtime: SkillRuntime, ctx: SkillContext
     ) -> None:
         r = await runtime.execute(
-            "filter", "filter",
-            {"sources": [
-                {"url": "a", "score": 0.8},
-                {"url": "a", "score": 0.9},  # dup
-                {"url": "b", "score": 0.5},
-            ]},
+            "filter",
+            "filter",
+            {
+                "sources": [
+                    {"url": "a", "score": 0.8},
+                    {"url": "a", "score": 0.9},  # dup
+                    {"url": "b", "score": 0.5},
+                ]
+            },
             ctx,
         )
         assert r.status == "ok"
@@ -307,11 +325,15 @@ class TestFilterAction:
         self, runtime: SkillRuntime, ctx: SkillContext
     ) -> None:
         r = await runtime.execute(
-            "filter", "filter",
-            {"sources": [
-                {"url": "a", "score": 0.5},
-                {"url": "b", "score": 0.1},
-            ], "min_score": 0.3},
+            "filter",
+            "filter",
+            {
+                "sources": [
+                    {"url": "a", "score": 0.5},
+                    {"url": "b", "score": 0.1},
+                ],
+                "min_score": 0.3,
+            },
             ctx,
         )
         assert r.status == "ok"
@@ -324,7 +346,8 @@ class TestFilterAction:
         self, runtime: SkillRuntime, ctx: SkillContext
     ) -> None:
         r = await runtime.execute(
-            "filter", "filter",
+            "filter",
+            "filter",
             {"sources": [{"url": "a", "score": 0.2}]},
             ctx,
         )
@@ -362,49 +385,59 @@ class TestReasonAction:
         assert d["action"] == "gather"
 
     def test_state_with_sources_analyzes(self) -> None:
-        d = _rule_based_reason({
-            "sub_queries": [{"q": "x"}],
-            "sources": [{"url": "a"}],
-        })
+        d = _rule_based_reason(
+            {
+                "sub_queries": [{"q": "x"}],
+                "sources": [{"url": "a"}],
+            }
+        )
         assert d["action"] == "analyze"
 
     def test_state_with_analysis_synthesizes(self) -> None:
-        d = _rule_based_reason({
-            "sub_queries": [{"q": "x"}],
-            "sources": [{"url": "a"}],
-            "analysis": {"entities": []},
-        })
+        d = _rule_based_reason(
+            {
+                "sub_queries": [{"q": "x"}],
+                "sources": [{"url": "a"}],
+                "analysis": {"entities": []},
+            }
+        )
         assert d["action"] == "synthesize"
 
     def test_state_with_synthesis_reports(self) -> None:
-        d = _rule_based_reason({
-            "sub_queries": [{"q": "x"}],
-            "sources": [{"url": "a"}],
-            "analysis": {"entities": []},
-            "synthesis": {"claims": []},
-        })
+        d = _rule_based_reason(
+            {
+                "sub_queries": [{"q": "x"}],
+                "sources": [{"url": "a"}],
+                "analysis": {"entities": []},
+                "synthesis": {"claims": []},
+            }
+        )
         assert d["action"] == "report"
 
     def test_state_with_report_low_score_revis(self) -> None:
-        d = _rule_based_reason({
-            "sub_queries": [{"q": "x"}],
-            "sources": [{"url": "a"}],
-            "analysis": {"entities": []},
-            "synthesis": {"claims": []},
-            "report_md": "## report",
-            "score": 0.3,
-        })
+        d = _rule_based_reason(
+            {
+                "sub_queries": [{"q": "x"}],
+                "sources": [{"url": "a"}],
+                "analysis": {"entities": []},
+                "synthesis": {"claims": []},
+                "report_md": "## report",
+                "score": 0.3,
+            }
+        )
         assert d["action"] == "revise"
 
     def test_state_with_high_score_done(self) -> None:
-        d = _rule_based_reason({
-            "sub_queries": [{"q": "x"}],
-            "sources": [{"url": "a"}],
-            "analysis": {"entities": []},
-            "synthesis": {"claims": []},
-            "report_md": "## report",
-            "score": 0.9,
-        })
+        d = _rule_based_reason(
+            {
+                "sub_queries": [{"q": "x"}],
+                "sources": [{"url": "a"}],
+                "analysis": {"entities": []},
+                "synthesis": {"claims": []},
+                "report_md": "## report",
+                "score": 0.9,
+            }
+        )
         assert d["action"] == "done"
 
     @pytest.mark.asyncio
@@ -412,7 +445,8 @@ class TestReasonAction:
         self, runtime: SkillRuntime, ctx: SkillContext
     ) -> None:
         r = await runtime.execute(
-            "reason", "reason_research",
+            "reason",
+            "reason_research",
             {"state": {"sub_queries": [{"q": "x"}]}},
             ctx,
         )
@@ -429,38 +463,59 @@ class TestObserveAction:
         assert obs == []
 
     def test_source_type_counts(self) -> None:
-        obs = _observe_research_state({"sources": [
-            {"source_type": "web"}, {"source_type": "web"},
-            {"source_type": "wiki"},
-        ]})
+        obs = _observe_research_state(
+            {
+                "sources": [
+                    {"source_type": "web"},
+                    {"source_type": "web"},
+                    {"source_type": "wiki"},
+                ]
+            }
+        )
         assert any("web=2" in o and "wiki=1" in o for o in obs)
 
     def test_failed_sub_queries_warning(self) -> None:
-        obs = _observe_research_state({"sub_queries": [
-            {"q": "a", "status": "failed"},
-            {"q": "b", "status": "failed"},
-            {"q": "c", "status": "done"},
-        ]})
+        obs = _observe_research_state(
+            {
+                "sub_queries": [
+                    {"q": "a", "status": "failed"},
+                    {"q": "b", "status": "failed"},
+                    {"q": "c", "status": "done"},
+                ]
+            }
+        )
         assert any("2 sub-queries failed" in o for o in obs)
 
     def test_wiki_vs_web_ratio(self) -> None:
-        obs = _observe_research_state({"sources": [
-            {"source_type": "wiki"},
-            {"source_type": "wiki"},
-            {"source_type": "web"},
-        ]})
+        obs = _observe_research_state(
+            {
+                "sources": [
+                    {"source_type": "wiki"},
+                    {"source_type": "wiki"},
+                    {"source_type": "web"},
+                ]
+            }
+        )
         assert any("Local wiki: 2, Web: 1" in o for o in obs)
 
     def test_knowledge_gap_alert(self) -> None:
-        obs = _observe_research_state({"synthesis": {
-            "knowledge_gaps": ["g1", "g2", "g3", "g4", "g5"],
-        }})
+        obs = _observe_research_state(
+            {
+                "synthesis": {
+                    "knowledge_gaps": ["g1", "g2", "g3", "g4", "g5"],
+                }
+            }
+        )
         assert any("5 knowledge gaps" in o for o in obs)
 
     def test_no_gap_alert_for_few_gaps(self) -> None:
-        obs = _observe_research_state({"synthesis": {
-            "knowledge_gaps": ["g1", "g2"],
-        }})
+        obs = _observe_research_state(
+            {
+                "synthesis": {
+                    "knowledge_gaps": ["g1", "g2"],
+                }
+            }
+        )
         assert not any("knowledge gaps" in o for o in obs)
 
     @pytest.mark.asyncio
@@ -468,7 +523,8 @@ class TestObserveAction:
         self, runtime: SkillRuntime, ctx: SkillContext
     ) -> None:
         r = await runtime.execute(
-            "observe", "observe_research_state",
+            "observe",
+            "observe_research_state",
             {"state": {"sources": [{"source_type": "web"}]}},
             ctx,
         )
@@ -497,16 +553,19 @@ class TestDetectActions:
         assert action_name.startswith("detect_")
         assert not action_name.startswith("_")
 
-    @pytest.mark.parametrize("skill,method", [
-        (detect_knowledge_gaps_skill, "_detect_knowledge_gaps"),
-        (detect_data_gaps_skill, "_detect_data_gaps"),
-        (detect_outdated_pages_skill, "_detect_outdated_pages"),
-        (detect_dated_claims_skill, "_detect_dated_claims"),
-        (detect_query_page_overlap_skill, "_detect_query_page_overlap"),
-        (detect_missing_cross_refs_skill, "_detect_missing_cross_refs"),
-        (detect_potential_contradictions_skill, "_detect_potential_contradictions"),
-        (detect_redundancy_skill, "_detect_redundancy"),
-    ])
+    @pytest.mark.parametrize(
+        "skill,method",
+        [
+            (detect_knowledge_gaps_skill, "_detect_knowledge_gaps"),
+            (detect_data_gaps_skill, "_detect_data_gaps"),
+            (detect_outdated_pages_skill, "_detect_outdated_pages"),
+            (detect_dated_claims_skill, "_detect_dated_claims"),
+            (detect_query_page_overlap_skill, "_detect_query_page_overlap"),
+            (detect_missing_cross_refs_skill, "_detect_missing_cross_refs"),
+            (detect_potential_contradictions_skill, "_detect_potential_contradictions"),
+            (detect_redundancy_skill, "_detect_redundancy"),
+        ],
+    )
     @pytest.mark.asyncio
     async def test_detect_action_invocation_no_wiki(
         self, runtime: SkillRuntime, ctx: SkillContext, skill, method
@@ -521,7 +580,10 @@ class TestDetectActions:
         self, runtime: SkillRuntime, ctx: SkillContext
     ) -> None:
         r = await runtime.execute(
-            "detect_knowledge_gaps", "detect_knowledge_gaps", {}, ctx,
+            "detect_knowledge_gaps",
+            "detect_knowledge_gaps",
+            {},
+            ctx,
         )
         assert r.status == "error"
         assert "_detect_knowledge_gaps" in r.error or "wiki" in r.error.lower()
@@ -540,7 +602,10 @@ class TestDetectActions:
 
         ctx = SkillContext(wiki=MockWiki())
         r = await rt.execute(
-            "detect_knowledge_gaps", "detect_knowledge_gaps", {}, ctx,
+            "detect_knowledge_gaps",
+            "detect_knowledge_gaps",
+            {},
+            ctx,
         )
         assert r.status == "ok"
         assert r.data == {"findings": [{"page": "foo", "gap": "missing entity X"}]}
@@ -557,7 +622,10 @@ class TestDetectActions:
 
         ctx = SkillContext(wiki=BareWiki())
         r = await rt.execute(
-            "detect_knowledge_gaps", "detect_knowledge_gaps", {}, ctx,
+            "detect_knowledge_gaps",
+            "detect_knowledge_gaps",
+            {},
+            ctx,
         )
         assert r.status == "error"
         assert "_detect_knowledge_gaps" in r.error
@@ -575,7 +643,10 @@ class TestDetectActions:
 
         ctx = SkillContext(wiki=BrokenWiki())
         r = await rt.execute(
-            "detect_knowledge_gaps", "detect_knowledge_gaps", {}, ctx,
+            "detect_knowledge_gaps",
+            "detect_knowledge_gaps",
+            {},
+            ctx,
         )
         assert r.status == "error"
         assert "analyzer offline" in r.error

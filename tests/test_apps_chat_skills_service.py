@@ -164,7 +164,7 @@ class TestSkillServiceWikiServiceInjection:
             def __init__(self):
                 self.config = {"wiki_id": "w1"}
 
-        svc = SkillService(wiki_service=None)
+        _svc = SkillService(wiki_service=None)
         ctx = _FakeCtx()
         assert "wiki_dream_editor" not in ctx.config
         assert "notification_manager" not in ctx.config

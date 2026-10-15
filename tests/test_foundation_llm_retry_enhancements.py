@@ -3,6 +3,7 @@
 - Retry-After header parsing (and cap at max_seconds)
 - RetryMetrics collection (success rate, retry count distribution)
 """
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
@@ -17,7 +18,6 @@ from llmwikify.foundation.llm.streamable import (
     _compute_backoff,
     _extract_retry_after,
     _parse_retry_after,
-    _post_with_retry_sync,
     get_retry_metrics,
     reset_retry_metrics,
 )
@@ -55,9 +55,7 @@ class TestRetryConfigFromEnv:
         assert cfg.backoff_jitter == 1.0
         assert cfg.retry_after_max_seconds == 30.0
 
-    def test_invalid_env_values_fall_back_to_defaults(
-        self, monkeypatch, caplog
-    ):
+    def test_invalid_env_values_fall_back_to_defaults(self, monkeypatch, caplog):
         monkeypatch.setenv("LLM_RETRY_BACKOFF_BASE", "not-a-number")
         monkeypatch.setenv("LLM_RETRY_MAX_RETRIES", "abc")
         cfg = RetryConfig.from_env()
@@ -77,9 +75,7 @@ class TestRetryConfigFromEnv:
 
     def test_backoff_uses_config_values(self):
         """Custom config values produce different backoff times."""
-        cfg = RetryConfig(
-            backoff_base=3.0, backoff_factor=2.0, backoff_jitter=0.0
-        )
+        cfg = RetryConfig(backoff_base=3.0, backoff_factor=2.0, backoff_jitter=0.0)
         b0 = _compute_backoff(0, cfg)
         b1 = _compute_backoff(1, cfg)
         b2 = _compute_backoff(2, cfg)
@@ -146,9 +142,7 @@ class TestExtractRetryAfter:
 
 
 class TestRetryAfterInLoop:
-    def test_429_with_retry_after_waits_per_header(
-        self, monkeypatch
-    ):
+    def test_429_with_retry_after_waits_per_header(self, monkeypatch):
         """When a 429 includes Retry-After, the wait uses the header value."""
         client = _make_client()
         # Use a header that says wait 0.1s so the test is fast
@@ -293,7 +287,8 @@ class TestMetricsIntegration:
         reset_retry_metrics()
         client = _make_client()
         with patch(
-            "httpx.Client.stream", return_value=_stream_ctx(_ok_response("hi")),
+            "httpx.Client.stream",
+            return_value=_stream_ctx(_ok_response("hi")),
         ):
             client.chat([{"role": "user", "content": "hi"}])
         m = get_retry_metrics()

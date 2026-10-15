@@ -58,9 +58,9 @@ class WikiInstance:
             "status": self.status.value,
             "page_count": self.page_count,
             "is_default": self.is_default,
-            "last_accessed": self.last_accessed.isoformat()
-            if self.last_accessed
-            else None,
+            "last_accessed": (
+                self.last_accessed.isoformat() if self.last_accessed else None
+            ),
             "error": self.error,
         }
 

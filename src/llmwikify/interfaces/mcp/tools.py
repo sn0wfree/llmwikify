@@ -52,7 +52,9 @@ def register_wiki_tools(mcp: FastMCP, wiki: Wiki) -> None:
             limit: Maximum number of results (default: 10)
             backend: Search backend - "fts5" (fast, default) or "qmd" (semantic)
         """
-        return json.dumps(wiki.search(query, limit, backend=backend), ensure_ascii=False, indent=2)
+        return json.dumps(
+            wiki.search(query, limit, backend=backend), ensure_ascii=False, indent=2
+        )
 
     @mcp.tool
     def wiki_lint(
@@ -72,20 +74,32 @@ def register_wiki_tools(mcp: FastMCP, wiki: Wiki) -> None:
             force: Force re-detection (ignore cache).
         """
         result = wiki.lint(
-            mode=mode, limit=limit, force=force,
+            mode=mode,
+            limit=limit,
+            force=force,
             generate_investigations=generate_investigations,
         )
         if format == "brief":
-            return json.dumps({
-                "hints": result.get("hints", {}),
-                "issue_count": result.get("issue_count", 0),
-                "total_pages": result.get("total_pages", 0),
-            }, ensure_ascii=False, indent=2)
+            return json.dumps(
+                {
+                    "hints": result.get("hints", {}),
+                    "issue_count": result.get("issue_count", 0),
+                    "total_pages": result.get("total_pages", 0),
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
         elif format == "recommendations":
-            return json.dumps({
-                "missing_pages": result.get("investigations", {}).get("missing_pages", []),
-                "orphan_pages": result.get("issues", []),
-            }, ensure_ascii=False, indent=2)
+            return json.dumps(
+                {
+                    "missing_pages": result.get("investigations", {}).get(
+                        "missing_pages", []
+                    ),
+                    "orphan_pages": result.get("issues", []),
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
         return json.dumps(result, ensure_ascii=False, indent=2)
 
     @mcp.tool
@@ -115,9 +129,13 @@ def register_wiki_tools(mcp: FastMCP, wiki: Wiki) -> None:
         """Show page references (inbound and outbound wikilinks)."""
         result = {"page": page_name, "inbound": [], "outbound": []}
         if not outbound:
-            result["inbound"] = wiki.get_inbound_links(page_name, include_context=detail)
+            result["inbound"] = wiki.get_inbound_links(
+                page_name, include_context=detail
+            )
         if not inbound:
-            result["outbound"] = wiki.get_outbound_links(page_name, include_context=detail)
+            result["outbound"] = wiki.get_outbound_links(
+                page_name, include_context=detail
+            )
         return json.dumps(result, ensure_ascii=False, indent=2)
 
     @mcp.tool
@@ -253,16 +271,19 @@ def register_multi_wiki_tools(mcp: FastMCP, registry: Any) -> None:
         mcp: FastMCP server instance
         registry: WikiRegistry instance
     """
-    from llmwikify.kernel.multi_wiki.instance import WikiType
 
     @mcp.tool
     def wiki_list() -> str:
         """List all registered wikis."""
         wikis = registry.list_wikis()
-        return json.dumps({
-            "wikis": [w.to_dict() for w in wikis],
-            "default_wiki_id": registry.get_default_wiki_id(),
-        }, ensure_ascii=False, indent=2)
+        return json.dumps(
+            {
+                "wikis": [w.to_dict() for w in wikis],
+                "default_wiki_id": registry.get_default_wiki_id(),
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
 
     @mcp.tool
     def wiki_switch(wiki_id: str) -> str:
@@ -273,10 +294,14 @@ def register_multi_wiki_tools(mcp: FastMCP, registry: Any) -> None:
         """
         try:
             instance = registry.get_wiki_instance(wiki_id)
-            return json.dumps({
-                "message": f"Switched to wiki: {instance.name}",
-                "wiki": instance.to_dict(),
-            }, ensure_ascii=False, indent=2)
+            return json.dumps(
+                {
+                    "message": f"Switched to wiki: {instance.name}",
+                    "wiki": instance.to_dict(),
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
         except KeyError:
             return json.dumps({"error": f"Wiki not found: {wiki_id}"})
 
@@ -319,10 +344,14 @@ def register_multi_wiki_tools(mcp: FastMCP, registry: Any) -> None:
                 root=Path(root),
             )
 
-        return json.dumps({
-            "message": f"Registered wiki: {wiki_id}",
-            "wiki": instance.to_dict(),
-        }, ensure_ascii=False, indent=2)
+        return json.dumps(
+            {
+                "message": f"Registered wiki: {wiki_id}",
+                "wiki": instance.to_dict(),
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
 
     @mcp.tool
     def wiki_unregister(wiki_id: str) -> str:
@@ -370,6 +399,7 @@ def register_multi_wiki_tools(mcp: FastMCP, registry: Any) -> None:
         if wiki_id:
             try:
                 from llmwikify.kernel.multi_wiki.instance import WikiType
+
                 instance = registry.get_wiki_instance(wiki_id)
                 if instance.wiki_type == WikiType.REMOTE:
                     client = registry._remote_clients.get(wiki_id)
@@ -389,7 +419,9 @@ def register_multi_wiki_tools(mcp: FastMCP, registry: Any) -> None:
             return json.dumps(results, ensure_ascii=False, indent=2)
 
     @mcp.tool
-    def wiki_search_cross(query: str, limit: int = 10, wiki_ids: str | None = None) -> str:
+    def wiki_search_cross(
+        query: str, limit: int = 10, wiki_ids: str | None = None
+    ) -> str:
         """Search across multiple wikis.
 
         Args:
@@ -399,11 +431,15 @@ def register_multi_wiki_tools(mcp: FastMCP, registry: Any) -> None:
         """
         ids = wiki_ids.split(",") if wiki_ids else None
         results = registry.cross_wiki_search(query, ids, limit)
-        return json.dumps({
-            "results": results,
-            "total_results": len(results),
-            "searched_wikis": ids or [w.wiki_id for w in registry.list_wikis()],
-        }, ensure_ascii=False, indent=2)
+        return json.dumps(
+            {
+                "results": results,
+                "total_results": len(results),
+                "searched_wikis": ids or [w.wiki_id for w in registry.list_wikis()],
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
 
     @mcp.tool
     def wiki_scan(scan_paths: str = ".", scan_depth: int = 2) -> str:
@@ -415,7 +451,11 @@ def register_multi_wiki_tools(mcp: FastMCP, registry: Any) -> None:
         """
         paths = [p.strip() for p in scan_paths.split(",")]
         new_wikis = registry.scan_directories(paths, scan_depth)
-        return json.dumps({
-            "new_wikis": [w.to_dict() for w in new_wikis],
-            "count": len(new_wikis),
-        }, ensure_ascii=False, indent=2)
+        return json.dumps(
+            {
+                "new_wikis": [w.to_dict() for w in new_wikis],
+                "count": len(new_wikis),
+            },
+            ensure_ascii=False,
+            indent=2,
+        )

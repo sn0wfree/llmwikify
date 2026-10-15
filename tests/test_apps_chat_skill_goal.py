@@ -47,10 +47,12 @@ def _ctx(chat_db, session_id: str) -> SkillContext:
 
 def test_start_long_task_persists_goal_state(chat_db, session_id) -> None:
     handler = goal_skill.actions["start_long_task"].handler
-    result = _run(handler(
-        {"goal": "Research X over 3 turns", "ui_summary": "Research X"},
-        _ctx(chat_db, session_id),
-    ))
+    result = _run(
+        handler(
+            {"goal": "Research X over 3 turns", "ui_summary": "Research X"},
+            _ctx(chat_db, session_id),
+        )
+    )
     assert result.status == "ok"
     assert result.data["registered"] is True
     metadata = chat_db.get_session_metadata(session_id)
@@ -69,7 +71,9 @@ def test_start_long_task_rejects_when_active(chat_db, session_id) -> None:
     assert result.status == "error"
     assert "active" in (result.error or "").lower()
     # Still has the original goal
-    blob = parse_goal_state(chat_db.get_session_metadata(session_id).get(GOAL_STATE_KEY))
+    blob = parse_goal_state(
+        chat_db.get_session_metadata(session_id).get(GOAL_STATE_KEY)
+    )
     assert blob["objective"] == "first"
 
 
@@ -88,7 +92,9 @@ def test_complete_goal_flips_status_and_records_recap(chat_db, session_id) -> No
     assert result.status == "ok"
     assert result.data["completed"] is True
     assert result.data["recap"] == "done with caveat"
-    blob = parse_goal_state(chat_db.get_session_metadata(session_id).get(GOAL_STATE_KEY))
+    blob = parse_goal_state(
+        chat_db.get_session_metadata(session_id).get(GOAL_STATE_KEY)
+    )
     assert blob["status"] == "completed"
     assert blob["completed_at"]
     assert blob["recap"] == "done with caveat"
@@ -119,7 +125,9 @@ def test_after_complete_a_new_long_task_can_be_started(chat_db, session_id) -> N
     _run(complete({"recap": "done"}, _ctx(chat_db, session_id)))
     result = _run(start({"goal": "second"}, _ctx(chat_db, session_id)))
     assert result.status == "ok"
-    blob = parse_goal_state(chat_db.get_session_metadata(session_id).get(GOAL_STATE_KEY))
+    blob = parse_goal_state(
+        chat_db.get_session_metadata(session_id).get(GOAL_STATE_KEY)
+    )
     assert blob["status"] == "active"
     assert blob["objective"] == "second"
 

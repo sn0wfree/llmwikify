@@ -75,13 +75,11 @@ def test_main_prints_command_error_message_with_error_icon():
             main()
         output = captured.getvalue()
         # The CommandError message is "Usage: ...neighbors <concept>"
-        assert "neighbors <concept>" in output, (
-            f"Expected error message in stdout, got: {output!r}"
-        )
+        assert (
+            "neighbors <concept>" in output
+        ), f"Expected error message in stdout, got: {output!r}"
         # print_error prefixes with ❌
-        assert "❌" in output, (
-            f"Expected ❌ prefix from print_error, got: {output!r}"
-        )
+        assert "❌" in output, f"Expected ❌ prefix from print_error, got: {output!r}"
     finally:
         sys.argv = saved_argv
 
@@ -228,8 +226,7 @@ def test_batch_no_longer_uses_file_sys_stderr_for_emoji():
                     if kw.arg == "file":
                         # Check the value
                         if isinstance(kw.value, ast.Attribute):
-                            if (kw.value.value.id == "sys"
-                                    and kw.value.attr == "stderr"):
+                            if kw.value.value.id == "sys" and kw.value.attr == "stderr":
                                 self.violations.append(
                                     f"line {node.lineno}: print(..., file=sys.stderr)"
                                 )
@@ -270,8 +267,7 @@ def test_ingest_no_longer_uses_file_sys_stderr_for_emoji():
                 for kw in node.keywords:
                     if kw.arg == "file":
                         if isinstance(kw.value, ast.Attribute):
-                            if (kw.value.value.id == "sys"
-                                    and kw.value.attr == "stderr"):
+                            if kw.value.value.id == "sys" and kw.value.attr == "stderr":
                                 self.violations.append(
                                     f"line {node.lineno}: print(..., file=sys.stderr)"
                                 )
@@ -327,7 +323,7 @@ def test_regression_no_direct_print_error_in_graph_query():
     # graph_query.py after Phase 3 #7.
     assert 'print("❌' not in src, (
         "graph_query.py should not contain direct "
-        "``print(\"❌`` patterns after Phase 3 #7. Use "
+        '``print("❌`` patterns after Phase 3 #7. Use '
         "CommandError instead — main() catches it and "
         "calls print_error."
     )

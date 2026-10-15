@@ -27,12 +27,11 @@ DEPRECATED: New code should use ``apps.research.db.ResearchDatabase``
 directly. These delegates are kept for back-compat with 91 production
 callers identified in the 2026-06-19 audit.
 """
+
 from __future__ import annotations
 
 import logging
 from typing import Any
-
-from llmwikify.apps.db_base import get_app_db_path
 
 logger = logging.getLogger(__name__)
 
@@ -44,14 +43,15 @@ class ResearchDelegate:
     1-line forwarders.
     """
 
-    def __init__(self, data_dir):
+    def __init__(self, data_dir) -> None:
         self._data_dir = data_dir
 
     @property
-    def _research(self):
+    def _research(self) -> Any:
         """Lazy ResearchDatabase instance."""
         if not hasattr(self, "_research_db"):
             from llmwikify.apps.research.db import ResearchDatabase
+
             self._research_db = ResearchDatabase(self._data_dir)
         return self._research_db
 
@@ -69,32 +69,47 @@ class ResearchDelegate:
         return self._research.list_research_sessions(wiki_id, limit)
 
     def update_research_status(
-        self, session_id: str, status: str,
-        step: str | None = None, iteration_round: int | None = None,
+        self,
+        session_id: str,
+        status: str,
+        step: str | None = None,
+        iteration_round: int | None = None,
         synthesis_json: str | None = None,
         review_json: str | None = None,
     ) -> None:
         return self._research.update_research_status(
-            session_id, status, step, iteration_round,
-            synthesis_json, review_json,
+            session_id,
+            status,
+            step,
+            iteration_round,
+            synthesis_json,
+            review_json,
         )
 
     def update_research_progress(
-        self, session_id: str, progress: float,
+        self,
+        session_id: str,
+        progress: float,
     ) -> None:
         return self._research.update_research_progress(session_id, progress)
 
     def persist_report(
-        self, session_id: str, result: str | None = None,
+        self,
+        session_id: str,
+        result: str | None = None,
     ) -> None:
         return self._research.persist_report(session_id, result)
 
     def finalize_research(
-        self, session_id: str, result: str | None = None,
+        self,
+        session_id: str,
+        result: str | None = None,
         wiki_page_name: str | None = None,
     ) -> None:
         return self._research.finalize_research(
-            session_id, result, wiki_page_name,
+            session_id,
+            result,
+            wiki_page_name,
         )
 
     def delete_research(self, session_id: str) -> bool:
@@ -103,19 +118,31 @@ class ResearchDelegate:
     # ─── Sub-queries ──────────────────────────────────────────
 
     def save_sub_query(
-        self, session_id: str, query: str, source_type: str,
+        self,
+        session_id: str,
+        query: str,
+        source_type: str,
         url: str | None = None,
     ) -> str:
         return self._research.save_sub_query(
-            session_id, query, source_type, url,
+            session_id,
+            query,
+            source_type,
+            url,
         )
 
     def update_sub_query(
-        self, sq_id: str, status: str,
-        result: dict | None = None, error: str | None = None,
+        self,
+        sq_id: str,
+        status: str,
+        result: dict | None = None,
+        error: str | None = None,
     ) -> None:
         return self._research.update_sub_query(
-            sq_id, status, result, error,
+            sq_id,
+            status,
+            result,
+            error,
         )
 
     def get_sub_queries(self, session_id: str) -> list[dict]:
@@ -127,13 +154,25 @@ class ResearchDelegate:
     # ─── Sources ──────────────────────────────────────────────
 
     def save_source(
-        self, session_id: str, sub_query_id: str, source_type: str,
-        url: str, title: str, content_length: int,
-        content_preview: str | None = None, content: str | None = None,
+        self,
+        session_id: str,
+        sub_query_id: str,
+        source_type: str,
+        url: str,
+        title: str,
+        content_length: int,
+        content_preview: str | None = None,
+        content: str | None = None,
     ) -> str:
         return self._research.save_source(
-            session_id, sub_query_id, source_type, url, title,
-            content_length, content_preview, content,
+            session_id,
+            sub_query_id,
+            source_type,
+            url,
+            title,
+            content_length,
+            content_preview,
+            content,
         )
 
     def update_source_analysis(self, source_id: str, analysis: dict) -> None:
@@ -151,7 +190,8 @@ class ResearchDelegate:
     # ─── 6-step framework fields ──────────────────────────────
 
     def update_six_step_fields(
-        self, session_id: str,
+        self,
+        session_id: str,
         clarification: dict | None = None,
         reasoning: dict | None = None,
         structure: dict | None = None,
@@ -160,8 +200,13 @@ class ResearchDelegate:
         evidence_scores: dict | None = None,
     ) -> None:
         return self._research.update_six_step_fields(
-            session_id, clarification, reasoning, structure,
-            self_loop_counts, self_loop_history, evidence_scores,
+            session_id,
+            clarification,
+            reasoning,
+            structure,
+            self_loop_counts,
+            self_loop_history,
+            evidence_scores,
         )
 
     def get_six_step_fields(self, session_id: str) -> dict[str, Any]:
@@ -176,10 +221,16 @@ class ResearchDelegate:
         return self._research.get_events(session_id)
 
     def get_events_since(
-        self, session_id: str, since_ts: float, *, limit: int = 500,
+        self,
+        session_id: str,
+        since_ts: float,
+        *,
+        limit: int = 500,
     ) -> list[dict]:
         return self._research.get_events_since(
-            session_id, since_ts, limit=limit,
+            session_id,
+            since_ts,
+            limit=limit,
         )
 
     # ─── Issue#5: events_json → autoresearch_events migration ─────
@@ -191,22 +242,36 @@ class ResearchDelegate:
         return self._research.list_sessions_with_unmigrated_events()
 
     def migrate_session_events_to_table(
-        self, session_id: str, *, base_ts: float | None = None,
+        self,
+        session_id: str,
+        *,
+        base_ts: float | None = None,
     ) -> int:
         return self._research.migrate_session_events_to_table(
-            session_id, base_ts=base_ts,
+            session_id,
+            base_ts=base_ts,
         )
 
     # ─── research_steps ──────────────────────────────────────
 
     def save_step(
-        self, session_id: str, step_num: int, action: str,
-        status: str = "pending", thought: str | None = None,
-        result: Any = None, duration_ms: int = 0,
+        self,
+        session_id: str,
+        step_num: int,
+        action: str,
+        status: str = "pending",
+        thought: str | None = None,
+        result: Any = None,
+        duration_ms: int = 0,
     ) -> None:
         return self._research.save_step(
-            session_id, step_num, action, status,
-            thought, result, duration_ms,
+            session_id,
+            step_num,
+            action,
+            status,
+            thought,
+            result,
+            duration_ms,
         )
 
     def get_step(self, session_id: str, step_num: int) -> dict | None:
@@ -219,21 +284,33 @@ class ResearchDelegate:
         return self._research.delete_steps(session_id)
 
     def update_step_status(
-        self, session_id: str, step_num: int, status: str,
+        self,
+        session_id: str,
+        step_num: int,
+        status: str,
     ) -> None:
         return self._research.update_step_status(
-            session_id, step_num, status,
+            session_id,
+            step_num,
+            status,
         )
 
     def save_research_state(
-        self, session_id: str, step_num: int, state: dict,
+        self,
+        session_id: str,
+        step_num: int,
+        state: dict,
     ) -> str:
         return self._research.save_research_state(
-            session_id, step_num, state,
+            session_id,
+            step_num,
+            state,
         )
 
     def load_research_state(
-        self, session_id: str, step_num: int,
+        self,
+        session_id: str,
+        step_num: int,
     ) -> dict | None:
         return self._research.load_research_state(session_id, step_num)
 

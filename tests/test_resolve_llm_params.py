@@ -9,8 +9,6 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-import pytest
-
 from llmwikify.apps.chat.engine_helpers import (
     DEFAULT_LLM_PARAMS,
     resolve_llm_params,
@@ -73,7 +71,9 @@ def test_safety_net_used_when_config_section_missing():
 
 def test_registry_provides_max_tokens():
     """Registry's max_tokens is used when config is absent."""
-    registry = _make_registry({"max_tokens": 8192, "temperature": 0.1, "json_mode": False})
+    registry = _make_registry(
+        {"max_tokens": 8192, "temperature": 0.1, "json_mode": False}
+    )
     result = resolve_llm_params(
         registry=registry, config=None, prompt_name="research_report"
     )
@@ -107,10 +107,16 @@ def test_registry_only_returns_recognized_params():
 
 def test_config_overrides_registry():
     """Caller config wins over registry."""
-    registry = _make_registry({"max_tokens": 1024, "temperature": 0.1, "json_mode": False})
+    registry = _make_registry(
+        {"max_tokens": 1024, "temperature": 0.1, "json_mode": False}
+    )
     config = {
         "llm_params": {
-            "research_plan": {"max_tokens": 7777, "temperature": 0.9, "json_mode": True},
+            "research_plan": {
+                "max_tokens": 7777,
+                "temperature": 0.9,
+                "json_mode": True,
+            },
         }
     }
     result = resolve_llm_params(
@@ -126,7 +132,9 @@ def test_config_overrides_registry():
 
 def test_config_partial_override_falls_back_to_registry():
     """Config sets only some params → others come from registry."""
-    registry = _make_registry({"max_tokens": 1024, "temperature": 0.1, "json_mode": True})
+    registry = _make_registry(
+        {"max_tokens": 1024, "temperature": 0.1, "json_mode": True}
+    )
     config = {"llm_params": {"research_plan": {"max_tokens": 999}}}
     result = resolve_llm_params(
         registry=registry,
@@ -149,11 +157,15 @@ def test_config_per_prompt_independence():
         }
     }
     plan = resolve_llm_params(
-        registry=registry, config=config, prompt_name="research_plan",
+        registry=registry,
+        config=config,
+        prompt_name="research_plan",
         config_section="llm_params",
     )
     report = resolve_llm_params(
-        registry=registry, config=config, prompt_name="research_report",
+        registry=registry,
+        config=config,
+        prompt_name="research_report",
         config_section="llm_params",
     )
     assert plan["max_tokens"] == 7777
@@ -170,7 +182,9 @@ def test_config_section_is_dict_with_unrelated_prompts_ignored():
         }
     }
     result = resolve_llm_params(
-        registry=registry, config=config, prompt_name="research_review",
+        registry=registry,
+        config=config,
+        prompt_name="research_review",
         config_section="llm_params",
     )
     assert result["max_tokens"] == 1024  # falls through to registry
@@ -178,7 +192,9 @@ def test_config_section_is_dict_with_unrelated_prompts_ignored():
 
 def test_config_empty_section_falls_back_to_registry():
     """config[config_section] exists but is empty → registry wins."""
-    registry = _make_registry({"max_tokens": 2048, "temperature": 0.2, "json_mode": True})
+    registry = _make_registry(
+        {"max_tokens": 2048, "temperature": 0.2, "json_mode": True}
+    )
     config = {"llm_params": {}}
     result = resolve_llm_params(
         registry=registry,
@@ -208,9 +224,7 @@ def test_registry_raises_keyerror_falls_back_gracefully():
     """KeyError from registry → use safety net."""
     registry = MagicMock()
     registry.get_api_params = MagicMock(side_effect=KeyError("k"))
-    result = resolve_llm_params(
-        registry=registry, config=None, prompt_name="x"
-    )
+    result = resolve_llm_params(registry=registry, config=None, prompt_name="x")
     assert result["temperature"] == DEFAULT_LLM_PARAMS["temperature"]
 
 
@@ -219,7 +233,10 @@ def test_config_section_none_skips_config_layer():
     registry = _make_registry({"max_tokens": 1024})
     config = {"llm_params": {"plan": {"max_tokens": 99999}}}
     result = resolve_llm_params(
-        registry=registry, config=config, prompt_name="research_plan", config_section=None
+        registry=registry,
+        config=config,
+        prompt_name="research_plan",
+        config_section=None,
     )
     assert result["max_tokens"] == 1024  # registry, not config
 
@@ -228,9 +245,7 @@ def test_prompt_name_empty_string_skips_registry():
     """prompt_name="" → registry not consulted."""
     registry = MagicMock()
     registry.get_api_params = MagicMock(return_value={"max_tokens": 1024})
-    result = resolve_llm_params(
-        registry=registry, config=None, prompt_name=""
-    )
+    result = resolve_llm_params(registry=registry, config=None, prompt_name="")
     registry.get_api_params.assert_not_called()
     assert result["max_tokens"] == DEFAULT_LLM_PARAMS["max_tokens"]
 

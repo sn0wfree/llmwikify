@@ -7,6 +7,7 @@ for shared I/O patterns extracted from across the codebase
 Initial version is a placeholder. Concrete utilities will be
 added as they are identified during subsequent batches.
 """
+
 from __future__ import annotations
 
 import json
@@ -41,7 +42,9 @@ def write_json(path: Path, data: Any, indent: int = 2) -> None:
         indent: JSON indentation level.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, indent=indent, ensure_ascii=False), encoding="utf-8")
+    path.write_text(
+        json.dumps(data, indent=indent, ensure_ascii=False), encoding="utf-8"
+    )
 
 
 def safe_read_text(path: Path, default: str = "") -> str:
@@ -71,3 +74,32 @@ def safe_write_text(path: Path, content: str) -> None:
     """
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content, encoding="utf-8")
+
+
+def read_yaml(path: Path, default: Any = None) -> Any:
+    """Read YAML from path, returning default if file doesn't exist.
+
+    Args:
+        path: Path to YAML file.
+        default: Value to return if file doesn't exist or is invalid.
+
+    Returns:
+        Parsed YAML value, or default.
+    """
+    if not path.exists():
+        return default
+    try:
+        import yaml
+
+        return yaml.safe_load(path.read_text(encoding="utf-8")) or default
+    except (ImportError, Exception):
+        return default
+
+
+__all__ = [
+    "read_json",
+    "write_json",
+    "safe_read_text",
+    "safe_write_text",
+    "read_yaml",
+]

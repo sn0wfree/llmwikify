@@ -1,9 +1,9 @@
 """Tests for unified/pipelines/codegen.py — CodegenReasoner + CodeActor。"""
+
 from __future__ import annotations
 
 import pytest
 
-from llmwikify.apps.chat.agent.unified.core import StepResult
 from llmwikify.apps.chat.agent.unified.pipelines.codegen import (
     CodeActor,
     CodegenReasoner,
@@ -88,34 +88,41 @@ async def test_code_actor_syntax_error():
     assert result.success is True
     act = result.output
     assert act.success is False
-    assert "SyntaxError" in (act.error or "") or "pipeline_error" in (act.error_kind or "")
+    assert "SyntaxError" in (act.error or "") or "pipeline_error" in (
+        act.error_kind or ""
+    )
     assert len(act.messages_to_inject) == 1
 
 
 @pytest.mark.asyncio
 async def test_code_actor_success():
     """Test with a valid compute_factor that returns a Series."""
+    # v0.40 quant 分离: 生成的因子代码 import QuantNodes, 该包已迁出本仓
+    # (可选依赖) — 未安装则跳过
+    pytest.importorskip("QuantNodes")
     import polars as pl
 
-    code = '''
+    code = """
 def compute_factor(df):
     return df.select(pl.col("close")).to_series()
-'''
+"""
     actor = CodeActor()
     response = ReasonResponse(code=code)
 
     # Create a small test DataFrame
-    df = pl.DataFrame({
-        "date": [20240101, 20240102, 20240103],
-        "code": ["A", "A", "A"],
-        "close": [10.0, 11.0, 12.0],
-        "open": [9.0, 10.0, 11.0],
-        "high": [11.0, 12.0, 13.0],
-        "low": [9.0, 10.0, 11.0],
-        "volume": [1000.0, 1100.0, 1200.0],
-        "returns": [0.0, 0.1, 0.09],
-        "vwap": [10.0, 11.0, 12.0],
-    })
+    df = pl.DataFrame(
+        {
+            "date": [20240101, 20240102, 20240103],
+            "code": ["A", "A", "A"],
+            "close": [10.0, 11.0, 12.0],
+            "open": [9.0, 10.0, 11.0],
+            "high": [11.0, 12.0, 13.0],
+            "low": [9.0, 10.0, 11.0],
+            "volume": [1000.0, 1100.0, 1200.0],
+            "returns": [0.0, 0.1, 0.09],
+            "vwap": [10.0, 11.0, 12.0],
+        }
+    )
     spec = CodegenSpec(messages=[], df=df)
     result = await actor.handle(response, spec, None)
     assert result.success is True

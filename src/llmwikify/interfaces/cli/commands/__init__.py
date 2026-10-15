@@ -25,6 +25,7 @@ from .batch import BatchCommand, run_batch
 from .build_index import BuildIndexCommand, run_build_index
 from .community_detect import CommunityDetectCommand, run_community_detect
 from .db import DbCommand, run_db
+from .dict_cmd import DictCommand
 from .doctor_cmd import DoctorCommand, run_doctor
 from .export_graph import ExportGraphCommand, run_export_graph
 from .fix_wikilinks import FixWikilinksCommand, run_fix_wikilinks
@@ -43,12 +44,11 @@ from .init_llm_cmd import InitLlmCommand, run_init_llm
 from .knowledge_gaps import KnowledgeGapsCommand, run_knowledge_gaps
 from .lint import LintCommand, run_lint
 from .log_cmd import LogCommand, run_log
+from .migrate_config_cmd import MigrateConfigCommand, run_migrate_config
 from .qmd import QmdCommand, run_qmd
-from .quant_init_cmd import QuantInitCommand, run_quant_init
 from .read_page import ReadPageCommand, run_read_page
 from .references import ReferencesCommand, run_references
 from .report import ReportCommand, run_report
-from .reproduce_cmd import ReproduceCommand, run_one_paper_cli
 from .search import SearchCommand, run_search
 from .serve import ServeCommand, run_serve
 from .sink_status import SinkStatusCommand, run_sink_status
@@ -90,11 +90,12 @@ register_command(GraphAnalyzeCommand())
 register_command(ServeCommand())
 register_command(QmdCommand())
 register_command(DbCommand())
+register_command(DictCommand())
 register_command(DoctorCommand())
-register_command(QuantInitCommand())
-register_command(ReproduceCommand())
 register_command(HelpCommand())
 register_command(AuthCommand())
+register_command(MigrateConfigCommand())
+
 
 # C3 backward-compat re-exports — when ``commands.py`` was
 # renamed to ``_app.py`` (Phase 1 #2 / C2-C3) to make room
@@ -126,41 +127,71 @@ def __getattr__(name):
     """
     if name in ("WikiCLI", "main"):
         from .. import _app
+
         return getattr(_app, name)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
+
 __all__ = [
     # C2 simple commands
-    "InitCommand", "run_init",
-    "InitLlmCommand", "run_init_llm",
-    "IngestCommand", "run_ingest",
-    "StatusCommand", "run_status",
-    "LogCommand", "run_log",
-    "SinkStatusCommand", "run_sink_status",
-    "WritePageCommand", "run_write_page",
-    "ReadPageCommand", "run_read_page",
-    "SearchCommand", "run_search",
-    "BuildIndexCommand", "run_build_index",
-    "FixWikilinksCommand", "run_fix_wikilinks",
+    "InitCommand",
+    "run_init",
+    "InitLlmCommand",
+    "run_init_llm",
+    "IngestCommand",
+    "run_ingest",
+    "StatusCommand",
+    "run_status",
+    "LogCommand",
+    "run_log",
+    "SinkStatusCommand",
+    "run_sink_status",
+    "WritePageCommand",
+    "run_write_page",
+    "ReadPageCommand",
+    "run_read_page",
+    "SearchCommand",
+    "run_search",
+    "BuildIndexCommand",
+    "run_build_index",
+    "FixWikilinksCommand",
+    "run_fix_wikilinks",
     # C3 complex commands
-    "AnalyzeSourceCommand", "run_analyze_source",
-    "LintCommand", "run_lint",
-    "ReferencesCommand", "run_references",
-    "BatchCommand", "run_batch",
-    "SynthesizeCommand", "run_synthesize",
-    "WatchCommand", "run_watch",
-    "GraphQueryCommand", "run_graph_query",
-    "ExportGraphCommand", "run_export_graph",
-    "CommunityDetectCommand", "run_community_detect",
-    "ReportCommand", "run_report",
-    "WikisCommand", "run_wikis",
-    "SuggestSynthesisCommand", "run_suggest_synthesis",
-    "KnowledgeGapsCommand", "run_knowledge_gaps",
-    "GraphAnalyzeCommand", "run_graph_analyze",
-    "ServeCommand", "run_serve",  # McpCommand removed in Phase 3 #6
-    "QmdCommand", "run_qmd",
-    "DbCommand", "run_db",
-    "DoctorCommand", "run_doctor",
+    "AnalyzeSourceCommand",
+    "run_analyze_source",
+    "LintCommand",
+    "run_lint",
+    "ReferencesCommand",
+    "run_references",
+    "BatchCommand",
+    "run_batch",
+    "SynthesizeCommand",
+    "run_synthesize",
+    "WatchCommand",
+    "run_watch",
+    "GraphQueryCommand",
+    "run_graph_query",
+    "ExportGraphCommand",
+    "run_export_graph",
+    "CommunityDetectCommand",
+    "run_community_detect",
+    "ReportCommand",
+    "run_report",
+    "WikisCommand",
+    "run_wikis",
+    "SuggestSynthesisCommand",
+    "run_suggest_synthesis",
+    "KnowledgeGapsCommand",
+    "run_knowledge_gaps",
+    "GraphAnalyzeCommand",
+    "run_graph_analyze",
+    "ServeCommand",
+    "run_serve",  # McpCommand removed in Phase 3 #6
+    "QmdCommand",
+    "run_qmd",
+    "DbCommand",
+    "run_db",
+    "DoctorCommand",
+    "run_doctor",
     "HelpCommand",  # Phase 3 #6
-    "ReproduceCommand", "run_one_paper_cli", "run_batch",  # Phase 4 — paper reproduction
 ]

@@ -105,7 +105,9 @@ class ChatBridgeBackend:
         """
         llm = self._get_llm_client()
         async for ev in self._tool_executor.llm_stream_with_retry(
-            messages, tools, llm,
+            messages,
+            tools,
+            llm,
         ):
             yield ev
 

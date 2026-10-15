@@ -19,8 +19,6 @@ Tests cover:
 
 import inspect
 
-import pytest
-
 
 def test_wiki_caches_analyzer_in_init():
     """Wiki.__init__ sets self._analyzer = WikiAnalyzer(self)."""
@@ -40,13 +38,13 @@ def test_wiki_caches_analyzer_in_init():
         wiki = Wiki(root)
 
         # The cache attribute is set
-        assert hasattr(wiki, "_analyzer"), (
-            "Wiki.__init__ should set self._analyzer for Phase 2 #4"
-        )
+        assert hasattr(
+            wiki, "_analyzer"
+        ), "Wiki.__init__ should set self._analyzer for Phase 2 #4"
         # It's a WikiAnalyzer
-        assert isinstance(wiki._analyzer, WikiAnalyzer), (
-            f"Wiki._analyzer should be WikiAnalyzer, got {type(wiki._analyzer)}"
-        )
+        assert isinstance(
+            wiki._analyzer, WikiAnalyzer
+        ), f"Wiki._analyzer should be WikiAnalyzer, got {type(wiki._analyzer)}"
         # It holds a back-reference to the wiki
         assert wiki._analyzer.wiki is wiki
 
@@ -119,8 +117,7 @@ def test_llm_mixin_uses_cached_analyzer():
             f"Source:\n{src}"
         )
         assert "from .wiki_analyzer import WikiAnalyzer" not in src, (
-            f"WikiLLMMixin.{name} should not re-import WikiAnalyzer. "
-            f"Source:\n{src}"
+            f"WikiLLMMixin.{name} should not re-import WikiAnalyzer. " f"Source:\n{src}"
         )
 
 

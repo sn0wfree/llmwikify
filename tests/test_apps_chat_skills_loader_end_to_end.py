@@ -21,7 +21,6 @@ from __future__ import annotations
 import json
 import textwrap
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 
@@ -53,9 +52,7 @@ def reset_registry():
 
 
 class TestEndToEndPipeline:
-    def test_body_only_skill_appears_in_api(
-        self, fake_plugin_dir: Path
-    ) -> None:
+    def test_body_only_skill_appears_in_api(self, fake_plugin_dir: Path) -> None:
         """No frontmatter → fallback name from dir, all fields default."""
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
@@ -69,9 +66,7 @@ class TestEndToEndPipeline:
 
         skill_dir = fake_plugin_dir / "body_only"
         skill_dir.mkdir()
-        (skill_dir / "SKILL.md").write_text(
-            "# Body only\n\nNo frontmatter here.\n"
-        )
+        (skill_dir / "SKILL.md").write_text("# Body only\n\nNo frontmatter here.\n")
 
         loaded = load_plugins(default_registry())
         assert loaded == 1
@@ -112,9 +107,7 @@ class TestEndToEndPipeline:
 
         skill_dir = fake_plugin_dir / "full_meta"
         skill_dir.mkdir()
-        (skill_dir / "SKILL.md").write_text(
-            textwrap.dedent(
-                """\
+        (skill_dir / "SKILL.md").write_text(textwrap.dedent("""\
                 ---
                 name: full_meta
                 description: meta-heavy plugin
@@ -135,9 +128,7 @@ class TestEndToEndPipeline:
                 # Full Meta Plugin
 
                 Instructions for the LLM follow.
-                """
-            )
-        )
+                """))
 
         load_plugins(default_registry())
 
@@ -161,9 +152,7 @@ class TestEndToEndPipeline:
         assert "full_meta" in plugin["source_path"]
         assert plugin["source_path"].endswith("SKILL.md")
 
-    def test_multiple_skills_in_one_dir(
-        self, fake_plugin_dir: Path
-    ) -> None:
+    def test_multiple_skills_in_one_dir(self, fake_plugin_dir: Path) -> None:
         """Several skills load side-by-side; no cross-contamination."""
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
@@ -210,15 +199,11 @@ class TestEndToEndPipeline:
         # Good skill
         good = fake_plugin_dir / "good"
         good.mkdir()
-        (good / "SKILL.md").write_text(
-            "---\nname: good\nversion: 1.0\n---\nbody\n"
-        )
+        (good / "SKILL.md").write_text("---\nname: good\nversion: 1.0\n---\nbody\n")
         # Bad skill with malformed YAML
         bad = fake_plugin_dir / "bad"
         bad.mkdir()
-        (bad / "SKILL.md").write_text(
-            "---\nname: : bad yaml\n---\nbody\n"
-        )
+        (bad / "SKILL.md").write_text("---\nname: : bad yaml\n---\nbody\n")
 
         with caplog.at_level("WARNING"):
             loaded = load_plugins(default_registry())
@@ -230,9 +215,7 @@ class TestEndToEndPipeline:
         bad_skill = default_registry().get("bad")
         assert bad_skill is not None
         # Warning was logged for the YAML error
-        assert any(
-            "YAML parse error" in rec.message for rec in caplog.records
-        )
+        assert any("YAML parse error" in rec.message for rec in caplog.records)
 
     def test_comma_separated_triggers_split_with_warning(
         self, fake_plugin_dir: Path, caplog: pytest.LogCaptureFixture
@@ -265,9 +248,7 @@ class TestEndToEndPipeline:
         from llmwikify.apps.chat.skills.registry import default_registry
 
         py_path = fake_plugin_dir / "code_skill.py"
-        py_path.write_text(
-            textwrap.dedent(
-                """\
+        py_path.write_text(textwrap.dedent("""\
                 from llmwikify.apps.chat.skills.base import Skill, SkillAction
 
                 class CodeSkill(Skill):
@@ -284,18 +265,17 @@ class TestEndToEndPipeline:
                         super().__init__()
 
                 skill = CodeSkill()
-                """
-            )
-        )
+                """))
 
         loaded = load_plugins(default_registry())
         assert loaded == 1
         skill = default_registry().get("code_skill")
         assert skill is not None
         # No _plugin_metadata for code-based skills
-        assert not hasattr(skill, "_plugin_metadata") or getattr(
-            skill, "_plugin_metadata", None
-        ) is None
+        assert (
+            not hasattr(skill, "_plugin_metadata")
+            or getattr(skill, "_plugin_metadata", None) is None
+        )
 
 
 # ── load_plugins return value ────────────────────────────────────
@@ -346,9 +326,7 @@ class TestLoadPluginsReturn:
 
 
 class TestApiSkillsJsonShape:
-    def test_list_response_is_json_serializable(
-        self, fake_plugin_dir: Path
-    ) -> None:
+    def test_list_response_is_json_serializable(self, fake_plugin_dir: Path) -> None:
         """The whole /api/skills payload round-trips through json.dumps."""
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
@@ -361,9 +339,7 @@ class TestApiSkillsJsonShape:
 
         sd = fake_plugin_dir / "jsonable"
         sd.mkdir()
-        (sd / "SKILL.md").write_text(
-            "---\nname: jsonable\nversion: 1.0\n---\nbody\n"
-        )
+        (sd / "SKILL.md").write_text("---\nname: jsonable\nversion: 1.0\n---\nbody\n")
         load_plugins(default_registry())
 
         app = FastAPI()

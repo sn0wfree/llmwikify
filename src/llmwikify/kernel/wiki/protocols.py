@@ -94,6 +94,19 @@ class WikiProtocol:
 
     def is_initialized(self) -> bool: ...  # type: ignore[empty-body]
 
+    # Layout introspection (v0.40+ — for `llmwikify doctor`).
+    @property
+    def expected_layout(self) -> dict[str, Path]: ...  # type: ignore[empty-body]
+
+    @property
+    def actual_layout(self) -> dict[str, Path]: ...  # type: ignore[empty-body]
+
+    def check_layout(self) -> dict[str, bool]: ...  # type: ignore[empty-body]
+
+    def layout_diff(self) -> dict[str, list[str]]: ...  # type: ignore[empty-body]
+
+    def _extract_subdirs_from_wiki_md(self) -> list[str]: ...  # type: ignore[empty-body]
+
     # Path operations
     @staticmethod
     def join(*parts: str) -> str: ...  # type: ignore[empty-body]

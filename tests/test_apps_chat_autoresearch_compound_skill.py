@@ -44,7 +44,9 @@ async def test_autoresearch_compound_run_starts_without_write_confirmation(monke
 async def test_autoresearch_compound_status_handles_unknown_run():
     adapter = SkillToolAdapter(SkillService())
 
-    result = await adapter.execute("autoresearch_compound_status", {"run_id": "missing"})
+    result = await adapter.execute(
+        "autoresearch_compound_status", {"run_id": "missing"}
+    )
 
     assert result["status"] == "error"
     assert "no run with id" in result["error"]

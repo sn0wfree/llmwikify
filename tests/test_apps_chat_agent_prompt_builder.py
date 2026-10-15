@@ -10,12 +10,11 @@ Covers the 8-case matrix from docs/poc/phase-a-steps.md §4.6:
   7.  build_minimal → only 3 sections
   8.  enable_bootstrap=False → bootstrap skipped
 """
+
 from __future__ import annotations
 
 import asyncio
 from pathlib import Path
-
-import pytest
 
 from llmwikify.apps.chat.agent.prompt_builder import (
     BOOTSTRAP_FILES,
@@ -68,10 +67,15 @@ class _StubMemory:
         return _StubMemory._Index(self)
 
 
-def _make_builder(workspace=None, tool_names=None, prefs=None, related=None,
-                  skill_descs=None):
+def _make_builder(
+    workspace=None, tool_names=None, prefs=None, related=None, skill_descs=None
+):
     wiki = _StubWiki(tool_names=tool_names, skill_descs=skill_descs)
-    memory = _StubMemory(prefs=prefs, related=related) if prefs is not None or related is not None else None
+    memory = (
+        _StubMemory(prefs=prefs, related=related)
+        if prefs is not None or related is not None
+        else None
+    )
     return PromptBuilder(wiki_service=wiki, memory_manager=memory, workspace=workspace)
 
 
@@ -170,6 +174,7 @@ def test_history_truncated_to_max_chars() -> None:
         RUNTIME_CONTEXT_END,
         RUNTIME_CONTEXT_TAG,
     )
+
     tag_overhead = len(RUNTIME_CONTEXT_TAG) + len(RUNTIME_CONTEXT_END) + 30
     assert len(history_section) <= 300 + tag_overhead
 
@@ -179,8 +184,9 @@ def test_section_failure_does_not_break_others(tmp_path: Path) -> None:
         def list_tool_names(self):
             raise RuntimeError("wiki broken")
 
-    builder = PromptBuilder(wiki_service=BrokenWiki(), memory_manager=None,
-                            workspace=tmp_path)
+    builder = PromptBuilder(
+        wiki_service=BrokenWiki(), memory_manager=None, workspace=tmp_path
+    )
     ctx = BuildContext(workspace=tmp_path)
     prompt = _run(builder.build_with_context(ctx))
     assert "Workspace" in prompt

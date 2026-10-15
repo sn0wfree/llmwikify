@@ -78,6 +78,7 @@ class LLMSpec:
         if model == self.model:
             return self
         from dataclasses import replace
+
         return replace(self, model=model)
 
 

@@ -13,11 +13,8 @@ args, handler exception, path traversal in Read/Grep/Glob.
 from __future__ import annotations
 
 import json
-import tempfile
 from pathlib import Path
 from typing import Any
-
-import pytest
 
 from llmwikify.apps.chat.skills.workflows.subagent_runner import SubagentRequest
 from llmwikify.apps.chat.skills.workflows.subagent_worker import (
@@ -48,7 +45,11 @@ class FakeClient:
     ) -> dict[str, Any]:
         self.chat_with_tools_calls.append({"messages": list(messages), "tools": tools})
         if not self.responses:
-            return {"content": "[exhausted]", "tool_calls": None, "usage": {"total_tokens": 0}}
+            return {
+                "content": "[exhausted]",
+                "tool_calls": None,
+                "usage": {"total_tokens": 0},
+            }
         return self.responses.pop(0)
 
     def chat(self, messages: list[dict[str, Any]]) -> str:
@@ -186,6 +187,7 @@ class TestDispatch:
 
     def test_handler_called_with_kwargs(self) -> None:
         captured = {}
+
         def capture(**kw):
             captured.update(kw)
             return {"ok": True}
@@ -201,7 +203,9 @@ class TestDispatch:
 
 class TestNormalizeChatResult:
     def test_dict_with_content(self) -> None:
-        text, tokens = _normalize_chat_result({"content": "hi", "usage": {"total_tokens": 10}})
+        text, tokens = _normalize_chat_result(
+            {"content": "hi", "usage": {"total_tokens": 10}}
+        )
         assert text == "hi"
         assert tokens == 10
 
@@ -268,14 +272,20 @@ class TestToolLoop:
 
     def test_single_tool_call(self) -> None:
         """LLM makes one tool call, then returns content."""
-        fake = FakeClient([
-            {
-                "content": "",
-                "tool_calls": [_tc("WebSearch", {"query": "x"})],
-                "usage": {"total_tokens": 10},
-            },
-            {"content": "final answer", "tool_calls": None, "usage": {"total_tokens": 5}},
-        ])
+        fake = FakeClient(
+            [
+                {
+                    "content": "",
+                    "tool_calls": [_tc("WebSearch", {"query": "x"})],
+                    "usage": {"total_tokens": 10},
+                },
+                {
+                    "content": "final answer",
+                    "tool_calls": None,
+                    "usage": {"total_tokens": 5},
+                },
+            ]
+        )
         driver = _LoopDriver(fake)
         request = _make_request(actor_tools=("WebSearch",))
         messages = [{"role": "user", "content": "hi"}]
@@ -284,7 +294,10 @@ class TestToolLoop:
         # holds the reference; patching the function object would not
         # affect the binding).
         from unittest.mock import patch
-        stub = lambda **kw: {"results": [{"title": "t", "url": "u", "snippet": "s"}]}
+
+        def stub(**kw):
+            return {"results": [{"title": "t", "url": "u", "snippet": "s"}]}
+
         with patch.dict(
             "llmwikify.apps.chat.skills.workflows.subagent_worker._TOOL_HANDLERS",
             {"WebSearch": stub},
@@ -305,17 +318,36 @@ class TestToolLoop:
 
     def test_multiple_iterations(self) -> None:
         """Three tool calls across three iterations, then done."""
-        fake = FakeClient([
-            {"content": "", "tool_calls": [_tc("WebSearch", {"query": "q1"}, "c1")], "usage": {"total_tokens": 1}},
-            {"content": "", "tool_calls": [_tc("WebSearch", {"query": "q2"}, "c2")], "usage": {"total_tokens": 1}},
-            {"content": "", "tool_calls": [_tc("WebSearch", {"query": "q3"}, "c3")], "usage": {"total_tokens": 1}},
-            {"content": "all done", "tool_calls": None, "usage": {"total_tokens": 1}},
-        ])
+        fake = FakeClient(
+            [
+                {
+                    "content": "",
+                    "tool_calls": [_tc("WebSearch", {"query": "q1"}, "c1")],
+                    "usage": {"total_tokens": 1},
+                },
+                {
+                    "content": "",
+                    "tool_calls": [_tc("WebSearch", {"query": "q2"}, "c2")],
+                    "usage": {"total_tokens": 1},
+                },
+                {
+                    "content": "",
+                    "tool_calls": [_tc("WebSearch", {"query": "q3"}, "c3")],
+                    "usage": {"total_tokens": 1},
+                },
+                {
+                    "content": "all done",
+                    "tool_calls": None,
+                    "usage": {"total_tokens": 1},
+                },
+            ]
+        )
         driver = _LoopDriver(fake)
         request = _make_request(actor_tools=("WebSearch",))
         messages = [{"role": "user", "content": "hi"}]
 
         from unittest.mock import patch
+
         with patch.dict(
             "llmwikify.apps.chat.skills.workflows.subagent_worker._TOOL_HANDLERS",
             {"WebSearch": lambda **kw: {"results": []}},
@@ -331,8 +363,11 @@ class TestToolLoop:
         from llmwikify.apps.chat.skills.workflows.subagent_worker import _MAX_TOOL_ITER
 
         responses = [
-            {"content": "", "tool_calls": [_tc("WebSearch", {"query": f"q{i}"}, f"c{i}")],
-             "usage": {"total_tokens": 1}}
+            {
+                "content": "",
+                "tool_calls": [_tc("WebSearch", {"query": f"q{i}"}, f"c{i}")],
+                "usage": {"total_tokens": 1},
+            }
             for i in range(_MAX_TOOL_ITER + 2)
         ]
         fake = FakeClient(responses)
@@ -341,6 +376,7 @@ class TestToolLoop:
         messages = [{"role": "user", "content": "hi"}]
 
         from unittest.mock import patch
+
         with patch.dict(
             "llmwikify.apps.chat.skills.workflows.subagent_worker._TOOL_HANDLERS",
             {"WebSearch": lambda **kw: {"results": []}},
@@ -352,14 +388,16 @@ class TestToolLoop:
 
     def test_unknown_tool_in_dispatch_returns_error(self) -> None:
         """If the LLM returns a tool we don't have, dispatch returns error."""
-        fake = FakeClient([
-            {
-                "content": "",
-                "tool_calls": [_tc("MysteryTool", {}, "c1")],
-                "usage": {"total_tokens": 1},
-            },
-            {"content": "done", "tool_calls": None, "usage": {"total_tokens": 1}},
-        ])
+        fake = FakeClient(
+            [
+                {
+                    "content": "",
+                    "tool_calls": [_tc("MysteryTool", {}, "c1")],
+                    "usage": {"total_tokens": 1},
+                },
+                {"content": "done", "tool_calls": None, "usage": {"total_tokens": 1}},
+            ]
+        )
         driver = _LoopDriver(fake)
         request = _make_request(actor_tools=("WebSearch",))
         messages = [{"role": "user", "content": "hi"}]
@@ -375,21 +413,29 @@ class TestToolLoop:
 
     def test_handler_exception_doesnt_crash_loop(self) -> None:
         """If a handler raises, the error is fed back and the loop continues."""
-        fake = FakeClient([
-            {
-                "content": "",
-                "tool_calls": [_tc("WebSearch", {"query": "x"}, "c1")],
-                "usage": {"total_tokens": 1},
-            },
-            {"content": "recovered", "tool_calls": None, "usage": {"total_tokens": 1}},
-        ])
+        fake = FakeClient(
+            [
+                {
+                    "content": "",
+                    "tool_calls": [_tc("WebSearch", {"query": "x"}, "c1")],
+                    "usage": {"total_tokens": 1},
+                },
+                {
+                    "content": "recovered",
+                    "tool_calls": None,
+                    "usage": {"total_tokens": 1},
+                },
+            ]
+        )
         driver = _LoopDriver(fake)
         request = _make_request(actor_tools=("WebSearch",))
         messages = [{"role": "user", "content": "hi"}]
 
         from unittest.mock import patch
+
         def boom(**kw):
             raise RuntimeError("handler exploded")
+
         with patch.dict(
             "llmwikify.apps.chat.skills.workflows.subagent_worker._TOOL_HANDLERS",
             {"WebSearch": boom},
@@ -417,6 +463,7 @@ class TestFileToolSafety:
         outside.write_text("secret")
 
         from llmwikify.apps.chat.skills.workflows.subagent_worker import _handle_read
+
         result = _handle_read("../outside.txt", worktree_path=str(wt))
         assert "error" in result
         assert "outside worktree" in result["error"]
@@ -424,6 +471,7 @@ class TestFileToolSafety:
     def test_read_absolute_path_rejected(self, tmp_path: Path) -> None:
         wt = self._setup_worktree(tmp_path)
         from llmwikify.apps.chat.skills.workflows.subagent_worker import _handle_read
+
         result = _handle_read("/etc/passwd", worktree_path=str(wt))
         assert "error" in result
         assert "outside worktree" in result["error"]
@@ -431,6 +479,7 @@ class TestFileToolSafety:
     def test_read_inside_worktree_succeeds(self, tmp_path: Path) -> None:
         wt = self._setup_worktree(tmp_path)
         from llmwikify.apps.chat.skills.workflows.subagent_worker import _handle_read
+
         result = _handle_read("in_repo.txt", worktree_path=str(wt))
         assert "content" in result
         assert "inside" in result["content"]
@@ -438,6 +487,7 @@ class TestFileToolSafety:
 
     def test_read_no_worktree_returns_error(self) -> None:
         from llmwikify.apps.chat.skills.workflows.subagent_worker import _handle_read
+
         result = _handle_read("anything.txt", worktree_path=None)
         assert "error" in result
         assert "no worktree_path" in result["error"]
@@ -445,6 +495,7 @@ class TestFileToolSafety:
     def test_glob_outside_worktree_rejected(self, tmp_path: Path) -> None:
         wt = self._setup_worktree(tmp_path)
         from llmwikify.apps.chat.skills.workflows.subagent_worker import _handle_glob
+
         result = _handle_glob("../*.txt", worktree_path=str(wt))
         assert "error" in result
         assert "outside worktree" in result["error"]
@@ -454,6 +505,7 @@ class TestFileToolSafety:
         (wt / "sub").mkdir()
         (wt / "sub" / "x.py").write_text("x")
         from llmwikify.apps.chat.skills.workflows.subagent_worker import _handle_glob
+
         result = _handle_glob("**/*.py", worktree_path=str(wt))
         assert "files" in result
         assert any("x.py" in f for f in result["files"])

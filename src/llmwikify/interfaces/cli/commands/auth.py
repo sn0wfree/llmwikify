@@ -21,6 +21,7 @@ Decisions:
 from __future__ import annotations
 
 import json
+import logging
 import sys
 from typing import Any
 
@@ -29,11 +30,12 @@ from llmwikify.foundation.auth import (
     chmod_600,
     ensure_dir_700,
     generate_pat,
-    hash_pat,
     local_token_path,
 )
 
 from .._base import Command
+
+logger = logging.getLogger(__name__)
 
 _local_token_path = local_token_path
 _chmod_600 = chmod_600
@@ -55,7 +57,10 @@ def run_auth_init(wiki: Any, config: dict, args: Any) -> int:
         try:
             result = prompt_first_admin()
         except Exception as exc:
-            print(f"\n[!] {type(exc).__name__}: {getattr(exc, 'detail', exc)}", file=sys.stderr)
+            print(
+                f"\n[!] {type(exc).__name__}: {getattr(exc, 'detail', exc)}",
+                file=sys.stderr,
+            )
             return 1
         email = result.user_email
         token = result.token
@@ -63,12 +68,12 @@ def run_auth_init(wiki: Any, config: dict, args: Any) -> int:
         # Non-interactive: create user + issue PAT.
         from llmwikify.foundation.auth import (
             TokenClaims,
-            UserRepository,
             auto_first_admin,
             encode,
             get_secret,
             set_secret,
         )
+
         secret = get_secret()
         if not secret:
             secret = set_secret()
@@ -85,6 +90,7 @@ def run_auth_init(wiki: Any, config: dict, args: Any) -> int:
             scopes="write",
         )
         from llmwikify.foundation.auth.utils import save_pat
+
         save_pat(pat)
 
         claims = TokenClaims.new(
@@ -108,7 +114,7 @@ def run_auth_init(wiki: Any, config: dict, args: Any) -> int:
     print(f"  {token}")
     print()
     print("WebUI: open http://127.0.0.1:8765 and paste your PAT")
-    print("CLI:   export LLMWIKIFY_AUTH_TOKEN=\"<the-token-above>\"")
+    print('CLI:   export LLMWIKIFY_AUTH_TOKEN="<the-token-above>"')
     return 0
 
 
@@ -133,18 +139,22 @@ def run_auth_create_token(wiki: Any, config: dict, args: Any) -> int:
         existing = _local_token_path().read_text(encoding="utf-8").strip()
         if existing and existing != "local-mode-no-auth":
             from llmwikify.foundation.auth import decode
+
             try:
                 claims = decode(existing, require_secret())
                 if claims.sub.startswith("user:"):
-                    user = repo.get_by_id(claims.sub[len("user:"):])
+                    user = repo.get_by_id(claims.sub[len("user:") :])
             except Exception:
-                pass
+                logger.debug(
+                    "Could not decode existing token for user lookup", exc_info=True
+                )
     except FileNotFoundError:
-        pass
+        logger.debug("No existing local_token file found")
 
     if user is None:
         for row in repo._connect().execute("SELECT * FROM users LIMIT 1"):
             from llmwikify.foundation.auth.db import _row_to_user
+
             user = _row_to_user(row)
             break
 
@@ -199,9 +209,9 @@ def run_auth_list_tokens(wiki: Any, config: dict, args: Any) -> int:
         if existing and existing != "local-mode-no-auth":
             claims = decode(existing, require_secret())
             if claims.sub.startswith("user:"):
-                user = repo.get_by_id(claims.sub[len("user:"):])
+                user = repo.get_by_id(claims.sub[len("user:") :])
     except Exception:
-        pass
+        logger.debug("Could not decode existing token for list-tokens", exc_info=True)
 
     if user is None:
         print("[!] No users found. Run `llmwikify auth init` first.", file=sys.stderr)
@@ -214,14 +224,18 @@ def run_auth_list_tokens(wiki: Any, config: dict, args: Any) -> int:
         print("No PATs found.")
         return 0
 
-    print(f"{'ID':<12} {'Prefix':<14} {'Name':<20} {'Created':<20} {'Last Used':<20} {'Status'}")
+    print(
+        f"{'ID':<12} {'Prefix':<14} {'Name':<20} {'Created':<20} {'Last Used':<20} {'Status'}"
+    )
     print("-" * 100)
     for k in keys:
         status = "active" if k.revoked_at is None else f"revoked {k.revoked_at}"
         if k.expires_at:
             status += f" (exp: {k.expires_at})"
         last_used = k.last_used_at or "never"
-        print(f"{k.id[:12]}  {k.key_prefix:<14} {(k.name or '-'):<20} {k.created_at:<20} {last_used:<20} {status}")
+        print(
+            f"{k.id[:12]}  {k.key_prefix:<14} {(k.name or '-'):<20} {k.created_at:<20} {last_used:<20} {status}"
+        )
     return 0
 
 
@@ -245,9 +259,9 @@ def run_auth_revoke_token(wiki: Any, config: dict, args: Any) -> int:
         if existing and existing != "local-mode-no-auth":
             claims = decode(existing, require_secret())
             if claims.sub.startswith("user:"):
-                user = repo.get_by_id(claims.sub[len("user:"):])
+                user = repo.get_by_id(claims.sub[len("user:") :])
     except Exception:
-        pass
+        logger.debug("Could not decode existing token for revoke-token", exc_info=True)
 
     if user is None:
         print("[!] No users found.", file=sys.stderr)
@@ -281,18 +295,22 @@ def run_auth_token(wiki: Any, config: dict, args: Any) -> int:
         existing = _local_token_path().read_text(encoding="utf-8").strip()
         if existing and existing != "local-mode-no-auth":
             from llmwikify.foundation.auth import decode
+
             try:
                 claims = decode(existing, require_secret())
                 if claims.sub.startswith("user:"):
-                    user = repo.get_by_id(claims.sub[len("user:"):])
+                    user = repo.get_by_id(claims.sub[len("user:") :])
             except Exception:
-                pass
+                logger.debug(
+                    "Could not decode existing token for auth token", exc_info=True
+                )
     except FileNotFoundError:
-        pass
+        logger.debug("No existing local_token file found")
 
     if user is None:
         for row in repo._connect().execute("SELECT * FROM users LIMIT 1"):
             from llmwikify.foundation.auth.db import _row_to_user
+
             user = _row_to_user(row)
             break
 
@@ -327,7 +345,9 @@ def run_auth_whoami(wiki: Any, config: dict, args: Any) -> int:
     except FileNotFoundError:
         print("[!] No local_token. Run `llmwikify auth init` first.", file=sys.stderr)
         return 1
-    if not token or token == "local-mode-no-auth":
+    if (
+        not token or token == "local-mode-no-auth"
+    ):  # noqa: S105 — sentinel, not a password
         print("[!] local_token is the local-mode marker.", file=sys.stderr)
         return 1
     try:
@@ -339,7 +359,7 @@ def run_auth_whoami(wiki: Any, config: dict, args: Any) -> int:
     user_email = None
     is_first_admin = False
     if claims.sub.startswith("user:"):
-        user = UserRepository().get_by_id(claims.sub[len("user:"):])
+        user = UserRepository().get_by_id(claims.sub[len("user:") :])
         if user is not None:
             user_email = user.email
             is_first_admin = user.is_first_admin
@@ -418,7 +438,10 @@ class AuthCommand(Command):
     def run(self, args: Any, wiki: Any, config: dict) -> int:
         sub = getattr(args, "auth_command", None)
         if sub is None:
-            print("Usage: llmwikify auth {init,create-token,list-tokens,revoke-token,token,whoami,logout}", file=sys.stderr)
+            print(
+                "Usage: llmwikify auth {init,create-token,list-tokens,revoke-token,token,whoami,logout}",
+                file=sys.stderr,
+            )
             return 1
         if sub == "init":
             return run_auth_init(wiki, config, args)

@@ -105,11 +105,13 @@ def log_timing(
         level: logging level for the timing messages (default INFO).
         label: optional prefix prepended to the function name.
     """
+
     def decorator(fn: F) -> F:
         log = logger or logging.getLogger(fn.__module__)
         name = f"{label}.{fn.__name__}" if label else fn.__name__
 
         if inspect.iscoroutinefunction(fn):
+
             @functools.wraps(fn)
             async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
                 log.log(level, "start %s", name)
@@ -118,6 +120,7 @@ def log_timing(
                     return await fn(*args, **kwargs)
                 finally:
                     log.log(level, "%s done in %.3fs", name, time.monotonic() - t0)
+
             return async_wrapper  # type: ignore[return-value]
 
         @functools.wraps(fn)
@@ -128,6 +131,7 @@ def log_timing(
                 return fn(*args, **kwargs)
             finally:
                 log.log(level, "%s done in %.3fs", name, time.monotonic() - t0)
+
         return sync_wrapper  # type: ignore[return-value]
 
     return decorator

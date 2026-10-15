@@ -29,9 +29,10 @@ Design notes
     instance per element. Instances share the same actor; their ids
     are ``<id_prefix><index>``.
 """
+
 from __future__ import annotations
 
-import asyncio
+import concurrent.futures
 import json
 import logging
 import re
@@ -44,7 +45,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from llmwikify.apps.chat.skills.workflows.dag import (
-    Dag,
     PhaseSpec,
     WorkflowSpec,
     build_dag,
@@ -79,8 +79,8 @@ class WorkflowRunResult:
     """Final result of a workflow run."""
 
     run_id: str
-    status: str                          # "ok" | "partial" | "failed" | "halted"
-    outputs: dict[str, Any]              # phase_id → final output
+    status: str  # "ok" | "partial" | "failed" | "halted"
+    outputs: dict[str, Any]  # phase_id → final output
     total_tokens_used: int
     total_agents_spawned: int
     duration_seconds: float
@@ -106,7 +106,7 @@ class WorkflowProgressEvent:
     """Emitted at every interesting state transition."""
 
     run_id: str
-    event: str                            # "phase_started" | "phase_complete" | "phase_failed" | "workflow_complete" | "workflow_halted"
+    event: str  # "phase_started" | "phase_complete" | "phase_failed" | "workflow_complete" | "workflow_halted"
     phase_id: str | None = None
     payload: Mapping[str, Any] = field(default_factory=dict)
     timestamp: float = field(default_factory=time.time)
@@ -183,7 +183,11 @@ def resolve_dollar_refs(
                 # Leave the placeholder; the executor will surface a
                 # clearer error if the phase fails.
                 return match.group(0)
-            return json.dumps(resolved, ensure_ascii=False) if not isinstance(resolved, str) else resolved
+            return (
+                json.dumps(resolved, ensure_ascii=False)
+                if not isinstance(resolved, str)
+                else resolved
+            )
 
         # Special case: entire string is a single $ref → return the value directly
         if value.startswith("$") and _DOLLAR_RE.fullmatch(value):
@@ -197,9 +201,15 @@ def resolve_dollar_refs(
         # and let the LLM interpret any remaining text.
         return _DOLLAR_RE.sub(_replace, value)
     if isinstance(value, Mapping):
-        return {k: resolve_dollar_refs(v, inputs=inputs, outputs=outputs, item=item) for k, v in value.items()}
+        return {
+            k: resolve_dollar_refs(v, inputs=inputs, outputs=outputs, item=item)
+            for k, v in value.items()
+        }
     if isinstance(value, list):
-        return [resolve_dollar_refs(v, inputs=inputs, outputs=outputs, item=item) for v in value]
+        return [
+            resolve_dollar_refs(v, inputs=inputs, outputs=outputs, item=item)
+            for v in value
+        ]
     return value
 
 
@@ -297,9 +307,7 @@ class WorkflowExecutor:
             raise FileNotFoundError(f"no run with id {run_id!r}")
         # Re-parse the spec from its source
         if state.source_path is None:
-            raise FileNotFoundError(
-                f"run {run_id!r} has no source_path; cannot resume"
-            )
+            raise FileNotFoundError(f"run {run_id!r} has no source_path; cannot resume")
         from llmwikify.apps.chat.skills.workflows.dag import load_workflow
 
         spec = load_workflow(Path(state.source_path))
@@ -339,19 +347,25 @@ class WorkflowExecutor:
     def run(self) -> WorkflowRunResult:
         """Drive the DAG to completion (or halt)."""
         # Pre-flight: budget check
-        if self.spec.budget.max_total_tokens is not None and \
-                self._total_tokens > self.spec.budget.max_total_tokens:
+        if (
+            self.spec.budget.max_total_tokens is not None
+            and self._total_tokens > self.spec.budget.max_total_tokens
+        ):
             return self._halt("budget_preflight_exceeded")
 
         # Build the schedule. We iterate until no more ready phases
         # can be dispatched, or we hit a terminal condition.
         max_workers = self.spec.budget.max_concurrent_agents
-        with ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="wf") as pool:
+        with ThreadPoolExecutor(
+            max_workers=max_workers, thread_name_prefix="wf"
+        ) as pool:
             inflight: dict[Future[SubagentResult], str] = {}
 
             while True:
                 self._materialize_fanouts()
-                ready = self.dag.ready_phases(self._completed | self._skipped | self._failed)
+                ready = self.dag.ready_phases(
+                    self._completed | self._skipped | self._failed
+                )
                 # Also include any newly materialized fan-out instances
                 # whose templates aren't in completed/skipped/failed.
                 for phase_id, phase in self._live_phases.items():
@@ -383,6 +397,10 @@ class WorkflowExecutor:
                     phase_id = inflight.pop(fut)
                     try:
                         result = fut.result()
+                    except concurrent.futures.CancelledError:
+                        logger.warning("phase %s was cancelled", phase_id)
+                        self._mark_failed(phase_id, "phase cancelled")
+                        continue
                     except Exception as e:  # pragma: no cover
                         logger.error("phase %s raised: %s", phase_id, e, exc_info=True)
                         self._mark_failed(phase_id, str(e))
@@ -426,13 +444,22 @@ class WorkflowExecutor:
                 inputs=self.inputs,
                 outputs=self._outputs,
             )
-        except Exception as e:
+        except (KeyError, TypeError, ValueError, _UnresolvableRef) as e:
             return SubagentResult(
                 status="error",
                 output={},
                 tokens_used=0,
                 duration_seconds=0.0,
                 error=f"failed to resolve $refs: {e}",
+            )
+        except Exception as e:
+            logger.exception("unexpected error resolving $refs for phase %s", phase.id)
+            return SubagentResult(
+                status="error",
+                output={},
+                tokens_used=0,
+                duration_seconds=0.0,
+                error=f"failed to resolve $refs: {type(e).__name__}: {e}",
             )
         # Build per-phase budget
         per_phase_budget = {
@@ -458,7 +485,7 @@ class WorkflowExecutor:
                 return result
             last_result = result
             if attempt + 1 < attempts:
-                time.sleep(phase.retry_backoff_seconds * (2 ** attempt))
+                time.sleep(phase.retry_backoff_seconds * (2**attempt))
         assert last_result is not None
         return last_result
 
@@ -502,9 +529,9 @@ class WorkflowExecutor:
                 continue
             # Already materialized?
             existing = [
-                pid for pid in self._live_phases
-                if pid.startswith(phase.fan_out.id_prefix)
-                and pid != phase_id
+                pid
+                for pid in self._live_phases
+                if pid.startswith(phase.fan_out.id_prefix) and pid != phase_id
             ]
             if existing:
                 continue
@@ -516,8 +543,12 @@ class WorkflowExecutor:
                     outputs=self._outputs,
                 )
             except KeyError as e:
-                logger.error("fan_out %r: cannot resolve %s: %s",
-                             phase_id, phase.fan_out.from_ref, e)
+                logger.error(
+                    "fan_out %r: cannot resolve %s: %s",
+                    phase_id,
+                    phase.fan_out.from_ref,
+                    e,
+                )
                 self._mark_failed(phase_id, f"fan_out upstream ref: {e}")
                 continue
             if not isinstance(upstream_value, list):
@@ -530,7 +561,8 @@ class WorkflowExecutor:
                     self._emit("phase_skipped", phase_id=phase_id)
                     logger.info(
                         "phase %s skipped (fan_out upstream %s is %s, skip_if matched)",
-                        phase_id, phase.fan_out.from_ref,
+                        phase_id,
+                        phase.fan_out.from_ref,
                         type(upstream_value).__name__,
                     )
                     continue
@@ -662,10 +694,13 @@ class WorkflowExecutor:
             phases={
                 pid: {
                     "status": (
-                        "complete" if pid in self._completed
-                        else "failed" if pid in self._failed
-                        else "skipped" if pid in self._skipped
-                        else "pending"
+                        "complete"
+                        if pid in self._completed
+                        else (
+                            "failed"
+                            if pid in self._failed
+                            else "skipped" if pid in self._skipped else "pending"
+                        )
                     ),
                     "output": self._outputs.get(pid, {}),
                 }
@@ -709,10 +744,13 @@ class WorkflowExecutor:
             phases={
                 pid: {
                     "status": (
-                        "complete" if pid in self._completed
-                        else "failed" if pid in self._failed
-                        else "skipped" if pid in self._skipped
-                        else "pending"
+                        "complete"
+                        if pid in self._completed
+                        else (
+                            "failed"
+                            if pid in self._failed
+                            else "skipped" if pid in self._skipped else "pending"
+                        )
                     ),
                     "output": self._outputs.get(pid, {}),
                 }
@@ -734,10 +772,13 @@ class WorkflowExecutor:
                 {
                     "phase_id": phase_id,
                     "status": (
-                        "complete" if phase_id in self._completed
-                        else "failed" if phase_id in self._failed
-                        else "skipped" if phase_id in self._skipped
-                        else "pending"
+                        "complete"
+                        if phase_id in self._completed
+                        else (
+                            "failed"
+                            if phase_id in self._failed
+                            else "skipped" if phase_id in self._skipped else "pending"
+                        )
                     ),
                 }
             )
@@ -749,10 +790,13 @@ class WorkflowExecutor:
                 {
                     "phase_id": pid,
                     "status": (
-                        "complete" if pid in self._completed
-                        else "failed" if pid in self._failed
-                        else "skipped" if pid in self._skipped
-                        else "pending"
+                        "complete"
+                        if pid in self._completed
+                        else (
+                            "failed"
+                            if pid in self._failed
+                            else "skipped" if pid in self._skipped else "pending"
+                        )
                     ),
                 }
             )
@@ -776,10 +820,13 @@ class WorkflowExecutor:
             phases={
                 pid: {
                     "status": (
-                        "complete" if pid in self._completed
-                        else "failed" if pid in self._failed
-                        else "skipped" if pid in self._skipped
-                        else "pending"
+                        "complete"
+                        if pid in self._completed
+                        else (
+                            "failed"
+                            if pid in self._failed
+                            else "skipped" if pid in self._skipped else "pending"
+                        )
                     ),
                     "output": self._outputs.get(pid, {}),
                 }
@@ -874,6 +921,7 @@ def _wait_first(
     """Cross-version wait for first future to complete."""
     try:
         from concurrent.futures import FIRST_COMPLETED, wait
+
         done, not_done = wait(futures, timeout=timeout, return_when=FIRST_COMPLETED)
         return set(done), set(not_done)
     except ImportError:  # pragma: no cover

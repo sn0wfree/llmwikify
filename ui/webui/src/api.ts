@@ -280,6 +280,42 @@ export interface GraphData {
   all_types: string[];
 }
 
+export interface GraphAnalysis {
+  status: 'success' | 'empty';
+  message?: string;
+  centrality: {
+    pagerank: Array<{ node: string; score: number }>;
+    hubs: Array<{ node: string; out_degree: number }>;
+    authorities: Array<{ node: string; in_degree: number }>;
+  };
+  communities: {
+    num_communities: number;
+    modularity: number;
+    communities: Record<string, {
+      label: string;
+      size: number;
+      members: string[];
+      total_members: number;
+    }>;
+    bridges: Array<{ node: string; communities_connected: number; observation: string }>;
+  };
+  suggestions: Array<{
+    type: string;
+    node?: string;
+    concept?: string;
+    priority: 'high' | 'medium' | 'low' | string;
+    observation: string;
+    suggestion: string;
+  }>;
+  stats: {
+    nodes: number;
+    edges: number;
+    density: number;
+    avg_degree: number;
+    is_connected: boolean;
+  };
+}
+
 async function request<T>(endpoint: string, options?: RequestInit): Promise<T> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   const token = getAuthToken();
@@ -294,13 +330,24 @@ async function request<T>(endpoint: string, options?: RequestInit): Promise<T> {
   }
   if (!res.ok) {
     let errorMessage = `API error: ${res.status}`;
+    let structuredError: Record<string, unknown> | null = null;
     try {
       const body = await res.json();
-      errorMessage = body.error || body.message || body.detail || errorMessage;
+      if (res.status === 409 && body.detail && typeof body.detail === 'object') {
+        structuredError = body.detail;
+        errorMessage = body.detail.message || errorMessage;
+      } else {
+        errorMessage = body.error || body.message || (typeof body.detail === 'string' ? body.detail : null) || errorMessage;
+      }
     } catch {
       // Response body is not JSON, use status message
     }
-    throw new Error(errorMessage);
+    const error = new Error(errorMessage) as Error & { status?: number; detail?: Record<string, unknown> };
+    error.status = res.status;
+    if (structuredError) {
+      error.detail = structuredError;
+    }
+    throw error;
   }
   if (res.status === 204) return undefined as unknown as T;
   return res.json();
@@ -323,11 +370,20 @@ export const api = {
       request<SearchResult[]>(`/wiki/search?q=${encodeURIComponent(query)}&limit=${limit}`),
     readPage: (pageName: string) =>
       request<WikiPage>(`/wiki/page/${encodeURIComponent(pageName)}`),
-    writePage: (pageName: string, content: string) =>
-      request<{ ok: boolean }>(`/wiki/page`, {
+    writePage: (pageName: string, content: string, confirmToken?: string) => {
+      // v0.40: confirm_token sent in POST body (back-compat path).
+      // Server-side PRIMARY mechanism is ?confirm_token=<id> query
+      // string. Body is honored only when query string is absent;
+      // when both are present and disagree, query wins.
+      return request<{ ok: boolean }>(`/wiki/page`, {
         method: 'POST',
-        body: JSON.stringify({ page_name: pageName, content }),
-      }),
+        body: JSON.stringify({
+          page_name: pageName,
+          content,
+          ...(confirmToken ? { confirm_token: confirmToken } : {}),
+        }),
+      });
+    },
     sinkStatus: () => request<SinkStatus>('/wiki/sink/status'),
     lint: (wikiId?: string) =>
       request<{ issues: unknown[] }>(wikiId ? `/wiki/${wikiId}/lint` : '/wiki/lint'),
@@ -336,7 +392,7 @@ export const api = {
     suggestSynthesis: (wikiId?: string) =>
       request<unknown[]>(wikiId ? `/wiki/${wikiId}/suggest_synthesis` : '/wiki/suggest_synthesis'),
     graphAnalyze: (wikiId?: string) =>
-      request<unknown>(wikiId ? `/wiki/${wikiId}/graph_analyze` : '/wiki/graph_analyze'),
+      request<GraphAnalysis>(wikiId ? `/wiki/${wikiId}/graph_analyze` : '/wiki/graph_analyze'),
     graph: (params: { currentPage?: string; mode?: string; wikiId?: string } = {}) => {
       const q = new URLSearchParams();
       if (params.currentPage) q.set('current_page', params.currentPage);
@@ -348,17 +404,39 @@ export const api = {
     scoped: {
       readPage: (wikiId: string, pageName: string) =>
         request<WikiPage>(`/wiki/${wikiId}/page/${encodeURIComponent(pageName)}`),
-      writePage: (wikiId: string, pageName: string, content: string) =>
-        request<{ ok: boolean }>(`/wiki/${wikiId}/page`, {
+      writePage: (wikiId: string, pageName: string, content: string, confirmToken?: string) => {
+        // v0.40: confirm_token sent in POST body (back-compat path).
+        // Server-side PRIMARY mechanism is ?confirm_token=<id> query
+        // string. Body is honored only when query string is absent.
+        return request<{ ok: boolean }>(`/wiki/${wikiId}/page`, {
           method: 'POST',
-          body: JSON.stringify({ page_name: pageName, content }),
-        }),
+          body: JSON.stringify({
+            page_name: pageName,
+            content,
+            ...(confirmToken ? { confirm_token: confirmToken } : {}),
+          }),
+        });
+      },
       search: (wikiId: string, query: string, limit = 10) =>
         request<SearchResult[]>(`/wiki/${wikiId}/search?q=${encodeURIComponent(query)}&limit=${limit}`),
       status: (wikiId: string) => request<WikiStatus>(`/wiki/${wikiId}/status`),
       sinkStatus: (wikiId: string) => request<SinkStatus>(`/wiki/${wikiId}/sink/status`),
       pages: (wikiId: string) => request<{ pages: string[] }>(`/wiki/${wikiId}/pages`),
       graph: (wikiId: string, currentPage?: string) => api.wiki.graph({ wikiId, currentPage }),
+    },
+    fileUrl: (path: string, wikiId?: string) => {
+      // Decode first in case the path is already URL-encoded (react-markdown's
+      // urlTransform pre-encodes hrefs/src for ASCII files; raw CJK paths come
+      // through with %E4%... already in them). Re-encoding without decoding
+      // produces double-encoded %25E4%25... which 404s on the server.
+      let normalized = path;
+      try {
+        normalized = decodeURIComponent(path);
+      } catch {
+        normalized = path;
+      }
+      const encoded = normalized.split('/').map(encodeURIComponent).join('/');
+      return wikiId ? `/api/wiki/${wikiId}/file/${encoded}` : `/api/wiki/file/${encoded}`;
     },
   },
 
@@ -546,19 +624,20 @@ export const api = {
     },
   },
 
+  maintenance: {
+    health: () => request<Record<string, unknown>>('/maintenance/health'),
+    status: () => request<Record<string, unknown>>('/maintenance/status'),
+    trigger: (task: 'gaps' | 'db' | 'lint' | 'all' = 'all') =>
+      request<Record<string, unknown>>(`/maintenance/trigger?task=${task}`, { method: 'POST' }),
+  },
+
   ingest: {
     log: (limit = 20, wikiId?: string) => request<IngestLogEntry[]>(`/agent/ingest/log?limit=${limit}${wikiId ? `&wiki_id=${wikiId}` : ''}`),
     changes: (id: string) => request<IngestLogEntry>(`/agent/ingest/log/${id}`),
     revert: (id: string) => request<Record<string, unknown>>(`/agent/ingest/log/${id}/revert`, { method: 'POST' }),
   },
 
-  factorLibrary: {
-    list: () => request<{ categories: Record<string, unknown[]> }>('/factor/library/list'),
-    get: (name: string) => request<{ name: string; factor: Record<string, unknown> }>(`/factor/library/${encodeURIComponent(name)}`),
-    update: (name: string, data: Record<string, unknown>) =>
-      request<{ status: string; message: string }>(`/factor/library/${encodeURIComponent(name)}`, {
-        method: 'PUT',
-        body: JSON.stringify(data),
-      }),
-  },
+  // v0.40 BREAKING: factorLibrary removed.
+  // Quant research pipeline moved to quantnodes. See:
+  // https://github.com/sn0wfree/quantnodes (>=4.0)
 };

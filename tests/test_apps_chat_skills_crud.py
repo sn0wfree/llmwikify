@@ -18,9 +18,8 @@ from __future__ import annotations
 
 import pytest
 
-from llmwikify.apps.chat.skills import SkillContext, SkillResult
+from llmwikify.apps.chat.skills import SkillContext
 from llmwikify.apps.chat.skills.crud.memory_skill import (
-    MemorySkill,
     _add,
     _clear,
     _list,
@@ -28,14 +27,12 @@ from llmwikify.apps.chat.skills.crud.memory_skill import (
     memory_skill,
 )
 from llmwikify.apps.chat.skills.crud.notify_skill import (
-    NotifySkill,
     _list_notifications,
     _mark_read,
     _subscribe,
     notify_skill,
 )
 from llmwikify.apps.chat.skills.crud.scheduler_skill import (
-    SchedulerSkill,
     _add_job,
     _list_jobs,
     _remove_job,
@@ -43,7 +40,6 @@ from llmwikify.apps.chat.skills.crud.scheduler_skill import (
     scheduler_skill,
 )
 from llmwikify.apps.chat.skills.crud.wiki_dream_skill import (
-    WikiDreamSkill,
     _approve,
     _get_proposals,
     _reject,
@@ -62,16 +58,22 @@ class MockMemoryManager:
 
     def add(self, session_id: str, role: str, content: str) -> str:
         import uuid
+
         entry_id = str(uuid.uuid4())[:8]
-        self._entries.append({"id": entry_id, "session_id": session_id, "role": role, "content": content})
+        self._entries.append(
+            {"id": entry_id, "session_id": session_id, "role": role, "content": content}
+        )
         return entry_id
 
     def list(self, session_id: str, limit: int = 50) -> list[dict]:
         return [e for e in self._entries if e["session_id"] == session_id][-limit:]
 
     def search(self, session_id: str, query: str, limit: int = 10) -> list[dict]:
-        return [e for e in self._entries
-                if e["session_id"] == session_id and query.lower() in e["content"].lower()][:limit]
+        return [
+            e
+            for e in self._entries
+            if e["session_id"] == session_id and query.lower() in e["content"].lower()
+        ][:limit]
 
 
 class MockConversationStore:
@@ -80,16 +82,22 @@ class MockConversationStore:
 
     def add(self, session_id: str, role: str, content: str) -> str:
         import uuid
+
         entry_id = str(uuid.uuid4())[:8]
-        self._entries.append({"id": entry_id, "session_id": session_id, "role": role, "content": content})
+        self._entries.append(
+            {"id": entry_id, "session_id": session_id, "role": role, "content": content}
+        )
         return entry_id
 
     def list(self, session_id: str, limit: int = 50) -> list[dict]:
         return [e for e in self._entries if e["session_id"] == session_id][-limit:]
 
     def search(self, session_id: str, query: str, limit: int = 10) -> list[dict]:
-        return [e for e in self._entries
-                if e["session_id"] == session_id and query.lower() in e["content"].lower()][:limit]
+        return [
+            e
+            for e in self._entries
+            if e["session_id"] == session_id and query.lower() in e["content"].lower()
+        ][:limit]
 
     def clear(self, session_id: str) -> int:
         before = len(self._entries)
@@ -127,7 +135,15 @@ class MockScheduler:
     def __init__(self) -> None:
         self._tasks: dict[str, dict] = {}
 
-    def add_task(self, name: str, cron_expr: str, handler: object, description: str = "", enabled: bool = True, is_write: bool = False) -> None:
+    def add_task(
+        self,
+        name: str,
+        cron_expr: str,
+        handler: object,
+        description: str = "",
+        enabled: bool = True,
+        is_write: bool = False,
+    ) -> None:
         self._tasks[name] = {"name": name, "cron_expr": cron_expr, "enabled": enabled}
 
     def list_tasks(self) -> list[dict]:
@@ -322,7 +338,12 @@ class TestSchedulerSkillMetadata:
         assert scheduler_skill.name == "scheduler"
 
     def test_has_4_actions(self) -> None:
-        assert set(scheduler_skill.actions.keys()) == {"add_job", "list_jobs", "remove_job", "trigger"}
+        assert set(scheduler_skill.actions.keys()) == {
+            "add_job",
+            "list_jobs",
+            "remove_job",
+            "trigger",
+        }
 
     def test_manifest(self) -> None:
         m = scheduler_skill.manifest()
@@ -333,12 +354,16 @@ class TestSchedulerSkillMetadata:
 class TestSchedulerSkillActions:
     @pytest.mark.asyncio
     async def test_add_job(self, ctx_with_scheduler: SkillContext) -> None:
-        r = await _add_job({"name": "test", "cron_expr": "0 * * * *"}, ctx_with_scheduler)
+        r = await _add_job(
+            {"name": "test", "cron_expr": "0 * * * *"}, ctx_with_scheduler
+        )
         assert r.status == "ok"
         assert r.data["added"] is True
 
     @pytest.mark.asyncio
-    async def test_add_job_missing_fields(self, ctx_with_scheduler: SkillContext) -> None:
+    async def test_add_job_missing_fields(
+        self, ctx_with_scheduler: SkillContext
+    ) -> None:
         r = await _add_job({"name": "test"}, ctx_with_scheduler)
         assert r.status == "error"
 
@@ -380,7 +405,12 @@ class TestWikiDreamSkillMetadata:
         assert wiki_dream_skill.name == "wiki_dream"
 
     def test_has_4_actions(self) -> None:
-        assert set(wiki_dream_skill.actions.keys()) == {"run", "get_proposals", "approve", "reject"}
+        assert set(wiki_dream_skill.actions.keys()) == {
+            "run",
+            "get_proposals",
+            "approve",
+            "reject",
+        }
 
     def test_manifest(self) -> None:
         m = wiki_dream_skill.manifest()

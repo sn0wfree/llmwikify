@@ -57,9 +57,7 @@ def load_plugins(registry: SkillRegistry) -> int:
                 _load_python_skill(item, registry)
                 loaded += 1
         except Exception:
-            logger.warning(
-                "Failed to load plugin %s", item.name, exc_info=True
-            )
+            logger.warning("Failed to load plugin %s", item.name, exc_info=True)
     if loaded:
         logger.info("Loaded %d plugin skill(s) from %s", loaded, PLUGIN_DIR)
     return loaded
@@ -92,9 +90,7 @@ def _load_skill_md(skill_dir: Path, registry: SkillRegistry) -> None:
     fm = parsed.frontmatter
 
     for warning in fm.warnings:
-        logger.warning(
-            "Plugin %s SKILL.md: %s", skill_dir.name, warning
-        )
+        logger.warning("Plugin %s SKILL.md: %s", skill_dir.name, warning)
 
     skill = PromptBasedSkill(
         name=fm.name,
@@ -117,7 +113,9 @@ def _load_skill_md(skill_dir: Path, registry: SkillRegistry) -> None:
     registry.register(skill)
     logger.debug(
         "Loaded Prompt-Based plugin: %s (version=%s triggers=%s)",
-        fm.name, fm.version, fm.triggers,
+        fm.name,
+        fm.version,
+        fm.triggers,
     )
 
 
@@ -143,26 +141,16 @@ def _load_python_skill(py_path: Path, registry: SkillRegistry) -> None:
     # Otherwise, look for a Skill subclass
     for attr_name in dir(module):
         attr = getattr(module, attr_name)
-        if (
-            isinstance(attr, type)
-            and issubclass(attr, Skill)
-            and attr is not Skill
-        ):
+        if isinstance(attr, type) and issubclass(attr, Skill) and attr is not Skill:
             try:
                 instance = attr()
                 registry.register(instance)
-                logger.debug(
-                    "Loaded Code-Based plugin (class): %s", py_path.name
-                )
+                logger.debug("Loaded Code-Based plugin (class): %s", py_path.name)
                 return
             except Exception:
-                logger.debug(
-                    "Skipping %s: instantiation failed", attr_name
-                )
+                logger.debug("Skipping %s: instantiation failed", attr_name)
 
-    raise ImportError(
-        f"No Skill subclass or `skill` variable found in {py_path.name}"
-    )
+    raise ImportError(f"No Skill subclass or `skill` variable found in {py_path.name}")
 
 
 __all__ = ["load_plugins", "PLUGIN_DIR"]

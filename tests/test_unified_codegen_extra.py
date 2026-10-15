@@ -6,24 +6,28 @@
 - 多轮失败
 - 边界情况
 """
+
 from __future__ import annotations
 
-import polars as pl
 import pytest
 
-from llmwikify.apps.chat.agent.unified.core import StepResult
-from llmwikify.apps.chat.agent.unified.loop import UnifiedAgentLoop
-from llmwikify.apps.chat.agent.unified.pipelines.codegen import (
+pl = pytest.importorskip(
+    "polars", reason="polars not installed — codegen 数据框断言需要它"
+)
+
+# v0.40 quant 分离: 本文件的 codegen 流程 import QuantNodes (已迁出本仓,
+# 可选依赖) — 未安装则整文件跳过
+pytest.importorskip("QuantNodes")
+
+from llmwikify.apps.chat.agent.unified.pipelines.codegen import (  # noqa: E402
     CodeActor,
     CodegenReasoner,
 )
-from llmwikify.apps.chat.agent.unified.spec import (
-    ActResult,
+from llmwikify.apps.chat.agent.unified.spec import (  # noqa: E402
     CodegenSpec,
     ReasonResponse,
     UnifiedResult,
 )
-from llmwikify.apps.chat.agent.unified.steps import CheckSuccessStep
 
 # ── Mock LLM ──────────────────────────────────────────────
 
@@ -47,29 +51,115 @@ class _ScriptedLLM:
 
 def _sample_df() -> pl.DataFrame:
     """Small long-format polars DataFrame for factor computation tests."""
-    return pl.DataFrame({
-        "date": [20240101, 20240102, 20240103, 20240104, 20240105] * 3,
-        "code": ["A"] * 5 + ["B"] * 5 + ["C"] * 5,
-        "close": [10.0, 11.0, 12.0, 13.0, 14.0,
-                  20.0, 21.0, 22.0, 23.0, 24.0,
-                  30.0, 31.0, 32.0, 33.0, 34.0],
-        "open": [9.5, 10.5, 11.5, 12.5, 13.5,
-                 19.5, 20.5, 21.5, 22.5, 23.5,
-                 29.5, 30.5, 31.5, 32.5, 33.5],
-        "high": [10.5, 11.5, 12.5, 13.5, 14.5,
-                 20.5, 21.5, 22.5, 23.5, 24.5,
-                 30.5, 31.5, 32.5, 33.5, 34.5],
-        "low": [9.0, 10.0, 11.0, 12.0, 13.0,
-                19.0, 20.0, 21.0, 22.0, 23.0,
-                29.0, 30.0, 31.0, 32.0, 33.0],
-        "volume": [1000.0] * 15,
-        "returns": [0.0, 0.1, 0.09, 0.08, 0.07,
-                    0.0, 0.05, 0.047, 0.045, 0.043,
-                    0.0, 0.033, 0.032, 0.031, 0.030],
-        "vwap": [10.0, 11.0, 12.0, 13.0, 14.0,
-                 20.0, 21.0, 22.0, 23.0, 24.0,
-                 30.0, 31.0, 32.0, 33.0, 34.0],
-    })
+    return pl.DataFrame(
+        {
+            "date": [20240101, 20240102, 20240103, 20240104, 20240105] * 3,
+            "code": ["A"] * 5 + ["B"] * 5 + ["C"] * 5,
+            "close": [
+                10.0,
+                11.0,
+                12.0,
+                13.0,
+                14.0,
+                20.0,
+                21.0,
+                22.0,
+                23.0,
+                24.0,
+                30.0,
+                31.0,
+                32.0,
+                33.0,
+                34.0,
+            ],
+            "open": [
+                9.5,
+                10.5,
+                11.5,
+                12.5,
+                13.5,
+                19.5,
+                20.5,
+                21.5,
+                22.5,
+                23.5,
+                29.5,
+                30.5,
+                31.5,
+                32.5,
+                33.5,
+            ],
+            "high": [
+                10.5,
+                11.5,
+                12.5,
+                13.5,
+                14.5,
+                20.5,
+                21.5,
+                22.5,
+                23.5,
+                24.5,
+                30.5,
+                31.5,
+                32.5,
+                33.5,
+                34.5,
+            ],
+            "low": [
+                9.0,
+                10.0,
+                11.0,
+                12.0,
+                13.0,
+                19.0,
+                20.0,
+                21.0,
+                22.0,
+                23.0,
+                29.0,
+                30.0,
+                31.0,
+                32.0,
+                33.0,
+            ],
+            "volume": [1000.0] * 15,
+            "returns": [
+                0.0,
+                0.1,
+                0.09,
+                0.08,
+                0.07,
+                0.0,
+                0.05,
+                0.047,
+                0.045,
+                0.043,
+                0.0,
+                0.033,
+                0.032,
+                0.031,
+                0.030,
+            ],
+            "vwap": [
+                10.0,
+                11.0,
+                12.0,
+                13.0,
+                14.0,
+                20.0,
+                21.0,
+                22.0,
+                23.0,
+                24.0,
+                30.0,
+                31.0,
+                32.0,
+                33.0,
+                34.0,
+            ],
+        }
+    )
 
 
 # ── CodegenReasoner tests ─────────────────────────────────
@@ -78,7 +168,9 @@ def _sample_df() -> pl.DataFrame:
 @pytest.mark.asyncio
 async def test_codegen_reasoner_success():
     """LLM returns valid code → ReasonResponse with code."""
-    good_code = 'def compute_factor(df):\n    return df.select(pl.col("close")).to_series()'
+    good_code = (
+        'def compute_factor(df):\n    return df.select(pl.col("close")).to_series()'
+    )
     llm = _ScriptedLLM(f"```python\n{good_code}\n```")
     reasoner = CodegenReasoner(llm_client=llm)
     spec = CodegenSpec(messages=[{"role": "user", "content": "test"}])
@@ -213,10 +305,13 @@ async def test_code_actor_output_is_series():
 @pytest.mark.asyncio
 async def test_codegen_loop_success_first_try():
     """Full codegen loop: LLM returns valid code → success."""
-    good_code = 'def compute_factor(df):\n    return df.select(pl.col("close")).to_series()'
+    good_code = (
+        'def compute_factor(df):\n    return df.select(pl.col("close")).to_series()'
+    )
     llm = _ScriptedLLM(f"```python\n{good_code}\n```")
 
     from llmwikify.apps.chat.agent.unified.registry import create_agent_loop
+
     loop = create_agent_loop("codegen", llm_client=llm)
 
     spec = CodegenSpec(
@@ -234,13 +329,16 @@ async def test_codegen_loop_success_first_try():
 async def test_codegen_loop_retry_on_syntax_error():
     """Codegen loop: syntax error → retry → success."""
     bad_code = "def compute_factor(df:\n    return 1\n"  # missing )
-    good_code = 'def compute_factor(df):\n    return df.select(pl.col("close")).to_series()'
+    good_code = (
+        'def compute_factor(df):\n    return df.select(pl.col("close")).to_series()'
+    )
     llm = _ScriptedLLM(
         f"```python\n{bad_code}\n```",
         f"```python\n{good_code}\n```",
     )
 
     from llmwikify.apps.chat.agent.unified.registry import create_agent_loop
+
     loop = create_agent_loop("codegen", llm_client=llm)
 
     spec = CodegenSpec(
@@ -259,13 +357,16 @@ async def test_codegen_loop_retry_on_syntax_error():
 async def test_codegen_loop_retry_on_execute_error():
     """Codegen loop: execute error → retry → success."""
     bad_code = "def compute_factor(df):\n    return 1 / 0\n"
-    good_code = 'def compute_factor(df):\n    return df.select(pl.col("close")).to_series()'
+    good_code = (
+        'def compute_factor(df):\n    return df.select(pl.col("close")).to_series()'
+    )
     llm = _ScriptedLLM(
         f"```python\n{bad_code}\n```",
         f"```python\n{good_code}\n```",
     )
 
     from llmwikify.apps.chat.agent.unified.registry import create_agent_loop
+
     loop = create_agent_loop("codegen", llm_client=llm)
 
     spec = CodegenSpec(
@@ -292,6 +393,7 @@ async def test_codegen_loop_exhausts_rounds():
     )
 
     from llmwikify.apps.chat.agent.unified.registry import create_agent_loop
+
     loop = create_agent_loop("codegen", llm_client=llm)
 
     spec = CodegenSpec(
@@ -314,13 +416,16 @@ async def test_codegen_loop_exhausts_rounds():
 async def test_codegen_loop_error_feedback_in_messages():
     """Error feedback is injected into messages for the next LLM call."""
     bad_code = "def compute_factor(df):\n    return 1 / 0\n"
-    good_code = 'def compute_factor(df):\n    return df.select(pl.col("close")).to_series()'
+    good_code = (
+        'def compute_factor(df):\n    return df.select(pl.col("close")).to_series()'
+    )
     llm = _ScriptedLLM(
         f"```python\n{bad_code}\n```",
         f"```python\n{good_code}\n```",
     )
 
     from llmwikify.apps.chat.agent.unified.registry import create_agent_loop
+
     loop = create_agent_loop("codegen", llm_client=llm)
 
     spec = CodegenSpec(
@@ -334,7 +439,10 @@ async def test_codegen_loop_error_feedback_in_messages():
     assert len(llm.calls) == 2
     second_messages = llm.calls[1][0]
     last_user = next(m for m in reversed(second_messages) if m["role"] == "user")
-    assert "ZeroDivisionError" in last_user["content"] or "execute_error" in last_user["content"]
+    assert (
+        "ZeroDivisionError" in last_user["content"]
+        or "execute_error" in last_user["content"]
+    )
 
 
 # ─── UnifiedResult.to_dict() ──────────────────────────────────────
@@ -392,6 +500,7 @@ async def test_unified_result_to_dict_preserves_steps():
 
 class _DictLLM:
     """LLM that returns a fixed code string."""
+
     def __init__(self, code: str) -> None:
         self._code = code
         self.calls: list = []
@@ -408,8 +517,11 @@ async def test_generate_factor_code_success():
 
     llm = _DictLLM("def compute_factor(df):\n    return df['close'].fill_null(0)")
     result = await generate_factor_code(
-        "alpha-001", "close", _sample_df(),
-        llm_client=llm, max_repair_rounds=0,
+        "alpha-001",
+        "close",
+        _sample_df(),
+        llm_client=llm,
+        max_repair_rounds=0,
     )
     assert result.code is not None
     assert "compute_factor" in result.code
@@ -424,8 +536,11 @@ async def test_generate_factor_code_failure():
 
     llm = _DictLLM("def compute_factor(df):\n    if rank(pl.col('x')) > 0: return 1")
     result = await generate_factor_code(
-        "alpha-001", "rank(x)", _sample_df(),
-        llm_client=llm, max_repair_rounds=0,
+        "alpha-001",
+        "rank(x)",
+        _sample_df(),
+        llm_client=llm,
+        max_repair_rounds=0,
     )
     # Code has syntax/execution error — loop retries then gives up
     assert result.error is not None or result.code is not None
@@ -438,8 +553,11 @@ async def test_generate_factor_code_builds_messages():
 
     llm = _DictLLM("def compute_factor(df):\n    return df['close'].fill_null(0)")
     await generate_factor_code(
-        "alpha-042", "close / open", _sample_df(),
-        llm_client=llm, system_prompt="TEST SYSTEM PROMPT",
+        "alpha-042",
+        "close / open",
+        _sample_df(),
+        llm_client=llm,
+        system_prompt="TEST SYSTEM PROMPT",
     )
     # LLM should have been called with the system prompt
     assert len(llm.calls) >= 1

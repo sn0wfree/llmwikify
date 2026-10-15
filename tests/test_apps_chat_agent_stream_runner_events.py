@@ -10,7 +10,6 @@ ERROR) directly testable.
 from __future__ import annotations
 
 import asyncio
-from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
@@ -23,7 +22,6 @@ from llmwikify.apps.chat.agent.events import (
     TOOL_CALL_END,
 )
 from llmwikify.apps.chat.agent.orchestrator import (
-    ChatEvent,
     ChatOrchestrator,
 )
 
@@ -45,7 +43,7 @@ def _make_orchestrator(
     async def _runner(**_kwargs):
         if runner_exc is not None:
             raise runner_exc
-        for ev in (runner_events or []):
+        for ev in runner_events or []:
             yield ev
 
     orch._chat_via_runner_v2 = _runner
@@ -61,14 +59,18 @@ class TestPreStreamAbort:
         orch = _make_orchestrator(runner_events=[])
         ev = asyncio.Event()
         ev.set()
-        out = asyncio.run(_collect(orch._stream_runner_events(
-            messages_for_llm=[],
-            system_prompt="",
-            tool_registry=MagicMock(),
-            session_id="s1",
-            ctx=MagicMock(),
-            abort_event=ev,
-        )))
+        out = asyncio.run(
+            _collect(
+                orch._stream_runner_events(
+                    messages_for_llm=[],
+                    system_prompt="",
+                    tool_registry=MagicMock(),
+                    session_id="s1",
+                    ctx=MagicMock(),
+                    abort_event=ev,
+                )
+            )
+        )
         assert len(out) == 1
         assert out[0]["type"] == ERROR
 
@@ -77,9 +79,18 @@ class TestPreStreamAbort:
         orch = _make_orchestrator(runner_events=[{"type": DONE, "content": "x"}])
         ev = asyncio.Event()
         ev.set()
-        asyncio.run(_collect(orch._stream_runner_events(
-            [], "", MagicMock(), "s1", MagicMock(), ev,
-        )))
+        asyncio.run(
+            _collect(
+                orch._stream_runner_events(
+                    [],
+                    "",
+                    MagicMock(),
+                    "s1",
+                    MagicMock(),
+                    ev,
+                )
+            )
+        )
         # runner is async generator factory; verify it wasn't entered
         # by checking that no DONE event was yielded.
         # (We can't easily assert _chat_via_runner_v2 wasn't called
@@ -102,9 +113,18 @@ class TestMidStreamAbort:
         orch.tool_executor = MagicMock()
         orch._chat_via_runner_v2 = _runner
 
-        out = asyncio.run(_collect(orch._stream_runner_events(
-            [], "", MagicMock(), "s1", MagicMock(), ev,
-        )))
+        out = asyncio.run(
+            _collect(
+                orch._stream_runner_events(
+                    [],
+                    "",
+                    MagicMock(),
+                    "s1",
+                    MagicMock(),
+                    ev,
+                )
+            )
+        )
         # First MESSAGE_DELTA, then error (no second delta)
         assert out[0]["type"] == MESSAGE_DELTA
         assert out[1]["type"] == ERROR
@@ -118,9 +138,18 @@ class TestPerEventSideEffects:
             runner_events=[{"type": MESSAGE_DELTA, "content": "hi"}],
         )
         ev = asyncio.Event()
-        asyncio.run(_collect(orch._stream_runner_events(
-            [], "", MagicMock(), "s1", MagicMock(), ev,
-        )))
+        asyncio.run(
+            _collect(
+                orch._stream_runner_events(
+                    [],
+                    "",
+                    MagicMock(),
+                    "s1",
+                    MagicMock(),
+                    ev,
+                )
+            )
+        )
         orch.event_log.log.assert_not_called()
 
     def test_non_delta_events_logged(self):
@@ -130,9 +159,18 @@ class TestPerEventSideEffects:
             ],
         )
         ev = asyncio.Event()
-        asyncio.run(_collect(orch._stream_runner_events(
-            [], "", MagicMock(), "s1", MagicMock(), ev,
-        )))
+        asyncio.run(
+            _collect(
+                orch._stream_runner_events(
+                    [],
+                    "",
+                    MagicMock(),
+                    "s1",
+                    MagicMock(),
+                    ev,
+                )
+            )
+        )
         orch.event_log.log.assert_called_once()
         args = orch.event_log.log.call_args[0]
         assert args[0] == "s1"
@@ -140,16 +178,27 @@ class TestPerEventSideEffects:
 
     def test_confirmation_required_saves_assistant_message(self):
         orch = _make_orchestrator(
-            runner_events=[{
-                "type": CONFIRMATION_REQUIRED,
-                "tool": "wiki_write",
-                "confirmation_id": "abc-123",
-            }],
+            runner_events=[
+                {
+                    "type": CONFIRMATION_REQUIRED,
+                    "tool": "wiki_write",
+                    "confirmation_id": "abc-123",
+                }
+            ],
         )
         ev = asyncio.Event()
-        asyncio.run(_collect(orch._stream_runner_events(
-            [], "", MagicMock(), "s1", MagicMock(), ev,
-        )))
+        asyncio.run(
+            _collect(
+                orch._stream_runner_events(
+                    [],
+                    "",
+                    MagicMock(),
+                    "s1",
+                    MagicMock(),
+                    ev,
+                )
+            )
+        )
         orch.tool_executor.save_message.assert_called_once()
         args = orch.tool_executor.save_message.call_args[0]
         assert args[0] == "s1"
@@ -159,15 +208,26 @@ class TestPerEventSideEffects:
 
     def test_error_event_saves_assistant_message(self):
         orch = _make_orchestrator(
-            runner_events=[{
-                "type": ERROR,
-                "message": "rate limit hit",
-            }],
+            runner_events=[
+                {
+                    "type": ERROR,
+                    "message": "rate limit hit",
+                }
+            ],
         )
         ev = asyncio.Event()
-        asyncio.run(_collect(orch._stream_runner_events(
-            [], "", MagicMock(), "s1", MagicMock(), ev,
-        )))
+        asyncio.run(
+            _collect(
+                orch._stream_runner_events(
+                    [],
+                    "",
+                    MagicMock(),
+                    "s1",
+                    MagicMock(),
+                    ev,
+                )
+            )
+        )
         orch.tool_executor.save_message.assert_called_once()
         args = orch.tool_executor.save_message.call_args[0]
         assert "rate limit hit" in args[2]
@@ -183,9 +243,18 @@ class TestEventForwarding:
         ]
         orch = _make_orchestrator(runner_events=runner_events)
         ev = asyncio.Event()
-        out = asyncio.run(_collect(orch._stream_runner_events(
-            [], "", MagicMock(), "s1", MagicMock(), ev,
-        )))
+        out = asyncio.run(
+            _collect(
+                orch._stream_runner_events(
+                    [],
+                    "",
+                    MagicMock(),
+                    "s1",
+                    MagicMock(),
+                    ev,
+                )
+            )
+        )
         assert out == runner_events
 
     def test_done_event_ends_stream(self):
@@ -196,9 +265,18 @@ class TestEventForwarding:
             ],
         )
         ev = asyncio.Event()
-        out = asyncio.run(_collect(orch._stream_runner_events(
-            [], "", MagicMock(), "s1", MagicMock(), ev,
-        )))
+        out = asyncio.run(
+            _collect(
+                orch._stream_runner_events(
+                    [],
+                    "",
+                    MagicMock(),
+                    "s1",
+                    MagicMock(),
+                    ev,
+                )
+            )
+        )
         assert out[-1]["type"] == DONE
         assert len(out) == 2
 
@@ -211,20 +289,40 @@ class TestEventForwarding:
         orch = _make_orchestrator(runner_exc=RuntimeError("boom"))
         ev = asyncio.Event()
         with pytest.raises(RuntimeError, match="boom"):
-            asyncio.run(_collect(orch._stream_runner_events(
-                [], "", MagicMock(), "s1", MagicMock(), ev,
-            )))
+            asyncio.run(
+                _collect(
+                    orch._stream_runner_events(
+                        [],
+                        "",
+                        MagicMock(),
+                        "s1",
+                        MagicMock(),
+                        ev,
+                    )
+                )
+            )
 
 
 class TestSessionIdForwarding:
     def test_session_id_used_for_log(self):
         orch = _make_orchestrator(
-            runner_events=[{"type": TOOL_CALL_END, "tool": "x", "result": "r", "call_id": "c"}],
+            runner_events=[
+                {"type": TOOL_CALL_END, "tool": "x", "result": "r", "call_id": "c"}
+            ],
         )
         ev = asyncio.Event()
-        asyncio.run(_collect(orch._stream_runner_events(
-            [], "", MagicMock(), "session-xyz", MagicMock(), ev,
-        )))
+        asyncio.run(
+            _collect(
+                orch._stream_runner_events(
+                    [],
+                    "",
+                    MagicMock(),
+                    "session-xyz",
+                    MagicMock(),
+                    ev,
+                )
+            )
+        )
         orch.event_log.log.assert_called_once()
         assert orch.event_log.log.call_args[0][0] == "session-xyz"
 
@@ -233,7 +331,16 @@ class TestSessionIdForwarding:
             runner_events=[{"type": ERROR, "message": "x"}],
         )
         ev = asyncio.Event()
-        asyncio.run(_collect(orch._stream_runner_events(
-            [], "", MagicMock(), "another-id", MagicMock(), ev,
-        )))
+        asyncio.run(
+            _collect(
+                orch._stream_runner_events(
+                    [],
+                    "",
+                    MagicMock(),
+                    "another-id",
+                    MagicMock(),
+                    ev,
+                )
+            )
+        )
         assert orch.tool_executor.save_message.call_args[0][0] == "another-id"

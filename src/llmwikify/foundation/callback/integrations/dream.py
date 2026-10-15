@@ -19,7 +19,10 @@ class WikiDreamSyncHook(AgentHook):
         self.pending_wiki_dream = False
 
     def after_tool_executed(
-        self, ctx: AgentHookContext, tool_call: Any, result: Any,
+        self,
+        ctx: AgentHookContext,
+        tool_call: Any,
+        result: Any,
     ) -> None:
         if tool_call.name not in {"wiki_synthesize", "wiki_sink_status"}:
             return

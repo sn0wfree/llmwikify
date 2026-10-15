@@ -11,6 +11,7 @@
 - memory_manager: Optional memory layer
 - hook: Optional lifecycle hook
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field

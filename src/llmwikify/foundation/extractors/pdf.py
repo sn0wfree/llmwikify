@@ -14,28 +14,28 @@ def _extract_pdf(path: Path) -> ExtractedContent:
             text="",
             source_type="error",
             title=path.stem,
-            metadata={"error": "pymupdf not installed. Install with: pip install pymupdf"}
+            metadata={
+                "error": "pymupdf not installed. Install with: pip install pymupdf"
+            },
         )
 
-    doc = pymupdf.open(path)
-    pages = []
-    page_count = len(doc)
+    with pymupdf.open(path) as doc:
+        pages = []
+        page_count = len(doc)
 
-    for page_num in range(page_count):
-        page = doc[page_num]
-        text = page.get_text()
-        pages.append(f"--- Page {page_num + 1} ---\n{text}")
-
-    doc.close()
+        for page_num in range(page_count):
+            page = doc[page_num]
+            text = page.get_text()
+            pages.append(f"--- Page {page_num + 1} ---\n{text}")
 
     full_text = "\n\n".join(pages)
 
     # Try to extract title from first page
     first_page_title = ""
     if pages:
-        first_lines = pages[0].split('\n')[:5]
+        first_lines = pages[0].split("\n")[:5]
         for line in first_lines:
-            if line.strip() and not line.startswith('---'):
+            if line.strip() and not line.startswith("---"):
                 first_page_title = line.strip()
                 break
 

@@ -38,9 +38,7 @@ def build_visualization_data(
             all_types: List of page type names for coloring
     """
     try:
-        graph_data = build_graph(
-            index, include_wikilinks=True, include_relations=False
-        )
+        graph_data = build_graph(index, include_wikilinks=True, include_relations=False)
     except Exception:
         logger.exception("Failed to build graph")
         return {
@@ -101,7 +99,9 @@ def build_visualization_data(
 
     # Filter edges for display nodes
     node_ids = {n["id"] for n in display_nodes}
-    display_edges = [e for e in edges if e["source"] in node_ids and e["target"] in node_ids]
+    display_edges = [
+        e for e in edges if e["source"] in node_ids and e["target"] in node_ids
+    ]
 
     # Load page type mapping for coloring
     try:
@@ -119,11 +119,13 @@ def build_visualization_data(
             if nid.startswith(type_dir + "/") or nid == type_dir:
                 page_type = type_dir
                 break
-        result_nodes.append({
-            "id": nid,
-            "label": n.get("label", nid),
-            "page_type": page_type,
-        })
+        result_nodes.append(
+            {
+                "id": nid,
+                "label": n.get("label", nid),
+                "page_type": page_type,
+            }
+        )
 
     return {
         "nodes": result_nodes,

@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { saveToWiki } from '../../lib/autoresearch-api';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../ui/dialog';
 
 interface Props {
   sessionId: string;
@@ -39,18 +40,20 @@ export function SaveToWikiModal({ sessionId, query, onClose, onSaved }: Props) {
   }, [sessionId, pageName, onSaved]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
-      <div
-        className="w-full max-w-md mx-4 bg-card rounded-lg shadow-xl border border-border overflow-hidden"
-        onClick={e => e.stopPropagation()}
+    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent
+        className="max-w-md sm:max-w-md"
+        showCloseButton={false}
+        onClick={(e) => e.stopPropagation()}
       >
-        <div className="px-4 py-3 border-b border-border">
-          <h3 className="text-sm font-medium text-foreground">Save to Wiki</h3>
-          <p className="text-xs text-muted-foreground mt-1">
+        <DialogHeader>
+          <DialogTitle>Save to Wiki</DialogTitle>
+          <DialogDescription>
             Report will be saved as a wiki page. Sources and synthesis will also be saved.
-          </p>
-        </div>
-        <div className="p-4 space-y-3">
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-3">
           <div>
             <label className="text-xs text-muted-foreground mb-1 block">Page Name</label>
             <input
@@ -70,7 +73,8 @@ export function SaveToWikiModal({ sessionId, query, onClose, onSaved }: Props) {
             </div>
           )}
         </div>
-        <div className="px-4 py-3 border-t border-border flex gap-3 justify-end">
+
+        <div className="flex gap-3 justify-end">
           <button
             onClick={onClose}
             className="px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground"
@@ -87,7 +91,7 @@ export function SaveToWikiModal({ sessionId, query, onClose, onSaved }: Props) {
             </button>
           )}
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -40,27 +40,91 @@ if TYPE_CHECKING:
 
 
 class Rule:
-    """Base class for a lint rule.
+    """Base class for a per-page lint rule.
 
     Subclasses override:
     - ``name`` (str): the issue-type string this rule produces
-    - ``run(wiki) -> list[dict]``: the detection logic
+    - ``detect(page_name, content, wiki, results)``: per-page detection logic
 
     Subclasses MAY override:
+    - ``max_results`` (int): max issues to return (default 3)
+    - ``_iter_pages(wiki)``: custom page iteration (default: skip Query: pages)
     - ``__doc__``: a short description of what the rule detects
     """
 
     name: str = ""
+    max_results: int = 3
 
     def run(self, wiki: Wiki) -> list[dict[str, Any]]:
         """Run this rule against ``wiki`` and return any issues found.
 
-        Returns:
-            A list of issue dicts. Each dict is a free-form structure
-            consumed by the LLM/CLI for display. Common keys:
-            ``type`` (str), ``page`` (str), ``file`` (str),
-            ``observation`` (str, human-readable).
+        Template method: checks wiki_dir, iterates pages, calls detect().
         """
+        if not wiki.wiki_dir.exists():
+            return []
+        results: list[dict[str, Any]] = []
+        for page in self._iter_pages(wiki):
+            page_name = wiki._page_display_name(page)
+            content = page.read_text()
+            self.detect(page_name, content, wiki, results)
+            if len(results) >= self.max_results:
+                break
+        return results[: self.max_results]
+
+    def _iter_pages(self, wiki: Wiki):
+        """Yield non-Query pages. Override for custom iteration."""
+        for page in wiki._wiki_pages():
+            if not wiki._page_display_name(page).startswith("Query:"):
+                yield page
+
+    def detect(
+        self,
+        page_name: str,
+        content: str,
+        wiki: Wiki,
+        results: list[dict[str, Any]],
+    ) -> None:
+        """Detect issues in a single page. Append to results."""
+        raise NotImplementedError
+
+
+class CrossPageRule(Rule):
+    """Base class for rules that need all pages loaded first.
+
+    Subclasses override:
+    - ``detect_all(pages, wiki, results)``: cross-page analysis logic
+
+    The ``pages`` dict is ``{page_name: content}`` for all non-Query pages.
+    """
+
+    def run(self, wiki: Wiki) -> list[dict[str, Any]]:
+        """Run this rule against ``wiki`` and return any issues found.
+
+        Template method: loads all pages, then calls detect_all().
+        """
+        if not wiki.wiki_dir.exists():
+            return []
+        pages = self._load_pages(wiki)
+        results: list[dict[str, Any]] = []
+        self.detect_all(pages, wiki, results)
+        return results[: self.max_results]
+
+    def _load_pages(self, wiki: Wiki) -> dict[str, str]:
+        """Load all non-Query pages into a dict."""
+        pages: dict[str, str] = {}
+        for page in wiki._wiki_pages():
+            name = wiki._page_display_name(page)
+            if not name.startswith("Query:"):
+                pages[name] = page.read_text()
+        return pages
+
+    def detect_all(
+        self,
+        pages: dict[str, str],
+        wiki: Wiki,
+        results: list[dict[str, Any]],
+    ) -> None:
+        """Detect issues across all pages. Append to results."""
         raise NotImplementedError
 
 

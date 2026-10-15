@@ -88,13 +88,15 @@ async def _gather(args: dict, ctx: SkillContext) -> SkillResult:
 
         if wiki is None:
             # Offline / test mode: produce a synthetic source
-            sources_collected.append({
-                "url": f"https://offline.example/{query[:30]}",
-                "title": f"Synthetic result for: {query[:50]}",
-                "source_type": "web",
-                "sub_query": query,
-                "content_preview": f"Offline content for {query}",
-            })
+            sources_collected.append(
+                {
+                    "url": f"https://offline.example/{query[:30]}",
+                    "title": f"Synthetic result for: {query[:50]}",
+                    "source_type": "web",
+                    "sub_query": query,
+                    "content_preview": f"Offline content for {query}",
+                }
+            )
             new_sources += 1
             continue
 
@@ -125,8 +127,10 @@ async def _gather(args: dict, ctx: SkillContext) -> SkillResult:
                             from llmwikify.apps.chat.skills.actions.extract_action import (
                                 extract_skill,
                             )
+
                             er = await extract_skill.actions["extract"].handler(
-                                {"url_or_path": s["url"]}, ctx,
+                                {"url_or_path": s["url"]},
+                                ctx,
                             )
                             if er.status == "ok":
                                 s["content"] = er.data.get("content", "")
@@ -135,42 +139,58 @@ async def _gather(args: dict, ctx: SkillContext) -> SkillResult:
 
             # Fallback to web search when wiki yielded nothing for this query
             # and the caller opted in via enable_web_search=True.
-            if (
-                enable_web_search
-                and len(sources_collected) == sources_before
-            ):
+            if enable_web_search and len(sources_collected) == sources_before:
                 try:
                     from llmwikify.apps.research.web_search import WebSearch
+
                     searcher = WebSearch(ctx.config or {})
+                    logger.info(
+                        "gather_skill web_search fallback: querying %r "
+                        "(num_results=%d)",
+                        query,
+                        max_per_query,
+                    )
                     web_results = await searcher.search(
-                        query, num_results=max_per_query,
+                        query,
+                        num_results=max_per_query,
+                    )
+                    logger.info(
+                        "gather_skill web_search fallback for %r: %d results",
+                        query,
+                        len(web_results),
                     )
                     for wr in web_results:
                         if not wr.url or wr.url in existing_urls:
                             continue
-                        sources_collected.append({
-                            "url": wr.url,
-                            "title": wr.title or wr.url,
-                            "source_type": "web",
-                            "sub_query": query,
-                            "content_preview": wr.snippet or "",
-                        })
+                        sources_collected.append(
+                            {
+                                "url": wr.url,
+                                "title": wr.title or wr.url,
+                                "source_type": "web",
+                                "sub_query": query,
+                                "content_preview": wr.snippet or "",
+                            }
+                        )
                         existing_urls.add(wr.url)
                         new_sources += 1
                 except Exception as e:
-                    logger.debug(
-                        "web_search fallback failed for %s: %s", query, e,
+                    logger.warning(
+                        "gather_skill web_search fallback failed for %r: %s",
+                        query,
+                        e,
                     )
 
         except Exception as e:
             logger.warning("gather failed for sub_query %s: %s", query, e)
             failed_queries.append(query)
 
-    return SkillResult.ok({
-        "sources": sources_collected,
-        "_new_sources": new_sources,
-        "_failed_queries": failed_queries,
-    })
+    return SkillResult.ok(
+        {
+            "sources": sources_collected,
+            "_new_sources": new_sources,
+            "_failed_queries": failed_queries,
+        }
+    )
 
 
 # ─── Skill declaration ─────────────────────────────────────────

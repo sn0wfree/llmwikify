@@ -13,6 +13,7 @@ Access patterns:
     - From disk: path is
       ``llmwikify/foundation/templates/<file>``.
 """
+
 from __future__ import annotations
 
 from pathlib import Path

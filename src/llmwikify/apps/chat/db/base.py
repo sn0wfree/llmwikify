@@ -17,6 +17,7 @@ Why a separate base (not BaseDatabase)?
     schema runs (e.g. ChatDatabase.__init__ runs each repo's
     _init_schema in sequence).
 """
+
 from __future__ import annotations
 
 import logging
@@ -24,6 +25,7 @@ import sqlite3
 from pathlib import Path
 
 from llmwikify.apps.db_base import DB_SIZE_WARNING_MB  # re-export
+from llmwikify.foundation.db import get_connection
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +37,7 @@ def get_chat_db_path(data_dir: Path | str) -> Path:
     Delegates to ``apps.db_base.get_app_db_path``.
     """
     from llmwikify.apps.db_base import get_app_db_path
+
     return get_app_db_path(data_dir)
 
 
@@ -54,15 +57,13 @@ class ChatDBBase:
     db_size check, etc.) — those are owned by ChatDatabase.
     """
 
-    def __init__(self, db_path: Path):
+    def __init__(self, db_path: Path) -> None:
         self.db_path = db_path
+        self._mgr = get_connection(db_path)
 
     def _connect(self) -> sqlite3.Connection:
         """Open a connection with row_factory + foreign_keys."""
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA foreign_keys = ON")
-        return conn
+        return self._mgr.conn
 
     def _init_schema(self) -> None:
         """Create this repository's tables.

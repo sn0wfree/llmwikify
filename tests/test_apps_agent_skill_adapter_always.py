@@ -26,6 +26,7 @@ def _noop(args, ctx):
 
 class _WriteSkill(Skill):
     """A skill that requires pre-confirmation (mimics dynamic_workflow.run)."""
+
     name = "dangerous_skill"
     description = "Requires approval"
     actions = {
@@ -93,7 +94,8 @@ class TestAlwaysPermissionShortCircuit:
         # No DB call to has_always_permission means we hit the wrong branch
         # (or has_always_permission was called and returned False)
         adapter.db.has_always_permission.assert_called_with(
-            "dangerous_skill_run", session_id="sess-1",
+            "dangerous_skill_run",
+            session_id="sess-1",
         )
 
     @pytest.mark.asyncio

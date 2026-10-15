@@ -30,7 +30,10 @@ from llmwikify.apps.chat.skills.workflows.dag import (
     validate_workflow,
 )
 
-BUILTINS = Path(__file__).resolve().parent.parent / "src/llmwikify/apps/chat/skills/workflows/builtins"
+BUILTINS = (
+    Path(__file__).resolve().parent.parent
+    / "src/llmwikify/apps/chat/skills/workflows/builtins"
+)
 
 
 @pytest.fixture(autouse=True)
@@ -60,9 +63,9 @@ class TestBuiltinWorkflowYAMLs:
         spec = load_workflow(BUILTINS / "autoresearch-compound.yaml")
         for name, actor in spec.actors.items():
             model = (actor.model or "").strip()
-            assert model not in _LEGACY_MODEL_ALIASES, (
-                f"actor {name!r} still has legacy alias model {model!r}"
-            )
+            assert (
+                model not in _LEGACY_MODEL_ALIASES
+            ), f"actor {name!r} still has legacy alias model {model!r}"
             # The default is "inherit from parent LLMSpec"
             assert model == "", (
                 f"actor {name!r} has explicit model {model!r}; expected "
@@ -79,7 +82,7 @@ class TestBuiltinWorkflowYAMLs:
     def test_autoresearch_compound_actors_count(self):
         spec = load_workflow(BUILTINS / "autoresearch-compound.yaml")
         assert len(spec.actors) == 6  # clarifier, planner, evidence_extractor,
-                                       # finding_extractor, wiki_proposer, synthesizer
+        # finding_extractor, wiki_proposer, synthesizer
 
     def test_llmwikify_research_actors_count(self):
         spec = load_workflow(BUILTINS / "llmwikify-research.yaml")

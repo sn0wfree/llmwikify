@@ -28,8 +28,6 @@ WebUI screenshots for reference (dark theme, English interface):
 | [`screenshots/editor.png`](screenshots/editor.png) | Markdown Editor with live preview |
 | [`screenshots/graph.png`](screenshots/graph.png) | Knowledge Graph (D3.js force-directed) |
 | [`screenshots/dashboard.png`](screenshots/dashboard.png) | Dashboard with metrics and activity |
-| [`screenshots/factor.png`](screenshots/factor.png) | Quant Factor Detail (6-layer view) |
-| [`screenshots/backtest.png`](screenshots/backtest.png) | Backtest Platform with IC heatmap |
 | [`screenshots/insights.png`](screenshots/insights.png) | Insights (synthesis + graph analysis) |
 | [`screenshots/autoresearch.png`](screenshots/autoresearch.png) | AutoResearch (6-step research panel) |
 
@@ -76,10 +74,6 @@ recently active designs live here; completed ones are in `archive/done/`.
 | [react-quality-gates.md](designs/react-quality-gates.md) | ReAct quality gates design |
 | [react-research-engine.md](designs/react-research-engine.md) | ReAct Research Engine design |
 | [stage-pipeline-ui.md](designs/stage-pipeline-ui.md) | StagePipeline UI component plan |
-| [ppt-generator.md](designs/ppt-generator.md) | PPT generator design |
-| [ppt-v0.6.2-patch1.md](designs/ppt-v0.6.2-patch1.md) | PPT generator v0.6.2 patch |
-| [pptchat-harness-v0.7.md](designs/pptchat-harness-v0.7.md) | PPT chat harness design |
-| [ashare-strategy-building.md](designs/ashare-strategy-building.md) | A-share quant strategy design |
 
 ---
 
@@ -119,7 +113,8 @@ release.
 
 | Release | Title | Status |
 |---------|-------|--------|
-| [v0.38.0](releases/v0.38.0.md) | Nanobot v0.2.1 Borrowings + Bus+WS Wire | **latest** |
+| [v0.40.0](releases/v0.40.0.md) | Quant Separation — refocus on Knowledge + Chat + Research | **latest** |
+| [v0.38.0](releases/v0.38.0.md) | Nanobot v0.2.1 Borrowings + Bus+WS Wire | — |
 | [v0.37.0](releases/v0.37.0.md) | Triple ReAct Loop 统一 | — |
 | [v0.36.0](releases/v0.36.0.md) | AgentChat 全面硬化 | — |
 | [v0.33.0](releases/v0.33.0.md) | 5+1-Service Architecture | — |
@@ -182,41 +177,6 @@ complexity warrants deep analysis.
 
 ---
 
-## 🧪 LLM Code Gen (`docs/llm_code_generation/`)
-
-LLM-driven 量化因子代码生成的经验库。Prompt 设计、失败模式、ReAct 流程
-优化的累积知识，用于指导 reproduction/ pipeline 改进。
-
-| Doc | Scope |
-|-----|-------|
-| [README.md](llm_code_generation/README.md) | 索引 |
-| [LESSONS_LEARNED.md](llm_code_generation/LESSONS_LEARNED.md) | 项目成果 + 关键教训 |
-| [PARSING_FAILURE_MODES.md](llm_code_generation/PARSING_FAILURE_MODES.md) | LLM 代码生成 5 大失败模式 |
-| [PROMPT_ENGINEERING.md](llm_code_generation/PROMPT_ENGINEERING.md) | Prompt 设计原则 |
-| [REACT_FLOW_OPTIMIZATION.md](llm_code_generation/REACT_FLOW_OPTIMIZATION.md) | ReAct 流程优化策略 |
-
----
-
-## 📜 Principles (`docs/principles/`)
-
-功能/子系统的开发原则，**不是**设计稿（设计稿在 `designs/`）。
-
-| Doc | Scope |
-|-----|-------|
-| [reproduction-principles.md](principles/reproduction-principles.md) | 研报复现功能开发原则 v1.1 |
-
----
-
-## 📋 TODO (`docs/TODO.md`)
-
-跨版本 in-flight 待办清单。当前主要是 reproduction/ Phase 3+ 优化项。
-
-| Doc | Scope |
-|-----|-------|
-| [TODO.md](TODO.md) | Phase 3+ 优化待办（子因子拆分、sourcing 改进等） |
-
----
-
 ## 🗂 Layout Summary
 
 ```
@@ -233,19 +193,16 @@ docs/
 │
 ├── api/                               # API reference (1 doc)
 ├── diagnostics/                       # Architecture diagnostics (1 doc)
-├── llm_code_generation/               # LLM 代码生成经验库 (5 docs)
-├── principles/                        # 开发原则 (1 doc)
-├── TODO.md                            # in-flight 待办
 │
-├── designs/                           # 64 active/recent feature designs
-├── releases/                          # 7 per-version notes (v0.32 → v0.38)
-├── research/                          # 4 landscape research docs
+├── designs/                           # Active/recent feature designs
+├── releases/                          # Per-version notes (v0.32 → v0.40)
+├── research/                          # Landscape research docs
 ├── issues/                            # bug reports + issue tracker (active pointer)
 │   └── snapshots/                     #   historical issues snapshots
-├── summaries/                         # 4 experiment summaries
 └── archive/
-    ├── done/                          # 3 implemented designs
-    ├── status/                        # 1 expired status snapshot
-    ├── plans/                         # 4 completed version plans
-    └── refactor-history/              # 1 refactor roadmap
+    ├── done/                          # Implemented designs
+    ├── status/                        # Expired status snapshots
+    ├── plans/                         # Completed version plans
+    ├── poc/                           # PoC research documents
+    └── refactor-history/              # Refactor roadmap
 ```

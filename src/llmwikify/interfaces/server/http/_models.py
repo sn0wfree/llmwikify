@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 
 class ChatRequest(BaseModel):
     """POST /api/agent/chat"""
+
     message: str = Field(default="", min_length=0, max_length=100_000)
     session_id: str | None = None
     wiki_id: str | None = None
@@ -20,11 +21,13 @@ class ChatRequest(BaseModel):
 
 class CreateSessionRequest(BaseModel):
     """POST /api/agent/sessions"""
+
     wiki_id: str | None = None
 
 
 class ApprovalRequest(BaseModel):
     """POST /api/agent/confirmations/{id}/approve-and-continue"""
+
     session_id: str = ""
     wiki_id: str | None = None
     arguments: dict | None = None
@@ -32,22 +35,26 @@ class ApprovalRequest(BaseModel):
 
 class BatchApproveRequest(BaseModel):
     """POST /api/agent/confirmations/batch"""
+
     ids: list[str] = Field(default_factory=list)
 
 
 class BatchApproveProposalsRequest(BaseModel):
     """POST /api/agent/wiki-dream/proposals/batch-approve"""
+
     ids: list[str] = Field(default_factory=list)
 
 
 class ApplyProposalsRequest(BaseModel):
     """POST /api/agent/wiki-dream/proposals/apply"""
+
     wiki_id: str | None = None
     ids: list[str] | None = None
 
 
 class SaveConfigRequest(BaseModel):
     """PUT /api/agent/config"""
+
     api_key: str = ""
     model: str | None = None
     provider: str | None = None
@@ -55,3 +62,15 @@ class SaveConfigRequest(BaseModel):
     temperature: float | None = None
     max_tokens: int | None = None
     system_prompt: str | None = None  # v0.40: custom system prompt
+
+
+class RevertRequest(BaseModel):
+    """POST /api/agent/sessions/{id}/revert"""
+
+    message_id: str
+
+
+class EditMessageRequest(BaseModel):
+    """PUT /api/agent/sessions/{id}/messages/{msg_id}"""
+
+    content: str

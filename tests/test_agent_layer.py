@@ -1,10 +1,6 @@
 """Tests for Agent layer components."""
 
 import asyncio
-import json
-import tempfile
-from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -16,13 +12,13 @@ def _run_async(coro):
     except RuntimeError as e:
         if "cannot be called from a running event loop" in str(e):
             import concurrent.futures
+
             with concurrent.futures.ThreadPoolExecutor() as pool:
                 return pool.submit(asyncio.run, coro).result()
         raise
 
 
-from llmwikify.kernel import Wiki
-from llmwikify.kernel.storage.query_sink import QuerySink
+from llmwikify.kernel import Wiki  # noqa: E402
 
 
 @pytest.fixture
@@ -32,9 +28,7 @@ def wiki_root(tmp_path):
     (root / "raw").mkdir()
     (root / "wiki").mkdir()
     (root / "wiki" / ".sink").mkdir()
-    db_path = root / ".llmwikify.db"
+    _db_path = root / ".llmwikify.db"
     wiki = Wiki(root)
     wiki.init()
     return wiki
-
-

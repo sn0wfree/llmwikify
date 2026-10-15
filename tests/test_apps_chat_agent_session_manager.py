@@ -1,9 +1,8 @@
 """Tests for SessionManager (Phase 5 extraction)."""
+
 from __future__ import annotations
 
 import asyncio
-
-import pytest
 
 from llmwikify.apps.chat.agent.session_manager import SessionManager
 
@@ -48,8 +47,10 @@ def _make_mgr() -> tuple[SessionManager, _FakeDB, _FakeContextManager]:
     status: dict[str, str] = {}
     aborts: dict[str, asyncio.Event] = {}
     mgr = SessionManager(
-        db=db, context_manager=ctx,
-        session_status=status, abort_events=aborts,
+        db=db,
+        context_manager=ctx,
+        session_status=status,
+        abort_events=aborts,
     )
     return mgr, db, ctx
 
@@ -178,8 +179,10 @@ def test_session_status_dict_is_shared_with_caller() -> None:
     status: dict[str, str] = {}
     aborts: dict[str, asyncio.Event] = {}
     mgr = SessionManager(
-        db=db, context_manager=ctx,
-        session_status=status, abort_events=aborts,
+        db=db,
+        context_manager=ctx,
+        session_status=status,
+        abort_events=aborts,
     )
     status["s1"] = "busy"
     assert mgr.get_session_status("s1") == "busy"

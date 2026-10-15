@@ -12,6 +12,7 @@ We don't exercise the full 6-step research pipeline (that's
 covered by tests/test_autoresearch.py and tests/test_apps_chat_*
 for the engine itself). Here we just verify the wrapper.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -60,6 +61,15 @@ class TestResearchAgentConstruction:
         assert agent.engine is engine
         assert "research" in agent._default_system_prompt.lower()
 
+    def test_engine_none_raises_actionable_error(self) -> None:
+        """Regression (Bug 3, 2026-10-14): engine=None used to build
+        ResearchEngine(llm_client=...) which lacks the now-required wiki/db
+        args — a bare TypeError at construction. The fallback must fail
+        fast with an actionable message instead."""
+        llm = StubLLM()
+        with pytest.raises(TypeError, match="engine"):
+            ResearchAgent(llm_client=llm)
+
     def test_custom_system_prompt(self) -> None:
         llm = StubLLM()
         engine = self._make_custom_engine()
@@ -71,6 +81,7 @@ class TestResearchAgentConstruction:
     def test_subclass_of_chat_base(self) -> None:
         """ResearchAgent is a ChatBase subclass (gets ask/astream/...)."""
         from llmwikify.apps.chat.base import ChatBase
+
         assert issubclass(ResearchAgent, ChatBase)
 
     @pytest.mark.skip(reason="v0.38: register_tool / tools dict removed")
@@ -98,6 +109,7 @@ class TestResearchAgentSync:
 
         # Stub the engine's async run() method
         called: list[dict] = []
+
         async def fake_run(query, **kw):
             called.append({"q": query, **kw})
             yield {"type": "report", "text": "fake report"}
@@ -115,15 +127,18 @@ class TestResearchAgentSync:
 
 
 class TestResearchAgentLooksLikeResearch:
-    @pytest.mark.parametrize("prompt,expected", [
-        ("What is the capital of France?", False),  # plain Q&A
-        ("Can you research the history of X?", True),
-        ("Please investigate this issue", True),
-        ("Compare A and B", True),
-        ("Analyze the trade-offs", True),
-        ("Give me a survey of the literature", True),
-        ("Write a literature review on X", True),
-    ])
+    @pytest.mark.parametrize(
+        "prompt,expected",
+        [
+            ("What is the capital of France?", False),  # plain Q&A
+            ("Can you research the history of X?", True),
+            ("Please investigate this issue", True),
+            ("Compare A and B", True),
+            ("Analyze the trade-offs", True),
+            ("Give me a survey of the literature", True),
+            ("Write a literature review on X", True),
+        ],
+    )
     def test_heuristic(self, prompt: str, expected: bool) -> None:
         assert ResearchAgent._looks_like_research(prompt) is expected
 
@@ -158,9 +173,11 @@ class TestResearchAgentAstreamRouting:
     def test_astream_routes_research_prompt(self) -> None:
         agent, calls = self._make_agent()
         chunks: list[str] = []
+
         async def collect() -> None:
             async for c in agent.astream("Research the history of X"):
                 chunks.append(c)
+
         asyncio.run(collect())
         # The engine's report_chunks were emitted
         assert chunks == ["hello ", "world"]
@@ -178,20 +195,25 @@ class TestResearchAgentAstreamRouting:
         # Patch engine.run to be a sentinel — it should
         # NOT be called for non-research prompts.
         called: list[str] = []
+
         async def fake_run(query, **kw):
             called.append(query)
             yield {"type": "report_chunk", "text": "should-not-appear"}
+
         agent.engine.run = fake_run  # type: ignore[method-assign]
 
         # Patch llm_client.chat to be sync (no astream_chat)
         def fake_chat(messages, **kw):
             return "direct-llm-reply"
+
         agent.llm_client.chat = fake_chat  # type: ignore[method-assign]
 
         chunks: list[str] = []
+
         async def collect() -> None:
             async for c in agent.astream("What is 2+2?"):
                 chunks.append(c)
+
         asyncio.run(collect())
         # The LLM's plain reply is yielded
         assert chunks == ["direct-llm-reply"]

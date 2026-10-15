@@ -27,7 +27,6 @@ from __future__ import annotations
 import logging
 import os
 import sqlite3
-import tempfile
 import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -101,10 +100,10 @@ class UserRepository:
             pass
 
     def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA foreign_keys = ON")
-        return conn
+        """Open a connection with row_factory + foreign_keys."""
+        from llmwikify.foundation.db import connect as _db_connect
+
+        return _db_connect(self.db_path)
 
     @contextmanager
     def _atomic_write(self) -> Iterator[sqlite3.Connection]:
@@ -129,13 +128,14 @@ class UserRepository:
     def _init_schema(self) -> None:
         with self._connect() as conn:
             # Phase 2.5 migration: detect old schema with password_hash column.
-            columns = {row[1] for row in conn.execute("PRAGMA table_info(users)").fetchall()}
+            columns = {
+                row[1] for row in conn.execute("PRAGMA table_info(users)").fetchall()
+            }
             if "password_hash" in columns:
                 conn.executescript(
                     "DROP TABLE IF EXISTS api_keys; DROP TABLE IF EXISTS users;"
                 )
-            conn.executescript(
-                """
+            conn.executescript("""
                 CREATE TABLE IF NOT EXISTS users (
                     id TEXT PRIMARY KEY,
                     email TEXT UNIQUE NOT NULL,
@@ -161,8 +161,7 @@ class UserRepository:
                 );
                 CREATE INDEX IF NOT EXISTS idx_api_keys_hash ON api_keys(key_hash);
                 CREATE INDEX IF NOT EXISTS idx_api_keys_user ON api_keys(user_id);
-                """
-            )
+                """)
             conn.commit()
 
     # ─── Public API ─────────────────────────────────────────────────
@@ -181,14 +180,16 @@ class UserRepository:
     def get_by_email(self, email: str) -> User | None:
         with self._connect() as conn:
             row = conn.execute(
-                "SELECT * FROM users WHERE email = ?", (email,),
+                "SELECT * FROM users WHERE email = ?",
+                (email,),
             ).fetchone()
         return _row_to_user(row) if row else None
 
     def get_by_id(self, user_id: str) -> User | None:
         with self._connect() as conn:
             row = conn.execute(
-                "SELECT * FROM users WHERE id = ?", (user_id,),
+                "SELECT * FROM users WHERE id = ?",
+                (user_id,),
             ).fetchone()
         return _row_to_user(row) if row else None
 
@@ -316,21 +317,22 @@ class ApiKeyRepository:
             pass
 
     def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA foreign_keys = ON")
-        return conn
+        """Open a connection with row_factory + foreign_keys."""
+        from llmwikify.foundation.db import connect as _db_connect
+
+        return _db_connect(self.db_path)
 
     def _init_schema(self) -> None:
         with self._connect() as conn:
             # Phase 2.5 migration: detect old schema with password_hash column.
-            columns = {row[1] for row in conn.execute("PRAGMA table_info(users)").fetchall()}
+            columns = {
+                row[1] for row in conn.execute("PRAGMA table_info(users)").fetchall()
+            }
             if "password_hash" in columns:
                 conn.executescript(
                     "DROP TABLE IF EXISTS api_keys; DROP TABLE IF EXISTS users;"
                 )
-            conn.executescript(
-                """
+            conn.executescript("""
                 CREATE TABLE IF NOT EXISTS users (
                     id TEXT PRIMARY KEY,
                     email TEXT UNIQUE NOT NULL,
@@ -353,8 +355,7 @@ class ApiKeyRepository:
                 );
                 CREATE INDEX IF NOT EXISTS idx_api_keys_hash ON api_keys(key_hash);
                 CREATE INDEX IF NOT EXISTS idx_api_keys_user ON api_keys(user_id);
-                """
-            )
+                """)
             conn.commit()
 
     @contextmanager
@@ -395,7 +396,8 @@ class ApiKeyRepository:
     def get_by_id(self, key_id: str) -> ApiKey | None:
         with self._connect() as conn:
             row = conn.execute(
-                "SELECT * FROM api_keys WHERE id = ?", (key_id,),
+                "SELECT * FROM api_keys WHERE id = ?",
+                (key_id,),
             ).fetchone()
         return _row_to_api_key(row) if row else None
 

@@ -17,7 +17,9 @@ from llmwikify.kernel.wiki.prompt_registry import PromptRegistry
 from llmwikify.kernel.wiki.wiki import Wiki
 
 # Load mock_llm_framework directly
-_framework_path = Path(__file__).parent / "fixtures" / "golden_sources" / "mock_llm_framework.py"
+_framework_path = (
+    Path(__file__).parent / "fixtures" / "golden_sources" / "mock_llm_framework.py"
+)
 _spec = importlib.util.spec_from_file_location("mock_llm_framework", _framework_path)
 _mock_mod = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_mock_mod)
@@ -29,7 +31,12 @@ GOLDEN_DIR = Path(__file__).parent / "fixtures" / "golden_sources"
 
 
 class TestPromptRegression:
-    """Core regression tests for prompt behavior."""
+    """Prompt 回归测试 — 直连本机 LLM (localhost:11434), 默认跳过 (CI 无 LLM).
+
+    Core regression tests for prompt behavior.
+    """
+
+    pytestmark = pytest.mark.llm
 
     @pytest.fixture
     def temp_wiki(self, tmp_path):
@@ -71,6 +78,7 @@ class TestPromptRegression:
         ]
 
         call_count = 0
+
         def side_effect(msgs, **kwargs):
             nonlocal call_count
             call_count += 1
@@ -109,13 +117,19 @@ class TestPromptRegression:
             "content_type": "article",
             "potential_contradictions": [],
             "data_gaps": [],
-            "quality_assessment": {"credibility": 7, "relevance": 8, "completeness": 6, "issues": []},
+            "quality_assessment": {
+                "credibility": 7,
+                "relevance": 8,
+                "completeness": 6,
+                "issues": [],
+            },
         }
         ops_response = [
             {"action": "log", "operation": "ingest", "details": "Processed"},
         ]
 
         call_count = 0
+
         def side_effect(msgs, **kwargs):
             nonlocal call_count
             call_count += 1
@@ -153,13 +167,19 @@ class TestPromptRegression:
                 "Source claims AI is fully safe, wiki index says challenges remain"
             ],
             "data_gaps": [],
-            "quality_assessment": {"credibility": 7, "relevance": 8, "completeness": 6, "issues": []},
+            "quality_assessment": {
+                "credibility": 7,
+                "relevance": 8,
+                "completeness": 6,
+                "issues": [],
+            },
         }
         ops_response = [
             {"action": "log", "operation": "ingest", "details": "Processed"},
         ]
 
         call_count = 0
+
         def side_effect(msgs, **kwargs):
             nonlocal call_count
             call_count += 1
@@ -191,17 +211,30 @@ class TestPromptRegression:
             "entities": [],
             "key_facts": [],
             "suggested_pages": [
-                {"name": "Artificial Intelligence", "summary": "About AI", "priority": "high"}
+                {
+                    "name": "Artificial Intelligence",
+                    "summary": "About AI",
+                    "priority": "high",
+                }
             ],
             "cross_refs": [],
             "content_type": "article",
             "potential_contradictions": [],
             "data_gaps": [],
-            "quality_assessment": {"credibility": 7, "relevance": 8, "completeness": 6, "issues": []},
+            "quality_assessment": {
+                "credibility": 7,
+                "relevance": 8,
+                "completeness": 6,
+                "issues": [],
+            },
         }
 
         ops_result = [
-            {"action": "write_page", "page_name": "Artificial Intelligence", "content": "# AI\n\nContent."},
+            {
+                "action": "write_page",
+                "page_name": "Artificial Intelligence",
+                "content": "# AI\n\nContent.",
+            },
             {"action": "log", "operation": "ingest", "details": "Created 1 page"},
         ]
 
@@ -239,12 +272,19 @@ class TestPromptRegression:
             "topics": ["AI"],
             "entities": [],
             "key_facts": [],
-            "suggested_pages": [{"name": "AI", "summary": "About AI", "priority": "high"}],
+            "suggested_pages": [
+                {"name": "AI", "summary": "About AI", "priority": "high"}
+            ],
             "cross_refs": [],
             "content_type": "article",
             "potential_contradictions": [],
             "data_gaps": [],
-            "quality_assessment": {"credibility": 7, "relevance": 8, "completeness": 6, "issues": []},
+            "quality_assessment": {
+                "credibility": 7,
+                "relevance": 8,
+                "completeness": 6,
+                "issues": [],
+            },
         }
 
         ops_result = [
@@ -296,6 +336,9 @@ class TestPromptRegression:
 
 class TestGoldenSourceIntegration:
     """Tests using golden source files with mock LLM."""
+
+    # 直连本机 LLM (localhost:11434), 默认跳过 (CI 无 LLM):
+    pytestmark = pytest.mark.llm
 
     @pytest.fixture
     def temp_wiki(self, tmp_path):
@@ -364,8 +407,11 @@ class TestAllPromptsLoadable:
     def test_all_builtin_prompts_load(self):
         registry = PromptRegistry()
         prompts = [
-            "analyze_source", "generate_wiki_ops",
-            "ingest_instructions", "investigate_lint", "wiki_schema",
+            "analyze_source",
+            "generate_wiki_ops",
+            "ingest_instructions",
+            "investigate_lint",
+            "wiki_schema",
             "wiki_synthesize",
         ]
         for name in prompts:
@@ -375,7 +421,15 @@ class TestAllPromptsLoadable:
     def test_all_prompts_render(self):
         registry = PromptRegistry()
         prompts = [
-            ("analyze_source", {"title": "T", "content": "C", "source_type": "md", "current_index": ""}),
+            (
+                "analyze_source",
+                {
+                    "title": "T",
+                    "content": "C",
+                    "source_type": "md",
+                    "current_index": "",
+                },
+            ),
             ("generate_wiki_ops", {"analysis_json": "{}", "current_index": ""}),
             ("wiki_synthesize", {"query": "Q?"}),
         ]
@@ -389,10 +443,15 @@ class TestContextInjectionMethodsExist:
 
     def test_all_referenced_methods_exist(self):
         import yaml
-        defaults_dir = Path(__file__).parent.parent / "src" / "llmwikify" / "prompts" / "_defaults"
+
+        defaults_dir = (
+            Path(__file__).parent.parent / "src" / "llmwikify" / "prompts" / "_defaults"
+        )
 
         wiki_methods = {
-            "_get_index_summary", "_get_recent_log", "_get_page_count",
+            "_get_index_summary",
+            "_get_recent_log",
+            "_get_page_count",
             "_get_existing_page_names",
         }
 
@@ -403,9 +462,9 @@ class TestContextInjectionMethodsExist:
             ctx = data.get("context_injection", {})
             for key, spec in ctx.items():
                 method_name = spec if isinstance(spec, str) else spec.get("method", "")
-                assert method_name in wiki_methods, (
-                    f"{yaml_file.stem}.{key}: method '{method_name}' not in Wiki class"
-                )
+                assert (
+                    method_name in wiki_methods
+                ), f"{yaml_file.stem}.{key}: method '{method_name}' not in Wiki class"
 
 
 class TestPromptPrincipleCompliance:
@@ -416,9 +475,9 @@ class TestPromptPrincipleCompliance:
         results = checker.check_all_templates()
 
         for name, result in results.items():
-            assert result.is_pass, (
-                f"{name} has errors: {[v.message for v in result.violations if v.severity == 'error']}"
-            )
+            assert (
+                result.is_pass
+            ), f"{name} has errors: {[v.message for v in result.violations if v.severity == 'error']}"
 
     def test_overall_score_above_threshold(self):
         checker = PrincipleChecker()

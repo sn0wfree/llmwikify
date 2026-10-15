@@ -17,10 +17,12 @@ This module provides:
 from __future__ import annotations
 
 import logging
-import os
 import sqlite3
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Any
+
+from llmwikify.foundation.db import get_connection
 
 logger = logging.getLogger(__name__)
 
@@ -50,13 +52,16 @@ def get_app_db_path(data_dir: Path | str) -> Path:
             legacy_path.rename(new_path)
             logger.info(
                 "Auto-migrated DB file: %s -> %s",
-                legacy_path, new_path,
+                legacy_path,
+                new_path,
             )
         except OSError as e:
             logger.warning(
                 "Failed to auto-migrate %s -> %s: %s. "
                 "Will create new DB at canonical path.",
-                legacy_path, new_path, e,
+                legacy_path,
+                new_path,
+                e,
             )
     return new_path
 
@@ -73,24 +78,27 @@ class BaseDatabase:
     - ``__init__(data_dir)``: resolves db_path, runs subclass
       ``_init_db``, checks db size
     - ``_connect()``: opens a sqlite3 connection
+    - ``_transaction()``: transaction context manager
     - ``_check_db_size()``: warns if db > 100 MB
     """
 
-    def __init__(self, data_dir: Path | str):
+    def __init__(self, data_dir: Path | str) -> None:
         self.data_dir = Path(data_dir)
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.db_path = get_app_db_path(self.data_dir)
+        self._mgr = get_connection(self.db_path)
         self._init_db()
         self._check_db_size()
 
     def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
-        # Phase 4.5 (v0.36): enable foreign key enforcement.
-        # SQLite has FK support OFF by default; this pragma
-        # must be set on every new connection.
-        conn.execute("PRAGMA foreign_keys = ON")
-        return conn
+        """Open a connection with row_factory + foreign_keys."""
+        return self._mgr.conn
+
+    @contextmanager
+    def _transaction(self) -> Iterator[sqlite3.Connection]:
+        """Transaction context manager (auto-commit/rollback)."""
+        with self._mgr.transaction() as conn:
+            yield conn
 
     def _init_db(self) -> None:
         """Create the database schema. Subclasses must implement.
@@ -118,7 +126,8 @@ class BaseDatabase:
         if size_mb > DB_SIZE_WARNING_MB:
             logger.warning(
                 "App DB is large: %.2f MB (threshold: %d MB).",
-                size_mb, DB_SIZE_WARNING_MB,
+                size_mb,
+                DB_SIZE_WARNING_MB,
             )
 
     # ─── shared low-level helper ──────────────────────────────
@@ -132,10 +141,8 @@ class BaseDatabase:
         message.
         """
         if not self.db_path.exists():
-            raise FileNotFoundError(
-                f"DB file does not exist: {self.db_path}"
-            )
-        return sqlite3.connect(self.db_path)
+            raise FileNotFoundError(f"DB file does not exist: {self.db_path}")
+        return self._mgr.conn
 
 
 __all__ = [

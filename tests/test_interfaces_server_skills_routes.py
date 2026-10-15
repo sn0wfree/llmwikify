@@ -10,10 +10,8 @@ Covers:
 
 from __future__ import annotations
 
-import json
 import textwrap
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 
@@ -29,9 +27,7 @@ class TestPluginLoaderFrontmatterIntegration:
 
         skill_dir = tmp_path / "study"
         skill_dir.mkdir()
-        (skill_dir / "SKILL.md").write_text(
-            textwrap.dedent(
-                """\
+        (skill_dir / "SKILL.md").write_text(textwrap.dedent("""\
                 ---
                 name: study
                 description: study helper
@@ -49,9 +45,7 @@ class TestPluginLoaderFrontmatterIntegration:
                 ---
                 # body
                 actual instructions for the LLM
-                """
-            )
-        )
+                """))
 
         reg = SkillRegistry()
         _load_skill_md(skill_dir, reg)
@@ -80,9 +74,7 @@ class TestPluginLoaderFrontmatterIntegration:
 
         skill_dir = tmp_path / "no_fm_skill"
         skill_dir.mkdir()
-        (skill_dir / "SKILL.md").write_text(
-            "# Just markdown\n\nNo frontmatter here."
-        )
+        (skill_dir / "SKILL.md").write_text("# Just markdown\n\nNo frontmatter here.")
 
         reg = SkillRegistry()
         _load_skill_md(skill_dir, reg)
@@ -105,9 +97,7 @@ class TestPluginLoaderFrontmatterIntegration:
 
         skill_dir = tmp_path / "bad"
         skill_dir.mkdir()
-        (skill_dir / "SKILL.md").write_text(
-            "---\nname: : bad yaml\n---\nbody\n"
-        )
+        (skill_dir / "SKILL.md").write_text("---\nname: : bad yaml\n---\nbody\n")
 
         reg = SkillRegistry()
         with caplog.at_level("WARNING"):
@@ -117,9 +107,7 @@ class TestPluginLoaderFrontmatterIntegration:
         skill = reg.get("bad")
         assert isinstance(skill, PromptBasedSkill)
         # Warning was emitted for the YAML error
-        assert any(
-            "YAML parse error" in rec.message for rec in caplog.records
-        )
+        assert any("YAML parse error" in rec.message for rec in caplog.records)
 
 
 # ── /api/skills endpoint ──────────────────────────────────────────
@@ -353,7 +341,14 @@ class TestApiSkillsDetail:
 
 class TestSkillsRoutesRegistration:
     def test_routes_appear_after_register_routes(self) -> None:
-        """End-to-end: register_routes() registers the skills router."""
+        """End-to-end: register_routes() registers the skills router.
+
+        FastAPI ``app.include_router`` registers the subrouter as a
+        single ``_IncludedRouter`` entry on ``app.routes``; the actual
+        ``/api/skills`` and ``/api/skills/{name}`` routes live inside
+        ``_IncludedRouter.original_router.routes``. Flatten both
+        layers so the test sees them.
+        """
         from fastapi import FastAPI
 
         from llmwikify.apps.chat.skills.registry import (
@@ -363,9 +358,24 @@ class TestSkillsRoutesRegistration:
             _register_skills_routes,
         )
 
+        def _all_paths(routes) -> list[str]:
+            paths: list[str] = []
+            for r in routes:
+                # _IncludedRouter (FastAPI 0.95+) wraps an included
+                # APIRouter; the actual sub-routes live on
+                # ``original_router.routes``.
+                if hasattr(r, "original_router"):
+                    paths.extend(_all_paths(r.original_router.routes))
+                    continue
+                # Plain APIRoute: just take its path.
+                path = getattr(r, "path", None)
+                if path:
+                    paths.append(path)
+            return paths
+
         reset_default_registry()
         app = FastAPI()
         _register_skills_routes(app)
-        paths = [r.path for r in app.routes if hasattr(r, "path")]
+        paths = _all_paths(app.routes)
         assert "/api/skills" in paths
         assert "/api/skills/{name}" in paths

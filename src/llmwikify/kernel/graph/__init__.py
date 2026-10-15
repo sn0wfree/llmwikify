@@ -9,6 +9,7 @@ The ``graph`` subpackage provides:
 - ``visualizer``: convert the graph to a JSON shape suitable
   for the WebUI graph explorer.
 """
+
 from .analyzer import GraphAnalyzer
 from .export import build_graph, detect_communities, generate_report
 from .visualizer import build_visualization_data

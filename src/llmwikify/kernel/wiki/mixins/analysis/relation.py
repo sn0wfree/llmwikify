@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import shutil
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -58,6 +57,7 @@ class WikiRelationMixin(WikiProtocol):
     def get_relation_engine(self) -> RelationEngine:
         """Get the relation engine instance."""
         from ...engines.relation import RelationEngine
+
         return RelationEngine(self.index, wiki_root=self.root)
 
     def graph_analyze(self) -> dict:
@@ -86,6 +86,7 @@ class WikiRelationMixin(WikiProtocol):
         return analyzer.get_suggested_pages_report()
 
     def execute_operations(self, operations: list) -> dict:
+        # TODO(refactor): C901=16 — too complex, consider splitting
         """Execute a list of wiki operations from LLM processing.
 
         Args:
@@ -129,35 +130,43 @@ class WikiRelationMixin(WikiProtocol):
                     content = op.get("content", "")
                     if page_name and content:
                         self.write_page(page_name, content)
-                        results.append({
-                            "action": "write_page",
-                            "page": page_name,
-                            "status": "done",
-                            "ms": int((time.monotonic() - t0) * 1000),
-                        })
+                        results.append(
+                            {
+                                "action": "write_page",
+                                "page": page_name,
+                                "status": "done",
+                                "ms": int((time.monotonic() - t0) * 1000),
+                            }
+                        )
                     else:
-                        results.append({
-                            "action": "write_page",
-                            "status": "skipped",
-                            "reason": "missing page_name or content",
-                        })
+                        results.append(
+                            {
+                                "action": "write_page",
+                                "status": "skipped",
+                                "reason": "missing page_name or content",
+                            }
+                        )
                 elif action == "log":
                     operation = op.get("operation", "")
                     details = op.get("details", "")
                     if operation and details:
                         self.append_log(operation, details)
-                        results.append({
-                            "action": "log",
-                            "operation": operation,
-                            "status": "done",
-                            "ms": int((time.monotonic() - t0) * 1000),
-                        })
+                        results.append(
+                            {
+                                "action": "log",
+                                "operation": operation,
+                                "status": "done",
+                                "ms": int((time.monotonic() - t0) * 1000),
+                            }
+                        )
                     else:
-                        results.append({
-                            "action": "log",
-                            "status": "skipped",
-                            "reason": "missing operation or details",
-                        })
+                        results.append(
+                            {
+                                "action": "log",
+                                "status": "skipped",
+                                "reason": "missing operation or details",
+                            }
+                        )
                 else:
                     results.append({"action": action, "status": "unknown"})
 
@@ -169,7 +178,9 @@ class WikiRelationMixin(WikiProtocol):
 
         except Exception as e:
             # Rollback on failure
-            logger.error("Operation failed, rolling back %d pages: %s", len(page_snapshots), e)
+            logger.error(
+                "Operation failed, rolling back %d pages: %s", len(page_snapshots), e
+            )
             for page_name, snapshot_path in page_snapshots.items():
                 try:
                     page_path = self.wiki_dir / f"{page_name}.md"
@@ -178,7 +189,9 @@ class WikiRelationMixin(WikiProtocol):
                     elif page_path.exists():
                         page_path.unlink()
                 except Exception as rollback_error:
-                    logger.error("Rollback failed for %s: %s", page_name, rollback_error)
+                    logger.error(
+                        "Rollback failed for %s: %s", page_name, rollback_error
+                    )
 
             return {
                 "status": "rolled_back",
@@ -192,4 +205,4 @@ class WikiRelationMixin(WikiProtocol):
                 if snapshot_dir.exists():
                     shutil.rmtree(snapshot_dir)
             except Exception:
-                pass
+                logger.debug("Failed to clean up snapshot dir %s", snapshot_dir)

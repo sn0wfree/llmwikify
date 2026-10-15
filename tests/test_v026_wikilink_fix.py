@@ -1,8 +1,5 @@
 """Tests for wikilink resolution and auto-fix (v0.26.0)."""
 
-import tempfile
-from pathlib import Path
-
 from llmwikify.kernel.storage.index import WikiIndex
 from llmwikify.kernel.wiki.wiki import Wiki
 
@@ -16,8 +13,11 @@ class TestResolveByName:
         index = WikiIndex(db_path)
         index.initialize()
 
-        index.upsert_page("concepts/Factor Investing", "# Factor Investing\n\nContent",
-                          "concepts/Factor Investing.md")
+        index.upsert_page(
+            "concepts/Factor Investing",
+            "# Factor Investing\n\nContent",
+            "concepts/Factor Investing.md",
+        )
 
         result = index.resolve_by_name("concepts/Factor Investing")
         assert result == "concepts/Factor Investing.md"
@@ -64,12 +64,18 @@ class TestWikilinkResolution:
 
         page = wiki.wiki_dir / "concepts" / "Risk Parity.md"
         page.parent.mkdir(parents=True, exist_ok=True)
-        page.write_text("# Risk Parity\n\nContent about [[concepts/Portfolio Construction]].")
+        page.write_text(
+            "# Risk Parity\n\nContent about [[concepts/Portfolio Construction]]."
+        )
 
-        wiki.index.upsert_page("concepts/Risk Parity", page.read_text(),
-                               "concepts/Risk Parity.md")
-        wiki.index.upsert_page("concepts/Portfolio Construction", "# Portfolio Construction",
-                               "concepts/Portfolio Construction.md")
+        wiki.index.upsert_page(
+            "concepts/Risk Parity", page.read_text(), "concepts/Risk Parity.md"
+        )
+        wiki.index.upsert_page(
+            "concepts/Portfolio Construction",
+            "# Portfolio Construction",
+            "concepts/Portfolio Construction.md",
+        )
 
         result = wiki._resolve_wikilink_target("concepts/Portfolio Construction")
         assert result == wiki.wiki_dir / "concepts" / "Portfolio Construction.md"
@@ -295,9 +301,7 @@ class TestFixWikilinksReindex:
 
         # Source page with OLD format wikilink (no directory prefix)
         source = concepts / "Factor Investing.md"
-        source.write_text(
-            "# Factor Investing\n\nRelated to [[Risk Parity]]."
-        )
+        source.write_text("# Factor Investing\n\nRelated to [[Risk Parity]].")
         (concepts / "Risk Parity.md").write_text("# Risk Parity")
 
         # Build index — page_links.target_page will store bare name "Risk Parity"
@@ -408,7 +412,7 @@ class TestIndexPageNameConsistency:
             "SELECT page_name FROM pages WHERE page_name LIKE '%Factor%'"
         )
         row = cursor.fetchone()
-        assert row['page_name'] == "concepts/Factor Investing"
+        assert row["page_name"] == "concepts/Factor Investing"
         wiki.close()
 
     def test_write_page_uses_full_path(self, temp_wiki):
@@ -422,7 +426,7 @@ class TestIndexPageNameConsistency:
             "SELECT page_name FROM pages WHERE page_name LIKE '%Risk%'"
         )
         row = cursor.fetchone()
-        assert row['page_name'] == "concepts/Risk Parity"
+        assert row["page_name"] == "concepts/Risk Parity"
         wiki.close()
 
 
@@ -451,9 +455,7 @@ class TestMissingCrossRefDetection:
 
         # concepts/Volatility should NOT be reported as missing
         missing_concepts = [
-            h["concept"]
-            for h in hints
-            if h["type"] == "missing_cross_ref"
+            h["concept"] for h in hints if h["type"] == "missing_cross_ref"
         ]
         assert "concepts/Volatility" not in missing_concepts
         wiki.close()
@@ -477,9 +479,7 @@ class TestMissingCrossRefDetection:
         hints = wiki._detect_missing_cross_refs()
 
         missing_concepts = [
-            h["concept"]
-            for h in hints
-            if h["type"] == "missing_cross_ref"
+            h["concept"] for h in hints if h["type"] == "missing_cross_ref"
         ]
         assert "concepts/Risk Parity" in missing_concepts
         wiki.close()
@@ -495,16 +495,12 @@ class TestMissingCrossRefDetection:
         (concepts / "Silver.md").write_text(
             "# Silver\n\nSee [[concepts/Gold]] for details."
         )
-        (concepts / "Copper.md").write_text(
-            "# Copper\n\nAlso see [[concepts/Gold]]."
-        )
+        (concepts / "Copper.md").write_text("# Copper\n\nAlso see [[concepts/Gold]].")
 
         hints = wiki._detect_missing_cross_refs()
 
         missing_concepts = [
-            h["concept"]
-            for h in hints
-            if h["type"] == "missing_cross_ref"
+            h["concept"] for h in hints if h["type"] == "missing_cross_ref"
         ]
         assert "concepts/Gold" not in missing_concepts
         wiki.close()

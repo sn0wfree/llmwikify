@@ -65,7 +65,7 @@ class WikiQueryMixin(WikiProtocol):
         hint = ""
 
         if similar_page and mode == "update":
-            similar_name = similar_page['page_name']
+            similar_name = similar_page["page_name"]
             page_name = similar_name
             page_path = self.wiki_dir / f"{page_name}.md"
 
@@ -84,7 +84,7 @@ class WikiQueryMixin(WikiProtocol):
             message = f"Updated query page: {page_name}"
 
         elif similar_page:
-            similar_name = similar_page['page_name']
+            similar_name = similar_page["page_name"]
             sink_path = self.query_sink.append_to_sink(
                 similar_name, query, answer, source_pages, raw_sources
             )
@@ -93,10 +93,10 @@ class WikiQueryMixin(WikiProtocol):
             hint = {
                 "type": "similar_page_exists",
                 "page_name": similar_name,
-                "preview": similar_page['preview'][:100],
-                "word_count": similar_page['word_count'],
-                "created": similar_page['created'],
-                "score": similar_page['score'],
+                "preview": similar_page["preview"][:100],
+                "word_count": similar_page["word_count"],
+                "created": similar_page["created"],
+                "score": similar_page["score"],
                 "action_taken": "appended_to_sink",
                 "sink_path": sink_path,
                 "observation": (
@@ -130,7 +130,15 @@ class WikiQueryMixin(WikiProtocol):
                 page_path = self.wiki_dir / f"{page_name}.md"
                 counter += 1
 
-            self._create_query_page(page_path, page_name, answer, query, source_pages, raw_sources, auto_link)
+            self._create_query_page(
+                page_path,
+                page_name,
+                answer,
+                query,
+                source_pages,
+                raw_sources,
+                auto_link,
+            )
             status = "created"
             message = f"Created query page: {page_name}"
 
@@ -215,7 +223,8 @@ class WikiQueryMixin(WikiProtocol):
             try:
                 content = page.read_text()
                 content_keywords = {
-                    w.lower() for w in re.findall(r'\b\w{4,}\b', content)
+                    w.lower()
+                    for w in re.findall(r"\b\w{4,}\b", content)
                     if w.lower() not in STOP_WORDS
                 }
                 content_overlap = len(keywords & content_keywords)
@@ -227,10 +236,14 @@ class WikiQueryMixin(WikiProtocol):
             if score > best_score and score >= SIMILARITY_THRESHOLD:
                 best_score = score
 
-                preview = content.split('\n')[-1] if '\n' in content else content
-                for line in content.split('\n'):
+                preview = content.split("\n")[-1] if "\n" in content else content
+                for line in content.split("\n"):
                     stripped = line.strip()
-                    if stripped and not stripped.startswith('#') and not stripped.startswith('---'):
+                    if (
+                        stripped
+                        and not stripped.startswith("#")
+                        and not stripped.startswith("---")
+                    ):
                         preview = stripped[:200]
                         break
 
@@ -269,7 +282,9 @@ class WikiQueryMixin(WikiProtocol):
         content = answer
 
         if auto_link and (source_pages or raw_sources):
-            content = self._append_sources_section(content, query, source_pages, raw_sources)
+            content = self._append_sources_section(
+                content, query, source_pages, raw_sources
+            )
 
         page_path.write_text(content)
 

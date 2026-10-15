@@ -28,9 +28,9 @@ wikis:
 - Discovery finds nothing: check scan_paths relative to wiki root
 """
 
+from pathlib import Path
 
 import yaml
-from pathlib import Path
 
 
 class TestMultiWikiConfig:
@@ -76,7 +76,11 @@ class TestMultiWikiConfig:
             "wikis": {
                 "default": "personal",
                 "local": [
-                    {"id": "personal", "name": "Personal", "path": str(temp_dir / "personal")},
+                    {
+                        "id": "personal",
+                        "name": "Personal",
+                        "path": str(temp_dir / "personal"),
+                    },
                     {"id": "team", "name": "Team", "path": str(temp_dir / "team")},
                     {"id": "cloud", "name": "Cloud", "path": str(temp_dir / "cloud")},
                 ],

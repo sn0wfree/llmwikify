@@ -45,6 +45,7 @@ from llmwikify.apps.chat.skills.base import (
     SkillContext,
     SkillResult,
 )
+from llmwikify.foundation.utils import is_safe_url
 
 logger = logging.getLogger(__name__)
 
@@ -134,6 +135,10 @@ async def fetch_url(
     if not url or not isinstance(url, str):
         return {"error": "url is required", "url": url}
 
+    # SSRF protection: block internal/private IPs
+    if not is_safe_url(url):
+        return {"error": f"URL blocked by SSRF protection: {url}", "url": url}
+
     cap = min(max_chars, MAX_HARD_CAP)
     try:
         async with httpx.AsyncClient(
@@ -146,12 +151,20 @@ async def fetch_url(
         return {"error": f"{type(e).__name__}: {e}", "url": url}
 
     if resp.status_code >= 400:
-        return {"error": f"HTTP {resp.status_code}", "url": url, "status": resp.status_code}
+        return {
+            "error": f"HTTP {resp.status_code}",
+            "url": url,
+            "status": resp.status_code,
+        }
 
     try:
         html = resp.text
     except Exception as e:  # noqa: BLE001
-        return {"error": f"decode failed: {e!r}", "url": url, "status": resp.status_code}
+        return {
+            "error": f"decode failed: {e!r}",
+            "url": url,
+            "status": resp.status_code,
+        }
 
     title = _extract_title(html)
     full_text = _strip_html(html)
@@ -173,8 +186,29 @@ def fetch_url_sync(
     max_chars: int = DEFAULT_MAX_CHARS,
     timeout: float = DEFAULT_TIMEOUT,
 ) -> dict:
-    """Sync wrapper for use in sync tool loops (subagent_worker)."""
-    return asyncio.run(fetch_url(url, max_chars, timeout))
+    """Sync wrapper for use in sync tool loops (subagent_worker).
+
+    Handles the case where an event loop is already running (e.g.,
+    when called from within an async context via asyncio.to_thread).
+    In that case, we create a new thread to run the async code.
+    """
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            # We're inside an already-running event loop.
+            # Run the async code in a new thread to avoid conflicts.
+            import concurrent.futures
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(
+                    asyncio.run, fetch_url(url, max_chars, timeout)
+                )
+                return future.result(timeout=timeout + 30)
+        else:
+            return loop.run_until_complete(fetch_url(url, max_chars, timeout))
+    except RuntimeError:
+        # No event loop running, use asyncio.run()
+        return asyncio.run(fetch_url(url, max_chars, timeout))
 
 
 # ─── Skill handler ───────────────────────────────────────────────
@@ -198,7 +232,9 @@ async def _fetch_url_handler(args: dict, ctx: SkillContext) -> SkillResult:
     if max_chars > MAX_HARD_CAP:
         max_chars = MAX_HARD_CAP
 
-    timeout = float((ctx.config or {}).get("web_fetch_timeout_seconds", DEFAULT_TIMEOUT))
+    timeout = float(
+        (ctx.config or {}).get("web_fetch_timeout_seconds", DEFAULT_TIMEOUT)
+    )
 
     try:
         payload = await fetch_url(url, max_chars=max_chars, timeout=timeout)
@@ -207,9 +243,9 @@ async def _fetch_url_handler(args: dict, ctx: SkillContext) -> SkillResult:
         return SkillResult.fail(f"web_fetch failed: {e!r}")
 
     if "error" in payload:
-        return SkillResult.fail(payload["error"], **{
-            k: v for k, v in payload.items() if k != "error"
-        })
+        return SkillResult.fail(
+            payload["error"], **{k: v for k, v in payload.items() if k != "error"}
+        )
 
     return SkillResult.ok(payload)
 

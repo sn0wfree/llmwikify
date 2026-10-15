@@ -60,7 +60,10 @@ class GraphSkill(Skill):
                         "default": "query",
                     },
                     "concept": {"type": "string"},
-                    "direction": {"type": "string", "enum": ["inbound", "outbound", "both"]},
+                    "direction": {
+                        "type": "string",
+                        "enum": ["inbound", "outbound", "both"],
+                    },
                     "source": {"type": "string"},
                     "target": {"type": "string"},
                     "max_length": {"type": "integer", "default": 5},

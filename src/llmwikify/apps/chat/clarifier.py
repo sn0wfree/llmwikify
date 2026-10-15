@@ -25,7 +25,9 @@ class _ClarifierCtx:
     """
 
     def __init__(
-        self, llm_client: Any, config: dict[str, Any],
+        self,
+        llm_client: Any,
+        config: dict[str, Any],
         metrics: Any = None,
     ):
         self.default_llm = llm_client
@@ -49,7 +51,9 @@ class ResearchClarifier:
     """
 
     def __init__(
-        self, llm_client: Any, config: dict[str, Any] | None = None,
+        self,
+        llm_client: Any,
+        config: dict[str, Any] | None = None,
         metrics: Any = None,
     ):
         self.llm_client = llm_client
@@ -69,8 +73,10 @@ class ResearchClarifier:
         """
         try:
             result = await run_prompt(
-                self._as_ctx(), "research_clarify",
-                query=query, wiki_context=wiki_context,
+                self._as_ctx(),
+                "research_clarify",
+                query=query,
+                wiki_context=wiki_context,
             )
         except Exception as e:
             logger.warning("Clarifier LLM call failed: %s, using fallback", e)
@@ -96,11 +102,13 @@ class ResearchClarifier:
         current_query = query
         current_context = wiki_context
         clarification = await self.clarify(current_query, current_context)
-        loop_history.append({
-            "type": "clarify",
-            "attempt": 0,
-            "scope_check": clarification.get("scope_check", False),
-        })
+        loop_history.append(
+            {
+                "type": "clarify",
+                "attempt": 0,
+                "scope_check": clarification.get("scope_check", False),
+            }
+        )
 
         for attempt in range(1, max_retries + 1):
             # Stop if scope is researchable (genuine clarification succeeded)
@@ -110,7 +118,8 @@ class ResearchClarifier:
             if budget_remaining < budget_ratio:
                 logger.warning(
                     "Clarify self-loop budget exhausted (%.0f%% < %.0f%%), using last result",
-                    budget_remaining * 100, budget_ratio * 100,
+                    budget_remaining * 100,
+                    budget_ratio * 100,
                 )
                 break
 
@@ -121,26 +130,31 @@ class ResearchClarifier:
             if clarification.get("fallback"):
                 logger.info(
                     "Clarify attempt %d: previous was fallback (%s), retrying with original query",
-                    attempt, clarification.get("fallback_reason", "unknown"),
+                    attempt,
+                    clarification.get("fallback_reason", "unknown"),
                 )
                 clarification = await self.clarify(query, wiki_context)
-                loop_history.append({
-                    "type": "clarify_retry_after_fallback",
-                    "attempt": attempt,
-                    "scope_check": clarification.get("scope_check", False),
-                    "fallback": clarification.get("fallback", False),
-                })
+                loop_history.append(
+                    {
+                        "type": "clarify_retry_after_fallback",
+                        "attempt": attempt,
+                        "scope_check": clarification.get("scope_check", False),
+                        "fallback": clarification.get("fallback", False),
+                    }
+                )
                 continue
 
             # Normal path: refine query based on previous clarification and retry
             current_query = self._narrow_query(query, clarification)
             current_context = self._enrich_context(wiki_context, clarification)
             clarification = await self.clarify(current_query, current_context)
-            loop_history.append({
-                "type": "clarify_retry",
-                "attempt": attempt,
-                "scope_check": clarification.get("scope_check", False),
-            })
+            loop_history.append(
+                {
+                    "type": "clarify_retry",
+                    "attempt": attempt,
+                    "scope_check": clarification.get("scope_check", False),
+                }
+            )
 
         # Final warning if scope still not researchable
         if not clarification.get("scope_check", False) and len(loop_history) > 1:

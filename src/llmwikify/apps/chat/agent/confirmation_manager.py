@@ -17,6 +17,7 @@ Public API mirrors the previous ChatOrchestrator methods 1:1 so
 external callers (e.g. ``AgentService`` and ``chat_sse.py``) do not
 need to change. ChatOrchestrator delegates to the manager.
 """
+
 from __future__ import annotations
 
 import logging
@@ -62,10 +63,15 @@ class ConfirmationManager:
             result = registry.confirm_execution(confirmation_id, arguments)
             if not self.is_unknown_confirmation(result):
                 return result
-        return {"status": "error", "error": f"Invalid confirmation ID: {confirmation_id}"}
+        return {
+            "status": "error",
+            "error": f"Invalid confirmation ID: {confirmation_id}",
+        }
 
     async def reject_confirmation(
-        self, confirmation_id: str, wiki_id: str | None = None,
+        self,
+        confirmation_id: str,
+        wiki_id: str | None = None,
     ) -> dict:
         """Reject a pending confirmation."""
         for (_, cached_wiki_id), registry in self._tool_registries.items():
@@ -74,10 +80,15 @@ class ConfirmationManager:
             result = registry.reject_execution(confirmation_id)
             if not self.is_unknown_confirmation(result):
                 return result
-        return {"status": "error", "error": f"Invalid confirmation ID: {confirmation_id}"}
+        return {
+            "status": "error",
+            "error": f"Invalid confirmation ID: {confirmation_id}",
+        }
 
     async def batch_approve_confirmations(
-        self, confirmation_ids: list[str], wiki_id: str | None = None,
+        self,
+        confirmation_ids: list[str],
+        wiki_id: str | None = None,
     ) -> dict:
         """Approve a list of confirmations sequentially and aggregate results."""
         results = [

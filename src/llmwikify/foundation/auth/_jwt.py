@@ -20,7 +20,7 @@ where the secret comes from (keyring or `--auth-token` override).
 from __future__ import annotations
 
 import time
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 
 import jwt
 

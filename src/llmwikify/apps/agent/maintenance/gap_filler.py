@@ -1,0 +1,439 @@
+"""Track B: lint-driven knowledge-gap detection and proposal-based filling.
+
+Two gap classes with different write policies (user decision):
+
+- missing_cross_ref  → mechanical fix: insert [[concept]] wikilink at first
+  word-boundary occurrence in each mentioning page. Auto-approved (no LLM).
+- unreferenced_entity → content generation: LLM drafts a new page via the
+  wiki's own analyze/synthesize prompt chain, queued as a proposal for
+  human review (WikiDreamProposalManager).
+"""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+import re
+import time
+from dataclasses import dataclass, field
+from typing import Any
+
+from llmwikify.apps.agent.wiki_dream_editor import WikiDreamProposalManager
+
+from .config import GapFillerConfig
+from .llm_support import ensure_global_llm_fallback
+from .rate_limit import SlidingWindowRateLimiter
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class GapItem:
+    """A prioritized knowledge gap extracted from lint results."""
+
+    gap_type: str
+    priority: int
+    data: dict[str, Any]
+    concept: str = ""
+
+
+@dataclass
+class GapCycleResult:
+    """Summary of one gap-filling cycle (for health history)."""
+
+    detected: int = 0
+    processed: int = 0
+    mechanical_fixes: int = 0
+    proposals_created: int = 0
+    skipped_low_priority: int = 0
+    errors: int = 0
+    ran_at: float = field(default_factory=time.time)
+
+
+def calc_priority(gap: dict[str, Any]) -> int:
+    """Priority score 0-100 (design doc §Gap priority)."""
+    gap_type = gap.get("type", "")
+    mentions = int(gap.get("mention_count", 1) or 1)
+    if gap_type == "unreferenced_entity":
+        return min(100, 50 + mentions * 10)
+    if gap_type == "missing_cross_ref":
+        return min(80, 30 + mentions * 10)
+    if gap_type == "isolated_source":
+        return 20
+    if gap_type == "potentially_outdated":
+        return 25
+    return 0
+
+
+def extract_gaps(lint_result: dict[str, Any]) -> list[GapItem]:
+    """Extract gap items from ``wiki.lint()`` result (hints + investigations)."""
+    found: list[GapItem] = []
+    seen: set[tuple[str, str]] = set()
+
+    hints = lint_result.get("hints", {}) or {}
+    for item in hints.get("informational", []) or []:
+        gap_type = item.get("type", "")
+        concept = str(item.get("concept", ""))
+        if gap_type not in ("missing_cross_ref", "unreferenced_entity"):
+            continue
+        if (gap_type, concept) in seen:
+            continue
+        seen.add((gap_type, concept))
+        found.append(
+            GapItem(
+                gap_type=gap_type,
+                priority=calc_priority(item),
+                data=item,
+                concept=concept,
+            )
+        )
+
+    investigations = lint_result.get("investigations", {}) or {}
+    for item in investigations.get("knowledge_gaps", []) or []:
+        gap_type = item.get("type", "")
+        concept = str(item.get("concept", item.get("page", "")))
+        if gap_type not in ("unreferenced_entity", "isolated_source"):
+            continue
+        if (gap_type, concept) in seen:
+            continue
+        seen.add((gap_type, concept))
+        found.append(
+            GapItem(
+                gap_type=gap_type,
+                priority=calc_priority(item),
+                data=item,
+                concept=concept,
+            )
+        )
+
+    return sorted(found, key=lambda g: g.priority, reverse=True)
+
+
+class GapFiller:
+    """Per-wiki gap filler. All blocking calls go through ``to_thread``."""
+
+    def __init__(
+        self,
+        wiki: Any,
+        wiki_id: str,
+        config: GapFillerConfig,
+        llm_semaphore: asyncio.Semaphore,
+        proposal_manager: WikiDreamProposalManager | None = None,
+        rate_limiter: SlidingWindowRateLimiter | None = None,
+    ) -> None:
+        self.wiki = wiki
+        self.wiki_id = wiki_id
+        self.config = config
+        self.llm_semaphore = llm_semaphore
+        self.rate_limiter = rate_limiter or SlidingWindowRateLimiter(
+            enabled=False,
+            name=f"gap_filler_{wiki_id}",
+        )
+        self._proposal_manager = proposal_manager or WikiDreamProposalManager(
+            wiki_id=wiki_id,
+        )
+        self.last_result: GapCycleResult | None = None
+
+    async def run_cycle(self) -> GapCycleResult:
+        """Detect gaps once, then fill high-priority ones (mechanical or proposal)."""
+        ensure_global_llm_fallback(self.wiki, self.wiki_id)
+        result = GapCycleResult()
+        try:
+            # lint(mode="check") makes one LLM call (_llm_detect_gaps)
+            # → one rate-limit unit per cycle.
+            await self.rate_limiter.acquire()
+            lint_result = await asyncio.to_thread(
+                self.wiki.lint,
+                mode="check",
+            )
+        except Exception as exc:
+            result.errors += 1
+            logger.warning("[%s] gap_filler lint failed: %s", self.wiki_id, exc)
+            self.last_result = result
+            return result
+
+        gaps = extract_gaps(lint_result)
+        result.detected = len(gaps)
+
+        budget = self.config.max_per_cycle
+        for gap in gaps:
+            if gap.priority < self.config.min_priority:
+                result.skipped_low_priority += 1
+                continue
+            if budget <= 0:
+                result.skipped_low_priority += 1
+                continue
+            budget -= 1
+            try:
+                if gap.gap_type == "missing_cross_ref":
+                    fixed = await self._fix_missing_cross_ref(gap)
+                    result.mechanical_fixes += fixed
+                elif gap.gap_type == "unreferenced_entity":
+                    created = await self._propose_entity_page(gap)
+                    result.proposals_created += created
+                result.processed += 1
+            except Exception as exc:
+                result.errors += 1
+                logger.warning(
+                    "[%s] gap_filler failed on %s/%s: %s",
+                    self.wiki_id,
+                    gap.gap_type,
+                    gap.concept,
+                    exc,
+                )
+
+        self.last_result = result
+        logger.info(
+            "[%s] gap_filler: %d detected, %d processed "
+            "(%d mechanical, %d proposals, %d errors)",
+            self.wiki_id,
+            result.detected,
+            result.processed,
+            result.mechanical_fixes,
+            result.proposals_created,
+            result.errors,
+        )
+        return result
+
+    # ── mechanical fix: missing_cross_ref ──────────────────────────────
+
+    async def _fix_missing_cross_ref(self, gap: GapItem) -> int:
+        """Insert ``[[concept]]`` at first plain-text occurrence per mentioning page.
+
+        Returns number of pages actually modified. Mirrors the rule's own
+        word-boundary detection (missing_cross_refs.py:52-53) so a fixed
+        page no longer triggers the rule.
+        """
+        if not self.config.auto_approve_mechanical:
+            return 0
+        concept = gap.concept
+        if not concept:
+            return 0
+        pattern = re.compile(r"\b" + re.escape(concept) + r"\b", re.IGNORECASE)
+        fixed = 0
+        for page_name in gap.data.get("mentioning_pages", []):
+            page = await asyncio.to_thread(self.wiki.read_page, page_name)
+            if page.get("error") or page.get("is_sink"):
+                continue
+            content = page.get("content", "")
+            stripped = re.sub(r"\[\[.*?\]\]", "", content)
+            if not pattern.search(stripped):
+                continue
+            # replace first occurrence OUTSIDE any existing wikilink
+            new_content = self._link_first_occurrence(content, pattern, concept)
+            if new_content == content:
+                continue
+            await asyncio.to_thread(self.wiki.write_page, page_name, new_content)
+            fixed += 1
+        return fixed
+
+    @staticmethod
+    def _link_first_occurrence(content: str, pattern: re.Pattern, concept: str) -> str:
+        """Replace the first non-wikilink word-boundary match with ``[[concept]]``."""
+        out: list[str] = []
+        pos = 0
+        for m in re.finditer(r"\[\[.*?\]\]", content):
+            before = content[pos : m.start()]
+            hit = pattern.search(before)
+            if hit:
+                out.append(before[: hit.start()])
+                out.append(f"[[{concept}]]")
+                out.append(before[hit.end() :])
+                out.append(content[m.start() :])
+                return "".join(out)
+            out.append(before)
+            out.append(m.group(0))
+            pos = m.end()
+        tail = content[pos:]
+        hit = pattern.search(tail)
+        if hit:
+            out.append(tail[: hit.start()])
+            out.append(f"[[{concept}]]")
+            out.append(tail[hit.end() :])
+            return "".join(out)
+        return content
+
+    # ── content generation: unreferenced_entity ────────────────────────
+
+    async def _propose_entity_page(self, gap: GapItem) -> int:
+        """Research an orphan concept and draft a wiki page.
+
+        Pipeline (respects rate limiter + LLM availability):
+        1. wiki.search(concept) — find related local pages
+        2. [optional] WebSearch.search(concept) — web context
+        3. [optional] LLM synthesis — structured draft (rate-limited)
+        4. Fallback: stub page if LLM unavailable or fails
+
+        Rate limiter: one acquire per entity (LLM calls are bounded by
+        the process-wide ``llm_rate_limit`` window).
+        """
+        concept = gap.concept
+        if not concept:
+            return 0
+
+        # 1. Local wiki search
+        try:
+            related = await asyncio.to_thread(self.wiki.search, concept, 5)
+        except TypeError:
+            related = await asyncio.to_thread(self.wiki.search, concept)
+        except Exception as exc:
+            logger.warning(
+                "[%s] gap_filler search failed for %s: %s", self.wiki_id, concept, exc
+            )
+            related = []
+
+        related_names = [
+            r.get("page_name") or r.get("name") or str(r) for r in (related or [])[:5]
+        ]
+        related_snippets = [
+            f"- {r.get('page_name', '?')}: {(r.get('content', '') or r.get('snippet', ''))[:200]}"
+            for r in (related or [])[:3]
+        ]
+
+        # 2. Optional web search
+        web_sources: list[str] = []
+        if self.config.web_search_enabled:
+            web_sources = await self._web_search(concept)
+
+        # 3. LLM draft (when enabled + LLM available)
+        draft = None
+        if self.config.use_llm_draft:
+            llm_enabled = isinstance(self.wiki.config, dict) and (
+                self.wiki.config.get("llm") or {}
+            ).get("enabled")
+            if llm_enabled:
+                await self.rate_limiter.acquire()
+                draft = await asyncio.to_thread(
+                    self._llm_synthesize_draft,
+                    concept,
+                    related_snippets,
+                    web_sources,
+                )
+
+        # 4. Fallback to stub if LLM didn't produce output
+        if not draft:
+            draft = self._stub_draft(concept, related_names)
+
+        self._proposal_manager.create_proposal(
+            page_name=concept,
+            edit_type="create",
+            content=draft,
+            reason=f"gap_filler: unreferenced_entity (priority {gap.priority})",
+        )
+        return 1
+
+    def _search_config(self) -> dict[str, Any]:
+        """Global search settings (~/.llmwikify/llmwikify.json → research).
+
+        2026-10-14 fix (Bug 2): ``WebSearch()`` used to be called without its
+        required ``config`` argument; the TypeError was swallowed by
+        ``_web_search``'s except, so the web leg silently returned [] on
+        every gap cycle. ``create_search_provider`` fills in the provider
+        chain (jina / minimax / duckduckgo) and resolves the minimax key
+        from the global llm config as fallback.
+        """
+        try:
+            from llmwikify.foundation.config import config as _llmwikify_config
+
+            cfg = _llmwikify_config.get("research", {})
+            return cfg if isinstance(cfg, dict) else {}
+        except Exception:
+            return {}
+
+    async def _web_search(self, concept: str) -> list[str]:
+        """Search the web for entity context. Returns formatted snippets."""
+        try:
+            from llmwikify.apps.research.web_search import WebSearch
+
+            ws = WebSearch(self._search_config())
+            results = await ws.search(concept, num_results=3)
+            return [
+                f"- [{r.title}]({r.url}): {r.snippet[:200]}"
+                for r in results
+                if r.snippet
+            ]
+        except Exception as exc:
+            logger.debug("[%s] gap_filler web search failed: %s", self.wiki_id, exc)
+            return []
+
+    def _llm_synthesize_draft(
+        self,
+        concept: str,
+        related_snippets: list[str],
+        web_sources: list[str],
+    ) -> str | None:
+        """Build a structured wiki page via LLM. Called in a thread."""
+        try:
+            from llmwikify.foundation.llm import LLMClient
+
+            client = LLMClient.from_config(self.wiki.config)
+            context_parts = []
+            if related_snippets:
+                context_parts.append(
+                    "Related pages in wiki:\n" + "\n".join(related_snippets)
+                )
+            if web_sources:
+                context_parts.append("Web sources:\n" + "\n".join(web_sources))
+            context = "\n\n".join(context_parts) or "(no context available)"
+
+            messages = [
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a wiki content author. Write a concise, factual "
+                        "markdown page for the given concept. Use [[wikilink]] "
+                        "syntax for related concepts. Do NOT fabricate facts — "
+                        "use only the provided context. Output ONLY the markdown "
+                        "page content, no explanations."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": (
+                        f"Write a wiki page for: **{concept}**\n\n"
+                        f"Context:\n{context}"
+                    ),
+                },
+            ]
+            result = client.complete(messages)
+            if isinstance(result, str) and len(result.strip()) > 50:
+                return result.strip()
+        except Exception as exc:
+            logger.warning(
+                "[%s] gap_filler LLM synthesis failed for %s: %s",
+                self.wiki_id,
+                concept,
+                exc,
+            )
+        return None
+
+    @staticmethod
+    def _stub_draft(concept: str, related_names: list[str]) -> str:
+        """Fallback stub when LLM is unavailable."""
+        links = "".join(f"- [[{n}]]\n" for n in related_names if n and n != concept)
+        return (
+            f"# {concept}\n\n"
+            f"Auto-generated stub by gap_filler "
+            f"(unreferenced entity detected by lint).\n\n"
+            f"## Overview\n\n(pending human review)\n\n"
+            f"## Related\n\n{links}"
+        )
+
+    def status(self) -> dict[str, Any]:
+        last = self.last_result
+        return {
+            "wiki_id": self.wiki_id,
+            "last_cycle": (
+                {
+                    "detected": last.detected,
+                    "processed": last.processed,
+                    "mechanical_fixes": last.mechanical_fixes,
+                    "proposals_created": last.proposals_created,
+                    "skipped_low_priority": last.skipped_low_priority,
+                    "errors": last.errors,
+                    "ran_at": last.ran_at,
+                }
+                if last
+                else None
+            ),
+        }

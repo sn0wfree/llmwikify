@@ -1,0 +1,92 @@
+# LLM Provider 元数据 — 唯一来源
+#
+# 代码中不应硬编码 provider 的 base_url、auth_scheme、default_model、
+# supported_models、context_windows、reasoning_split。
+#
+# 新增 provider 时，只需在此文件中添加一个 section。
+
+providers:
+  # ─── OpenAI ────────────────────────────────────────────
+  openai:
+    base_url: "https://api.openai.com"
+    auth_scheme: "bearer"
+    default_model: "gpt-4o"
+    reasoning_split: false
+    supported_models:
+      - "gpt-4o"
+      - "gpt-4o-mini"
+      - "gpt-4-turbo"
+      - "gpt-3.5-turbo"
+    context_windows:
+      "gpt-4o": 128000
+      "gpt-4o-mini": 128000
+      "gpt-4-turbo": 128000
+      "gpt-3.5-turbo": 16385
+
+  # ─── MiniMax ───────────────────────────────────────────
+  minimax:
+    base_url: "https://api.minimaxi.com/v1"
+    auth_scheme: "bearer"
+    default_model: "minimax-M3"
+    reasoning_split: true
+    supported_models:
+      - "minimax-M3"
+      - "minimax-M2.7"
+      - "minimax-M2.7-highspeed"
+      - "minimax-M2.5"
+      - "minimax-M2.5-highspeed"
+      - "minimax-M2.1"
+      - "minimax-M2.1-highspeed"
+      - "minimax-M2"
+    context_windows:
+      "minimax-M3": 1000000
+      "minimax-M2.7": 1000000
+      "minimax-M2.5": 1000000
+
+  # ─── Xiaomi MiMo ───────────────────────────────────────
+  xiaomi:
+    base_url: "https://token-plan-cn.xiaomimimo.com"
+    auth_scheme: "api-key"
+    default_model: "mimo-v2.5-pro"
+    reasoning_split: true
+    supported_models:
+      - "mimo-v2.5-pro"
+      - "mimo-v2.5"
+      - "mimo-v2-flash"
+      - "mimo-v2-pro"
+      - "mimo-v2-omni"
+    context_windows: {}
+
+  # ─── Anthropic ─────────────────────────────────────────
+  anthropic:
+    base_url: "https://api.anthropic.com"
+    auth_scheme: "x-api-key"
+    default_model: "claude-sonnet-4-20250514"
+    reasoning_split: false
+    supported_models: []
+    context_windows: {}
+
+  # ─── Ollama (local) ────────────────────────────────────
+  ollama:
+    base_url: "http://localhost:11434/v1"
+    auth_scheme: "bearer"
+    default_model: ""
+    reasoning_split: false
+    # 模型名称由用户在安装时选择，无法穷举
+    supported_models: []
+    context_windows: {}
+
+  # ─── LM Studio (local) ─────────────────────────────────
+  lmstudio:
+    base_url: "http://localhost:1234/v1"
+    auth_scheme: "bearer"
+    default_model: ""
+    reasoning_split: false
+    supported_models: []
+    context_windows: {}
+
+# ─── Provider 别名（向后兼容）────────────────────────────
+# 旧 provider id → canonical provider id。
+# 新代码不应添加新的 alias，已有 alias 只用于迁移期兼容。
+aliases:
+  "minimax": "minimax"

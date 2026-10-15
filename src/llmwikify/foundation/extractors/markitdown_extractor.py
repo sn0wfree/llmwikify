@@ -19,22 +19,17 @@ Supported formats (when markitdown[all] is installed):
 from pathlib import Path
 from typing import Any
 
-from .base import ExtractedContent
+# Re-export for backward compatibility (canonical definition is in base.py)
+from .base import (
+    _EXTRACTOR_REGISTRY,
+    MARKITDOWN_FORMATS,  # noqa: F401
+    ExtractedContent,
+)
 
-# All file extensions handled by MarkItDown
-MARKITDOWN_FORMATS: set[str] = {
-    ".pdf",
-    ".docx", ".doc",
-    ".xlsx", ".xls",
-    ".pptx", ".ppt",
-    ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff", ".tif", ".webp", ".svg",
-    ".mp3", ".wav", ".m4a",
-    ".html", ".htm",
-    ".csv", ".json", ".xml",
-    ".epub",
-    ".zip",
-    ".msg",
-}
+
+def _ext_to_source_type(ext: str) -> str:
+    """Map file extension to source_type string. Backward-compatible wrapper."""
+    return _EXTRACTOR_REGISTRY.get(ext, ("text", ["text"]))[0]
 
 
 class MarkItDownExtractor:
@@ -122,12 +117,19 @@ class MarkItDownExtractor:
             if not text_content or not text_content.strip():
                 return None
 
-            title = self._extract_title(text_content, path)
+            # 2026-10-14: markitdown >=0.1.8 会在元数据里给 title（如 html
+            # <title>），优先使用；非字符串/空值回退到启发式提取
+            md_title = getattr(result, "title", None)
+            title = (
+                md_title
+                if isinstance(md_title, str) and md_title.strip()
+                else self._extract_title(text_content, path)
+            )
             ext = path.suffix.lower()
 
             return ExtractedContent(
                 text=text_content,
-                source_type=_ext_to_source_type(ext),
+                source_type=_EXTRACTOR_REGISTRY.get(ext, ("text", ["text"]))[0],
                 title=title,
                 metadata={
                     "file_path": str(path),
@@ -144,34 +146,14 @@ class MarkItDownExtractor:
         import re
 
         # Try to find first markdown heading
-        heading_match = re.search(r'^#\s+(.+)$', text, re.MULTILINE)
+        heading_match = re.search(r"^#\s+(.+)$", text, re.MULTILINE)
         if heading_match:
             return heading_match.group(1).strip()
 
         # Try to find first non-empty line that looks like a title
-        for line in text.split('\n')[:10]:
+        for line in text.split("\n")[:10]:
             stripped = line.strip()
-            if stripped and not stripped.startswith('---') and len(stripped) > 3:
+            if stripped and not stripped.startswith("---") and len(stripped) > 3:
                 return stripped[:100]
 
-        return path.stem.replace('-', ' ').replace('_', ' ').title()
-
-
-def _ext_to_source_type(ext: str) -> str:
-    """Map file extension to source_type string."""
-    type_map = {
-        ".pdf": "pdf",
-        ".docx": "docx", ".doc": "doc",
-        ".xlsx": "xlsx", ".xls": "xls",
-        ".pptx": "pptx", ".ppt": "ppt",
-        ".jpg": "image", ".jpeg": "image", ".png": "image",
-        ".gif": "image", ".bmp": "image", ".tiff": "image",
-        ".tif": "image", ".webp": "image", ".svg": "image",
-        ".mp3": "audio", ".wav": "audio", ".m4a": "audio",
-        ".html": "html", ".htm": "html",
-        ".csv": "csv", ".json": "json", ".xml": "xml",
-        ".epub": "epub",
-        ".zip": "zip",
-        ".msg": "outlook",
-    }
-    return type_map.get(ext, "text")
+        return path.stem.replace("-", " ").replace("_", " ").title()

@@ -14,6 +14,7 @@ Methods (2):
     save_permission       — INSERT a permission grant
     has_always_permission — COUNT(*) for tool with response='always'
 """
+
 from __future__ import annotations
 
 import logging
@@ -29,9 +30,8 @@ class PermissionRepository(ChatDBBase):
     """Repository for the ``chat_permissions`` table."""
 
     def _init_schema(self) -> None:
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute(
-                """
+        with self._mgr.transaction() as conn:
+            conn.execute("""
                 CREATE TABLE IF NOT EXISTS chat_permissions (
                     id TEXT PRIMARY KEY,
                     session_id TEXT,
@@ -40,15 +40,11 @@ class PermissionRepository(ChatDBBase):
                     response TEXT NOT NULL DEFAULT 'once',
                     created_at TEXT DEFAULT (datetime('now'))
                 )
-                """
-            )
-            conn.execute(
-                """
+                """)
+            conn.execute("""
                 CREATE INDEX IF NOT EXISTS idx_chat_permissions_tool
                 ON chat_permissions(tool_name, response)
-                """
-            )
-            conn.commit()
+                """)
 
     def save_permission(
         self,
@@ -59,14 +55,12 @@ class PermissionRepository(ChatDBBase):
     ) -> str:
         """Save a permission grant. Returns the permission id."""
         perm_id = uuid.uuid4().hex
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute(
-                """INSERT INTO chat_permissions
-                   (id, session_id, tool_name, pattern, response)
-                   VALUES (?, ?, ?, ?, ?)""",
-                (perm_id, session_id, tool_name, pattern, response),
-            )
-            conn.commit()
+        self._mgr.execute_write(
+            """INSERT INTO chat_permissions
+               (id, session_id, tool_name, pattern, response)
+               VALUES (?, ?, ?, ?, ?)""",
+            (perm_id, session_id, tool_name, pattern, response),
+        )
         return perm_id
 
     def has_always_permission(

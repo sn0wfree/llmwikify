@@ -9,6 +9,7 @@ Microcompact is **on by default** (2026-06-17 user decision) so the
 common case — large ``read_file`` results — saves tokens without any
 caller opt-in.
 """
+
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -16,14 +17,16 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-DEFAULT_COMPACTABLE_TOOLS: frozenset[str] = frozenset({
-    "read_file",
-    "exec",
-    "grep",
-    "find_files",
-    "web_search",
-    "list_dir",
-})
+DEFAULT_COMPACTABLE_TOOLS: frozenset[str] = frozenset(
+    {
+        "read_file",
+        "exec",
+        "grep",
+        "find_files",
+        "web_search",
+        "list_dir",
+    }
+)
 
 
 @dataclass
@@ -32,7 +35,10 @@ class ChatRunSpec:
     tool_registry: Any
     session_id: str
     wiki_id: str | None = None
-    model: str = "MiniMax-M2.7"
+    # v0.41: empty default. Actual model resolved at runtime via
+    # foundation.llm.resolver.resolve_chat_llm() — code should not
+    # hardcode model names here.
+    model: str = ""
     max_iterations: int = 10
     max_tool_result_chars: int = 50000
     temperature: float | None = None

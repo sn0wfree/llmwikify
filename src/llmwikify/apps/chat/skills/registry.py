@@ -38,7 +38,6 @@ from __future__ import annotations
 import logging
 import threading
 from collections.abc import Iterator
-from typing import Any
 
 from llmwikify.apps.chat.skills.base import (
     Skill,
@@ -80,8 +79,7 @@ class SkillRegistry:
         """
         if not isinstance(skill, Skill):
             raise TypeError(
-                f"register() requires a Skill instance, got "
-                f"{type(skill).__name__}"
+                f"register() requires a Skill instance, got " f"{type(skill).__name__}"
             )
         with self._lock:
             if skill.name in self._skills and not replace:
@@ -90,16 +88,12 @@ class SkillRegistry:
                     f"(pass replace=True to override)"
                 )
             if skill.name in self._skills:
-                logger.warning(
-                    "Replacing already-registered skill %r", skill.name
-                )
+                logger.warning("Replacing already-registered skill %r", skill.name)
             self._skills[skill.name] = skill
         try:
             skill.setup()
         except Exception as e:
-            logger.error(
-                "Skill %r setup() failed: %s", skill.name, e, exc_info=True
-            )
+            logger.error("Skill %r setup() failed: %s", skill.name, e, exc_info=True)
             raise
         return skill
 
@@ -111,9 +105,7 @@ class SkillRegistry:
             try:
                 skill.teardown()
             except Exception as e:
-                logger.warning(
-                    "Skill %r teardown() failed: %s", name, e, exc_info=True
-                )
+                logger.warning("Skill %r teardown() failed: %s", name, e, exc_info=True)
         return skill
 
     def clear(self) -> None:
@@ -125,7 +117,7 @@ class SkillRegistry:
                 try:
                     skill.teardown()
                 except Exception:
-                    pass
+                    logger.debug("Skill teardown failed for %s", name, exc_info=True)
 
     # ── lookup ─────────────────────────────────────────────────
 
@@ -167,8 +159,7 @@ class SkillRegistry:
         """
         if "." not in qualified:
             raise ValueError(
-                f"Qualified skill name must be 'skill.action', "
-                f"got {qualified!r}"
+                f"Qualified skill name must be 'skill.action', " f"got {qualified!r}"
             )
         skill_name, action_name = qualified.split(".", 1)
         if not skill_name or not action_name:
@@ -191,9 +182,7 @@ class SkillRegistry:
             names = sorted(self._skills.keys())
             return [self._skills[n].manifest() for n in names]
 
-    def all_actions(
-        self, *, tag: str | None = None
-    ) -> list[tuple[str, SkillAction]]:
+    def all_actions(self, *, tag: str | None = None) -> list[tuple[str, SkillAction]]:
         """Flatten all (skill_name, action) pairs.
 
         With ``tag="read-only"`` (or any tag), only actions
@@ -241,10 +230,8 @@ class SkillRegistry:
                         # the LLM doesn't get sent after the
                         # non-existent "skill_action" tool. See
                         # regression note in commit bb1e635+1.
-                        tool_name = (
-                            f"{name}_{action.name}"
-                            .replace(".", "_")
-                            .replace("-", "_")
+                        tool_name = f"{name}_{action.name}".replace(".", "_").replace(
+                            "-", "_"
                         )
                         out.append(
                             {

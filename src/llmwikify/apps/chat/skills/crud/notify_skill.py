@@ -68,11 +68,13 @@ async def _mark_read(args: dict, ctx: SkillContext) -> SkillResult:
 async def _subscribe(args: dict, ctx: SkillContext) -> SkillResult:
     # Placeholder for future pub/sub
     event_type = args.get("event_type", "all")
-    return SkillResult.ok({
-        "subscribed": True,
-        "event_type": event_type,
-        "_note": "subscribe is a placeholder; notifications are currently poll-based",
-    })
+    return SkillResult.ok(
+        {
+            "subscribed": True,
+            "event_type": event_type,
+            "_note": "subscribe is a placeholder; notifications are currently poll-based",
+        }
+    )
 
 
 # ─── Skill declaration ─────────────────────────────────────────
@@ -106,7 +108,10 @@ class NotifySkill(Skill):
             input_schema={
                 "type": "object",
                 "properties": {
-                    "notification_id": {"type": "string", "description": "Notification UUID"},
+                    "notification_id": {
+                        "type": "string",
+                        "description": "Notification UUID",
+                    },
                 },
                 "required": ["notification_id"],
             },
@@ -118,7 +123,11 @@ class NotifySkill(Skill):
             input_schema={
                 "type": "object",
                 "properties": {
-                    "event_type": {"type": "string", "description": "Event type to subscribe to", "default": "all"},
+                    "event_type": {
+                        "type": "string",
+                        "description": "Event type to subscribe to",
+                        "default": "all",
+                    },
                 },
             },
         ),

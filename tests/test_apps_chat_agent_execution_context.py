@@ -19,8 +19,6 @@ These tests cover:
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
@@ -32,7 +30,6 @@ from llmwikify.apps.chat.agent.execution_context import (
 from llmwikify.apps.chat.agent.runner_v2 import ChatRunnerV2
 from llmwikify.apps.chat.agent.subagent_manager import (
     SubagentManager,
-    SubagentResult,
     SubagentSpec,
 )
 from llmwikify.foundation.callback import NoOpHook
@@ -105,7 +102,9 @@ class TestChatRunnerV2DualSignature:
         te = MagicMock()
         pb = MagicMock()
         ctx = AgentExecutionContext(
-            chat_service=cs, tool_executor=te, prompt_builder=pb,
+            chat_service=cs,
+            tool_executor=te,
+            prompt_builder=pb,
         )
         runner = ChatRunnerV2(ctx=ctx)
         assert runner._chat_service is cs
@@ -171,6 +170,7 @@ class TestSubagentManagerAcceptsAnyAgentRunner:
 
             async def run_to_completion(self, spec):
                 from dataclasses import dataclass as _dc
+
                 @_dc
                 class _R:
                     error = None
@@ -179,6 +179,7 @@ class TestSubagentManagerAcceptsAnyAgentRunner:
                     usage = {}
                     state_trace = []
                     stop_reason = "completed"
+
                 return _R()
 
             def execution_context(self):
@@ -201,6 +202,7 @@ class TestSubagentManagerAcceptsAnyAgentRunner:
         )
         with pytest.raises(AttributeError):
             import asyncio
+
             asyncio.run(mgr.run(spec))
 
 
@@ -211,6 +213,7 @@ class TestChildCtxOverrides:
         from llmwikify.apps.chat.agent.execution_context import (
             AgentExecutionContext,
         )
+
         parent_ctx = AgentExecutionContext(
             chat_service=MagicMock(),
             tool_executor=MagicMock(),
@@ -241,9 +244,10 @@ class TestChildCtxOverrides:
 
         # Patch ChatRunnerV2.__init__ via setattr trick
         from unittest.mock import patch
+
         with patch.object(ChatRunnerV2, "__init__", _capture):
             mgr = SubagentManager(_Parent())
-            spec = SubagentSpec(
+            _spec = SubagentSpec(
                 goal="g",
                 initial_messages=[{"role": "user", "content": "u"}],
                 tool_registry=None,
@@ -253,6 +257,7 @@ class TestChildCtxOverrides:
             # build a child ctx the way the manager does and assert
             # the shape.
             from llmwikify.foundation.callback import NoOpHook
+
             pc = mgr._parent.execution_context()
             child_ctx = AgentExecutionContext(
                 chat_service=pc.chat_service,

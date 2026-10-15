@@ -18,7 +18,6 @@ from __future__ import annotations
 import argparse
 import io
 import os
-import sys
 import tempfile
 from unittest.mock import MagicMock, patch
 
@@ -141,7 +140,8 @@ class TestLocalMode:
         assert "DISABLED" in captured.out
 
     def test_serve_local_mode_calls_server_with_local_mode_true(
-        self, monkeypatch,
+        self,
+        monkeypatch,
     ):
         """WikiServer should be constructed with local_mode=True when
         host is loopback.
@@ -191,9 +191,7 @@ class TestPublicModeAutoInit:
                 multi_wiki=False,
             )
             config = {"mcp": {}}
-            with patch(
-                "llmwikify.interfaces.server.WikiServer"
-            ):
+            with patch("llmwikify.interfaces.server.WikiServer"):
                 run_serve(wiki, config, args)
         # auth.db should now exist (auto-init succeeded).
         assert auth_db_path().exists()
@@ -222,9 +220,7 @@ class TestPublicModeAutoInit:
                 multi_wiki=False,
             )
             config = {"mcp": {}}
-            with patch(
-                "llmwikify.interfaces.server.WikiServer"
-            ):
+            with patch("llmwikify.interfaces.server.WikiServer"):
                 rc = run_serve(wiki, config, args)
         # Returns 1 (no auto-init possible).
         assert rc == 1

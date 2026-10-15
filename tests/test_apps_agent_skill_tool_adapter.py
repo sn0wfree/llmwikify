@@ -77,10 +77,16 @@ class _FakeRegistry:
         return {"tool": name, "arguments": arguments, **self.result}
 
     def confirm_execution(self, confirmation_id, arguments=None):
-        return {"status": "error", "error": f"Invalid confirmation ID: {confirmation_id}"}
+        return {
+            "status": "error",
+            "error": f"Invalid confirmation ID: {confirmation_id}",
+        }
 
     def reject_execution(self, confirmation_id):
-        return {"status": "error", "error": f"Invalid confirmation ID: {confirmation_id}"}
+        return {
+            "status": "error",
+            "error": f"Invalid confirmation ID: {confirmation_id}",
+        }
 
     def get_pending_confirmations(self):
         return []

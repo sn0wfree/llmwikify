@@ -37,12 +37,14 @@ async def _plan(args: dict, ctx: SkillContext) -> SkillResult:
     # For Phase 5, return a minimal plan placeholder so the
     # action is callable; the real planner integration is
     # Phase 6's research_skill work.
-    return SkillResult.ok({
-        "sub_queries": [
-            {"q": query, "rationale": "primary"},
-        ],
-        "rationale": f"plan for: {query}",
-    })
+    return SkillResult.ok(
+        {
+            "sub_queries": [
+                {"q": query, "rationale": "primary"},
+            ],
+            "rationale": f"plan for: {query}",
+        }
+    )
 
 
 class PlanSkill(Skill):

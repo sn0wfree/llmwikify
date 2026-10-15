@@ -224,12 +224,7 @@ class TestBodyContainingDashes:
     def test_dashes_inside_body_preserved(self) -> None:
         # Only the FIRST ``\n---\n`` is the closing delimiter;
         # subsequent ``---`` in body stays put.
-        raw = (
-            "---\n"
-            "name: x\n"
-            "---\n"
-            "section A\n\n---\n\nsection B"
-        )
+        raw = "---\n" "name: x\n" "---\n" "section A\n\n---\n\nsection B"
         r = parse_skill_frontmatter(raw, fallback_name="x")
         assert r.frontmatter.name == "x"
         assert r.body == "section A\n\n---\n\nsection B"
@@ -255,8 +250,6 @@ def test_warnings_does_not_double_count() -> None:
         ("---\nname: : bad\n---\nbody", False),
     ],
 )
-def test_warnings_param(
-    raw: str, expected_warnings_empty: bool
-) -> None:
+def test_warnings_param(raw: str, expected_warnings_empty: bool) -> None:
     r = parse_skill_frontmatter(raw, fallback_name="x")
     assert (len(r.frontmatter.warnings) == 0) is expected_warnings_empty

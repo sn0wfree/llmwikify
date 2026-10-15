@@ -66,9 +66,9 @@ class WikiSynthesisMixin(WikiProtocol):
                     logger.warning("Source analysis failed for %s: %s", source_file, e)
 
         total_suggestions = sum(
-            len(s.get("suggested_updates", [])) +
-            len(s.get("new_contradictions", [])) +
-            len(s.get("knowledge_gaps", []))
+            len(s.get("suggested_updates", []))
+            + len(s.get("new_contradictions", []))
+            + len(s.get("knowledge_gaps", []))
             for s in all_suggestions
         )
 

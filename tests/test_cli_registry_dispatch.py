@@ -24,13 +24,34 @@ import re
 
 ALL_26_COMMANDS = [
     # C2 (10 simple)
-    "init", "ingest", "status", "log", "sink-status",
-    "write_page", "read_page", "search", "build-index", "fix-wikilinks",
+    "init",
+    "ingest",
+    "status",
+    "log",
+    "sink-status",
+    "write_page",
+    "read_page",
+    "search",
+    "build-index",
+    "fix-wikilinks",
     # C3 (16 complex — note: serve and mcp share, so 16 entries)
-    "analyze-source", "lint", "references", "batch", "synthesize",
-    "watch", "graph-query", "export-graph", "community-detect", "report",
-    "wikis", "suggest-synthesis", "knowledge-gaps", "graph-analyze",
-    "serve", "qmd", "db",
+    "analyze-source",
+    "lint",
+    "references",
+    "batch",
+    "synthesize",
+    "watch",
+    "graph-query",
+    "export-graph",
+    "community-detect",
+    "report",
+    "wikis",
+    "suggest-synthesis",
+    "knowledge-gaps",
+    "graph-analyze",
+    "serve",
+    "qmd",
+    "db",
 ]
 
 
@@ -56,9 +77,9 @@ def test_registry_size_matches_command_count():
 
     # mcp is a separate Command that delegates to the same handler,
     # so it's a separate entry. We expect 27 entries (26 + mcp).
-    assert len(COMMAND_REGISTRY) >= 26, (
-        f"expected ≥26 commands, got {len(COMMAND_REGISTRY)}"
-    )
+    assert (
+        len(COMMAND_REGISTRY) >= 26
+    ), f"expected ≥26 commands, got {len(COMMAND_REGISTRY)}"
 
 
 def test_each_registry_command_has_setup_parser():
@@ -66,9 +87,9 @@ def test_each_registry_command_has_setup_parser():
     from llmwikify.interfaces.cli._base import COMMAND_REGISTRY
 
     for name, cmd in COMMAND_REGISTRY.items():
-        assert callable(cmd.setup_parser), (
-            f"command '{name}' has no setup_parser method"
-        )
+        assert callable(
+            cmd.setup_parser
+        ), f"command '{name}' has no setup_parser method"
 
 
 def test_each_registry_command_has_run():
@@ -76,9 +97,7 @@ def test_each_registry_command_has_run():
     from llmwikify.interfaces.cli._base import COMMAND_REGISTRY
 
     for name, cmd in COMMAND_REGISTRY.items():
-        assert callable(cmd.run), (
-            f"command '{name}' has no run method"
-        )
+        assert callable(cmd.run), f"command '{name}' has no run method"
 
 
 # ============================================================================
@@ -91,12 +110,10 @@ def test_main_references_command_registry():
     from llmwikify.interfaces.cli import _app
 
     src = inspect.getsource(_app.main)
-    assert "COMMAND_REGISTRY" in src, (
-        "main() should reference COMMAND_REGISTRY for parser setup"
-    )
-    assert "get_command" in src, (
-        "main() should look up the command via get_command()"
-    )
+    assert (
+        "COMMAND_REGISTRY" in src
+    ), "main() should reference COMMAND_REGISTRY for parser setup"
+    assert "get_command" in src, "main() should look up the command via get_command()"
 
 
 def test_main_does_not_contain_handwritten_command_dict():
@@ -105,9 +122,9 @@ def test_main_does_not_contain_handwritten_command_dict():
 
     src = inspect.getsource(_app.main)
     # The old dict was: ``commands = {\n        'init': cli.init,``
-    assert not re.search(r"^\s*commands\s*=\s*\{", src, re.MULTILINE), (
-        "main() should not have a hand-written commands = {…} dict"
-    )
+    assert not re.search(
+        r"^\s*commands\s*=\s*\{", src, re.MULTILINE
+    ), "main() should not have a hand-written commands = {…} dict"
 
 
 def test_main_uses_load_cli_config_helper():
@@ -115,9 +132,9 @@ def test_main_uses_load_cli_config_helper():
     from llmwikify.interfaces.cli import _app
 
     src = inspect.getsource(_app.main)
-    assert "load_cli_config" in src, (
-        "main() should use load_cli_config (C1 helper) for config loading"
-    )
+    assert (
+        "load_cli_config" in src
+    ), "main() should use load_cli_config (C1 helper) for config loading"
 
 
 def test_main_does_not_inline_yaml_loading():
@@ -125,12 +142,12 @@ def test_main_does_not_inline_yaml_loading():
     from llmwikify.interfaces.cli import _app
 
     src = inspect.getsource(_app.main)
-    assert "yaml.safe_load" not in src, (
-        "main() should not inline YAML loading — use load_cli_config"
-    )
-    assert ".wiki-config.yaml" not in src, (
-        "main() should not reference .wiki-config.yaml directly"
-    )
+    assert (
+        "yaml.safe_load" not in src
+    ), "main() should not inline YAML loading — use load_cli_config"
+    assert (
+        ".wiki-config.yaml" not in src
+    ), "main() should not reference .wiki-config.yaml directly"
 
 
 def test_main_iterates_registry_to_setup_parsers():
@@ -145,12 +162,10 @@ def test_main_iterates_registry_to_setup_parsers():
     # patterns are tested here.
     src = inspect.getsource(_app._build_parser)
     assert "cmd.setup_parser(subparsers)" in src, (
-        "_build_parser() should call cmd.setup_parser(subparsers) "
-        "for each command"
+        "_build_parser() should call cmd.setup_parser(subparsers) " "for each command"
     )
     assert "sorted(COMMAND_REGISTRY)" in src, (
-        "_build_parser() should iterate sorted(COMMAND_REGISTRY) "
-        "for determinism"
+        "_build_parser() should iterate sorted(COMMAND_REGISTRY) " "for determinism"
     )
 
 
@@ -159,9 +174,9 @@ def test_main_dispatches_via_registry_run():
     from llmwikify.interfaces.cli import _app
 
     src = inspect.getsource(_app.main)
-    assert "cmd.run(args" in src, (
-        "main() should dispatch via cmd.run(args, wiki_root, config)"
-    )
+    assert (
+        "cmd.run(args" in src
+    ), "main() should dispatch via cmd.run(args, wiki_root, config)"
 
 
 # ============================================================================
@@ -222,9 +237,9 @@ def test_wiki_cli_still_has_all_public_methods():
     for cmd_name in ALL_26_COMMANDS:
         # Convert command name → method name (snake_case)
         method_name = cmd_name.replace("-", "_")
-        assert hasattr(WikiCLI, method_name), (
-            f"WikiCLI.{method_name} is missing — backward compat broken"
-        )
+        assert hasattr(
+            WikiCLI, method_name
+        ), f"WikiCLI.{method_name} is missing — backward compat broken"
 
 
 def test_wiki_cli_methods_are_one_line_delegates():
@@ -235,7 +250,13 @@ def test_wiki_cli_methods_are_one_line_delegates():
         method_name = cmd_name.replace("-", "_")
         method = getattr(WikiCLI, method_name)
         src = inspect.getsource(method)
-        body_lines = [line for line in src.splitlines() if line.strip() and not line.strip().startswith("def ") and not line.strip().startswith('"""')]
+        body_lines = [
+            line
+            for line in src.splitlines()
+            if line.strip()
+            and not line.strip().startswith("def ")
+            and not line.strip().startswith('"""')
+        ]
         # 1-line delegate = 1 effective line
         assert len(body_lines) <= 1, (
             f"WikiCLI.{method_name} is not a 1-line delegate "

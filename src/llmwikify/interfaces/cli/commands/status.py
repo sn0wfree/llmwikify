@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from .._base import Command
-from .._output import ICON_CLIPBOARD, ICON_INFO, ICON_SEARCH, print_error
+from .._output import print_error
 
 
 def run_status(wiki: Any, args: Any) -> int:

@@ -1,9 +1,17 @@
 # llmwikify Configuration File
-# 
+#
+# v0.41+: This file configures wiki-specific settings only.
+# LLM / Research / MCP config lives in ~/.llmwikify/llmwikify.json
+# (see foundation/templates/llmwikify.default.json for schema).
+#
 # This file configures llmwikify behavior for your specific wiki.
 # Copy this to .wiki-config.yaml and customize as needed.
-# 
+#
 # All settings are optional - omit any section to use defaults.
+
+# Configuration schema version (v0.41+).
+# Auto-migration will populate this field on first run.
+version: "0.41"
 
 # ============================================================================
 # Directory Structure

@@ -16,6 +16,7 @@ Phase 2a additions (decisions 12, 13, 14, 15):
 from __future__ import annotations
 
 import asyncio  # Phase 3 #6 — used by stdio/http/sse paths
+import logging
 import os  # Phase 2a: LLMWIKIFY_HOST env var
 import sys  # Phase 2a: print to stderr
 from pathlib import Path
@@ -24,6 +25,62 @@ from typing import Any
 from llmwikify.interfaces.mcp.adapter import MCPAdapter  # Phase 3 #6
 
 from .._base import Command
+
+logger = logging.getLogger(__name__)
+
+
+def _run_startup_migration(wiki: Any) -> None:
+    """Run auto-migration on all known wiki roots at startup.
+
+    v0.41: Migrate deprecated sections in .wiki-config.yaml to the
+    global llmwikify.json before serving any requests. Failures are
+    logged but do not block startup (best-effort migration).
+    """
+    try:
+        from llmwikify.foundation.migration import (
+            auto_migrate_wiki_config,
+            discover_wikis,
+        )
+    except ImportError:
+        return
+
+    # 1. Current wiki_root (passed in by WikiCLI)
+    wiki_roots: list[Path] = []
+    if hasattr(wiki, "root") and wiki.root:
+        wiki_roots.append(Path(wiki.root))
+
+    # 2. Discovered wikis (env / cwd)
+    try:
+        for root in discover_wikis():
+            if root not in wiki_roots:
+                wiki_roots.append(root)
+    except Exception:
+        pass
+
+    for root in wiki_roots:
+        try:
+            result = auto_migrate_wiki_config(root, auto_resolve="interactive")
+            if result.migrated:
+                logger.warning(
+                    "[migrate] Auto-migrated .wiki-config.yaml in %s "
+                    "(backup: %s, %d fields changed)",
+                    root,
+                    result.backup_path,
+                    len(result.changes),
+                )
+            elif result.conflicts and not result.dry_run:
+                logger.warning(
+                    "[migrate] Conflicts detected in %s but skipped "
+                    "(%d conflicts). Run `llmwikify migrate-config` manually.",
+                    root,
+                    len(result.conflicts),
+                )
+        except Exception as exc:
+            logger.warning(
+                "[migrate] Auto-migration failed for %s: %s",
+                root,
+                exc,
+            )
 
 
 def run_serve(wiki: Any, config: dict, args: Any) -> int:
@@ -42,6 +99,53 @@ def run_serve(wiki: Any, config: dict, args: Any) -> int:
     from llmwikify.foundation.config import get_wikis_config
     from llmwikify.interfaces.server import WikiServer
 
+    # v0.41: auto-migrate .wiki-config.yaml before starting server.
+    if not getattr(args, "no_migrate", False):
+        _run_startup_migration(wiki)
+
+    # Phase 7+ (2026-07-08): wire the default LLM provider into WikiServer
+    # so Phase 6 DreamScheduler + Phase 9 AutoCompact can actually start.
+    # Without this, MemoryManager.dream stays None and lifespan logs
+    # "dream_scheduler start skipped" + "auto_compact start skipped" at
+    # every CLI startup. Behaviour follows get_default_provider() Option C:
+    #   - llm.enabled=false / config missing → None, no log (legit no-LLM)
+    #   - llm.enabled=true + ok                 → provider
+    #   - llm.enabled=true + broken             → RuntimeError
+    # force_skip_dream (CLI flag, default off) downgrades the RuntimeError
+    # to a warning so serve still starts (the memory pipeline becomes a
+    # silent no-op, same as if llm.enabled=false had been set).
+    force_skip_dream = getattr(args, "force_skip_dream", False)
+    provider: Any = None
+    try:
+        from llmwikify.apps.chat.providers.registry import get_default_provider
+
+        provider = get_default_provider()
+        if provider is not None:
+            logger.info(
+                "serve: LLM provider wired (model=%s)",
+                getattr(provider, "model", "?"),
+            )
+    except RuntimeError as exc:
+        if force_skip_dream:
+            logger.warning(
+                "serve: --force-skip-dream set; ignoring provider error: %s",
+                exc,
+            )
+            provider = None
+        else:
+            print(
+                f"\n[!] LLM provider initialization failed:\n    {exc}\n",
+                file=sys.stderr,
+            )
+            print(
+                "    To start serve anyway, pass --force-skip-dream "
+                "(dream/auto_compact will be disabled).\n"
+                "    Otherwise, fix llm.enabled / provider / api_key in "
+                "~/.llmwikify/llmwikify.json.\n",
+                file=sys.stderr,
+            )
+            return 1
+
     mcp_config = config.get("mcp", {})
 
     name = getattr(args, "name", None)
@@ -57,6 +161,7 @@ def run_serve(wiki: Any, config: dict, args: Any) -> int:
     # Phase 2a decision 13: host precedence is
     #   --host > LLMWIKIFY_HOST env > mcp.host config > 127.0.0.1
     from llmwikify.foundation.auth import env_host, is_local_default
+
     final_host = (
         host
         or os.environ.get("LLMWIKIFY_HOST")
@@ -77,6 +182,7 @@ def run_serve(wiki: Any, config: dict, args: Any) -> int:
             local_token_path,
             prompt_first_admin,
         )
+
         repo = UserRepository(db_path=auth_db_path())
         if not repo.exists():
             try:
@@ -100,12 +206,13 @@ def run_serve(wiki: Any, config: dict, args: Any) -> int:
             print(f"  {result.pat}")
             print()
             print(f"  WebUI: open http://{final_host}:{port}")
-            print("  CLI:   export LLMWIKIFY_AUTH_TOKEN=\"<pat-above>\"")
+            print('  CLI:   export LLMWIKIFY_AUTH_TOKEN="<pat-above>"')
             print()
 
         # Show PAT info on every startup (not just first time).
         from llmwikify.foundation.auth.db import ApiKeyRepository
         from llmwikify.foundation.auth.utils import pat_file_path, save_pat
+
         pf = pat_file_path()
         if pf.exists():
             print(f"  PAT file: {pf}")
@@ -115,10 +222,11 @@ def run_serve(wiki: Any, config: dict, args: Any) -> int:
         try:
             for row in _repo._connect().execute("SELECT * FROM users LIMIT 1"):
                 from llmwikify.foundation.auth.db import _row_to_user
+
                 _first_user = _row_to_user(row)
                 break
         except Exception:
-            pass
+            logger.debug("Could not query users table for first user lookup")
         if _first_user:
             _ak_repo = ApiKeyRepository()
             _keys = _ak_repo.list_by_user(_first_user.id)
@@ -127,6 +235,7 @@ def run_serve(wiki: Any, config: dict, args: Any) -> int:
             # If user exists but has no PATs, auto-create one.
             if not _active:
                 from llmwikify.foundation.auth._pat import generate_pat
+
                 _pat, _pat_hash = generate_pat()
                 _ak_repo.create(
                     user_id=_first_user.id,
@@ -154,7 +263,13 @@ def run_serve(wiki: Any, config: dict, args: Any) -> int:
     # We pass it to WikiServer, which uses it to mount JWTAuthMiddleware
     # in pass-through mode.
     server_local_mode = local_mode
-    server_public_read = True  # default; can be overridden later
+    # 2026-10-14: wire the previously hardcoded public_read flag to an env
+    # switch so deployments can require authentication for reads too.
+    # Default stays True (backward compatible). Set
+    # LLMWIKIFY_PUBLIC_READ=false to make token-less GETs return 401.
+    server_public_read = os.environ.get(
+        "LLMWIKIFY_PUBLIC_READ", "true"
+    ).strip().lower() not in {"0", "false", "no", "off"}
 
     try:
         # Check if multi-wiki mode is enabled
@@ -163,6 +278,7 @@ def run_serve(wiki: Any, config: dict, args: Any) -> int:
 
         if multi_wiki or has_wikis_config:
             from llmwikify.kernel.multi_wiki.registry import WikiRegistry
+
             registry = WikiRegistry(config)
             registry.initialize()
 
@@ -180,6 +296,7 @@ def run_serve(wiki: Any, config: dict, args: Any) -> int:
                 enable_webui=web,
                 public_read=server_public_read,
                 local_mode=server_local_mode,
+                provider=provider,
             )
 
             wiki_count = len(registry.list_wikis())
@@ -197,13 +314,14 @@ def run_serve(wiki: Any, config: dict, args: Any) -> int:
                 # Warn if WebUI bundle not built
                 try:
                     import llmwikify
+
                     pkg_dir = Path(llmwikify.__file__).parent.parent.parent
                     dist_path = pkg_dir / "ui" / "webui" / "dist" / "index.html"
                     if not dist_path.exists():
                         print("  ⚠️  WebUI bundle not built — the page may be blank.")
                         print("     Fix: cd ui/webui && pnpm install && pnpm build")
                 except Exception:
-                    pass
+                    logger.debug("Could not verify WebUI bundle existence")
             print()
 
             server.run(host=final_host, port=port)
@@ -218,12 +336,17 @@ def run_serve(wiki: Any, config: dict, args: Any) -> int:
                     enable_webui=True,
                     public_read=server_public_read,
                     local_mode=server_local_mode,
+                    provider=provider,
                 )
 
-                print(f"Starting Unified Server '{service_name}' on {final_host}:{port}")
+                print(
+                    f"Starting Unified Server '{service_name}' on {final_host}:{port}"
+                )
                 print("  Transport: http")
                 if server_local_mode:
-                    print(f"  Auth: DISABLED (local mode, host {final_host} is loopback)")
+                    print(
+                        f"  Auth: DISABLED (local mode, host {final_host} is loopback)"
+                    )
                 else:
                     print(f"  Auth: ENFORCED (host {final_host} is non-loopback)")
                 print(f"  Web UI: http://{final_host}:{port}")
@@ -287,7 +410,9 @@ def setup_serve_parser(subparsers: Any) -> None:
         help="Start MCP server with optional Web UI (alias: mcp)",
         aliases=["mcp"],
     )
-    p.add_argument("--transport", "-t", choices=["stdio", "http", "sse"], help="Transport protocol")
+    p.add_argument(
+        "--transport", "-t", choices=["stdio", "http", "sse"], help="Transport protocol"
+    )
     p.add_argument(
         "--host",
         help=(
@@ -299,7 +424,9 @@ def setup_serve_parser(subparsers: Any) -> None:
     p.add_argument("--mcp-port", type=int, help="MCP server port")
     p.add_argument("--port", "-p", type=int, help="[Deprecated] Use --mcp-port instead")
     p.add_argument("--name", "-n", help="Service name (defaults to directory name)")
-    p.add_argument("--web", action="store_true", help="Start unified Web UI (single process)")
+    p.add_argument(
+        "--web", action="store_true", help="Start unified Web UI (single process)"
+    )
     p.add_argument(
         "--auth-token",
         help=(
@@ -308,6 +435,25 @@ def setup_serve_parser(subparsers: Any) -> None:
         ),
     )
     p.add_argument("--multi-wiki", action="store_true", help="Enable multi-wiki mode")
+    p.add_argument(
+        "--force-skip-dream",
+        action="store_true",
+        help=(
+            "If llm.enabled=true but the LLM provider fails to initialize "
+            "(missing api_key, unknown provider, etc.), start serve anyway "
+            "with dream_scheduler + auto_compact disabled. Default: exit "
+            "with error and a fix-it hint. Has no effect when llm.enabled=false "
+            "or the config is missing (those already return None silently)."
+        ),
+    )
+    p.add_argument(
+        "--no-migrate",
+        action="store_true",
+        help=(
+            "Skip auto-migration of .wiki-config.yaml at startup. "
+            "Default: auto-migrate if version < 0.41."
+        ),
+    )
 
 
 class ServeCommand(Command):

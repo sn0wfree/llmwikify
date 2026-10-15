@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { api, WikiDreamEdit } from '../../api';
 import { useWikiStore } from '../../stores/wikiStore';
 import { EmptyState } from '../agent/StateViews';
@@ -11,11 +11,7 @@ export function WikiDreamLog() {
   const [loading, setLoading] = useState(true);
   const { currentWikiId } = useWikiStore();
 
-  useEffect(() => {
-    loadEdits();
-  }, []);
-
-  const loadEdits = async () => {
+  const loadEdits = useCallback(async () => {
     try {
       const log = await api.wikiDream.log(undefined, currentWikiId || undefined);
       setEdits(log);
@@ -24,7 +20,11 @@ export function WikiDreamLog() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentWikiId]);
+
+  useEffect(() => {
+    loadEdits();
+  }, [loadEdits]);
 
   if (loading) {
     return (

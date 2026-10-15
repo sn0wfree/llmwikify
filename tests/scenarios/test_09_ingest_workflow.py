@@ -26,9 +26,9 @@ Wiki pages with auto-linking
 - analyze_source hangs: check API key in ~/.llmwikify/llmwikify.json
 """
 
-
-import subprocess
 import shutil
+import subprocess
+
 import pytest
 
 

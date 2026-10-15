@@ -42,8 +42,13 @@ class TestMemoryFactsStoreInit:
             cols = conn.execute("PRAGMA table_info(memory_facts)").fetchall()
         col_names = {c[1] for c in cols}
         expected = {
-            "id", "content", "source_session_id", "source_type",
-            "confidence", "last_referenced_at", "created_at",
+            "id",
+            "content",
+            "source_session_id",
+            "source_type",
+            "confidence",
+            "last_referenced_at",
+            "created_at",
         }
         assert expected.issubset(col_names)
 
@@ -65,9 +70,7 @@ class TestMemoryFactsStoreCRUD:
         assert fact.confidence == 1.0
         assert fact.last_referenced_at is None
 
-    def test_add_with_custom_confidence(
-        self, store: MemoryFactsStore
-    ) -> None:
+    def test_add_with_custom_confidence(self, store: MemoryFactsStore) -> None:
         fid = store.add(
             content="Maybe mean-reverting",
             source_type="manual",
@@ -92,9 +95,7 @@ class TestMemoryFactsStoreCRUD:
         assert store.get(fid) is None
         assert store.delete(fid) is False
 
-    def test_touch_updates_last_referenced(
-        self, store: MemoryFactsStore
-    ) -> None:
+    def test_touch_updates_last_referenced(self, store: MemoryFactsStore) -> None:
         fid = store.add(content="x")
         assert store.touch(fid) is True
         fact = store.get(fid)

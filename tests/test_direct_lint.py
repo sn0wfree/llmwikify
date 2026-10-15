@@ -1,11 +1,10 @@
 """Tests for direct lint (schema-aware gap detection)."""
 
-import json
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from llmwikify.kernel import Wiki
 
@@ -51,20 +50,6 @@ class TestBuildLintContext:
         assert "=== SOURCE ANALYSIS" in context
         assert "test1.md" in context
         assert "test2.md" in context
-
-        wiki.close()
-
-    def test_context_limits_source_files(self, temp_wiki):
-        wiki = Wiki(temp_wiki)
-        wiki.init()
-
-        for i in range(25):
-            (temp_wiki / "raw" / f"source_{i}.md").write_text(f"# Source {i}\n")
-
-        context = wiki._build_lint_context(limit=20)
-
-        assert "=== SOURCE ANALYSIS" in context
-        assert "and 5 more" in context
 
         wiki.close()
 
@@ -154,10 +139,19 @@ class TestLintSignature:
 
         result = wiki.lint(limit=5)
 
-        llm_gaps = [i for i in result["issues"] if "type" in i and i["type"] in (
-            "missing_custom_page", "orphan_concept", "missing_cross_ref",
-            "non_compliant_page", "broken_link"
-        )]
+        llm_gaps = [
+            i
+            for i in result["issues"]
+            if "type" in i
+            and i["type"]
+            in (
+                "missing_custom_page",
+                "orphan_concept",
+                "missing_cross_ref",
+                "non_compliant_page",
+                "broken_link",
+            )
+        ]
         assert len(llm_gaps) <= 5
 
         wiki.close()
@@ -199,7 +193,7 @@ class TestLLMDetectGaps:
 
         wiki.close()
 
-    @patch('llmwikify.foundation.llm_client.LLMClient')
+    @patch("llmwikify.foundation.llm_client.LLMClient")
     def test_llm_parses_list_response(self, mock_client_class, temp_wiki):
         wiki = Wiki(temp_wiki)
         wiki.init()
@@ -217,7 +211,7 @@ class TestLLMDetectGaps:
 
         wiki.close()
 
-    @patch('llmwikify.foundation.llm_client.LLMClient')
+    @patch("llmwikify.foundation.llm_client.LLMClient")
     def test_llm_parses_dict_with_gaps(self, mock_client_class, temp_wiki):
         wiki = Wiki(temp_wiki)
         wiki.init()

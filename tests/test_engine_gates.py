@@ -30,9 +30,9 @@ def test_engine_constructs_gates():
     import llmwikify.apps.chat.research_engine.engine as engine_mod
 
     src = inspect.getsource(engine_mod.ResearchEngine.__init__)
-    assert "self.gates = ResearchGates(self)" in src, (
-        "ResearchEngine.__init__ should construct a ResearchGates"
-    )
+    assert (
+        "self.gates = ResearchGates(self)" in src
+    ), "ResearchEngine.__init__ should construct a ResearchGates"
 
 
 def test_gates_holds_back_refs_to_engine_deps():
@@ -58,9 +58,9 @@ def test_engine_check_control_signals_delegates_to_gates():
     import llmwikify.apps.chat.research_engine.engine as engine_mod
 
     src = inspect.getsource(engine_mod.ResearchEngine._check_control_signals)
-    assert "self.gates.check_control_signals" in src, (
-        "engine._check_control_signals should delegate to self.gates"
-    )
+    assert (
+        "self.gates.check_control_signals" in src
+    ), "engine._check_control_signals should delegate to self.gates"
 
 
 def test_engine_check_framework_compliance_delegates_to_gates():
@@ -68,9 +68,9 @@ def test_engine_check_framework_compliance_delegates_to_gates():
     import llmwikify.apps.chat.research_engine.engine as engine_mod
 
     src = inspect.getsource(engine_mod.ResearchEngine._check_framework_compliance)
-    assert "self.gates.check_framework_compliance" in src, (
-        "engine._check_framework_compliance should delegate to self.gates"
-    )
+    assert (
+        "self.gates.check_framework_compliance" in src
+    ), "engine._check_framework_compliance should delegate to self.gates"
 
 
 def test_engine_check_quality_compliance_delegates_to_gates():
@@ -78,9 +78,9 @@ def test_engine_check_quality_compliance_delegates_to_gates():
     import llmwikify.apps.chat.research_engine.engine as engine_mod
 
     src = inspect.getsource(engine_mod.ResearchEngine._check_quality_compliance)
-    assert "self.gates.check_quality_compliance" in src, (
-        "engine._check_quality_compliance should delegate to self.gates"
-    )
+    assert (
+        "self.gates.check_quality_compliance" in src
+    ), "engine._check_quality_compliance should delegate to self.gates"
 
 
 def test_engine_can_replan_delegates_to_gates():
@@ -88,9 +88,9 @@ def test_engine_can_replan_delegates_to_gates():
     import llmwikify.apps.chat.research_engine.engine as engine_mod
 
     src = inspect.getsource(engine_mod.ResearchEngine._can_replan)
-    assert "self.gates.can_replan" in src, (
-        "engine._can_replan should delegate to self.gates.can_replan"
-    )
+    assert (
+        "self.gates.can_replan" in src
+    ), "engine._can_replan should delegate to self.gates.can_replan"
 
 
 def test_engine_evaluate_gate_delegates_to_gates():
@@ -98,9 +98,9 @@ def test_engine_evaluate_gate_delegates_to_gates():
     import llmwikify.apps.chat.research_engine.engine as engine_mod
 
     src = inspect.getsource(engine_mod.ResearchEngine._evaluate_gate)
-    assert "self.gates.evaluate_gate" in src, (
-        "engine._evaluate_gate should delegate to self.gates.evaluate_gate"
-    )
+    assert (
+        "self.gates.evaluate_gate" in src
+    ), "engine._evaluate_gate should delegate to self.gates.evaluate_gate"
 
 
 def test_engine_synthesis_to_text_delegates_to_gates():
@@ -135,38 +135,49 @@ def test_framework_compliance_returns_missing_step():
     assert g.check_framework_compliance(s)["missing"] == "gather"
 
     # Step 3 missing → "synthesize" (reasoning_check)
-    s = ResearchState(clarification={"q": "x"}, evidence_scores={"a": 0.5},
-                      synthesis={"text": "s"})
+    s = ResearchState(
+        clarification={"q": "x"}, evidence_scores={"a": 0.5}, synthesis={"text": "s"}
+    )
     assert g.check_framework_compliance(s)["missing"] == "synthesize"
 
     # Step 4 missing → "report" (structure_check)
     s = ResearchState(
-        clarification={"q": "x"}, evidence_scores={"a": 0.5},
-        synthesis={"text": "s"}, reasoning_check={"ok": True},
+        clarification={"q": "x"},
+        evidence_scores={"a": 0.5},
+        synthesis={"text": "s"},
+        reasoning_check={"ok": True},
     )
     assert g.check_framework_compliance(s)["missing"] == "report"
 
     # Step 5 missing → "report"
     s = ResearchState(
-        clarification={"q": "x"}, evidence_scores={"a": 0.5},
-        synthesis={"text": "s"}, reasoning_check={"ok": True},
+        clarification={"q": "x"},
+        evidence_scores={"a": 0.5},
+        synthesis={"text": "s"},
+        reasoning_check={"ok": True},
         structure_check={"ok": True},
     )
     assert g.check_framework_compliance(s)["missing"] == "report"
 
     # Step 6 missing → "review"
     s = ResearchState(
-        clarification={"q": "x"}, evidence_scores={"a": 0.5},
-        synthesis={"text": "s"}, reasoning_check={"ok": True},
-        structure_check={"ok": True}, report_md="# Report",
+        clarification={"q": "x"},
+        evidence_scores={"a": 0.5},
+        synthesis={"text": "s"},
+        reasoning_check={"ok": True},
+        structure_check={"ok": True},
+        report_md="# Report",
     )
     assert g.check_framework_compliance(s)["missing"] == "review"
 
     # All present → None
     s = ResearchState(
-        clarification={"q": "x"}, evidence_scores={"a": 0.5},
-        synthesis={"text": "s"}, reasoning_check={"ok": True},
-        structure_check={"ok": True}, report_md="# Report",
+        clarification={"q": "x"},
+        evidence_scores={"a": 0.5},
+        synthesis={"text": "s"},
+        reasoning_check={"ok": True},
+        structure_check={"ok": True},
+        report_md="# Report",
         review={"approved": True},
     )
     assert g.check_framework_compliance(s) is None

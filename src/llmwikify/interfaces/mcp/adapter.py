@@ -15,6 +15,7 @@ from .tools import register_multi_wiki_tools, register_wiki_tools
 
 logger = logging.getLogger(__name__)
 
+
 class MCPAdapter:
     """MCP protocol adapter - wraps wiki services as MCP tools.
 
@@ -36,11 +37,15 @@ class MCPAdapter:
         if isinstance(wiki, WikiRegistry):
             self.registry = wiki
             self.wiki = wiki.get_default_wiki() if wiki.get_default_wiki_id() else None
-            self.name = name or (config.get("name") if config else None) or "llmwikify-multi"
+            self.name = (
+                name or (config.get("name") if config else None) or "llmwikify-multi"
+            )
         else:
             self.registry = None
             self.wiki = wiki
-            self.name = name or (config.get("name") if config else None) or wiki.root.name
+            self.name = (
+                name or (config.get("name") if config else None) or wiki.root.name
+            )
 
         self._mcp = FastMCP(self.name)
 

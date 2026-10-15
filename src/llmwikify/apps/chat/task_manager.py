@@ -21,7 +21,6 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from collections.abc import AsyncIterator
 from datetime import datetime, timezone
 from typing import Any
 
@@ -74,7 +73,7 @@ class EventBuffer:
 
         self._buf.append(e)
         if len(self._buf) >= self.BATCH_SIZE:
-            self._flush_task = asyncio.create_task(self.flush())
+            self._flush_task = asyncio.create_task(self.flush(), name="event_flush")
 
     async def flush(self) -> int:
         """Persist buffered events to DB. Returns count flushed."""
@@ -130,10 +129,12 @@ class ResearchTaskManager(BaseResearchTaskManager):
             # Note: this is called from _run_task's finally block,
             # which is already inside the event loop.
             import asyncio as _asyncio
-            _asyncio.create_task(buffer.flush())
+
+            _asyncio.create_task(buffer.flush(), name="event_flush_final")
         except Exception as ex:
-            logger.warning("Final EventBuffer flush dispatch failed for %s: %s",
-                           session_id, ex)
+            logger.warning(
+                "Final EventBuffer flush dispatch failed for %s: %s", session_id, ex
+            )
 
     def _on_session_cleanup(self, session_id: str) -> None:
         """Close + drop the per-session EventBuffer."""

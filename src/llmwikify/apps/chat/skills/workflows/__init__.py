@@ -38,6 +38,7 @@ A typical run looks like:
                                                              │
                                                        [JSON result on stdout]
 """
+
 from __future__ import annotations
 
 from llmwikify.apps.chat.skills.workflows.dag import (

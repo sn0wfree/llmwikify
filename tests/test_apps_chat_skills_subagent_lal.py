@@ -25,12 +25,10 @@ from llmwikify.apps.chat.skills.workflows.dag import (
 )
 from llmwikify.apps.chat.skills.workflows.subagent_runner import (
     SubagentRequest,
-    SubagentResult,
 )
 from llmwikify.apps.chat.skills.workflows.subagent_worker import (
     LlmClientDriver,
     MockDriver,
-    _current_request,
     _request_ctx,
     resolver_enabled_subagent,
     run_subagent,
@@ -42,8 +40,14 @@ from llmwikify.foundation.llm.streamable import StreamableLLMClient
 
 @pytest.fixture(autouse=True)
 def _clean_llm_env(monkeypatch):
-    for k in ("LLM_API_KEY", "LLM_BASE_URL", "LLM_MODEL", "LLM_PROVIDER",
-              "LLM_SUBAGENT_INHERIT", "LLMWIKIFY_SUBAGENT_DRIVER"):
+    for k in (
+        "LLM_API_KEY",
+        "LLM_BASE_URL",
+        "LLM_MODEL",
+        "LLM_PROVIDER",
+        "LLM_SUBAGENT_INHERIT",
+        "LLMWIKIFY_SUBAGENT_DRIVER",
+    ):
         monkeypatch.delenv(k, raising=False)
     yield
 
@@ -139,10 +143,16 @@ class TestLlmClientDriverInheritance:
     def test_uses_spec_model_when_no_override(self, monkeypatch):
         spec = _make_spec(model="minimax-M3")
         req = SubagentRequest(
-            actor_name="a", actor_prompt_source="file:",
-            actor_prompt_text="p", actor_model="",
-            actor_tools=(), actor_permission_mode="default",
-            inputs={}, budget={}, session_id="s", worktree_path=None,
+            actor_name="a",
+            actor_prompt_source="file:",
+            actor_prompt_text="p",
+            actor_model="",
+            actor_tools=(),
+            actor_permission_mode="default",
+            inputs={},
+            budget={},
+            session_id="s",
+            worktree_path=None,
             llm=spec,
         )
         token = _request_ctx.set(req)
@@ -157,10 +167,16 @@ class TestLlmClientDriverInheritance:
     def test_actor_model_override_applies_when_supported(self, monkeypatch):
         spec = _make_spec(model="minimax-M3")
         req = SubagentRequest(
-            actor_name="a", actor_prompt_source="file:",
-            actor_prompt_text="p", actor_model="minimax-M2.7",
-            actor_tools=(), actor_permission_mode="default",
-            inputs={}, budget={}, session_id="s", worktree_path=None,
+            actor_name="a",
+            actor_prompt_source="file:",
+            actor_prompt_text="p",
+            actor_model="minimax-M2.7",
+            actor_tools=(),
+            actor_permission_mode="default",
+            inputs={},
+            budget={},
+            session_id="s",
+            worktree_path=None,
             llm=spec,
         )
         token = _request_ctx.set(req)
@@ -173,10 +189,16 @@ class TestLlmClientDriverInheritance:
     def test_actor_model_unsupported_raises(self, monkeypatch):
         spec = _make_spec(provider="minimax", model="minimax-M3")
         req = SubagentRequest(
-            actor_name="a", actor_prompt_source="file:",
-            actor_prompt_text="p", actor_model="not-a-real-model",
-            actor_tools=(), actor_permission_mode="default",
-            inputs={}, budget={}, session_id="s", worktree_path=None,
+            actor_name="a",
+            actor_prompt_source="file:",
+            actor_prompt_text="p",
+            actor_model="not-a-real-model",
+            actor_tools=(),
+            actor_permission_mode="default",
+            inputs={},
+            budget={},
+            session_id="s",
+            worktree_path=None,
             llm=spec,
         )
         token = _request_ctx.set(req)
@@ -189,10 +211,16 @@ class TestLlmClientDriverInheritance:
     def test_inherit_alias_treated_as_no_override(self, monkeypatch):
         spec = _make_spec(model="minimax-M3")
         req = SubagentRequest(
-            actor_name="a", actor_prompt_source="file:",
-            actor_prompt_text="p", actor_model="inherit",
-            actor_tools=(), actor_permission_mode="default",
-            inputs={}, budget={}, session_id="s", worktree_path=None,
+            actor_name="a",
+            actor_prompt_source="file:",
+            actor_prompt_text="p",
+            actor_model="inherit",
+            actor_tools=(),
+            actor_permission_mode="default",
+            inputs={},
+            budget={},
+            session_id="s",
+            worktree_path=None,
             llm=spec,
         )
         token = _request_ctx.set(req)
@@ -205,10 +233,16 @@ class TestLlmClientDriverInheritance:
     def test_ollama_skips_model_validation(self, monkeypatch):
         spec = _make_spec(provider="ollama", model="llama3")
         req = SubagentRequest(
-            actor_name="a", actor_prompt_source="file:",
-            actor_prompt_text="p", actor_model="custom-ollama-model",
-            actor_tools=(), actor_permission_mode="default",
-            inputs={}, budget={}, session_id="s", worktree_path=None,
+            actor_name="a",
+            actor_prompt_source="file:",
+            actor_prompt_text="p",
+            actor_model="custom-ollama-model",
+            actor_tools=(),
+            actor_permission_mode="default",
+            inputs={},
+            budget={},
+            session_id="s",
+            worktree_path=None,
             llm=spec,
         )
         token = _request_ctx.set(req)
@@ -246,9 +280,10 @@ class TestSubagentInheritSwitch:
         # The fallback uses LLMClient.from_config; we pass enabled=True
         # via env-like config so the historical gate doesn't trip.
         from llmwikify.foundation.llm_client import LLMClient
-        client = LLMClient.from_config({
-            "llm": {"enabled": True, "api_key": "env-key", "model": "gpt-4o"}
-        })
+
+        client = LLMClient.from_config(
+            {"llm": {"enabled": True, "api_key": "env-key", "model": "gpt-4o"}}
+        )
         assert client.api_key == "env-key"
 
 
@@ -261,11 +296,16 @@ class TestRunSubagentEndToEnd:
         monkeypatch.setenv("LLMWIKIFY_SUBAGENT_DRIVER", "mock")
         spec = _make_spec(model="minimax-M3")
         req = SubagentRequest(
-            actor_name="echo", actor_prompt_source="file:",
-            actor_prompt_text="return {{inputs.q}}", actor_model="",
-            actor_tools=(), actor_permission_mode="default",
-            inputs={"q": "hi"}, budget={},
-            session_id="s", worktree_path=None,
+            actor_name="echo",
+            actor_prompt_source="file:",
+            actor_prompt_text="return {{inputs.q}}",
+            actor_model="",
+            actor_tools=(),
+            actor_permission_mode="default",
+            inputs={"q": "hi"},
+            budget={},
+            session_id="s",
+            worktree_path=None,
             llm=spec,
         )
         result = run_subagent(req)
@@ -294,6 +334,7 @@ class TestExecutorLLMSpec:
             InputsSpec,
             LimitsSpec,
         )
+
         spec = _make_spec()
         ws = WorkflowSpec(
             name="t",
@@ -311,8 +352,10 @@ class TestExecutorLLMSpec:
             WorkflowExecutor,
             WorkflowInputs,
         )
+
         with tempfile.TemporaryDirectory() as td:
             from pathlib import Path
+
             executor = WorkflowExecutor(
                 spec=ws,
                 inputs=WorkflowInputs(data={}),
@@ -331,15 +374,16 @@ class TestActorModelLiteral:
         import inspect
 
         from llmwikify.apps.chat.skills.workflows import dag as dag_mod
+
         src = inspect.getsource(dag_mod)
         # Look for the ActorModel definition line; the new one
         # should not contain "inherit".
         for line in src.splitlines():
             stripped = line.strip()
             if stripped.startswith("ActorModel ="):
-                assert '"inherit"' not in stripped, (
-                    f"ActorModel literal still contains 'inherit': {line!r}"
-                )
+                assert (
+                    '"inherit"' not in stripped
+                ), f"ActorModel literal still contains 'inherit': {line!r}"
                 assert '"opus"' in stripped
                 assert '"sonnet"' in stripped
                 assert '"haiku"' in stripped

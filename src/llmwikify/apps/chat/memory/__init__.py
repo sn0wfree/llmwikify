@@ -58,7 +58,7 @@ class ConversationStore:
     One row per message (role/content/tool_calls).
     """
 
-    def __init__(self, chat_db: Any):
+    def __init__(self, chat_db: Any) -> None:
         self.db = chat_db
 
     def add(
@@ -70,14 +70,17 @@ class ConversationStore:
     ) -> str:
         """Append a message to the conversation."""
         import uuid
+
         msg_id = str(uuid.uuid4())
-        self.db.save_chat_message({
-            "id": msg_id,
-            "session_id": session_id,
-            "role": role,
-            "content": content,
-            "tool_calls": json.dumps(tool_calls) if tool_calls else None,
-        })
+        self.db.save_chat_message(
+            {
+                "id": msg_id,
+                "session_id": session_id,
+                "role": role,
+                "content": content,
+                "tool_calls": json.dumps(tool_calls) if tool_calls else None,
+            }
+        )
         return msg_id
 
     def list(
@@ -87,7 +90,8 @@ class ConversationStore:
     ) -> list[dict]:
         """List messages in a session (chronological order)."""
         return self.db.get_chat_messages(
-            session_id, limit=limit if limit is not None else 50,
+            session_id,
+            limit=limit if limit is not None else 50,
         )
 
     def search(
@@ -98,10 +102,7 @@ class ConversationStore:
     ) -> list[dict]:
         """Search messages by content substring."""
         messages = self.list(session_id)
-        results = [
-            m for m in messages
-            if query.lower() in m.get("content", "").lower()
-        ]
+        results = [m for m in messages if query.lower() in m.get("content", "").lower()]
         return results[:limit]
 
     # ── async wrappers (Phase 3.5 / v0.36) ───────────────────
@@ -142,7 +143,7 @@ class KnowledgeStore:
     named entry point in the MemoryManager.
     """
 
-    def __init__(self, wiki: Any):
+    def __init__(self, wiki: Any) -> None:
         self.wiki = wiki
 
     def add(self, page_name: str, content: str) -> None:
@@ -176,7 +177,7 @@ class ContextStore:
     (e.g., RAG chunks, tool results, intermediate reasoning).
     """
 
-    def __init__(self, chat_db: Any):
+    def __init__(self, chat_db: Any) -> None:
         self.db = chat_db
 
     def add(
@@ -188,21 +189,20 @@ class ContextStore:
     ) -> str:
         """Add a context entry."""
         import uuid
+
         entry_id = str(uuid.uuid4())
-        with sqlite3.connect(self.db.db_path) as conn:
-            conn.execute(
-                """INSERT INTO context_entries
-                   (id, session_id, entry_type, content, metadata)
-                   VALUES (?, ?, ?, ?, ?)""",
-                (
-                    entry_id,
-                    session_id,
-                    entry_type,
-                    content,
-                    json.dumps(metadata) if metadata else None,
-                ),
-            )
-            conn.commit()
+        self.db._mgr.execute_write(
+            """INSERT INTO context_entries
+               (id, session_id, entry_type, content, metadata)
+               VALUES (?, ?, ?, ?, ?)""",
+            (
+                entry_id,
+                session_id,
+                entry_type,
+                content,
+                json.dumps(metadata) if metadata else None,
+            ),
+        )
         return entry_id
 
     def list(
@@ -212,35 +212,31 @@ class ContextStore:
         limit: int = 50,
     ) -> list[dict]:
         """List context entries for a session."""
-        with sqlite3.connect(self.db.db_path) as conn:
-            conn.row_factory = sqlite3.Row
-            if entry_type:
-                rows = conn.execute(
-                    """SELECT * FROM context_entries
-                       WHERE session_id = ? AND entry_type = ?
-                       ORDER BY created_at DESC
-                       LIMIT ?""",
-                    (session_id, entry_type, limit),
-                ).fetchall()
-            else:
-                rows = conn.execute(
-                    """SELECT * FROM context_entries
-                       WHERE session_id = ?
-                       ORDER BY created_at DESC
-                       LIMIT ?""",
-                    (session_id, limit),
-                ).fetchall()
-            return [dict(r) for r in rows]
+        if entry_type:
+            rows = self.db._mgr.select_all(
+                """SELECT * FROM context_entries
+                   WHERE session_id = ? AND entry_type = ?
+                   ORDER BY created_at DESC
+                   LIMIT ?""",
+                (session_id, entry_type, limit),
+            )
+        else:
+            rows = self.db._mgr.select_all(
+                """SELECT * FROM context_entries
+                   WHERE session_id = ?
+                   ORDER BY created_at DESC
+                   LIMIT ?""",
+                (session_id, limit),
+            )
+        return rows
 
     def clear(self, session_id: str) -> int:
         """Delete all context entries for a session. Returns count."""
-        with sqlite3.connect(self.db.db_path) as conn:
-            cursor = conn.execute(
-                "DELETE FROM context_entries WHERE session_id = ?",
-                (session_id,),
-            )
-            conn.commit()
-            return cursor.rowcount
+        cursor = self.db._mgr.execute_write(
+            "DELETE FROM context_entries WHERE session_id = ?",
+            (session_id,),
+        )
+        return cursor.rowcount
 
     # ── async wrappers (Phase 3.5 / v0.36) ───────────────────
 
@@ -253,7 +249,11 @@ class ContextStore:
     ) -> str:
         """Async variant of ``add`` (Phase 3.5 / v0.36)."""
         return await _run_sync(
-            self.add, session_id, entry_type, content, metadata,
+            self.add,
+            session_id,
+            entry_type,
+            content,
+            metadata,
         )
 
     async def alist(
@@ -264,7 +264,10 @@ class ContextStore:
     ) -> list[dict]:
         """Async variant of ``list`` (Phase 3.5 / v0.36)."""
         return await _run_sync(
-            self.list, session_id, entry_type, limit,
+            self.list,
+            session_id,
+            entry_type,
+            limit,
         )
 
     async def aclear(self, session_id: str) -> int:
@@ -279,7 +282,7 @@ class ReActStateStore:
     Each row is a snapshot of ResearchState at a given step.
     """
 
-    def __init__(self, research_db: Any):
+    def __init__(self, research_db: Any) -> None:
         self.db = research_db
 
     def save(
@@ -311,7 +314,7 @@ class UserPreferenceStore:
     (identified by user_id) has its own JSON file.
     """
 
-    def __init__(self, data_dir: Path):
+    def __init__(self, data_dir: Path) -> None:
         self.data_dir = Path(data_dir)
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self._prefs_file = self.data_dir / "user_preferences.json"
@@ -385,37 +388,43 @@ class MemoryIndex:
 
         if self.conversation and session_id:
             for msg in self.conversation.search(session_id, query, limit):
-                results.append({
-                    "source": "conversation",
-                    "content": msg.get("content", ""),
-                    "metadata": {
-                        "role": msg.get("role"),
-                        "msg_id": msg.get("id"),
-                    },
-                })
+                results.append(
+                    {
+                        "source": "conversation",
+                        "content": msg.get("content", ""),
+                        "metadata": {
+                            "role": msg.get("role"),
+                            "msg_id": msg.get("id"),
+                        },
+                    }
+                )
 
         if self.knowledge:
             for page in self.knowledge.search(query, limit):
-                results.append({
-                    "source": "knowledge",
-                    "content": page.get("content", page.get("preview", "")),
-                    "metadata": {
-                        "page": page.get("name") or page.get("title"),
-                    },
-                })
+                results.append(
+                    {
+                        "source": "knowledge",
+                        "content": page.get("content", page.get("preview", "")),
+                        "metadata": {
+                            "page": page.get("name") or page.get("title"),
+                        },
+                    }
+                )
 
         if self.context and session_id:
             for entry in self.context.list(session_id, limit=limit):
                 content = entry.get("content", "")
                 if query.lower() in content.lower():
-                    results.append({
-                        "source": "context",
-                        "content": content,
-                        "metadata": {
-                            "entry_type": entry.get("entry_type"),
-                            "entry_id": entry.get("id"),
-                        },
-                    })
+                    results.append(
+                        {
+                            "source": "context",
+                            "content": content,
+                            "metadata": {
+                                "entry_type": entry.get("entry_type"),
+                                "entry_id": entry.get("id"),
+                            },
+                        }
+                    )
 
         return results[:limit]
 
@@ -456,9 +465,7 @@ class MemoryManager:
         self.react_state = ReActStateStore(app_db.research)
         self.context = ContextStore(app_db.chat)
         self.knowledge = KnowledgeStore(wiki) if wiki else None
-        self.preferences = UserPreferenceStore(
-            data_dir or app_db.data_dir
-        )
+        self.preferences = UserPreferenceStore(data_dir or app_db.data_dir)
         self.index = MemoryIndex(
             conversation=self.conversation,
             knowledge=self.knowledge,
@@ -512,7 +519,9 @@ class MemoryManager:
         if self.consolidator is None:
             return None
         return await self.consolidator.maybe_consolidate(
-            session_id, messages, session_tokens,
+            session_id,
+            messages,
+            session_tokens,
         )
 
     async def dream_run(self) -> Any:

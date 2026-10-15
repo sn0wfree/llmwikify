@@ -7,7 +7,13 @@ from .abc import (
     ThinkingStyle,
 )
 from .base import BaseLLMProvider, LLMProvider
-from .registry import create_llm, get_provider, list_providers, register_provider
+from .registry import (
+    create_llm,
+    get_default_provider,
+    get_provider,
+    list_providers,
+    register_provider,
+)
 from .xiaomi import XiaomiProvider
 
 __all__ = [
@@ -25,4 +31,5 @@ __all__ = [
     "get_provider",
     "list_providers",
     "create_llm",
+    "get_default_provider",
 ]

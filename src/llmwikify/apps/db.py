@@ -34,7 +34,7 @@ class AppDatabase:
     aggregates them so callers need one injection, not three.
     """
 
-    def __init__(self, data_dir: Path | str):
+    def __init__(self, data_dir: Path | str) -> None:
         data_dir = Path(data_dir)
         self.chat = ChatDatabase(data_dir)
         self.research = ResearchDatabase(data_dir)

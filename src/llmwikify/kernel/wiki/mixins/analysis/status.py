@@ -16,6 +16,7 @@ class WikiStatusMixin(WikiProtocol):
     def _should_exclude_orphan(self, page_name: str, page_path) -> bool:
         """Check if a page should be excluded from orphan detection."""
         import re
+
         page_name_lower = page_name.lower()
 
         for pattern in self._default_exclude_patterns:
@@ -50,8 +51,12 @@ class WikiStatusMixin(WikiProtocol):
             "version": __version__,
             "page_count": len(self._wiki_pages()),
             "source_count": len([f for f in self.raw_dir.rglob("*") if f.is_file()]),
-            "indexed_pages": self.index.get_page_count() if self.is_initialized() else "N/A",
-            "total_links": self.index.get_link_count() if self.is_initialized() else "N/A",
+            "indexed_pages": (
+                self.index.get_page_count() if self.is_initialized() else "N/A"
+            ),
+            "total_links": (
+                self.index.get_link_count() if self.is_initialized() else "N/A"
+            ),
         }
 
         pages_by_type = {}
@@ -61,7 +66,7 @@ class WikiStatusMixin(WikiProtocol):
 
         if self.wiki_dir.exists():
             for d in self.wiki_dir.iterdir():
-                if d.is_dir() and not d.name.startswith('.') and d.name != '.sink':
+                if d.is_dir() and not d.name.startswith(".") and d.name != ".sink":
                     known_dirs.add(d.name)
 
         for subdir in sorted(known_dirs):
@@ -105,4 +110,3 @@ class WikiStatusMixin(WikiProtocol):
         Deprecated: Use `lint(format="brief")` instead.
         """
         return self._analyzer.hint()
-

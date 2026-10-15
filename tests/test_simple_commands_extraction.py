@@ -100,12 +100,12 @@ def test_command_run_delegates_to_free_function():
 
     for _, class_name, run_fn_name, _ in MIGRATED_COMMANDS:
         cls = getattr(commands, class_name)
-        run_fn = getattr(commands, run_fn_name)
+        _run_fn = getattr(commands, run_fn_name)
         # The class source should reference the function by name
         src = inspect.getsource(cls)
-        assert run_fn_name in src, (
-            f"{class_name}.run() should delegate to {run_fn_name}()"
-        )
+        assert (
+            run_fn_name in src
+        ), f"{class_name}.run() should delegate to {run_fn_name}()"
 
 
 # ============================================================================
@@ -117,7 +117,7 @@ def test_wiki_cli_delegates_migrated_methods():
     """WikiCLI's migrated methods are 1-line delegates to run_<name> functions."""
     from llmwikify.interfaces.cli import WikiCLI
 
-    for _, class_name, run_fn_name, method_name in MIGRATED_COMMANDS:
+    for _, _class_name, run_fn_name, method_name in MIGRATED_COMMANDS:
         method = getattr(WikiCLI, method_name)
         src = inspect.getsource(method)
         # The method body should be a single return statement
@@ -125,9 +125,7 @@ def test_wiki_cli_delegates_migrated_methods():
         body = src.strip()
         assert body.startswith("def "), f"unexpected method source: {body[:80]}"
         # Look for a call to the function name
-        assert run_fn_name in body, (
-            f"WikiCLI.{method_name} should call {run_fn_name}"
-        )
+        assert run_fn_name in body, f"WikiCLI.{method_name} should call {run_fn_name}"
 
 
 def test_wiki_cli_methods_not_duplicated_in_app_file():
@@ -153,7 +151,7 @@ def test_wiki_cli_methods_not_duplicated_in_app_file():
             # Find the next def
             next_def = re.search(r"^\s+def ", rest[1:], re.MULTILINE)
             if next_def:
-                method_body = rest[:next_def.start() + 1]
+                method_body = rest[: next_def.start() + 1]
             else:
                 method_body = rest
             # Count newlines — should be 4 (def + return + blank + 0)
@@ -173,12 +171,12 @@ def test_wiki_cli_methods_not_duplicated_in_app_file():
 
 def test_old_commands_py_file_is_gone():
     """The original commands.py file was renamed to _app.py to avoid shadowing."""
-    assert not Path("src/llmwikify/interfaces/cli/commands.py").exists(), (
-        "commands.py should have been renamed to _app.py"
-    )
-    assert Path("src/llmwikify/interfaces/cli/_app.py").exists(), (
-        "_app.py should exist as the new home for WikiCLI + main()"
-    )
+    assert not Path(
+        "src/llmwikify/interfaces/cli/commands.py"
+    ).exists(), "commands.py should have been renamed to _app.py"
+    assert Path(
+        "src/llmwikify/interfaces/cli/_app.py"
+    ).exists(), "_app.py should exist as the new home for WikiCLI + main()"
 
 
 # ============================================================================
@@ -194,17 +192,13 @@ def test_app_file_imports_run_functions_from_commands_subpackage():
         # from .commands.X import run_Y
         # or
         # from .commands import run_Y
-        assert run_fn_name in src, (
-            f"_app.py should reference {run_fn_name}"
-        )
+        assert run_fn_name in src, f"_app.py should reference {run_fn_name}"
 
 
 def test_cli_init_does_not_import_from_old_path():
     """cli/__init__.py imports from _app, not from commands (the subpackage)."""
     src = Path("src/llmwikify/interfaces/cli/__init__.py").read_text()
-    assert "from ._app import" in src, (
-        "cli/__init__.py should import from ._app"
-    )
-    assert "from .commands import WikiCLI" not in src, (
-        "cli/__init__.py must not import WikiCLI from the commands subpackage"
-    )
+    assert "from ._app import" in src, "cli/__init__.py should import from ._app"
+    assert (
+        "from .commands import WikiCLI" not in src
+    ), "cli/__init__.py must not import WikiCLI from the commands subpackage"

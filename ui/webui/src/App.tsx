@@ -1,7 +1,6 @@
 import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { WikiLayout } from './components/wiki/WikiLayout';
-import { AgentLayout } from './components/agent/AgentLayout';
+import { AppShell } from './components/shared/AppShell';
 import { LoginPage } from './components/auth/LoginPage';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import { AuthInitBanner } from './components/auth/AuthInitBanner';
@@ -15,6 +14,18 @@ const KnowledgeGrowth = lazy(() =>
 const Insights = lazy(() =>
   import('./components/wiki/Insights').then(m => ({ default: m.Insights }))
 );
+const DreamPage = lazy(() =>
+  import('./components/wiki/DreamPage').then(m => ({ default: m.DreamPage }))
+);
+const SinkPage = lazy(() =>
+  import('./components/wiki/SinkPage').then(m => ({ default: m.SinkPage }))
+);
+const MaintenancePanel = lazy(() =>
+  import('./components/wiki/MaintenancePanel').then(m => ({ default: m.MaintenancePanel }))
+);
+const Confirmations = lazy(() =>
+  import('./components/wiki/Confirmations').then(m => ({ default: m.Confirmations }))
+);
 const AgentChat = lazy(() =>
   import('./components/agent/AgentChat').then(m => ({ default: m.AgentChat }))
 );
@@ -27,33 +38,9 @@ const TaskMonitor = lazy(() =>
 const LLMSettings = lazy(() =>
   import('./components/agent/LLMSettings').then(m => ({ default: m.LLMSettings }))
 );
-const ReproductionPanel = lazy(() =>
-  import('./components/reproduction/ReproductionPanel').then(m => ({ default: m.ReproductionPanel }))
-);
-const PaperPanel = lazy(() =>
-  import('./components/paper/PaperPanel').then(m => ({ default: m.PaperPanel }))
-);
-const FactorList = lazy(() =>
-  import('./components/factor/FactorList').then(m => ({ default: m.FactorList }))
-);
-const FactorFamilyList = lazy(() =>
-  import('./components/factor/FactorFamilyList').then(m => ({ default: m.FactorFamilyList }))
-);
-const FamilyDetail = lazy(() =>
-  import('./components/factor/FamilyDetail').then(m => ({ default: m.FamilyDetail }))
-);
-const FactorDetail = lazy(() =>
-  import('./components/factor/FactorDetail').then(m => ({ default: m.FactorDetail }))
-);
-const StrategyList = lazy(() =>
-  import('./components/strategy/StrategyList').then(m => ({ default: m.StrategyList }))
-);
-const StrategyDetail = lazy(() =>
-  import('./components/strategy/StrategyDetail').then(m => ({ default: m.StrategyDetail }))
-);
-const BacktestPlatform = lazy(() =>
-  import('./components/backtest/BacktestPlatform').then(m => ({ default: m.BacktestPlatform }))
-);
+// v0.40 BREAKING: removed quant panel routes (ReproductionPanel, PaperPanel,
+// FactorList, FactorFamilyList, FamilyDetail, FactorDetail, StrategyList,
+// StrategyDetail, BacktestPlatform). Quant UI now lives in quantnodes."
 
 function Loading() {
   return <div className="p-6 text-muted-foreground">Loading...</div>;
@@ -71,28 +58,23 @@ function App() {
           {/* Protected routes */}
           <Route element={<ProtectedRoute />}>
             {/* Wiki routes */}
-            <Route path="/" element={<WikiLayout />}>
+            <Route path="/" element={<AppShell />}>
               <Route index element={<Navigate to="/edit" replace />} />
               <Route path="edit" element={<Editor />} />
               <Route path="dashboard" element={<KnowledgeGrowth />} />
               <Route path="insights" element={<Insights />} />
+              <Route path="insights/dream" element={<DreamPage />} />
+              <Route path="insights/sink" element={<SinkPage />} />
+              <Route path="insights/maintenance" element={<MaintenancePanel />} />
             </Route>
 
             {/* Agent routes */}
-            <Route path="/agent" element={<AgentLayout />}>
+            <Route path="/agent" element={<AppShell />}>
               <Route index element={<Navigate to="/agent/chat" replace />} />
               <Route path="chat" element={<AgentChat />} />
               <Route path="research" element={<Navigate to="/agent/autoresearch" replace />} />
               <Route path="autoresearch" element={<AutoResearchPanel />} />
-              <Route path="reproduction" element={<ReproductionPanel />} />
-              <Route path="paper" element={<PaperPanel />} />
-              <Route path="factor" element={<FactorFamilyList />} />
-              <Route path="factor/fam/:family" element={<FamilyDetail />} />
-              <Route path="factor/families" element={<FactorFamilyList />} />
-              <Route path="factor/*" element={<FactorDetail />} />
-              <Route path="strategy" element={<StrategyList />} />
-              <Route path="strategy/:name" element={<StrategyDetail />} />
-              <Route path="backtest" element={<BacktestPlatform />} />
+              <Route path="confirmations" element={<Confirmations />} />
               <Route path="tasks" element={<TaskMonitor />} />
               <Route path="settings" element={<LLMSettings />} />
             </Route>

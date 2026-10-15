@@ -4,6 +4,7 @@
 
 历史: 从 apps/chat/agent/unified/core.py 搬迁。
 """
+
 from __future__ import annotations
 
 import time
@@ -11,7 +12,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from .spec import BaseSpec
+    pass
 
 
 @dataclass

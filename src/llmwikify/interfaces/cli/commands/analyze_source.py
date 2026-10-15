@@ -67,7 +67,8 @@ def run_analyze_source(wiki: Any, args: Any) -> int:
             return 1
 
         result = wiki.analyze_source(
-            source_path, force=getattr(args, "force", False) if hasattr(args, "force") else False
+            source_path,
+            force=getattr(args, "force", False) if hasattr(args, "force") else False,
         )
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return 0 if result.get("status") not in ("error", "skipped") else 1

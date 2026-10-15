@@ -36,6 +36,7 @@ def chat_db(tmp_path: Path):
 def _set_updated(db, sid: str, when: datetime) -> None:
     """Backdate a session's updated_at so we can drive expiry tests."""
     import sqlite3
+
     with sqlite3.connect(db.db_path) as conn:
         conn.execute(
             "UPDATE chat_sessions SET updated_at = ? WHERE id = ?",
@@ -51,7 +52,10 @@ class _StubConsolidator:
         self.calls: list[tuple[str, int, int]] = []
 
     async def maybe_consolidate(
-        self, session_id: str, messages: list[dict], session_tokens: int,
+        self,
+        session_id: str,
+        messages: list[dict],
+        session_tokens: int,
     ):
         self.calls.append((session_id, len(messages), session_tokens))
         return {"summary": "ok"}
@@ -65,7 +69,9 @@ class _StubMemoryManager:
         if self.consolidator is None:
             return None
         return await self.consolidator.maybe_consolidate(
-            session_id, messages, session_tokens,
+            session_id,
+            messages,
+            session_tokens,
         )
 
 
@@ -118,18 +124,22 @@ def test_list_expired_skips_active_sessions(chat_db) -> None:
 
 def test_check_expired_forwards_to_consolidator(chat_db) -> None:
     sid = chat_db.create_chat_session()
-    chat_db.save_chat_message({
-        "id": "m1",
-        "session_id": sid,
-        "role": "user",
-        "content": "hello world",
-    })
-    chat_db.save_chat_message({
-        "id": "m2",
-        "session_id": sid,
-        "role": "assistant",
-        "content": "hi back",
-    })
+    chat_db.save_chat_message(
+        {
+            "id": "m1",
+            "session_id": sid,
+            "role": "user",
+            "content": "hello world",
+        }
+    )
+    chat_db.save_chat_message(
+        {
+            "id": "m2",
+            "session_id": sid,
+            "role": "assistant",
+            "content": "hi back",
+        }
+    )
     now = datetime.now()
     _set_updated(chat_db, sid, now - timedelta(hours=2))
     cons = _StubConsolidator()
@@ -156,28 +166,40 @@ def test_check_expired_noop_when_no_consolidator(chat_db) -> None:
 def test_check_expired_skips_active_session(chat_db) -> None:
     sid_active = chat_db.create_chat_session()
     sid_idle = chat_db.create_chat_session()
-    chat_db.save_chat_message({
-        "id": "m1", "session_id": sid_idle,
-        "role": "user", "content": "x",
-    })
+    chat_db.save_chat_message(
+        {
+            "id": "m1",
+            "session_id": sid_idle,
+            "role": "user",
+            "content": "x",
+        }
+    )
     now = datetime.now()
     _set_updated(chat_db, sid_active, now - timedelta(hours=2))
     _set_updated(chat_db, sid_idle, now - timedelta(hours=2))
     cons = _StubConsolidator()
     mm = _StubMemoryManager(cons)
     auto = AutoCompact(chat_db=chat_db, memory_manager=mm, ttl_minutes=30)
-    touched = _run(auto.check_expired(
-        active_session_keys={sid_active}, now=now,
-    ))
+    touched = _run(
+        auto.check_expired(
+            active_session_keys={sid_active},
+            now=now,
+        )
+    )
     assert touched == [sid_idle]
     assert [c[0] for c in cons.calls] == [sid_idle]
 
 
 def test_check_expired_uses_scheduler_callback(chat_db) -> None:
     sid = chat_db.create_chat_session()
-    chat_db.save_chat_message({
-        "id": "m1", "session_id": sid, "role": "user", "content": "x",
-    })
+    chat_db.save_chat_message(
+        {
+            "id": "m1",
+            "session_id": sid,
+            "role": "user",
+            "content": "x",
+        }
+    )
     now = datetime.now()
     _set_updated(chat_db, sid, now - timedelta(hours=2))
     cons = _StubConsolidator()

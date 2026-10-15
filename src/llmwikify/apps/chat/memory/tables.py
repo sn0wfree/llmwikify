@@ -61,6 +61,16 @@ CREATE INDEX IF NOT EXISTS idx_memory_facts_created
 ON memory_facts(created_at)
 """
 
+CREATE_IDX_MEMORY_FACTS_LAST_REFERENCED = """
+CREATE INDEX IF NOT EXISTS idx_memory_facts_last_referenced
+ON memory_facts(last_referenced_at)
+"""
+
+CREATE_IDX_MEMORY_FACTS_SOURCE_CREATED = """
+CREATE INDEX IF NOT EXISTS idx_memory_facts_source_created
+ON memory_facts(source_type, created_at)
+"""
+
 
 # ─── Combined init (idempotent) ─────────────────────────────────
 
@@ -70,6 +80,8 @@ ALL_PHASE6_DDL = [
     CREATE_MEMORY_FACTS_TABLE,
     CREATE_IDX_MEMORY_FACTS_SOURCE,
     CREATE_IDX_MEMORY_FACTS_CREATED,
+    CREATE_IDX_MEMORY_FACTS_LAST_REFERENCED,
+    CREATE_IDX_MEMORY_FACTS_SOURCE_CREATED,
 ]
 
 
@@ -80,4 +92,6 @@ __all__ = [
     "CREATE_IDX_MEMORY_CONSOLIDATIONS_SESSION",
     "CREATE_IDX_MEMORY_FACTS_SOURCE",
     "CREATE_IDX_MEMORY_FACTS_CREATED",
+    "CREATE_IDX_MEMORY_FACTS_LAST_REFERENCED",
+    "CREATE_IDX_MEMORY_FACTS_SOURCE_CREATED",
 ]

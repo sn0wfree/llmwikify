@@ -17,9 +17,9 @@ project docs, academic research (long timeout), industry news
 - Config ignored: verify file is at wiki root as .wiki-config.yaml
 """
 
+from pathlib import Path
 
 import pytest
-from pathlib import Path
 
 
 class TestYAMLTemplates:
@@ -37,7 +37,10 @@ class TestYAMLTemplates:
 
         template_path = (
             Path(__file__).parent.parent.parent
-            / "examples" / "07_yaml_templates" / "yaml_templates" / "personal-kb.yaml"
+            / "examples"
+            / "07_yaml_templates"
+            / "yaml_templates"
+            / "personal-kb.yaml"
         )
         if not template_path.exists():
             pytest.skip("Template file not found")
@@ -55,7 +58,10 @@ class TestYAMLTemplates:
 
         template_path = (
             Path(__file__).parent.parent.parent
-            / "examples" / "07_yaml_templates" / "yaml_templates" / "project-docs.yaml"
+            / "examples"
+            / "07_yaml_templates"
+            / "yaml_templates"
+            / "project-docs.yaml"
         )
         if not template_path.exists():
             pytest.skip("Template file not found")
@@ -72,7 +78,10 @@ class TestYAMLTemplates:
 
         template_path = (
             Path(__file__).parent.parent.parent
-            / "examples" / "07_yaml_templates" / "yaml_templates" / "research-wiki.yaml"
+            / "examples"
+            / "07_yaml_templates"
+            / "yaml_templates"
+            / "research-wiki.yaml"
         )
         if not template_path.exists():
             pytest.skip("Template file not found")
@@ -89,7 +98,10 @@ class TestYAMLTemplates:
 
         template_path = (
             Path(__file__).parent.parent.parent
-            / "examples" / "07_yaml_templates" / "yaml_templates" / "mining-news-wiki.yaml"
+            / "examples"
+            / "07_yaml_templates"
+            / "yaml_templates"
+            / "mining-news-wiki.yaml"
         )
         if not template_path.exists():
             pytest.skip("Template file not found")

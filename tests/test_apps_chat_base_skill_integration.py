@@ -22,7 +22,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-from typing import Any
 
 import pytest
 
@@ -30,18 +29,12 @@ from llmwikify.apps.chat.base import (
     DEFAULT_MAX_TOOL_ITERATIONS,
     ChatBase,
     ChatMessage,
-    ChatSession,
 )
 from llmwikify.apps.chat.skills.actions import (
-    clarify_skill,
-    filter_skill,
-    plan_skill,
     register_all_actions,
-    score_skill,
 )
 from llmwikify.apps.chat.skills.base import (
     SkillContext,
-    SkillResult,
 )
 from llmwikify.apps.chat.skills.registry import (
     SkillRegistry,
@@ -61,7 +54,9 @@ class StubLLM:
     front; when empty, the LLM returns a final string.
     """
 
-    def __init__(self, reply: str = "stub-reply", tool_responses: list[dict] | None = None) -> None:
+    def __init__(
+        self, reply: str = "stub-reply", tool_responses: list[dict] | None = None
+    ) -> None:
         self.reply = reply
         self.tool_responses = list(tool_responses or [])
         self.calls: list[dict] = []
@@ -113,33 +108,42 @@ class TestConstruction:
         # test below asserts the singleton-sharing contract rather
         # than emptiness.
         from llmwikify.apps.chat.skills.registry import default_registry
+
         cb = ChatBase(StubLLM())
         assert cb.skill_registry is not None
         assert cb.skill_registry is default_registry()
 
     def test_default_registry_populated_after_register(self) -> None:
         from llmwikify.apps.chat.skills.actions import register_all_actions
+
         register_all_actions(default_registry())
         cb = ChatBase(StubLLM())
         assert len(cb.skill_registry) >= 23
 
     def test_explicit_registry_used(self, fresh_registry: SkillRegistry) -> None:
         cb = ChatBase(
-            StubLLM(), skill_registry=fresh_registry,
+            StubLLM(),
+            skill_registry=fresh_registry,
         )
         assert cb.skill_registry is fresh_registry
 
-    def test_default_runtime_created_if_none(self, fresh_registry: SkillRegistry) -> None:
+    def test_default_runtime_created_if_none(
+        self, fresh_registry: SkillRegistry
+    ) -> None:
         cb = ChatBase(
-            StubLLM(), skill_registry=fresh_registry,
+            StubLLM(),
+            skill_registry=fresh_registry,
         )
         assert cb.skill_runtime is not None
 
     def test_explicit_runtime_used(self, fresh_registry: SkillRegistry) -> None:
         from llmwikify.apps.chat.skills.runtime import SkillRuntime
+
         rt = SkillRuntime(fresh_registry)
         cb = ChatBase(
-            StubLLM(), skill_registry=fresh_registry, skill_runtime=rt,
+            StubLLM(),
+            skill_registry=fresh_registry,
+            skill_runtime=rt,
         )
         assert cb.skill_runtime is rt
 
@@ -151,7 +155,9 @@ class TestConstruction:
 
 
 class TestRegisterSkills:
-    @pytest.mark.skip(reason="v0.38: _tools dict removed; register_skills now count-only")
+    @pytest.mark.skip(
+        reason="v0.38: _tools dict removed; register_skills now count-only"
+    )
     def test_register_bulk_creates_qualified_names(self, chat: ChatBase) -> None:
         n = chat.register_skills()
         assert n == 26
@@ -160,7 +166,9 @@ class TestRegisterSkills:
         assert "search.search" in chat.tools
         assert "filter.filter" in chat.tools
 
-    @pytest.mark.skip(reason="v0.38: _tools dict removed; register_skills now count-only")
+    @pytest.mark.skip(
+        reason="v0.38: _tools dict removed; register_skills now count-only"
+    )
     def test_register_skills_with_specific_registry(
         self, chat: ChatBase, fresh_registry: SkillRegistry
     ) -> None:
@@ -172,16 +180,16 @@ class TestRegisterSkills:
         assert len(chat.tools) == before + 26
 
     @pytest.mark.skip(reason="v0.38: _SkillToolProxy removed")
-    def test_register_skills_uses_skilltoolproxy(
-        self, chat: ChatBase
-    ) -> None:
+    def test_register_skills_uses_skilltoolproxy(self, chat: ChatBase) -> None:
         chat.register_skills()
         proxy = chat.tools["research.run_research"]
-        assert isinstance(proxy, SkillToolProxy)
+        assert isinstance(proxy, SkillToolProxy)  # noqa: F821
         assert proxy._skill_name == "research"
         assert proxy._action_name == "run_research"
 
-    @pytest.mark.skip(reason="v0.38: _tools dict removed; register_skills now count-only")
+    @pytest.mark.skip(
+        reason="v0.38: _tools dict removed; register_skills now count-only"
+    )
     def test_register_skills_replaces_existing(self, chat: ChatBase) -> None:
         n1 = chat.register_skills()
         n2 = chat.register_skills()
@@ -217,14 +225,11 @@ class TestToolsSchema:
         assert "search.search" in names
         assert "filter.filter" in names
 
-    def test_schema_parameters_match_action(
-        self, chat: ChatBase
-    ) -> None:
+    def test_schema_parameters_match_action(self, chat: ChatBase) -> None:
         chat.register_skills()
         schema = chat.tools_schema()
         clarify_schema = next(
-            t for t in schema
-            if t["function"]["name"] == "clarify.clarify"
+            t for t in schema if t["function"]["name"] == "clarify.clarify"
         )
         params = clarify_schema["function"]["parameters"]
         assert params["type"] == "object"
@@ -256,9 +261,12 @@ class TestInvokeTool:
 
     def test_ainvoke_tool_routing(self, chat: ChatBase) -> None:
         """The async variant also works."""
-        r = asyncio.run(chat.ainvoke_tool(
-            "clarify.clarify", {"query": "Q?"},
-        ))
+        r = asyncio.run(
+            chat.ainvoke_tool(
+                "clarify.clarify",
+                {"query": "Q?"},
+            )
+        )
         assert r.status == "ok"
 
     def test_unqualified_name_returns_fail(self, chat: ChatBase) -> None:
@@ -277,9 +285,13 @@ class TestInvokeTool:
         assert "not found" in r.error
 
     def test_invoke_with_ctx(self, chat: ChatBase, ctx: SkillContext) -> None:
-        r = chat.invoke_tool("filter.filter", {
-            "sources": [{"url": "a", "score": 0.8}],
-        }, ctx=ctx)
+        r = chat.invoke_tool(
+            "filter.filter",
+            {
+                "sources": [{"url": "a", "score": 0.8}],
+            },
+            ctx=ctx,
+        )
         assert r.status == "ok"
 
 
@@ -306,21 +318,21 @@ class TestAskWithTools:
         # 1 system + 2 user + 2 assistant = 5
         assert len(sess.messages) == 5
 
-    def test_with_tool_call_then_final(
-        self, chat: ChatBase, ctx: SkillContext
-    ) -> None:
+    def test_with_tool_call_then_final(self, chat: ChatBase, ctx: SkillContext) -> None:
         chat.llm_client = StubLLM(
             tool_responses=[
                 {
                     "content": "",
-                    "tool_calls": [{
-                        "id": "call_1",
-                        "type": "function",
-                        "function": {
-                            "name": "clarify.clarify",
-                            "arguments": json.dumps({"query": "Q?"}),
-                        },
-                    }],
+                    "tool_calls": [
+                        {
+                            "id": "call_1",
+                            "type": "function",
+                            "function": {
+                                "name": "clarify.clarify",
+                                "arguments": json.dumps({"query": "Q?"}),
+                            },
+                        }
+                    ],
                 },
                 "final answer text",
             ],
@@ -339,14 +351,16 @@ class TestAskWithTools:
             tool_responses=[
                 {
                     "content": "",
-                    "tool_calls": [{
-                        "id": f"call_{i}",
-                        "type": "function",
-                        "function": {
-                            "name": "clarify.clarify",
-                            "arguments": json.dumps({"query": f"Q{i}"}),
-                        },
-                    }],
+                    "tool_calls": [
+                        {
+                            "id": f"call_{i}",
+                            "type": "function",
+                            "function": {
+                                "name": "clarify.clarify",
+                                "arguments": json.dumps({"query": f"Q{i}"}),
+                            },
+                        }
+                    ],
                 }
                 for i in range(20)
             ],
@@ -354,9 +368,7 @@ class TestAskWithTools:
         sess = chat.new_session()
         reply = chat.ask_with_tools("Q", session=sess, max_iterations=3)
         # Cap was honored: 3 assistant messages max
-        assistant_msgs = [
-            m for m in sess.messages if m.role == "assistant"
-        ]
+        assistant_msgs = [m for m in sess.messages if m.role == "assistant"]
         assert len(assistant_msgs) <= 3
         # The reply is the last message's content (whatever that is)
         # — the framework's "iteration cap" fallback.
@@ -383,14 +395,16 @@ class TestAskWithTools:
             tool_responses=[
                 {
                     "content": "",
-                    "tool_calls": [{
-                        "id": "call_bad",
-                        "type": "function",
-                        "function": {
-                            "name": "clarify.clarify",
-                            "arguments": "{not valid json",
-                        },
-                    }],
+                    "tool_calls": [
+                        {
+                            "id": "call_bad",
+                            "type": "function",
+                            "function": {
+                                "name": "clarify.clarify",
+                                "arguments": "{not valid json",
+                            },
+                        }
+                    ],
                 },
                 "done",
             ],
@@ -398,9 +412,7 @@ class TestAskWithTools:
         reply = chat.ask_with_tools("Q")
         assert reply == "done"
 
-    def test_ask_with_tools_without_skills_registered(
-        self, chat: ChatBase
-    ) -> None:
+    def test_ask_with_tools_without_skills_registered(self, chat: ChatBase) -> None:
         chat.llm_client = StubLLM(reply="no tools, just text")
         reply = chat.ask_with_tools("Hi")
         assert reply == "no tools, just text"
@@ -418,17 +430,17 @@ class TestCallLLMWithTools:
         sent = chat.llm_client.calls[0]
         assert sent["kwargs"].get("tools") == tools
 
-    def test_plain_convention_falls_back(
-        self, chat: ChatBase
-    ) -> None:
+    def test_plain_convention_falls_back(self, chat: ChatBase) -> None:
         class StrictLLM:
             def __init__(self):
                 self.calls = []
+
             def chat(self, msgs, **kwargs):
                 self.calls.append(kwargs)
                 if "tools" in kwargs:
                     raise TypeError("got unexpected kwarg 'tools'")
                 return "plain reply"
+
         chat.llm_client = StrictLLM()
         tools = [{"type": "function", "function": {"name": "x"}}]
         msgs = [ChatMessage(role="user", content="hi")]
@@ -462,11 +474,13 @@ class TestExtractContentAndToolCalls:
     def test_dict_reply_with_tool_calls(self) -> None:
         reply = {
             "content": "",
-            "tool_calls": [{
-                "id": "c1",
-                "type": "function",
-                "function": {"name": "x.y", "arguments": "{}"},
-            }],
+            "tool_calls": [
+                {
+                    "id": "c1",
+                    "type": "function",
+                    "function": {"name": "x.y", "arguments": "{}"},
+                }
+            ],
         }
         content, calls = ChatBase._extract_content_and_tool_calls(reply)
         assert content == ""
@@ -478,12 +492,19 @@ class TestExtractContentAndToolCalls:
         class FakeTC:
             def __init__(self, id, name, args):
                 self.id = id
-                self.function = type("F", (), {
-                    "name": name, "arguments": args,
-                })()
+                self.function = type(
+                    "F",
+                    (),
+                    {
+                        "name": name,
+                        "arguments": args,
+                    },
+                )()
+
         class FakeReply:
             content = "obj-content"
             tool_calls = [FakeTC("c1", "x.y", "{}")]
+
         content, calls = ChatBase._extract_content_and_tool_calls(FakeReply())
         assert content == "obj-content"
         assert calls[0]["function"]["name"] == "x.y"
@@ -492,14 +513,23 @@ class TestExtractContentAndToolCalls:
         class FakeTC:
             def __init__(self, id, name, args):
                 self.id = id
-                self.function = type("F", (), {
-                    "name": name, "arguments": args,
-                })()
+                self.function = type(
+                    "F",
+                    (),
+                    {
+                        "name": name,
+                        "arguments": args,
+                    },
+                )()
+
         reply = {
             "content": "x",
             "tool_calls": [
-                {"id": "d1", "type": "function",
-                 "function": {"name": "a.b", "arguments": "{}"}},
+                {
+                    "id": "d1",
+                    "type": "function",
+                    "function": {"name": "a.b", "arguments": "{}"},
+                },
                 FakeTC("d2", "c.d", "{}"),
             ],
         }
@@ -523,7 +553,7 @@ class TestExtractContentAndToolCalls:
 @pytest.mark.skip(reason="v0.38: _SkillToolProxy removed")
 class TestSkillToolProxy:
     def test_repr(self, fresh_registry: SkillRegistry) -> None:
-        proxy = SkillToolProxy(
+        proxy = SkillToolProxy(  # noqa: F821 - v0.38 removed; tombstone
             registry=fresh_registry,
             skill_name="clarify",
             action_name="clarify",
@@ -533,7 +563,7 @@ class TestSkillToolProxy:
         assert "SkillToolProxy" in r
 
     def test_proxy_attributes(self, fresh_registry: SkillRegistry) -> None:
-        proxy = SkillToolProxy(
+        proxy = SkillToolProxy(  # noqa: F821 - v0.38 removed; tombstone
             registry=fresh_registry,
             skill_name="research",
             action_name="run_research",
@@ -547,32 +577,34 @@ class TestSkillToolProxy:
 
 @pytest.mark.skip(reason="v0.38: ask_with_tools sync method removed")
 class TestEndToEndSkillChat:
-    def test_clarify_then_search_then_final(
-        self, chat: ChatBase
-    ) -> None:
+    def test_clarify_then_search_then_final(self, chat: ChatBase) -> None:
         chat.llm_client = StubLLM(
             tool_responses=[
                 {
                     "content": "",
-                    "tool_calls": [{
-                        "id": "t1",
-                        "type": "function",
-                        "function": {
-                            "name": "clarify.clarify",
-                            "arguments": json.dumps({"query": "What is X?"}),
-                        },
-                    }],
+                    "tool_calls": [
+                        {
+                            "id": "t1",
+                            "type": "function",
+                            "function": {
+                                "name": "clarify.clarify",
+                                "arguments": json.dumps({"query": "What is X?"}),
+                            },
+                        }
+                    ],
                 },
                 {
                     "content": "",
-                    "tool_calls": [{
-                        "id": "t2",
-                        "type": "function",
-                        "function": {
-                            "name": "search.search",
-                            "arguments": json.dumps({"query": "X"}),
-                        },
-                    }],
+                    "tool_calls": [
+                        {
+                            "id": "t2",
+                            "type": "function",
+                            "function": {
+                                "name": "search.search",
+                                "arguments": json.dumps({"query": "X"}),
+                            },
+                        }
+                    ],
                 },
                 "Based on my research, X is Y.",
             ],
@@ -585,27 +617,31 @@ class TestEndToEndSkillChat:
             tool_responses=[
                 {
                     "content": "",
-                    "tool_calls": [{
-                        "id": "f1",
-                        "type": "function",
-                        "function": {
-                            "name": "filter.filter",
-                            "arguments": json.dumps({
-                                "sources": [
-                                    {"url": "a", "score": 0.9},
-                                    {"url": "a", "score": 0.8},
-                                    {"url": "b", "score": 0.1},
-                                ],
-                            }),
-                        },
-                    }],
+                    "tool_calls": [
+                        {
+                            "id": "f1",
+                            "type": "function",
+                            "function": {
+                                "name": "filter.filter",
+                                "arguments": json.dumps(
+                                    {
+                                        "sources": [
+                                            {"url": "a", "score": 0.9},
+                                            {"url": "a", "score": 0.8},
+                                            {"url": "b", "score": 0.1},
+                                        ],
+                                    }
+                                ),
+                            },
+                        }
+                    ],
                 },
                 "Filtered 1 source.",
             ],
         )
         reply = chat.ask_with_tools("Filter these")
         assert reply == "Filtered 1 source."
-        sess_msgs = [c for c in chat.llm_client.calls]
+        sess_msgs = list(chat.llm_client.calls)
         last = sess_msgs[-1]
         tool_msgs = [m for m in last["messages"] if m.role == "tool"]
         assert len(tool_msgs) == 1

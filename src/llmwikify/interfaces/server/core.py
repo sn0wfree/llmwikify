@@ -13,6 +13,7 @@ from typing import Any
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
+from llmwikify import __version__
 from llmwikify.foundation.logging import setup_logging
 from llmwikify.interfaces.server.constants import DEFAULT_HOST, DEFAULT_PORT
 from llmwikify.kernel import Wiki
@@ -27,6 +28,7 @@ from .utils.webui import mount_webui
 logger = logging.getLogger(__name__)
 
 __all__ = ["WikiServer", "setup_logging"]
+
 
 class WikiServer:
     """llmwikify Unified Server - combines all service layers.
@@ -73,6 +75,8 @@ class WikiServer:
         provider: Any = None,
         enable_dream_scheduler: bool = True,
         enable_auto_compact: bool = True,
+        enable_confirmations_cleanup: bool = True,
+        enable_maintenance: bool = True,
         *,
         public_read: bool = True,
         local_mode: bool = False,
@@ -83,11 +87,12 @@ class WikiServer:
         else:
             # Single wiki mode: create a registry and auto-register the wiki
             from llmwikify.kernel.multi_wiki.instance import WikiType
+
             self.registry = WikiRegistry(config={})
-            wiki_id = str(wiki.root).split('/')[-1] or 'default'
+            wiki_id = str(wiki.root).split("/")[-1] or "default"
             self.registry.register_wiki(
                 wiki_id=wiki_id,
-                name=wiki_id.replace('-', ' ').replace('_', ' ').title(),
+                name=wiki_id.replace("-", " ").replace("_", " ").title(),
                 root=wiki.root,
                 wiki_type=WikiType.LOCAL,
                 is_default=True,
@@ -111,6 +116,18 @@ class WikiServer:
         self.provider = provider
         self.enable_dream_scheduler = enable_dream_scheduler
         self.enable_auto_compact = enable_auto_compact
+        # v0.40: periodic cleanup of expired POST /page confirmation
+        # tokens. Default ON; interval is configured via
+        # memory_config.json (confirmations_cleanup.interval_seconds)
+        # — same pattern as AutoCompact.
+        self.enable_confirmations_cleanup = enable_confirmations_cleanup
+        # Self-maintenance (docs/designs/self-maintenance.md): auto-ingest
+        # of raw/ new files + gap filler + DB maintenance, covering all
+        # LOCAL wikis. Master kill-switch; the config-level ``enabled``
+        # flag in ~/.llmwikify/llmwikify.json (maintenance.enabled) is
+        # honored too — same two-level pattern as confirmations_cleanup.
+        self.enable_maintenance = enable_maintenance
+        self._maintenance_manager: Any = None
         # Phase 2a: public_read + local_mode flags drive the new
         # JWTAuthMiddleware. Defaults match decision 12 + decision 1.
         self.public_read = public_read
@@ -131,6 +148,7 @@ class WikiServer:
         from llmwikify.apps.chat.channels.websocket import (
             get_default_ws_manager,
         )
+
         get_default_bus()
         get_default_ws_manager()
 
@@ -144,15 +162,17 @@ class WikiServer:
         # 3. Register REST API routes (Phase 7: provider forwarded)
         if enable_rest:
             register_routes(
-                self.app, self.registry,
+                self.app,
+                self.registry,
                 provider=self.provider,
                 api_key=self.api_key,
             )
             # Capture the AgentService created by _register_agent_routes
             # so the lifespan handler can access it for DreamScheduler.
-            from llmwikify.interfaces.server.http.chat_sse import (
+            from llmwikify.interfaces.server.http.agent._common import (
                 get_agent_service,
             )
+
             self._agent_service = get_agent_service()
 
             # Phase 2a: register auth routes (POST /auth/login, GET /auth/me)
@@ -162,6 +182,7 @@ class WikiServer:
             from llmwikify.interfaces.server.http.auth_routes import (
                 auth_router,
             )
+
             self.app.include_router(auth_router)
             # Make the registry reachable from request handlers.
             self.app.state.wiki_registry = self.registry
@@ -180,11 +201,26 @@ class WikiServer:
         registry on shutdown (preserved from the previous handler).
         """
 
+        # 2026-10-14: capture the MCP ASGI app once. The ``asgi_app``
+        # property builds a FRESH app per access, so the combined lifespan
+        # below and app.mount() must share this exact instance.
+        mcp_asgi_app = self.mcp.asgi_app if self.mcp is not None else None
+
         @asynccontextmanager
-        async def lifespan(app: FastAPI):
-            """Phase 7+9 lifespan: start DreamScheduler + AutoCompact on
-            startup, stop on shutdown. Always closes the registry on
-            shutdown."""
+        async def _wiki_lifespan(app: FastAPI) -> None:
+            """Phase 7+9+40 lifespan: start DreamScheduler + AutoCompact
+            + ConfirmationsCleanup on startup, stop on shutdown. Always
+            closes the registry on shutdown.
+
+            B3 attempt (v0.40, abandoned): tried to consolidate the
+            ``load_memory_config`` call + config-section read into a
+            helper, but the unit tests mock ``_agent_service`` wholesale
+            (so a helper method on AgentService would return MagicMocks
+            instead of triggering the config-driven ``enabled=False``
+            branch). Reverted to direct ``load_memory_config`` import
+            — see tests in ``test_interfaces_server_*_lifespan.py``
+            for the assertion shape.
+            """
             # Phase 7: start DreamScheduler (Phase 6 background)
             if self.enable_dream_scheduler and self._agent_service is not None:
                 try:
@@ -203,6 +239,7 @@ class WikiServer:
                     from llmwikify.apps.chat.memory.memory_config import (
                         load_memory_config,
                     )
+
                     mem_cfg = load_memory_config(self._agent_service.data_dir)
                     ac_cfg = mem_cfg.auto_compact
                     if ac_cfg.get("enabled", True):
@@ -218,10 +255,93 @@ class WikiServer:
                         "WikiServer: auto_compact start failed "
                         "during lifespan startup",
                     )
+            # v0.40: start confirmations cleanup task (deletes expired
+            # POST /page confirmation tokens). Interval is configured via
+            # memory_config.json (confirmations_cleanup.interval_seconds),
+            # matching the AutoCompact pattern. ``enable_confirmations_cleanup``
+            # on WikiServer is a master kill-switch — even when True, the
+            # config-level ``enabled`` flag is honored.
+            if self.enable_confirmations_cleanup and self._agent_service is not None:
+                try:
+                    from llmwikify.apps.chat.memory.memory_config import (
+                        load_memory_config,
+                    )
+
+                    mem_cfg = load_memory_config(self._agent_service.data_dir)
+                    cc_cfg = mem_cfg.confirmations_cleanup
+                    if cc_cfg.get("enabled", True):
+                        await self._agent_service.start_confirmations_cleanup(
+                            interval_seconds=float(
+                                cc_cfg.get("interval_seconds", 300.0),
+                            ),
+                            enabled=True,
+                        )
+                except Exception:
+                    logger.exception(
+                        "WikiServer: confirmations_cleanup start failed "
+                        "during lifespan startup",
+                    )
+            # Self-maintenance: start MaintenanceManager (auto-ingest
+            # watchers + gap-filler / DB periodic loops) for all LOCAL
+            # wikis. Config-level maintenance.enabled=False disables it
+            # even when the server-level switch is on.
+            if self.enable_maintenance:
+                try:
+                    import os as _os
+                    from pathlib import Path as _Path
+
+                    from llmwikify.apps.agent.maintenance import (
+                        MaintenanceManager,
+                        load_maintenance_config,
+                    )
+
+                    m_cfg = load_maintenance_config()
+                    if m_cfg.enabled:
+                        # Same data_dir resolution as AgentService
+                        # (routes.py): env override → ~/.llmwikify/agent.
+                        # Keeps the shared .llmwiki_agent.db proposal
+                        # table identical across subsystems.
+                        _env_dir = _os.environ.get("LLMWIKIFY_DATA_DIR")
+                        m_data_dir = (
+                            _Path(_env_dir)
+                            if _env_dir
+                            else _Path.home() / ".llmwikify" / "agent"
+                        )
+                        self._maintenance_manager = MaintenanceManager(
+                            registry=self.registry,
+                            config=m_cfg,
+                            data_dir=m_data_dir,
+                        )
+                        app.state.maintenance_manager = self._maintenance_manager
+                        await self._maintenance_manager.start()
+                except Exception:
+                    logger.exception(
+                        "WikiServer: maintenance start failed "
+                        "during lifespan startup",
+                    )
             try:
                 yield
             finally:
-                # Stop AutoCompact first (cheaper / no LLM call in flight)
+                # Stop maintenance first: file watchers must stop
+                # accepting new events before anything else tears down.
+                if self._maintenance_manager is not None:
+                    try:
+                        await self._maintenance_manager.stop()
+                    except Exception:
+                        logger.warning(
+                            "WikiServer: maintenance stop failed",
+                            exc_info=True,
+                        )
+                # Stop confirmations_cleanup first (cheap, just DELETE).
+                if self._agent_service is not None:
+                    try:
+                        await self._agent_service.stop_confirmations_cleanup()
+                    except Exception:
+                        logger.warning(
+                            "WikiServer: confirmations_cleanup stop failed",
+                            exc_info=True,
+                        )
+                # Stop AutoCompact next (cheaper / no LLM call in flight)
                 if self._agent_service is not None:
                     try:
                         await self._agent_service.stop_auto_compact()
@@ -230,7 +350,7 @@ class WikiServer:
                             "WikiServer: auto_compact stop failed",
                             exc_info=True,
                         )
-                # Stop DreamScheduler next (so it doesn't fire mid-shutdown)
+                # Stop DreamScheduler last (so it doesn't fire mid-shutdown)
                 if self._agent_service is not None:
                     try:
                         await self._agent_service.stop_dream_scheduler()
@@ -245,9 +365,27 @@ class WikiServer:
                 elif self.wiki:
                     self.wiki.close()
 
+        @asynccontextmanager
+        async def lifespan(app: FastAPI) -> None:
+            """Combined lifespan (2026-10-14).
+
+            Enter FastMCP's ASGI-app lifespan FIRST so its
+            StreamableHTTPSessionManager task group initializes; Starlette's
+            ``mount()`` does NOT run sub-app lifespans, which is why every
+            /mcp request failed with "task group was not initialized" (500).
+            Then delegate to the wiki subsystems lifespan.
+            """
+            from contextlib import AsyncExitStack
+
+            async with AsyncExitStack() as stack:
+                if mcp_asgi_app is not None:
+                    await stack.enter_async_context(mcp_asgi_app.lifespan(app))
+                await stack.enter_async_context(_wiki_lifespan(app))
+                yield
+
         app = FastAPI(
             title="llmwikify",
-            version="0.38.0",
+            version=__version__,
             description="LLM Wiki Knowledge Base API",
             docs_url="/docs",
             redoc_url="/redoc",
@@ -273,6 +411,7 @@ class WikiServer:
         from llmwikify.interfaces.server.http.middleware import (
             JWTAuthMiddleware,
         )
+
         if not self.local_mode:
             try:
                 secret = self._load_jwt_secret()
@@ -306,25 +445,29 @@ class WikiServer:
         # 60 req/min; set RATE_LIMIT_PER_MIN=0 to disable.
         from llmwikify.interfaces.server.http.middleware import (
             RateLimitMiddleware,
+            get_client_ip,
         )
+
         app.add_middleware(RateLimitMiddleware)
 
         # Request logging middleware - logs every request for debugging
         @app.middleware("http")
-        async def log_requests(request: Request, call_next):
+        async def log_requests(request: Request, call_next) -> Any:
             response = await call_next(request)
             if response.status_code >= 400:
-                client = request.client.host if request.client else "?"
-                logger.info(f"[req] {request.method} {request.url.path} → {response.status_code} | client={client}")
+                client = get_client_ip(request)
+                logger.info(
+                    f"[req] {request.method} {request.url.path} → {response.status_code} | client={client}"
+                )
             return response
 
-        # Mount MCP endpoint
-        if self.mcp is not None:
-            app.mount("/mcp", self.mcp.asgi_app)
+        # Mount MCP endpoint (same instance whose lifespan is entered above)
+        if mcp_asgi_app is not None:
+            app.mount("/mcp", mcp_asgi_app)
 
         # Health check endpoint
         @app.get("/api/health", tags=["system"])
-        async def health_check():
+        async def health_check() -> dict[str, Any]:
             """Get server health status."""
             wikis = self.registry.list_wikis()
             wiki_count = len(wikis)
@@ -333,82 +476,95 @@ class WikiServer:
             # (even with is_default set, single wiki = single-wiki mode)
             is_multi = wiki_count > 1
 
+            features = {
+                "mcp": self.enable_mcp,
+                "webui": self.enable_webui,
+                "auth": self.api_key is not None,
+                "multi_wiki": is_multi,
+                # Phase 7 feature flag (visible in /api/health)
+                "dream_scheduler": self._feature_running(
+                    "enable_dream_scheduler",
+                    "dream_scheduler",
+                ),
+                # Phase 9 feature flag
+                "auto_compact": self._feature_running(
+                    "enable_auto_compact",
+                    "auto_compact",
+                ),
+                # v0.40: confirmations cleanup task
+                "confirmations_cleanup": self._feature_running(
+                    "enable_confirmations_cleanup",
+                    "_confirmations_cleanup_task",
+                ),
+                # v0.41: self-maintenance (auto-ingest / gap-filler / DB)
+                "maintenance": bool(
+                    self.enable_maintenance
+                    and getattr(self, "_maintenance_manager", None) is not None
+                ),
+                # Phase 20 feature flag: the only trigger that routes a
+                # user message to the Research workflow is an explicit
+                # ``/study <question>`` prefix. Any message that merely
+                # mentions 调研 / 研究 / research without that prefix
+                # stays in normal chat (see docs/releases/v0.38.0.md §14).
+                "research_trigger": "/study",
+            }
+
             if is_multi:
                 return {
                     "status": "ok",
-                    "version": "0.38.0",
+                    "version": __version__,
                     "mode": "multi-wiki",
                     "wiki_count": wiki_count,
                     "default_wiki_id": self.registry.get_default_wiki_id(),
-                    "features": {
-                        "mcp": self.enable_mcp,
-                        "webui": self.enable_webui,
-                        "auth": self.api_key is not None,
-                        "multi_wiki": True,
-                        # Phase 7 feature flag (visible in /api/health)
-                        "dream_scheduler": (
-                            self.enable_dream_scheduler
-                            and self._agent_service is not None
-                            and getattr(
-                                self._agent_service, "dream_scheduler", None,
-                            ) is not None
-                        ),
-                        # Phase 9 feature flag
-                        "auto_compact": (
-                            self.enable_auto_compact
-                            and self._agent_service is not None
-                            and getattr(
-                                self._agent_service, "auto_compact", None,
-                            ) is not None
-                        ),
-                        # Phase 20 feature flag: the only trigger that
-                        # routes a user message to the Research workflow
-                        # is an explicit ``/study <question>`` prefix.
-                        # Any message that merely mentions 调研 / 研究 /
-                        # research without that prefix stays in normal
-                        # chat (see docs/releases/v0.38.0.md §14).
-                        "research_trigger": "/study",
-                    },
+                    "features": features,
                     "timestamp": datetime.utcnow().isoformat(),
                 }
-            else:
-                # Single wiki mode (1 wiki, no explicit default)
-                page_count = len(list(self.wiki.wiki_dir.glob("**/*.md"))) if self.wiki.wiki_dir.exists() else 0
-                return {
-                    "status": "ok",
-                    "version": "0.38.0",
-                    "mode": "single-wiki",
-                    "wiki": {
-                        "initialized": self.wiki.is_initialized(),
-                        "root": str(self.wiki.root),
-                        "page_count": page_count,
-                    },
-                    "features": {
-                        "mcp": self.enable_mcp,
-                        "webui": self.enable_webui,
-                        "auth": self.api_key is not None,
-                        "multi_wiki": False,
-                        "dream_scheduler": (
-                            self.enable_dream_scheduler
-                            and self._agent_service is not None
-                            and getattr(
-                                self._agent_service, "dream_scheduler", None,
-                            ) is not None
-                        ),
-                        "auto_compact": (
-                            self.enable_auto_compact
-                            and self._agent_service is not None
-                            and getattr(
-                                self._agent_service, "auto_compact", None,
-                            ) is not None
-                        ),
-                        # Phase 20: only `/study` routes to Research.
-                        "research_trigger": "/study",
-                    },
-                    "timestamp": datetime.utcnow().isoformat(),
-                }
+            # Single wiki mode (1 wiki, no explicit default)
+            page_count = (
+                len(list(self.wiki.wiki_dir.glob("**/*.md")))
+                if self.wiki.wiki_dir.exists()
+                else 0
+            )
+            return {
+                "status": "ok",
+                "version": __version__,
+                "mode": "single-wiki",
+                "wiki": {
+                    "initialized": self.wiki.is_initialized(),
+                    "root": str(self.wiki.root),
+                    "page_count": page_count,
+                },
+                "features": features,
+                "timestamp": datetime.utcnow().isoformat(),
+            }
 
         return app
+
+    def _feature_running(self, enable_attr: str, holder_attr: str) -> bool:
+        """B4 refactor (v0.40): single source of truth for "is this
+        optional background task currently running?"
+
+        Replaces the copy-pasted ``enable_X and self._agent_service is
+        not None and getattr(svc, holder, None) is not None`` blocks
+        that previously appeared in both single-wiki and multi-wiki
+        branches of the ``/api/health`` handler.
+
+        Args:
+            enable_attr: name of the boolean ``enable_*`` flag on this
+                :class:`WikiServer` (e.g. ``"enable_dream_scheduler"``).
+                Acts as the master kill-switch.
+            holder_attr: attribute name on the :class:`AgentService`
+                that holds the running instance / task (e.g.
+                ``"dream_scheduler"``, ``"auto_compact"``,
+                ``"_confirmations_cleanup_task"``). ``None`` means "not
+                started".
+        """
+        if not getattr(self, enable_attr, False):
+            return False
+        svc = self._agent_service
+        if svc is None:
+            return False
+        return getattr(svc, holder_attr, None) is not None
 
     def _mount_webui(self) -> None:
         """Mount React SPA static files (single source of truth)."""
@@ -423,12 +579,14 @@ class WikiServer:
         the caller falls back to lazy verification at request time.
         """
         from llmwikify.foundation.auth import require_secret
+
         return require_secret()
 
     def run(self, host: str = DEFAULT_HOST, port: int = DEFAULT_PORT) -> None:
         """Run unified HTTP server."""
         setup_logging()
         import uvicorn
+
         logger.info(f"llmwikify server starting on {host}:{port}")
         uvicorn.run(self.app, host=host, port=port, log_level="info")
 

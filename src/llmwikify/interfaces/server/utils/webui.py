@@ -47,7 +47,7 @@ class _CacheControlledStaticFiles(StaticFiles):
     browser (and any CDN in front) to fetch the updated file by name.
     """
 
-    async def get_response(self, path, scope):  # type: ignore[override]
+    async def get_response(self, path, scope):  # type -> response: ignore[override]
         response = await super().get_response(path, scope)
         response.headers["Cache-Control"] = HASHED_ASSET_CACHE_CONTROL
         return response
@@ -66,7 +66,7 @@ class SPAFallbackMiddleware(BaseHTTPMiddleware):
     causing the dynamic-import failures users saw.
     """
 
-    def __init__(self, app, index_html: Path, dist_dir: Path):
+    def __init__(self, app, index_html: Path, dist_dir: Path) -> None:
         super().__init__(app)
         self.index_html = index_html
         self.dist_dir = dist_dir
@@ -91,7 +91,10 @@ class SPAFallbackMiddleware(BaseHTTPMiddleware):
         if (self.dist_dir / rel).is_file():
             return response
         # Skip favicon / common static assets
-        if any(path.endswith(ext) for ext in (".ico", ".png", ".svg", ".jpg", ".gif", ".woff", ".woff2")):
+        if any(
+            path.endswith(ext)
+            for ext in (".ico", ".png", ".svg", ".jpg", ".gif", ".woff", ".woff2")
+        ):
             return response
 
         # SPA fallback: serve index.html for client-side routes

@@ -12,7 +12,6 @@ from llmwikify.foundation.llm import (
     TokenBudgetChecker,
     TokenBudgetConfig,
     TokenBudgetExceeded,
-    TokenUsage,
     ask_llm_context_window,
     count_messages,
     count_tokens,
@@ -159,7 +158,10 @@ class TestTokenEstimator:
         assert n > 0
 
     def test_count_tokens_fallback_no_tiktoken(self):
-        with patch("llmwikify.foundation.llm.token_estimator._get_tiktoken_encoding", return_value=None):
+        with patch(
+            "llmwikify.foundation.llm.token_estimator._get_tiktoken_encoding",
+            return_value=None,
+        ):
             n = count_tokens("hello world")
             # fallback: len("hello world") // 3 = 11 // 3 = 3
             assert n == 3
@@ -264,17 +266,15 @@ class TestTokenBudgetChecker:
 
     def test_stats_tracks_exceeded(self):
         checker = TokenBudgetChecker(
-            TokenBudgetConfig(
-                model="gpt-4o", context_window=100_000, on_exceed="warn"
-            )
+            TokenBudgetConfig(model="gpt-4o", context_window=100_000, on_exceed="warn")
         )
         # First call: small content -> OK
         checker.check([{"role": "user", "content": "Hi"}], prompt_name="test")
         # Second call: large content -> exceeds (use mock to avoid slow tiktoken)
-        with patch("llmwikify.foundation.llm.token_budget.count_messages", return_value=200_000):
-            checker.check(
-                [{"role": "user", "content": "x" * 1000}], prompt_name="test"
-            )
+        with patch(
+            "llmwikify.foundation.llm.token_budget.count_messages", return_value=200_000
+        ):
+            checker.check([{"role": "user", "content": "x" * 1000}], prompt_name="test")
         stats = checker.get_stats()
         assert stats["total_calls"] == 2
         assert stats["exceeded_count"] == 1
@@ -367,7 +367,9 @@ class TestIntegration:
         checker = TokenBudgetChecker(config)
 
         # Mock count_messages to simulate exceeding budget
-        with patch("llmwikify.foundation.llm.token_budget.count_messages", return_value=10_000):
+        with patch(
+            "llmwikify.foundation.llm.token_budget.count_messages", return_value=10_000
+        ):
             messages = [
                 {"role": "system", "content": "x" * 1000},
                 {"role": "user", "content": "y" * 1000},

@@ -3,6 +3,7 @@
 These are 1-line forwarders — the test just verifies the facade
 still works end-to-end (i.e. delegates correctly forward).
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -83,7 +84,8 @@ class TestSixStep:
     def test_update_and_get(self, db: ChatDatabase) -> None:
         sid = db.create_research_session(wiki_id="w", query="q")
         db.update_six_step_fields(
-            sid, clarification={"q": "what"},
+            sid,
+            clarification={"q": "what"},
             reasoning={"step": "think"},
         )
         fields = db.get_six_step_fields(sid)

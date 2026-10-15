@@ -1,4 +1,5 @@
 """Tests for ConfirmationManager (Phase 5 extraction)."""
+
 from __future__ import annotations
 
 import asyncio
@@ -54,24 +55,31 @@ class TestIsUnknownConfirmation:
         assert ConfirmationManager.is_unknown_confirmation(None) is False
 
     def test_returns_false_for_dict_without_error_status(self) -> None:
-        assert ConfirmationManager.is_unknown_confirmation(
-            {"status": "ok"}
-        ) is False
+        assert ConfirmationManager.is_unknown_confirmation({"status": "ok"}) is False
 
     def test_returns_false_for_unrelated_error(self) -> None:
-        assert ConfirmationManager.is_unknown_confirmation(
-            {"status": "error", "error": "Permission denied"}
-        ) is False
+        assert (
+            ConfirmationManager.is_unknown_confirmation(
+                {"status": "error", "error": "Permission denied"}
+            )
+            is False
+        )
 
     def test_returns_true_for_unknown_confirmation_id(self) -> None:
-        assert ConfirmationManager.is_unknown_confirmation(
-            {"status": "error", "error": "Unknown confirmation ID: c1"}
-        ) is True
+        assert (
+            ConfirmationManager.is_unknown_confirmation(
+                {"status": "error", "error": "Unknown confirmation ID: c1"}
+            )
+            is True
+        )
 
     def test_returns_true_for_invalid_confirmation_id(self) -> None:
-        assert ConfirmationManager.is_unknown_confirmation(
-            {"status": "error", "error": "Invalid confirmation ID: c1"}
-        ) is True
+        assert (
+            ConfirmationManager.is_unknown_confirmation(
+                {"status": "error", "error": "Invalid confirmation ID: c1"}
+            )
+            is True
+        )
 
 
 # ── list_confirmations ───────────────────────────────────────────

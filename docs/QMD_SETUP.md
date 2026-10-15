@@ -13,12 +13,19 @@ meaning of queries, at the cost of slightly higher latency and memory usage.
 | Feature | FTS5 (Default) | QMD (Hybrid) |
 |---------|-----------------|---------------|
 | **Speed** | Instant (~ms) | Slow (~seconds) |
-| **Keyword Match** | ✅ Excellent | ✅ Excellent |
+| **Keyword Match** | ✅ Excellent (CJK-friendly since v0.40.1) | ✅ Excellent |
 | **Semantic Match** | ❌ None | ✅ Excellent |
 | **Query Expansion** | ❌ No | ✅ LLM-powered |
 | **LLM Reranking** | ❌ No | ✅ Cross-encoder |
 | **Memory Usage** | Negligible | ~2GB (3 GGUF models) |
 | **Setup** | Built-in | Requires npm install |
+
+> **CJK support** (v0.40.1+): The default FTS5 tokenizer is configured with
+> `unicode61 categories 'L* N* Co Mn' tokenchars '_'`, so Chinese / Japanese /
+> Korean short queries (e.g. `配置`, `中文`, `算法`) correctly tokenize as
+> independent Unicode units and return BM25-ranked hits. Pre-v0.40.1 wikis
+> with short CJK queries may return 0 results — restart the server to trigger
+> the auto-migration.
 
 ---
 

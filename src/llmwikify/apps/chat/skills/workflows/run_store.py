@@ -10,6 +10,7 @@ idempotent (overwriting the same JSON path). If you need stronger
 guarantees, swap in a SQLite-backed implementation later — the
 public API stays the same.
 """
+
 from __future__ import annotations
 
 import json
@@ -32,7 +33,7 @@ class RunState:
     workflow_name: str
     source_path: str | None
     started_at: float
-    status: str                          # "running" | "complete" | "failed" | "halted" | "partial"
+    status: str  # "running" | "complete" | "failed" | "halted" | "partial"
     inputs_data: dict[str, Any] = field(default_factory=dict)
     session_id: str = ""
     phases: dict[str, dict[str, Any]] = field(default_factory=dict)

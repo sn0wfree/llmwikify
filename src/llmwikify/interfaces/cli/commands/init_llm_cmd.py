@@ -7,13 +7,11 @@ from __future__ import annotations
 
 import json
 import os
-import sys
 from pathlib import Path
 from typing import Any
 
 from .._base import Command
-from .._output import ICON_SUCCESS, ICON_WARNING, print_success, print_warning
-
+from .._output import print_success, print_warning
 
 # Provider detection from env vars
 _ENV_PROVIDER_MAP = {
@@ -23,14 +21,6 @@ _ENV_PROVIDER_MAP = {
     "OPENAI_BASE_URL": "openai",  # custom endpoint
 }
 
-# Default models per provider
-_DEFAULT_MODELS = {
-    "openai": "gpt-4o",
-    "anthropic": "claude-sonnet-4-20250514",
-    "minimax": "minimax-M3",
-    "xiaomi": "MiMo-7B-RL",
-}
-
 # Env var for API key per provider
 _PROVIDER_ENV_KEY = {
     "openai": "OPENAI_API_KEY",
@@ -38,6 +28,25 @@ _PROVIDER_ENV_KEY = {
     "minimax": "MINIMAX_API_KEY",
     "xiaomi": None,
 }
+
+
+def _get_default_model(provider: str) -> str:
+    """Get default model for provider from providers.yaml (v0.41+).
+
+    Falls back to empty string if provider not found.
+    """
+    try:
+        from llmwikify.foundation.llm.resolver import (
+            apply_provider_alias,
+            get_provider_metadata,
+        )
+
+        canonical = apply_provider_alias(provider)
+        meta = get_provider_metadata(canonical)
+        return meta.get("default_model", "")
+    except Exception:
+        return ""
+
 
 CONFIG_DIR = Path.home() / ".llmwikify"
 CONFIG_PATH = CONFIG_DIR / "llmwikify.json"
@@ -87,7 +96,9 @@ def create_llm_config(
 
     if not provider:
         if not quiet:
-            print_warning("Cannot auto-detect provider. Use --provider or set OPENAI_API_KEY / ANTHROPIC_API_KEY / MINIMAX_API_KEY.")
+            print_warning(
+                "Cannot auto-detect provider. Use --provider or set OPENAI_API_KEY / ANTHROPIC_API_KEY / MINIMAX_API_KEY."
+            )
             print("  Supported providers: openai, anthropic, minimax, xiaomi")
             print("  Example: llmwikify init-llm --provider openai --api-key sk-...")
         return 1
@@ -102,7 +113,7 @@ def create_llm_config(
         return 1
 
     if not model:
-        model = _DEFAULT_MODELS.get(provider, "gpt-4o")
+        model = _get_default_model(provider)
 
     config: dict[str, Any] = {
         "llm": {
@@ -123,7 +134,9 @@ def create_llm_config(
         return 1
 
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    CONFIG_PATH.write_text(json.dumps(config, indent=2, ensure_ascii=False), encoding="utf-8")
+    CONFIG_PATH.write_text(
+        json.dumps(config, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
 
     if not quiet:
         print_success(f"LLM config written to {CONFIG_PATH}")
@@ -156,6 +169,7 @@ class InitLlmCommand(Command):
 
     def setup_parser(self, subparsers: Any) -> None:
         from argparse import _SubParsersAction
+
         if not isinstance(subparsers, _SubParsersAction):
             raise TypeError("setup_parser requires an argparse subparsers action")
 
@@ -166,9 +180,13 @@ class InitLlmCommand(Command):
             help="LLM provider (auto-detected from env vars)",
         )
         p.add_argument("--model", help="Model name (default: provider-specific)")
-        p.add_argument("--api-key", dest="api_key", help="API key (default: from env var)")
+        p.add_argument(
+            "--api-key", dest="api_key", help="API key (default: from env var)"
+        )
         p.add_argument("--base-url", dest="base_url", help="Custom API base URL")
-        p.add_argument("--overwrite", action="store_true", help="Overwrite existing config")
+        p.add_argument(
+            "--overwrite", action="store_true", help="Overwrite existing config"
+        )
 
     def run(self, args: Any, wiki: Any, config: dict) -> int:
-        return run_init_llm(wiki, wiki.root if hasattr(wiki, 'root') else None, args)
+        return run_init_llm(wiki, wiki.root if hasattr(wiki, "root") else None, args)

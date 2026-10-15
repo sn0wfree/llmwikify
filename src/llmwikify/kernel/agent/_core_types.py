@@ -8,6 +8,7 @@
 
 历史: 从 apps/chat/agent/unified/core.py 搬迁。
 """
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -34,7 +35,9 @@ class StepResult:
     error: str | None = None
 
     @staticmethod
-    def ok(output: Any = None, events: list[dict[str, Any]] | None = None) -> StepResult:
+    def ok(
+        output: Any = None, events: list[dict[str, Any]] | None = None
+    ) -> StepResult:
         return StepResult(output=output, events=events or [])
 
     @staticmethod
@@ -59,8 +62,7 @@ class StepHandler(ABC):
     """
 
     @abstractmethod
-    async def handle(self, input: Any, spec: Any, ctx: Any) -> StepResult:
-        ...
+    async def handle(self, input: Any, spec: Any, ctx: Any) -> StepResult: ...
 
 
 # ─── StreamingHandler — 有状态流式接口 ──────────────────
@@ -84,7 +86,10 @@ class StreamingHandler(ABC):
 
     @abstractmethod
     def stream(
-        self, input: Any, spec: Any, ctx: Any,
+        self,
+        input: Any,
+        spec: Any,
+        ctx: Any,
     ) -> AsyncIterator[dict[str, Any] | StepResult]:
         """yield SSE events，最后一个 yield StepResult(output=结果)。"""
         ...
@@ -124,17 +129,3 @@ class Pipeline(StepHandler):
     def __repr__(self) -> str:
         names = " → ".join(type(s).__name__ for s in self._steps)
         return f"Pipeline({names})"
-
-
-# ─── 辅助函数 ───────────────────────────────────────────
-
-
-async def _maybe_await(fn_or_coro: Any, *args: Any, **kwargs: Any) -> Any:
-    """调用 sync 或 async callable，统一 await。"""
-    if callable(fn_or_coro):
-        result = fn_or_coro(*args, **kwargs)
-    else:
-        result = fn_or_coro
-    if hasattr(result, "__await__"):
-        return await result
-    return result

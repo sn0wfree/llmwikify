@@ -53,9 +53,7 @@ class DetectActionSkill(Skill):
         super().__init_subclass__(**kwargs)
         # Auto-build the actions dict from the class attrs.
         if not cls.name or not cls.DETECT_METHOD:
-            raise TypeError(
-                f"{cls.__name__} must set 'name' and 'DETECT_METHOD'"
-            )
+            raise TypeError(f"{cls.__name__} must set 'name' and 'DETECT_METHOD'")
 
         async def _handler(args: dict, ctx: SkillContext) -> SkillResult:
             wiki = wiki_from_ctx(ctx)
@@ -63,9 +61,7 @@ class DetectActionSkill(Skill):
                 return SkillResult.fail("No wiki in context")
             method = getattr(wiki, cls.DETECT_METHOD, None)
             if method is None:
-                return SkillResult.fail(
-                    f"wiki has no {cls.DETECT_METHOD} method"
-                )
+                return SkillResult.fail(f"wiki has no {cls.DETECT_METHOD} method")
             result = safe_call(method, error_prefix=f"{cls.name} failed")
             # Wrap the raw list into a dict for consistency with
             # the other actions' output shape.

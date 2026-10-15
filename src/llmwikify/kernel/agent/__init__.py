@@ -13,12 +13,12 @@
 历史: 从 apps/chat/agent/unified/ 搬迁 (维度 A 拆解).
 apps/chat/agent/unified/ 保留为 backward-compat shim.
 """
+
 from ._core_types import (
     Pipeline,
     StepHandler,
     StepResult,
     StreamingHandler,
-    _maybe_await,
 )
 from .codegen_pipeline import (
     CodeActor,
@@ -63,5 +63,4 @@ __all__ = [
     "StepResult",
     "StreamingHandler",
     "Pipeline",
-    "_maybe_await",
 ]

@@ -18,16 +18,12 @@ Covers:
 from __future__ import annotations
 
 import asyncio
-import json
 from typing import Any
 
 import pytest
 
 from llmwikify.apps.chat.bus import (
-    BusAdapter,
     MessageBus,
-    get_default_bus,
-    reset_default_bus,
 )
 from llmwikify.apps.chat.channels.websocket import (
     WebSocketManager,
@@ -39,7 +35,6 @@ from llmwikify.apps.chat.channels.websocket import (
     _register_websocket_routes,
     _run_ws_chat,
     get_default_ws_session_map,
-    reset_default_ws_manager,
     reset_default_ws_session_map,
 )
 
@@ -98,14 +93,19 @@ class _FakeOrchestrator:
         self.calls: list[dict[str, Any]] = []
 
     async def chat(
-        self, *, message: str, session_id: str | None = None,
+        self,
+        *,
+        message: str,
+        session_id: str | None = None,
         **kwargs: Any,
     ) -> Any:
-        self.calls.append({
-            "message": message,
-            "session_id": session_id,
-            **kwargs,
-        })
+        self.calls.append(
+            {
+                "message": message,
+                "session_id": session_id,
+                **kwargs,
+            }
+        )
         for ev in self._events:
             yield ev
 
@@ -134,17 +134,20 @@ async def _drain_queue(q: asyncio.Queue, n: int = 100) -> list[dict]:
 class TestHandleMessageRoutesToOrchestrator:
     @pytest.mark.asyncio
     async def test_message_calls_orchestrator_chat(self) -> None:
-        orch = _FakeOrchestrator(events=[
-            {"type": "message_delta", "content": "hi"},
-            {"type": "done", "content": "bye"},
-        ])
+        orch = _FakeOrchestrator(
+            events=[
+                {"type": "message_delta", "content": "hi"},
+                {"type": "done", "content": "bye"},
+            ]
+        )
         conn = _make_conn()
         manager = WebSocketManager()
         manager.attach(conn, "chat::1")
         session_map = WsSessionMap()
 
         await _handle_client_msg(
-            conn, manager,
+            conn,
+            manager,
             {
                 "type": WSClientMsg.MESSAGE,
                 "chat_id": "chat::1",
@@ -163,18 +166,21 @@ class TestHandleMessageRoutesToOrchestrator:
 
     @pytest.mark.asyncio
     async def test_message_fanout_uses_ws_envelope(self) -> None:
-        orch = _FakeOrchestrator(events=[
-            {"type": "message_delta", "content": "alpha"},
-            {"type": "message_delta", "content": "beta"},
-            {"type": "done", "content": "fin"},
-        ])
+        orch = _FakeOrchestrator(
+            events=[
+                {"type": "message_delta", "content": "alpha"},
+                {"type": "message_delta", "content": "beta"},
+                {"type": "done", "content": "fin"},
+            ]
+        )
         conn = _make_conn()
         manager = WebSocketManager()
         manager.attach(conn, "chat::1")
         session_map = WsSessionMap()
 
         await _handle_client_msg(
-            conn, manager,
+            conn,
+            manager,
             {
                 "type": WSClientMsg.MESSAGE,
                 "chat_id": "chat::1",
@@ -196,18 +202,21 @@ class TestHandleMessageRoutesToOrchestrator:
 
     @pytest.mark.asyncio
     async def test_session_created_caches_session_id(self) -> None:
-        orch = _FakeOrchestrator(events=[
-            {"type": "session_created", "session_id": "sess-xyz"},
-            {"type": "message_delta", "content": "hi"},
-            {"type": "done", "content": ""},
-        ])
+        orch = _FakeOrchestrator(
+            events=[
+                {"type": "session_created", "session_id": "sess-xyz"},
+                {"type": "message_delta", "content": "hi"},
+                {"type": "done", "content": ""},
+            ]
+        )
         conn = _make_conn()
         manager = WebSocketManager()
         manager.attach(conn, "chat::A")
         session_map = WsSessionMap()
 
         await _handle_client_msg(
-            conn, manager,
+            conn,
+            manager,
             {"type": WSClientMsg.MESSAGE, "chat_id": "chat::A", "content": "x"},
             orchestrator=orch,
             session_map=session_map,
@@ -226,7 +235,8 @@ class TestHandleMessageRoutesToOrchestrator:
         session_map.set("chat::A", "sess-prior")
 
         await _handle_client_msg(
-            conn, manager,
+            conn,
+            manager,
             {"type": WSClientMsg.MESSAGE, "chat_id": "chat::A", "content": "y"},
             orchestrator=orch,
             session_map=session_map,
@@ -240,12 +250,15 @@ class TestHandleMessageRoutesToOrchestrator:
         bus = MessageBus()
         # Inject bus into the default adapter path by patching get_default_bus
         from llmwikify.apps.chat.bus import queue as queue_mod
+
         queue_mod._default = bus  # bypass lazy init
 
-        orch = _FakeOrchestrator(events=[
-            {"type": "message_delta", "content": "from-orch"},
-            {"type": "done", "content": "ok"},
-        ])
+        orch = _FakeOrchestrator(
+            events=[
+                {"type": "message_delta", "content": "from-orch"},
+                {"type": "done", "content": "ok"},
+            ]
+        )
         conn = _make_conn()
         manager = WebSocketManager()
         manager.attach(conn, "chat::B")
@@ -253,7 +266,8 @@ class TestHandleMessageRoutesToOrchestrator:
 
         try:
             await _handle_client_msg(
-                conn, manager,
+                conn,
+                manager,
                 {
                     "type": WSClientMsg.MESSAGE,
                     "chat_id": "chat::B",
@@ -284,10 +298,12 @@ class TestHandleMessageRoutesToOrchestrator:
     @pytest.mark.asyncio
     async def test_multi_conn_fanout(self) -> None:
         """Two connections on the same chat both see the orchestrator's events."""
-        orch = _FakeOrchestrator(events=[
-            {"type": "message_delta", "content": "shared"},
-            {"type": "done", "content": ""},
-        ])
+        orch = _FakeOrchestrator(
+            events=[
+                {"type": "message_delta", "content": "shared"},
+                {"type": "done", "content": ""},
+            ]
+        )
         conn1 = _make_conn("c1:0")
         conn2 = _make_conn("c2:0")
         manager = WebSocketManager()
@@ -297,7 +313,8 @@ class TestHandleMessageRoutesToOrchestrator:
 
         # Use conn1 to send the message; conn2 should also receive
         await _handle_client_msg(
-            conn1, manager,
+            conn1,
+            manager,
             {"type": WSClientMsg.MESSAGE, "chat_id": "chat::F", "content": "x"},
             orchestrator=orch,
             session_map=session_map,
@@ -328,7 +345,8 @@ class TestHandleMessageErrorPath:
         session_map = WsSessionMap()
 
         await _handle_client_msg(
-            conn, manager,
+            conn,
+            manager,
             {"type": WSClientMsg.MESSAGE, "chat_id": "chat::E", "content": "x"},
             orchestrator=_BoomOrch(),
             session_map=session_map,
@@ -350,7 +368,8 @@ class TestHandleMessageErrorPath:
         session_map = WsSessionMap()
 
         await _handle_client_msg(
-            conn, manager,
+            conn,
+            manager,
             {"type": WSClientMsg.MESSAGE, "chat_id": "chat::X", "content": "x"},
             orchestrator=orch,
             session_map=session_map,
@@ -375,7 +394,8 @@ class TestHandleMessageEchoFallback:
         session_map = WsSessionMap()
 
         await _handle_client_msg(
-            conn, manager,
+            conn,
+            manager,
             {
                 "type": WSClientMsg.MESSAGE,
                 "chat_id": "chat::Z",
@@ -396,22 +416,32 @@ class TestHandleMessageEchoFallback:
 class TestRunWsChatDirect:
     @pytest.mark.asyncio
     async def test_run_ws_chat_yields_envelope_in_order(self) -> None:
-        orch = _FakeOrchestrator(events=[
-            {"type": "session_created", "session_id": "sess-1"},
-            {"type": "message_delta", "content": "step-1"},
-            {"type": "tool_call_start", "tool": "x", "args": {"a": 1}, "call_id": "c1"},
-            {"type": "tool_call_end", "tool": "x", "result": "r", "call_id": "c1"},
-            {"type": "done", "content": "fin"},
-        ])
+        orch = _FakeOrchestrator(
+            events=[
+                {"type": "session_created", "session_id": "sess-1"},
+                {"type": "message_delta", "content": "step-1"},
+                {
+                    "type": "tool_call_start",
+                    "tool": "x",
+                    "args": {"a": 1},
+                    "call_id": "c1",
+                },
+                {"type": "tool_call_end", "tool": "x", "result": "r", "call_id": "c1"},
+                {"type": "done", "content": "fin"},
+            ]
+        )
         conn = _make_conn()
         manager = WebSocketManager()
         manager.attach(conn, "chat::R")
         session_map = WsSessionMap()
 
         await _run_ws_chat(
-            conn=conn, manager=manager,
-            chat_id="chat::R", content="test",
-            orchestrator=orch, session_map=session_map,
+            conn=conn,
+            manager=manager,
+            chat_id="chat::R",
+            content="test",
+            orchestrator=orch,
+            session_map=session_map,
         )
         msgs = await _drain_queue(conn.out_queue, n=10)
         types = [m["type"] for m in msgs]
@@ -419,7 +449,11 @@ class TestRunWsChatDirect:
         # message_delta→delta, tool_call_start→tool_call (phase=start),
         # tool_call_end→tool_call (phase=end), done→stream_end
         assert types == [
-            "session_created", "delta", "tool_call", "tool_call", "stream_end",
+            "session_created",
+            "delta",
+            "tool_call",
+            "tool_call",
+            "stream_end",
         ]
         # session_id was captured by WsSessionMap
         assert session_map.get("chat::R") == "sess-1"
@@ -438,25 +472,32 @@ class TestRegisterRoutesSignature:
         """Calling _register_websocket_routes without chat_service
         should NOT raise (backward compat for tests / dev mode)."""
         from fastapi import FastAPI
+
         app = FastAPI()
         # Should not raise
         _register_websocket_routes(app, api_key="")
 
     def test_accepts_chat_service_param(self) -> None:
         from fastapi import FastAPI
+
         app = FastAPI()
         _register_websocket_routes(
-            app, api_key="", chat_service=None,
+            app,
+            api_key="",
+            chat_service=None,
         )
 
     def test_accepts_orchestrator_directly(self) -> None:
         """If chat_service is a raw ChatOrchestrator (no .chat_service),
         we should still resolve to it (via getattr fallback)."""
         from fastapi import FastAPI
+
         app = FastAPI()
         orch = _FakeOrchestrator()
         _register_websocket_routes(
-            app, api_key="", chat_service=orch,
+            app,
+            api_key="",
+            chat_service=orch,
         )
         # The internal ``orchestrator`` should resolve to the orch directly
         # (verified by checking the closure was created without error)

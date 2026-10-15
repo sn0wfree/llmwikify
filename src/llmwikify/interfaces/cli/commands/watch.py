@@ -80,7 +80,9 @@ def run_watch(wiki: Any, wiki_root: Path, args: Any) -> int:
     )
 
     def on_event(event_type: str, path: Path) -> None:
-        icon = {"created": "📄", "modified": "✏️", "deleted": "🗑️", "moved": "📥"}.get(event_type, "❓")
+        icon = {"created": "📄", "modified": "✏️", "deleted": "🗑️", "moved": "📥"}.get(
+            event_type, "❓"
+        )
         print(f"{icon} [{event_type}] {path.name}")
 
     try:
@@ -91,7 +93,9 @@ def run_watch(wiki: Any, wiki_root: Path, args: Any) -> int:
         print("\n\nWatcher stopped.")
     finally:
         watcher.stop()
-        print(f"Stats: {watcher.stats['events']} events, {watcher.stats['ingests']} ingests")
+        print(
+            f"Stats: {watcher.stats['events']} events, {watcher.stats['ingests']} ingests"
+        )
 
     return 0
 
@@ -108,14 +112,43 @@ class WatchCommand(Command):
         if not isinstance(subparsers, _SubParsersAction):
             raise TypeError("setup_parser requires an argparse subparsers action")
         p = subparsers.add_parser(self.name, help=self.help)
-        p.add_argument("dir", nargs="?", default=None, help="Directory to watch (default: raw/)")
-        p.add_argument("--auto-ingest", action="store_true", help="Automatically ingest new files")
-        p.add_argument("--self-create", "-s", action="store_true", help="CLI uses LLM API to process files (requires --auto-ingest)")
-        p.add_argument("--smart", action="store_true", help="[Deprecated] Alias for --self-create")
-        p.add_argument("--debounce", type=float, default=2.0, help="Debounce time in seconds (default: 2)")
-        p.add_argument("--dry-run", "-n", action="store_true", help="Only print events, do not ingest")
-        p.add_argument("--git-hook", action="store_true", help="Install git post-commit hook instead of watching")
-        p.add_argument("--uninstall-hook", action="store_true", help="Uninstall git post-commit hook")
+        p.add_argument(
+            "dir", nargs="?", default=None, help="Directory to watch (default: raw/)"
+        )
+        p.add_argument(
+            "--auto-ingest", action="store_true", help="Automatically ingest new files"
+        )
+        p.add_argument(
+            "--self-create",
+            "-s",
+            action="store_true",
+            help="CLI uses LLM API to process files (requires --auto-ingest)",
+        )
+        p.add_argument(
+            "--smart", action="store_true", help="[Deprecated] Alias for --self-create"
+        )
+        p.add_argument(
+            "--debounce",
+            type=float,
+            default=2.0,
+            help="Debounce time in seconds (default: 2)",
+        )
+        p.add_argument(
+            "--dry-run",
+            "-n",
+            action="store_true",
+            help="Only print events, do not ingest",
+        )
+        p.add_argument(
+            "--git-hook",
+            action="store_true",
+            help="Install git post-commit hook instead of watching",
+        )
+        p.add_argument(
+            "--uninstall-hook",
+            action="store_true",
+            help="Uninstall git post-commit hook",
+        )
 
     def run(self, args: Any, wiki: Any, config: dict) -> int:
         # watch needs wiki_root for the git hook and default dir

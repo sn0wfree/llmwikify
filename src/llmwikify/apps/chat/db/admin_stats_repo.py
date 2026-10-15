@@ -14,6 +14,7 @@ Tables touched:
     chat_sessions, dream_proposals, notifications, confirmations,
     ingest_log, autoresearch_sessions
 """
+
 from __future__ import annotations
 
 import logging
@@ -66,8 +67,7 @@ class AdminStatsRepository(ChatDBBase):
     def list_all_wikis(self) -> list[dict[str, str]]:
         """Distinct wiki_ids across all relevant tables."""
         with self._connect() as conn:
-            rows = conn.execute(
-                """SELECT DISTINCT wiki_id
+            rows = conn.execute("""SELECT DISTINCT wiki_id
                    FROM chat_sessions
                    WHERE wiki_id IS NOT NULL
                    UNION
@@ -78,16 +78,59 @@ class AdminStatsRepository(ChatDBBase):
                    FROM notifications
                    UNION
                    SELECT DISTINCT wiki_id
-                   FROM autoresearch_sessions"""
-            ).fetchall()
+                   FROM autoresearch_sessions""").fetchall()
             return [{"wiki_id": r["wiki_id"]} for r in rows]
 
     def delete_wiki_data(self, wiki_id: str) -> dict[str, Any]:
-        """Delete all rows belonging to a wiki_id. Returns deletion counts."""
+        """Delete all rows belonging to a wiki_id. Returns deletion counts.
+
+        Order matters: child rows must be deleted BEFORE the parent
+        (chat_sessions, autoresearch_sessions) because of FK constraints
+        (PRAGMA foreign_keys = ON by default). We delete child rows
+        keyed by session_id, then delete the session rows.
+        """
         deleted: dict[str, int] = {}
-        with sqlite3.connect(self.db_path) as conn:
+        with self._mgr.transaction() as conn:
+            # ── Step 1: child rows (keyed by session_id) ──────
+            # Find session ids for this wiki.
+            for parent_table in ("chat_sessions", "autoresearch_sessions"):
+                rows = conn.execute(
+                    f"SELECT id FROM {parent_table} WHERE wiki_id = ?",
+                    (wiki_id,),
+                ).fetchall()
+                session_ids = [r["id"] for r in rows]
+                if not session_ids:
+                    continue
+                # Delete children for these sessions. Table names
+                # are wrapped in quotes to handle the IF NOT EXISTS
+                # initialization that may not have run for every
+                # child (test envs may skip research/wiki).
+                for child_table, child_col in [
+                    ("chat_messages", "session_id"),
+                    ("tool_calls", "session_id"),
+                    ("research_steps", "session_id"),
+                    ("autoresearch_sub_queries", "session_id"),
+                    ("autoresearch_sources", "session_id"),
+                ]:
+                    # Skip if the child table doesn't exist (test
+                    # fixtures may not init all facades).
+                    exists = conn.execute(
+                        "SELECT 1 FROM sqlite_master " "WHERE type='table' AND name=?",
+                        (child_table,),
+                    ).fetchone()
+                    if not exists:
+                        continue
+                    placeholders = ",".join("?" * len(session_ids))
+                    cursor = conn.execute(
+                        f"DELETE FROM {child_table} "
+                        f"WHERE {child_col} IN ({placeholders})",
+                        session_ids,
+                    )
+                    deleted[f"{parent_table}→{child_table}"] = cursor.rowcount
+            # ── Step 2: parent rows (keyed by wiki_id) ────────
             for table, col in [
                 ("chat_sessions", "wiki_id"),
+                ("autoresearch_sessions", "wiki_id"),
                 ("dream_proposals", "wiki_id"),
                 ("notifications", "wiki_id"),
                 ("confirmations", "wiki_id"),
@@ -98,13 +141,6 @@ class AdminStatsRepository(ChatDBBase):
                     (wiki_id,),
                 )
                 deleted[table] = cursor.rowcount
-            cursor = conn.execute(
-                """DELETE FROM autoresearch_sessions
-                   WHERE wiki_id = ?""",
-                (wiki_id,),
-            )
-            deleted["autoresearch_sessions"] = cursor.rowcount
-            conn.commit()
         return {"wiki_id": wiki_id, "deleted": deleted}
 
     def export_wiki_data(self, wiki_id: str) -> dict[str, Any]:
@@ -133,10 +169,16 @@ class AdminStatsRepository(ChatDBBase):
         """Per-table counts across the whole DB + file size in MB."""
         with self._connect() as conn:
             tables = [
-                "autoresearch_sessions", "autoresearch_sub_queries",
-                "autoresearch_sources", "research_steps",
-                "chat_sessions", "chat_messages", "tool_calls",
-                "dream_proposals", "notifications", "confirmations",
+                "autoresearch_sessions",
+                "autoresearch_sub_queries",
+                "autoresearch_sources",
+                "research_steps",
+                "chat_sessions",
+                "chat_messages",
+                "tool_calls",
+                "dream_proposals",
+                "notifications",
+                "confirmations",
                 "ingest_log",
             ]
             stats = {}

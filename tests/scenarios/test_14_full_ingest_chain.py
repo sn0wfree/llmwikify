@@ -25,9 +25,9 @@ graph LR
 - Chain breaks at synthesize: source_pages must be valid page stems
 """
 
-
-import subprocess
 import shutil
+import subprocess
+
 import pytest
 
 

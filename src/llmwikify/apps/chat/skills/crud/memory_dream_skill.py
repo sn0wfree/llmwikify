@@ -70,9 +70,7 @@ async def _run_for_session(args: dict, ctx: SkillContext) -> SkillResult:
         return SkillResult.ok(result.to_dict())
     except Exception as e:
         logger.exception("memory_dream run_for_session failed")
-        return SkillResult.fail(
-            f"memory_dream run_for_session failed: {e!r}"
-        )
+        return SkillResult.fail(f"memory_dream run_for_session failed: {e!r}")
 
 
 # ─── Skill declaration ─────────────────────────────────────────

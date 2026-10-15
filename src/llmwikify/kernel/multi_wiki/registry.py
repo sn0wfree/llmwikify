@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 import sqlite3
 import threading
-from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -27,7 +26,7 @@ class WikiRegistry:
     - Cross-wiki search capabilities
     """
 
-    def __init__(self, config: dict[str, Any]):
+    def __init__(self, config: dict[str, Any]) -> None:
         """Initialize WikiRegistry.
 
         Args:
@@ -279,9 +278,7 @@ class WikiRegistry:
 
         if instance.wiki_type == WikiType.REMOTE:
             # Remote wikis don't have local Wiki objects
-            raise ValueError(
-                f"Cannot get local Wiki object for remote wiki: {wiki_id}"
-            )
+            raise ValueError(f"Cannot get local Wiki object for remote wiki: {wiki_id}")
 
         # Import here to avoid circular imports
         from ..wiki import Wiki
@@ -326,7 +323,9 @@ class WikiRegistry:
                     status = self.get_wiki_status(instance.wiki_id)
                     instance.page_count = status.get("page_count", 0)
                 except Exception:
-                    pass
+                    logger.debug(
+                        "Failed to refresh page_count for %s", instance.wiki_id
+                    )
         return list(self._instances.values())
 
     def get_default_wiki(self) -> Any:
@@ -507,3 +506,46 @@ class WikiRegistry:
             return {"status": "success", "message": f"Wiki {wiki_id} re-indexed"}
         except Exception as e:
             return {"status": "error", "message": str(e)}
+
+
+class WikiRegistryDiscovery:
+    """WikiDiscoveryProvider implementation using WikiRegistry.
+
+    Scans configured directories and returns wiki roots.
+    Compatible with foundation.migration.WikiDiscoveryProvider protocol.
+
+    Example::
+
+        registry = WikiRegistry(config)
+        registry.initialize()
+        provider = WikiRegistryDiscovery(registry)
+        roots = provider.discover_wiki_roots(["/path/to/scan"], depth=2)
+    """
+
+    def __init__(self, registry: WikiRegistry) -> None:
+        """Initialize with a WikiRegistry instance.
+
+        Args:
+            registry: The WikiRegistry to use for discovery.
+        """
+        self._registry = registry
+
+    def discover_wiki_roots(
+        self,
+        scan_paths: list[str],
+        depth: int = 2,
+    ) -> list[Path]:
+        """Discover wiki roots by scanning directories.
+
+        Uses WikiRegistry.scan_directories() to find wikis and returns
+        their root paths.
+
+        Args:
+            scan_paths: Directories to scan
+            depth: Maximum recursion depth
+
+        Returns:
+            List of wiki root paths (each containing .wiki-config.yaml).
+        """
+        instances = self._registry.scan_directories(scan_paths, depth)
+        return [inst.root for inst in instances if inst.root is not None]

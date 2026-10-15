@@ -13,13 +13,14 @@ def _run_async(coro):
     except RuntimeError as e:
         if "cannot be called from a running event loop" in str(e):
             import concurrent.futures
+
             with concurrent.futures.ThreadPoolExecutor() as pool:
                 return pool.submit(asyncio.run, coro).result()
         raise
 
 
-from llmwikify.interfaces.mcp import create_mcp_server
-from llmwikify.kernel import Wiki
+from llmwikify.interfaces.mcp import create_mcp_server  # noqa: E402
+from llmwikify.kernel import Wiki  # noqa: E402
 
 
 @pytest.fixture
@@ -40,27 +41,43 @@ class TestMCPIntegration:
 
     def test_ingest_write_read_cycle(self, mcp, wiki):
         """Test ingest → write page → read page cycle."""
+
         async def _run():
             src = wiki.raw_dir / "test_article.md"
-            src.write_text("# Gold Price Hits Record High\n\nGold prices surged to $3000/oz.")
+            src.write_text(
+                "# Gold Price Hits Record High\n\nGold prices surged to $3000/oz."
+            )
 
             result = await mcp.call_tool("wiki_ingest", {"source": str(src)})
-            text = result.content[0].text if hasattr(result.content[0], 'text') else str(result.content[0])
+            text = (
+                result.content[0].text
+                if hasattr(result.content[0], "text")
+                else str(result.content[0])
+            )
             data = json.loads(text)
             assert "title" in data
             assert "content" in data
             assert data["source_name"] == "test_article.md"
 
-            await mcp.call_tool("wiki_write_page", {
-                "page_name": "entities/Test Entity",
-                "content": "---\ntitle: Test Entity\ntype: entity\n---\n\n# Test Entity\n\nA test entity.\n\n[[Concept Page]]\n"
-            })
+            await mcp.call_tool(
+                "wiki_write_page",
+                {
+                    "page_name": "entities/Test Entity",
+                    "content": "---\ntitle: Test Entity\ntype: entity\n---\n\n# Test Entity\n\nA test entity.\n\n[[Concept Page]]\n",
+                },
+            )
 
             entity_path = wiki.wiki_dir / "entities" / "Test Entity.md"
             assert entity_path.exists()
 
-            read_result = await mcp.call_tool("wiki_read_page", {"page_name": "entities/Test Entity"})
-            read_text = read_result.content[0].text if hasattr(read_result.content[0], 'text') else str(read_result.content[0])
+            read_result = await mcp.call_tool(
+                "wiki_read_page", {"page_name": "entities/Test Entity"}
+            )
+            read_text = (
+                read_result.content[0].text
+                if hasattr(read_result.content[0], "text")
+                else str(read_result.content[0])
+            )
             assert "Test Entity" in read_text
             assert "[[Concept Page]]" in read_text
 
@@ -68,14 +85,22 @@ class TestMCPIntegration:
 
     def test_search_and_status(self, mcp, wiki):
         """Test search and status tools."""
+
         async def _run():
-            await mcp.call_tool("wiki_write_page", {
-                "page_name": "Gold Mining",
-                "content": "# Gold Mining\n\nGold mining is the extraction of gold.\n"
-            })
+            await mcp.call_tool(
+                "wiki_write_page",
+                {
+                    "page_name": "Gold Mining",
+                    "content": "# Gold Mining\n\nGold mining is the extraction of gold.\n",
+                },
+            )
 
             status_result = await mcp.call_tool("wiki_status", {})
-            text = status_result.content[0].text if hasattr(status_result.content[0], 'text') else str(status_result.content[0])
+            text = (
+                status_result.content[0].text
+                if hasattr(status_result.content[0], "text")
+                else str(status_result.content[0])
+            )
             data = json.loads(text)
             assert data["initialized"] is True
             assert "pages_by_type" in data
@@ -85,37 +110,65 @@ class TestMCPIntegration:
 
     def test_lint_and_log(self, mcp, wiki):
         """Test lint and log tools."""
+
         async def _run():
             lint_result = await mcp.call_tool("wiki_lint", {})
-            lint_text = lint_result.content[0].text if hasattr(lint_result.content[0], 'text') else str(lint_result.content[0])
+            lint_text = (
+                lint_result.content[0].text
+                if hasattr(lint_result.content[0], "text")
+                else str(lint_result.content[0])
+            )
             lint_data = json.loads(lint_text)
             assert "issue_count" in lint_data
 
-            log_result = await mcp.call_tool("wiki_log", {"operation": "test", "details": "MCP integration test"})
-            log_text = log_result.content[0].text if hasattr(log_result.content[0], 'text') else str(log_result.content[0])
+            log_result = await mcp.call_tool(
+                "wiki_log", {"operation": "test", "details": "MCP integration test"}
+            )
+            log_text = (
+                log_result.content[0].text
+                if hasattr(log_result.content[0], "text")
+                else str(log_result.content[0])
+            )
             assert "Logged" in log_text
 
         _run_async(_run())
 
     def test_status_has_pages_by_type(self, mcp, wiki):
         """Test that status returns pages_by_type with dynamically discovered directories."""
+
         async def _run():
             status_result = await mcp.call_tool("wiki_status", {})
-            text = status_result.content[0].text if hasattr(status_result.content[0], 'text') else str(status_result.content[0])
+            text = (
+                status_result.content[0].text
+                if hasattr(status_result.content[0], "text")
+                else str(status_result.content[0])
+            )
             data = json.loads(text)
             assert "pages_by_type" in data
             assert "root" in data["pages_by_type"]
             # init() creates these directories — keys should be directory names
-            for subdir in ["sources", "entities", "concepts", "comparisons", "synthesis", "claims"]:
+            for subdir in [
+                "sources",
+                "entities",
+                "concepts",
+                "comparisons",
+                "synthesis",
+                "claims",
+            ]:
                 assert subdir in data["pages_by_type"]
 
         _run_async(_run())
 
     def test_status_has_graph_stats(self, mcp, wiki):
         """Test that status returns graph_stats."""
+
         async def _run():
             status_result = await mcp.call_tool("wiki_status", {})
-            text = status_result.content[0].text if hasattr(status_result.content[0], 'text') else str(status_result.content[0])
+            text = (
+                status_result.content[0].text
+                if hasattr(status_result.content[0], "text")
+                else str(status_result.content[0])
+            )
             data = json.loads(text)
             assert "graph_stats" in data
             assert "total_relations" in data["graph_stats"]
@@ -152,7 +205,14 @@ class TestWikiInitSubdirs:
     def test_creates_subdirs(self, tmp_path):
         wiki = Wiki(tmp_path)
         wiki.init()
-        for subdir in ["sources", "entities", "concepts", "comparisons", "synthesis", "claims"]:
+        for subdir in [
+            "sources",
+            "entities",
+            "concepts",
+            "comparisons",
+            "synthesis",
+            "claims",
+        ]:
             assert (wiki.wiki_dir / subdir).exists()
         wiki.close()
 

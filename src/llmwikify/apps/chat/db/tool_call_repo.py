@@ -24,6 +24,7 @@ Also exposes:
                             (used by ChatMessageRepository.revert_to_message
                             via the tool_call_delete_after_rowid hook)
 """
+
 from __future__ import annotations
 
 import json
@@ -41,9 +42,8 @@ class ToolCallRepository(ChatDBBase):
     """Repository for the ``tool_calls`` table."""
 
     def _init_schema(self) -> None:
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute(
-                """
+        with self._mgr.transaction() as conn:
+            conn.execute("""
                 CREATE TABLE IF NOT EXISTS tool_calls (
                     id TEXT PRIMARY KEY,
                     session_id TEXT,
@@ -54,17 +54,18 @@ class ToolCallRepository(ChatDBBase):
                     created_at TEXT DEFAULT (datetime('now')),
                     FOREIGN KEY (session_id) REFERENCES chat_sessions(id)
                 )
-                """
-            )
+                """)
             # v0.40: timing columns
             for col in ("started_at", "finished_at"):
                 try:
-                    conn.execute(
-                        f"ALTER TABLE tool_calls ADD COLUMN {col} TEXT"
-                    )
+                    conn.execute(f"ALTER TABLE tool_calls ADD COLUMN {col} TEXT")
                 except sqlite3.OperationalError:
                     pass
-            conn.commit()
+            # Index for session_id + created_at (covers get_tool_calls and DELETE)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_tool_calls_session_created
+                ON tool_calls(session_id, created_at)
+                """)
 
     def log_tool_call(
         self,
@@ -76,15 +77,19 @@ class ToolCallRepository(ChatDBBase):
     ) -> str:
         """Insert a new tool call and return its id."""
         call_id = uuid.uuid4().hex
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute(
-                """INSERT INTO tool_calls
-                   (id, session_id, tool_name, arguments, status, started_at)
-                   VALUES (?, ?, ?, ?, ?, ?)""",
-                (call_id, session_id, tool_name,
-                 json.dumps(arguments, ensure_ascii=False), status, started_at),
-            )
-            conn.commit()
+        self._mgr.execute_write(
+            """INSERT INTO tool_calls
+               (id, session_id, tool_name, arguments, status, started_at)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (
+                call_id,
+                session_id,
+                tool_name,
+                json.dumps(arguments, ensure_ascii=False),
+                status,
+                started_at,
+            ),
+        )
         return call_id
 
     def update_tool_call(
@@ -95,16 +100,21 @@ class ToolCallRepository(ChatDBBase):
         finished_at: str | None = None,
     ) -> None:
         """Update a tool call's result, status, and finished_at."""
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute(
-                """UPDATE tool_calls
-                   SET result = ?, status = ?, finished_at = ?
-                   WHERE id = ?""",
-                (json.dumps(result, ensure_ascii=False)
-                 if not isinstance(result, str) else result,
-                 status, finished_at, call_id),
-            )
-            conn.commit()
+        self._mgr.execute_write(
+            """UPDATE tool_calls
+               SET result = ?, status = ?, finished_at = ?
+               WHERE id = ?""",
+            (
+                (
+                    json.dumps(result, ensure_ascii=False)
+                    if not isinstance(result, str)
+                    else result
+                ),
+                status,
+                finished_at,
+                call_id,
+            ),
+        )
 
     def get_tool_calls(self, session_id: str) -> list[dict[str, Any]]:
         """Fetch all tool calls for a session, oldest first."""
@@ -118,8 +128,10 @@ class ToolCallRepository(ChatDBBase):
             return [dict(r) for r in rows]
 
     def delete_after_rowid(
-        self, conn: sqlite3.Connection,
-        session_id: str, target_rowid: int,
+        self,
+        conn: sqlite3.Connection,
+        session_id: str,
+        target_rowid: int,
     ) -> int:
         """Delete tool_calls created after a given rowid.
 

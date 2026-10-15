@@ -26,11 +26,9 @@ from llmwikify.apps.chat.providers.abc import (
     RetryMode,
     ThinkingStyle,
 )
-from llmwikify.apps.chat.providers.base import BaseLLMProvider, LLMProvider
+from llmwikify.apps.chat.providers.base import LLMProvider
 from llmwikify.apps.chat.providers.minimax import MiniMaxProvider
 from llmwikify.apps.chat.providers.registry import (
-    PROVIDERS,
-    create_llm,
     get_provider,
     list_providers,
 )
@@ -78,9 +76,7 @@ class TestThinkingStyle:
             # No spaces / punctuation that would break config parsing
             assert " " not in style.value
             # Only ASCII letters, digits, underscore, hyphen allowed
-            assert all(
-                ch.isalnum() or ch in ("_", "-") for ch in style.value
-            )
+            assert all(ch.isalnum() or ch in ("_", "-") for ch in style.value)
 
     @pytest.mark.parametrize(
         "style,expected_keys",
@@ -133,13 +129,15 @@ class TestProviderConfig:
         assert cfg.extra == {}
 
     def test_from_dict_flat_shape(self) -> None:
-        cfg = ProviderConfig.from_dict({
-            "provider": "minimax",
-            "model": "minimax-M3",
-            "api_key": "sk-x",
-            "base_url": "https://api.minimaxi.com/v1",
-            "enabled": True,
-        })
+        cfg = ProviderConfig.from_dict(
+            {
+                "provider": "minimax",
+                "model": "minimax-M3",
+                "api_key": "sk-x",
+                "base_url": "https://api.minimaxi.com/v1",
+                "enabled": True,
+            }
+        )
         assert cfg.provider == "minimax"
         assert cfg.model == "minimax-M3"
         assert cfg.api_key == "sk-x"
@@ -148,52 +146,64 @@ class TestProviderConfig:
 
     def test_from_dict_wrapped_llm_shape(self) -> None:
         """``{"llm": {...}}`` shape (mirrors ``create_llm()``)."""
-        cfg = ProviderConfig.from_dict({
-            "llm": {"provider": "minimax", "model": "M3", "api_key": "sk-x"},
-        })
+        cfg = ProviderConfig.from_dict(
+            {
+                "llm": {"provider": "minimax", "model": "M3", "api_key": "sk-x"},
+            }
+        )
         assert cfg.provider == "minimax"
         assert cfg.model == "M3"
 
     def test_from_dict_enum_coercion(self) -> None:
-        cfg = ProviderConfig.from_dict({
-            "retry_mode": "persistent",
-            "thinking_style": "exhaustive",
-        })
+        cfg = ProviderConfig.from_dict(
+            {
+                "retry_mode": "persistent",
+                "thinking_style": "exhaustive",
+            }
+        )
         assert cfg.retry_mode is RetryMode.PERSISTENT
         assert cfg.thinking_style is ThinkingStyle.EXHAUSTIVE
 
     def test_from_dict_bad_enum_falls_back_to_default(self) -> None:
-        cfg = ProviderConfig.from_dict({
-            "retry_mode": "BOGUS_VALUE",
-            "thinking_style": "also_bogus",
-        })
+        cfg = ProviderConfig.from_dict(
+            {
+                "retry_mode": "BOGUS_VALUE",
+                "thinking_style": "also_bogus",
+            }
+        )
         assert cfg.retry_mode is RetryMode.TRANSIENT  # default
         assert cfg.thinking_style is ThinkingStyle.MINIMAL  # default
 
     def test_from_dict_numeric_coercion(self) -> None:
-        cfg = ProviderConfig.from_dict({
-            "max_tokens": 4096,
-            "temperature": 0.7,
-        })
+        cfg = ProviderConfig.from_dict(
+            {
+                "max_tokens": 4096,
+                "temperature": 0.7,
+            }
+        )
         assert cfg.max_tokens == 4096
         assert cfg.temperature == 0.7
 
     def test_from_dict_numeric_coercion_failure_drops(self) -> None:
         """Bad numeric values silently dropped (don't crash config load)."""
-        cfg = ProviderConfig.from_dict({
-            "max_tokens": "not_a_number",
-            "temperature": [1, 2, 3],
-        })
+        cfg = ProviderConfig.from_dict(
+            {
+                "max_tokens": "not_a_number",
+                "temperature": [1, 2, 3],
+            }
+        )
         assert cfg.max_tokens is None
         assert cfg.temperature is None
 
     def test_from_dict_extra_fields_go_to_extra(self) -> None:
         """Unknown keys survive round-trip via ``extra`` dict."""
-        cfg = ProviderConfig.from_dict({
-            "provider": "minimax",
-            "top_p": 0.9,
-            "frequency_penalty": 0.5,
-        })
+        cfg = ProviderConfig.from_dict(
+            {
+                "provider": "minimax",
+                "top_p": 0.9,
+                "frequency_penalty": 0.5,
+            }
+        )
         assert cfg.extra == {"top_p": 0.9, "frequency_penalty": 0.5}
 
     def test_from_dict_empty_inputs(self) -> None:
@@ -255,7 +265,9 @@ class TestProviderConfig:
 
         # Enabled + api_key
         cfg = ProviderConfig(
-            provider="minimax", enabled=True, api_key="sk-x",
+            provider="minimax",
+            enabled=True,
+            api_key="sk-x",
         )
         assert cfg.is_configured() is True
 
@@ -333,6 +345,7 @@ class TestLLMProviderABC:
 
     def test_apply_snapshot_default_is_noop(self) -> None:
         """Default apply_snapshot returns None (does nothing)."""
+
         class P(LLMProviderABC):
             def provider_name(self) -> str:
                 return "p"
@@ -642,11 +655,13 @@ class TestEndToEndABCProvider:
         assert ThinkingStyle.EXHAUSTIVE not in p.supported_thinking_styles()
 
         # from_config with dict
-        client = p.from_config({
-            "model": "smart",
-            "retry_mode": "persistent",
-            "thinking_style": "detailed",
-        })
+        client = p.from_config(
+            {
+                "model": "smart",
+                "retry_mode": "persistent",
+                "thinking_style": "detailed",
+            }
+        )
         assert client == "client(model=smart)"
         assert p.default_model() == "smart"
 
@@ -660,5 +675,7 @@ class TestEndToEndABCProvider:
         assert p.default_model() == "smart"
 
         # thinking_style_prompt override
-        assert p.thinking_style_prompt(ThinkingStyle.STEP_BY_STEP) == "Think step by step."
+        assert (
+            p.thinking_style_prompt(ThinkingStyle.STEP_BY_STEP) == "Think step by step."
+        )
         assert p.thinking_style_prompt(ThinkingStyle.MINIMAL) == ""

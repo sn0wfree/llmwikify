@@ -64,7 +64,9 @@ class LLMClient:
             provider = provider or "openai"
             model = model or "gpt-4o"
         self.provider = provider
-        self.base_url = base_url.rstrip("/") if base_url else self._default_base_url(provider)
+        self.base_url = (
+            base_url.rstrip("/") if base_url else self._default_base_url(provider)
+        )
         self.api_key = api_key
         self.model = model
         self.request_timeout_seconds = request_timeout_seconds
@@ -124,7 +126,9 @@ class LLMClient:
         provider = os.environ.get("LLM_PROVIDER", llm_cfg.get("provider", "openai"))
 
         if not api_key:
-            raise ValueError("LLM API key not configured. Set api_key or LLM_API_KEY env var.")
+            raise ValueError(
+                "LLM API key not configured. Set api_key or LLM_API_KEY env var."
+            )
 
         return cls(
             provider=provider,
@@ -190,9 +194,15 @@ class LLMClient:
         try:
             import requests
         except ImportError:
-            raise ImportError("requests is required for LLM client: pip install requests")
+            raise ImportError(
+                "requests is required for LLM client: pip install requests"
+            ) from None
 
-        url = f"{self.base_url}/chat/completions" if self.base_url.endswith("/v1") else f"{self.base_url}/v1/chat/completions"
+        url = (
+            f"{self.base_url}/chat/completions"
+            if self.base_url.endswith("/v1")
+            else f"{self.base_url}/v1/chat/completions"
+        )
 
         headers = {
             "Content-Type": "application/json",
@@ -212,14 +222,16 @@ class LLMClient:
                 payload[key] = generation_params[key]
 
         try:
-            resp = requests.post(url, headers=headers, json=payload, timeout=self.request_timeout_seconds)
+            resp = requests.post(
+                url, headers=headers, json=payload, timeout=self.request_timeout_seconds
+            )
             resp.raise_for_status()
             data = resp.json()
             return data["choices"][0]["message"]["content"]
         except requests.exceptions.RequestException as e:
-            raise ConnectionError(f"LLM API request failed: {e}")
+            raise ConnectionError(f"LLM API request failed: {e}") from e
         except (KeyError, IndexError) as e:
-            raise ValueError(f"Unexpected LLM API response format: {e}")
+            raise ValueError(f"Unexpected LLM API response format: {e}") from e
 
     @check_token_budget(lambda self: self._budget_checker)
     def chat_json(
@@ -237,6 +249,10 @@ class LLMClient:
     @staticmethod
     def _parse_json_response(raw: str) -> Any:
         """Extract JSON from potentially markdown-wrapped response."""
+        # Strip <think> blocks (minimax thinking mode) — sometimes the LLM
+        # returns thinking text without a JSON code block after it.
+        raw = re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL).strip()
+
         # Try direct parse
         try:
             return json.loads(raw)

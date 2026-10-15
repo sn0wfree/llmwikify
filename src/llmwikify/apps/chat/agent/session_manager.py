@@ -18,6 +18,7 @@ Public API mirrors the previous ChatOrchestrator methods 1:1 so
 external callers (``chat_sse.py`` HTTP routes) do not need to
 change. ChatOrchestrator delegates to the manager.
 """
+
 from __future__ import annotations
 
 import asyncio

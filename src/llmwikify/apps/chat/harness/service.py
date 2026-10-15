@@ -28,9 +28,14 @@ class HarnessService:
     The ``config`` parameter is shared across all primitives.
     """
 
-    def __init__(self, config: Any = None, wiki: Any = None,
-                 session_manager: Any = None, llm: Any = None,
-                 report_llm: Any = None):
+    def __init__(
+        self,
+        config: Any = None,
+        wiki: Any = None,
+        session_manager: Any = None,
+        llm: Any = None,
+        report_llm: Any = None,
+    ):
         self.config = config
         self.wiki = wiki
         self.session_manager = session_manager
@@ -53,6 +58,7 @@ class HarnessService:
             from llmwikify.apps.chat.harness.quality_gate import (
                 QualityGate,
             )
+
             self._quality_gate = QualityGate(self.config)
         return self._quality_gate
 
@@ -62,6 +68,7 @@ class HarnessService:
             from llmwikify.apps.chat.harness.source_filter import (
                 SourceFilter,
             )
+
             self._source_filter = SourceFilter(self.config)
         return self._source_filter
 
@@ -71,6 +78,7 @@ class HarnessService:
             from llmwikify.apps.chat.harness.structure_validator import (
                 StructureValidator,
             )
+
             self._structure_validator = StructureValidator()
         return self._structure_validator
 
@@ -80,6 +88,7 @@ class HarnessService:
             from llmwikify.apps.chat.harness.review import (
                 ResearchReviewer,
             )
+
             self._research_reviewer = ResearchReviewer(
                 wiki=self.wiki,
                 llm_client=self.llm,
@@ -93,6 +102,7 @@ class HarnessService:
             from llmwikify.apps.chat.harness.review import (
                 ResearchRevisor,
             )
+
             self._research_revisor = ResearchRevisor(
                 wiki=self.wiki,
                 llm_client=self.report_llm or self.llm,
@@ -106,6 +116,7 @@ class HarnessService:
             from llmwikify.apps.chat.harness.source_analyzer import (
                 SourceAnalyzer,
             )
+
             self._source_analyzer = SourceAnalyzer(
                 wiki=self.wiki,
                 session_manager=self.session_manager,

@@ -1,44 +1,23 @@
-"""Research engine subpackage — v0.41 6-step framework, inlined.
+"""Research engine subpackage — thin wrapper (v0.40).
 
-In 2026-06-19, all 9 modules from
-``archive/llmwikify_v0_41_legacy/chat_legacy/`` were git-mv'd here
-so production code (clarifier, research_agent, harness/review) and
-test code could drop their archive imports and resolve cleanly.
+v0.40 collapsed the legacy split between ``apps.research`` and
+``apps.chat.research_engine`` into a single canonical package at
+``llmwikify.apps.research``. The actual implementations now live in:
 
-Modules:
-    actions        — 8 action functions + ActionContext
-    engine         — ResearchEngine (ReAct loop orchestrator)
-    gates          — ResearchGates (framework & quality compliance)
-    llm_step       — run_prompt (unified LLM call layer)
-    observer       — ResearchObserver (state refresh)
-    reasoner       — ResearchReasoner (ReAct Thought step)
-    report         — ReportGenerator
-    resume         — ResearchResumeLoader
-    routes         — legacy /api/autoresearch/* FastAPI router
+  - ``llmwikify.apps.research.engine`` (ResearchEngine)
+  - ``llmwikify.apps.research.gates`` (ResearchGates)
+  - ``llmwikify.apps.research.llm_step`` (LLMCallMetrics, run_prompt)
+  - ``llmwikify.apps.research.report`` (ReportGenerator)
+  - ``llmwikify.apps.research.routes`` (FastAPI router)
 
-Back-compat: ``llmwikify.apps.chat.__init__`` re-exports the public
-API (ResearchEngine, run_prompt, ReportGenerator, ResearchGates, ...)
-and registers submodules in sys.modules so legacy import paths like
-``llmwikify.apps.chat.engine`` still work.
+Back-compat: callers using the legacy paths continue to work via
+explicit submodule imports:
+
+    from llmwikify.apps.chat.research_engine.engine import ResearchEngine
+    from llmwikify.apps.chat.research_engine.gates import ResearchGates
+
+The ``apps.chat.__init__`` re-exports the public API directly from the
+canonical ``llmwikify.apps.research`` package.
 """
-from .actions import ActionContext
-from .engine import ResearchEngine
-from .gates import ResearchGates
-from .llm_step import LLMCallMetrics, run_prompt
-from .observer import ResearchObserver
-from .reasoner import VALID_ACTIONS, ResearchReasoner
-from .report import ReportGenerator
-from .resume import ResearchResumeLoader
 
-__all__ = [
-    "ActionContext",
-    "LLMCallMetrics",
-    "ReportGenerator",
-    "ResearchEngine",
-    "ResearchGates",
-    "ResearchObserver",
-    "ResearchReasoner",
-    "ResearchResumeLoader",
-    "VALID_ACTIONS",
-    "run_prompt",
-]
+__all__: list[str] = []

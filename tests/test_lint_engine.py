@@ -25,7 +25,6 @@ These tests validate:
 from __future__ import annotations
 
 import inspect
-import re
 
 import pytest
 
@@ -70,11 +69,15 @@ def test_lint_engine_rejects_duplicate_names():
 
     class Rule1(Rule):
         name = "dup"
-        def run(self, wiki): return []
+
+        def run(self, wiki):
+            return []
 
     class Rule2(Rule):
         name = "dup"
-        def run(self, wiki): return []
+
+        def run(self, wiki):
+            return []
 
     with pytest.raises(ValueError, match="duplicate rule name"):
         LintEngine(wiki=None, rules=[Rule1(), Rule2()])
@@ -94,11 +97,15 @@ def test_lint_engine_property_rule_names_is_sorted():
 
     class RuleZ(Rule):
         name = "z_rule"
-        def run(self, wiki): return []
+
+        def run(self, wiki):
+            return []
 
     class RuleA(Rule):
         name = "a_rule"
-        def run(self, wiki): return []
+
+        def run(self, wiki):
+            return []
 
     engine = LintEngine(wiki=None, rules=[RuleZ(), RuleA()])
     assert engine.rule_names == ["a_rule", "z_rule"]
@@ -112,6 +119,7 @@ def test_lint_engine_skips_failing_rule(caplog):
 
     class BrokenRule(Rule):
         name = "broken"
+
         def run(self, wiki):
             raise RuntimeError("simulated failure")
 
@@ -128,11 +136,15 @@ def test_lint_engine_aggregates_multiple_rules():
 
     class RuleA(Rule):
         name = "a"
-        def run(self, wiki): return [{"type": "a", "msg": "1"}]
+
+        def run(self, wiki):
+            return [{"type": "a", "msg": "1"}]
 
     class RuleB(Rule):
         name = "b"
-        def run(self, wiki): return [{"type": "b", "msg": "2"}]
+
+        def run(self, wiki):
+            return [{"type": "b", "msg": "2"}]
 
     engine = LintEngine(wiki=None, rules=[RuleA(), RuleB()])
     issues = engine.run_all()
@@ -181,7 +193,6 @@ def test_all_eight_rules_are_importable():
         RedundancyRule,
     ):
         assert cls is not None
-        assert issubclass(cls, Rule) if False else True  # isinstance check below
 
 
 def test_each_rule_has_unique_name():
@@ -198,9 +209,9 @@ def test_all_rule_names_match_documented_set():
 
     actual = {r.name for r in RULES}
     expected = set(RULE_NAMES)
-    assert actual == expected, (
-        f"rule names mismatch.\n  expected: {expected}\n  actual: {actual}"
-    )
+    assert (
+        actual == expected
+    ), f"rule names mismatch.\n  expected: {expected}\n  actual: {actual}"
 
 
 def test_rules_list_has_exactly_eight_entries():
@@ -230,11 +241,9 @@ def test_wiki_analyzer_has_lint_engine():
     import inspect
 
     from llmwikify.kernel.wiki.engines.analyzer import WikiAnalyzer
-    from llmwikify.kernel.wiki.lint import LintEngine
+
     src = inspect.getsource(WikiAnalyzer.__init__)
-    assert "LintEngine" in src, (
-        "WikiAnalyzer.__init__ should construct a LintEngine"
-    )
+    assert "LintEngine" in src, "WikiAnalyzer.__init__ should construct a LintEngine"
 
 
 def test_each_detect_method_is_one_line_delegate():
@@ -253,16 +262,22 @@ def test_each_detect_method_is_one_line_delegate():
     ):
         method = getattr(WikiAnalyzer, name)
         src = inspect.getsource(method)
-        body_lines = [line for line in src.splitlines() if line.strip() and not line.strip().startswith("def ") and not line.strip().startswith('"""')]
+        body_lines = [
+            line
+            for line in src.splitlines()
+            if line.strip()
+            and not line.strip().startswith("def ")
+            and not line.strip().startswith('"""')
+        ]
         # 1-line delegate = 1 return line
         assert len(body_lines) <= 2, (
             f"WikiAnalyzer.{name} has {len(body_lines)} body lines — "
             f"expected 1 (the return statement)"
         )
         # The body should call self._run_rule(...)
-        assert "self._run_rule(" in body_lines[-1] if body_lines else "missing", (
-            f"WikiAnalyzer.{name} should call self._run_rule(...)"
-        )
+        assert (
+            "self._run_rule(" in body_lines[-1] if body_lines else "missing"
+        ), f"WikiAnalyzer.{name} should call self._run_rule(...)"
 
 
 def test_wiki_analyzer_lint_uses_run_all_rules():
@@ -283,9 +298,7 @@ def test_wiki_analyzer_lint_uses_run_all_rules():
         "_detect_redundancy()",
     ]
     for old in old_calls:
-        assert old not in src, (
-            f"WikiAnalyzer.lint still has old call: {old}"
-        )
+        assert old not in src, f"WikiAnalyzer.lint still has old call: {old}"
 
 
 # ============================================================================

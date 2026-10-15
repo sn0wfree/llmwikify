@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import logging
-from pathlib import Path
 from typing import Any
 
 from llmwikify.apps.chat.session import ResearchSessionManager
@@ -16,12 +15,16 @@ logger = logging.getLogger(__name__)
 class SourceAnalyzer:
     """Analyzes gathered sources using Wiki.analyze_source()."""
 
-    def __init__(self, wiki: Any, session_manager: ResearchSessionManager, config: dict[str, Any]):
+    def __init__(
+        self, wiki: Any, session_manager: ResearchSessionManager, config: dict[str, Any]
+    ) -> None:
         self.wiki = wiki
         self.session_manager = session_manager
         self.config = config
 
-    async def analyze_sources(self, sources: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    async def analyze_sources(
+        self, sources: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
         """Analyze all sources in parallel. Returns SSE events."""
         max_parallel = self.config.get("max_parallel_gathering", 5)
         semaphore = asyncio.Semaphore(max_parallel)
@@ -77,11 +80,15 @@ class SourceAnalyzer:
 
         # Write to raw/ for wiki to analyze
         url_or_title = source.get("url") or source.get("title", "unknown")
-        content_hash = hashlib.md5(url_or_title.encode()).hexdigest()[:12]
+        content_hash = hashlib.md5(url_or_title.encode()).hexdigest()[
+            :12
+        ]  # noqa: S324 — short ID, not cryptographic
         raw_dir = self.wiki.root / "raw" / "research"
         raw_dir.mkdir(parents=True, exist_ok=True)
         raw_path = raw_dir / f"{content_hash}.txt"
-        raw_path.write_text(content[: self.config.get("max_source_content_length", 500000)])
+        raw_path.write_text(
+            content[: self.config.get("max_source_content_length", 500000)]
+        )
 
         rel_path = f"raw/research/{content_hash}.txt"
         try:

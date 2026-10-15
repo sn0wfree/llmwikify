@@ -1,16 +1,25 @@
 """Tests for ToolCallRepository (tool_calls table)."""
+
 from __future__ import annotations
 
 from pathlib import Path
 
 import pytest
 
-from llmwikify.apps.chat.db import ToolCallRepository
+from llmwikify.apps.chat.db import ChatSessionRepository, ToolCallRepository
 
 
 @pytest.fixture
 def repo(tmp_path: Path) -> ToolCallRepository:
-    r = ToolCallRepository(tmp_path / "test.db")
+    db_path = tmp_path / "test.db"
+    session_repo = ChatSessionRepository(db_path)
+    session_repo._init_schema()
+    for sid in ("s1", "s2"):
+        session_repo._mgr.execute_write(
+            "INSERT INTO chat_sessions (id, wiki_id) VALUES (?, ?)",
+            (sid, "wiki-1"),
+        )
+    r = ToolCallRepository(db_path)
     r._init_schema()
     return r
 
@@ -22,7 +31,8 @@ class TestLog:
         assert len(call_id) == 32
 
     def test_inserts_with_status_pending(
-        self, repo: ToolCallRepository,
+        self,
+        repo: ToolCallRepository,
     ) -> None:
         call_id = repo.log_tool_call("s1", "echo", {"x": 1})
         calls = repo.get_tool_calls("s1")
@@ -32,24 +42,31 @@ class TestLog:
         assert calls[0]["status"] == "pending"
 
     def test_serializes_arguments_as_json(
-        self, repo: ToolCallRepository,
+        self,
+        repo: ToolCallRepository,
     ) -> None:
         repo.log_tool_call("s1", "echo", {"x": 1, "y": [1, 2]})
         import json
+
         calls = repo.get_tool_calls("s1")
         assert json.loads(calls[0]["arguments"]) == {"x": 1, "y": [1, 2]}
 
     def test_handles_unicode_arguments(
-        self, repo: ToolCallRepository,
+        self,
+        repo: ToolCallRepository,
     ) -> None:
         repo.log_tool_call("s1", "echo", {"text": "中文"})
         calls = repo.get_tool_calls("s1")
         import json
+
         assert json.loads(calls[0]["arguments"]) == {"text": "中文"}
 
     def test_stores_started_at(self, repo: ToolCallRepository) -> None:
         repo.log_tool_call(
-            "s1", "echo", {}, started_at="2026-01-01 00:00:00",
+            "s1",
+            "echo",
+            {},
+            started_at="2026-01-01 00:00:00",
         )
         calls = repo.get_tool_calls("s1")
         assert calls[0]["started_at"] == "2026-01-01 00:00:00"
@@ -66,6 +83,7 @@ class TestUpdate:
         repo.update_tool_call(call_id, {"output": "ok"}, "success")
         calls = repo.get_tool_calls("s1")
         import json
+
         assert json.loads(calls[0]["result"]) == {"output": "ok"}
         assert calls[0]["status"] == "success"
 
@@ -78,7 +96,9 @@ class TestUpdate:
     def test_stores_finished_at(self, repo: ToolCallRepository) -> None:
         call_id = repo.log_tool_call("s1", "echo", {})
         repo.update_tool_call(
-            call_id, "ok", "success",
+            call_id,
+            "ok",
+            "success",
             finished_at="2026-01-01 00:01:00",
         )
         calls = repo.get_tool_calls("s1")
@@ -87,7 +107,8 @@ class TestUpdate:
 
 class TestGet:
     def test_empty_returns_empty_list(
-        self, repo: ToolCallRepository,
+        self,
+        repo: ToolCallRepository,
     ) -> None:
         assert repo.get_tool_calls("s1") == []
 
@@ -106,16 +127,19 @@ class TestDeleteAfterRowid:
     """Cross-repo callback for ChatMessageRepository.revert_to_message."""
 
     def test_deletes_calls_with_higher_rowid(
-        self, repo: ToolCallRepository,
+        self,
+        repo: ToolCallRepository,
     ) -> None:
         a = repo.log_tool_call("s1", "a", {})
         repo.log_tool_call("s1", "b", {})
         repo.log_tool_call("s1", "c", {})
         # Get rowid of 'a' (the cut point)
         import sqlite3
+
         with sqlite3.connect(repo.db_path) as conn:
             target_rowid = conn.execute(
-                "SELECT rowid FROM tool_calls WHERE id = ?", (a,),
+                "SELECT rowid FROM tool_calls WHERE id = ?",
+                (a,),
             ).fetchone()[0]
             n = repo.delete_after_rowid(conn, "s1", target_rowid)
         # 'b' and 'c' are deleted (2 rows)
@@ -126,10 +150,12 @@ class TestDeleteAfterRowid:
         assert remaining[0]["id"] == a
 
     def test_no_matches_returns_zero(
-        self, repo: ToolCallRepository,
+        self,
+        repo: ToolCallRepository,
     ) -> None:
         repo.log_tool_call("s1", "a", {})
         import sqlite3
+
         with sqlite3.connect(repo.db_path) as conn:
             n = repo.delete_after_rowid(conn, "s1", 9999)
         assert n == 0

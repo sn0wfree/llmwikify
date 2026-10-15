@@ -25,7 +25,6 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from llmwikify.apps.chat.agent.spec import ChatRunResult
 from llmwikify.apps.chat.agent.subagent_manager import (
     SubagentManager,
     SubagentResult,
@@ -63,6 +62,7 @@ class _StubParentRunner:
         from llmwikify.apps.chat.agent.execution_context import (
             AgentExecutionContext,
         )
+
         self._chat_service = MagicMock()
         self._tool_executor = MagicMock()
         self._prompt_builder = MagicMock()
@@ -177,10 +177,9 @@ async def test_child_runner_uses_noop_hook_no_memory_manager(monkeypatch) -> Non
     mgr = _make_manager()
     captured: dict[str, Any] = {}
 
-    real_init = (
-        "llmwikify.apps.chat.agent.runner_v2.ChatRunnerV2.__init__"
-    )
+    real_init = "llmwikify.apps.chat.agent.runner_v2.ChatRunnerV2.__init__"
     from llmwikify.apps.chat.agent.runner_v2 import ChatRunnerV2
+
     orig_init = ChatRunnerV2.__init__
 
     def _capturing_init(self, *args, **kwargs):
@@ -206,6 +205,7 @@ async def test_child_runner_uses_noop_hook_no_memory_manager(monkeypatch) -> Non
     # Phase 16+: manager constructs a fresh ctx; verify its
     # hook/memory_manager overrides.
     from llmwikify.foundation.callback import NoOpHook
+
     assert "ctx" in captured
     child_ctx = captured["ctx"]
     assert isinstance(child_ctx.hook, NoOpHook)

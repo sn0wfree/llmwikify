@@ -7,6 +7,8 @@ Design principle: "LLM does grunt work, human makes decisions"
 """
 
 import logging
+import sqlite3
+from typing import Any
 
 from llmwikify.kernel.storage.backend import is_path_excluded
 
@@ -24,7 +26,7 @@ class GraphAnalyzer:
         # Returns: centrality, communities, suggestions, stats
     """
 
-    def __init__(self, wiki):
+    def __init__(self, wiki) -> None:
         self.wiki = wiki
 
     def analyze(self) -> dict:
@@ -37,6 +39,20 @@ class GraphAnalyzer:
             - suggestions: Suggested pages to create
             - stats: Graph statistics
         """
+        # Distinguish "no data" from "missing dependency" (networkx is in
+        # the [graph] extra which the slim image omits). Without this,
+        # users see a misleading "no pages" message when their KB has
+        # hundreds of pages but networkx isn't installed.
+        try:
+            import networkx as nx  # noqa: F401  (used by _build_graph etc.)
+        except ImportError:
+            return {
+                "status": "missing_dependency",
+                "missing": ["networkx"],
+                "fix": "pip install 'llmwikify[graph]'  # or rebuild the image with LLMWIKIFY_EXTRAS including 'graph'",
+                "message": "wiki_graph_analyze requires the [graph] extra (networkx). The wiki_graph visualization works; only the analysis (PageRank / community detection) needs networkx.",
+            }
+
         graph_data = self._get_graph_data()
         G = self._build_graph(graph_data)
 
@@ -66,14 +82,17 @@ class GraphAnalyzer:
                 include_wikilinks=True,
                 include_relations=True,
             )
+        except (sqlite3.OperationalError, KeyError, TypeError) as e:
+            logger.warning("Graph build failed with data error: %s", e)
+            return {"nodes": [], "edges": []}
         except Exception as e:
-            logger.warning("Graph build failed: %s", e)
+            logger.exception("Graph build failed with unexpected error: %s", e)
             return {"nodes": [], "edges": []}
 
-    def _build_graph(self, graph_data: dict):
+    def _build_graph(self, graph_data: dict) -> Any:
         """Build NetworkX graph from graph data."""
         try:
-            import networkx as nx
+            import networkx as nx  # noqa: F401  (used by _build_networkx / G.degree)
         except ImportError:
             return None
 
@@ -97,7 +116,7 @@ class GraphAnalyzer:
             - authorities: Nodes with high in-degree (connected by many)
         """
         try:
-            import networkx as nx
+            import networkx as nx  # noqa: F401  (used by _build_networkx / G.degree)
         except ImportError:
             return {"error": "networkx is required for centrality analysis"}
 
@@ -124,16 +143,11 @@ class GraphAnalyzer:
 
         return {
             "pagerank": [
-                {"node": node, "score": round(score, 4)}
-                for node, score in top_pagerank
+                {"node": node, "score": round(score, 4)} for node, score in top_pagerank
             ],
-            "hubs": [
-                {"node": node, "out_degree": degree}
-                for node, degree in top_hubs
-            ],
+            "hubs": [{"node": node, "out_degree": degree} for node, degree in top_hubs],
             "authorities": [
-                {"node": node, "in_degree": degree}
-                for node, degree in top_authorities
+                {"node": node, "in_degree": degree} for node, degree in top_authorities
             ],
         }
 
@@ -190,7 +204,7 @@ class GraphAnalyzer:
         # Count directory prefixes
         prefix_counts = {}
         for member in members:
-            prefix = member.split('/')[0] if '/' in member else 'root'
+            prefix = member.split("/")[0] if "/" in member else "root"
             prefix_counts[prefix] = prefix_counts.get(prefix, 0) + 1
 
         if prefix_counts:
@@ -199,7 +213,7 @@ class GraphAnalyzer:
                 return f"{dominant_prefix.title()} Community"
 
         # Use first few members as label
-        short_names = [m.split('/')[-1] for m in members[:3]]
+        short_names = [m.split("/")[-1] for m in members[:3]]
         if len(members) > 3:
             return f"{short_names[0]} + {len(members)-1} more"
         return ", ".join(short_names)
@@ -211,7 +225,7 @@ class GraphAnalyzer:
             List of bridge nodes with their community connections.
         """
         try:
-            import networkx as nx
+            import networkx as nx  # noqa: F401  (used by _build_networkx / G.degree)
         except ImportError:
             return []
 
@@ -236,11 +250,13 @@ class GraphAnalyzer:
                 logger.warning("Neighbor iteration failed for node %s: %s", node, e)
 
             if len(neighbor_communities) > 1:
-                bridges.append({
-                    "node": node,
-                    "communities_connected": len(neighbor_communities),
-                    "observation": f"Connects {len(neighbor_communities)} communities",
-                })
+                bridges.append(
+                    {
+                        "node": node,
+                        "communities_connected": len(neighbor_communities),
+                        "observation": f"Connects {len(neighbor_communities)} communities",
+                    }
+                )
 
         # Sort by number of communities connected
         bridges.sort(key=lambda x: -x["communities_connected"])
@@ -273,7 +289,7 @@ class GraphAnalyzer:
         suggestions = []
 
         try:
-            import networkx as nx
+            import networkx as nx  # noqa: F401  (used by _build_networkx / G.degree)
         except ImportError:
             return suggestions
 
@@ -284,14 +300,16 @@ class GraphAnalyzer:
             # Check if wiki page exists
             node_type = G.nodes[node].get("source_type", "unknown")
             if node_type == "concept" and not self._page_exists(node):
-                suggestions.append({
-                    "type": "create_page",
-                    "node": node,
-                    "degree": degree,
-                    "priority": "high" if degree >= 3 else "medium",
-                    "observation": f"'{node}' has {degree} connections but no wiki page",
-                    "suggestion": f"Create a page for '{node}' to document this concept",
-                })
+                suggestions.append(
+                    {
+                        "type": "create_page",
+                        "node": node,
+                        "degree": degree,
+                        "priority": "high" if degree >= 3 else "medium",
+                        "observation": f"'{node}' has {degree} connections but no wiki page",
+                        "suggestion": f"Create a page for '{node}' to document this concept",
+                    }
+                )
 
         # Sort by degree descending
         suggestions.sort(key=lambda x: -x["degree"])
@@ -305,13 +323,15 @@ class GraphAnalyzer:
             engine = self.wiki.get_relation_engine()
             orphans = engine.find_orphan_concepts()
             for concept in orphans[:5]:
-                suggestions.append({
-                    "type": "create_orphan_page",
-                    "concept": concept,
-                    "priority": "medium",
-                    "observation": f"'{concept}' is in the knowledge graph but has no wiki page",
-                    "suggestion": f"Consider creating entities/{concept}.md or concepts/{concept}.md",
-                })
+                suggestions.append(
+                    {
+                        "type": "create_orphan_page",
+                        "concept": concept,
+                        "priority": "medium",
+                        "observation": f"'{concept}' is in the knowledge graph but has no wiki page",
+                        "suggestion": f"Consider creating entities/{concept}.md or concepts/{concept}.md",
+                    }
+                )
         except Exception as e:
             logger.warning("Orphan concept lookup failed: %s", e)
 
@@ -326,13 +346,15 @@ class GraphAnalyzer:
             if degree == 0:
                 node_type = G.nodes[node].get("source_type", "unknown")
                 if node_type == "wiki_page":
-                    suggestions.append({
-                        "type": "add_wikilinks",
-                        "node": node,
-                        "priority": "low",
-                        "observation": f"'{node}' has no links to other pages",
-                        "suggestion": "Add wikilinks to connect this page to related concepts",
-                    })
+                    suggestions.append(
+                        {
+                            "type": "add_wikilinks",
+                            "node": node,
+                            "priority": "low",
+                            "observation": f"'{node}' has no links to other pages",
+                            "suggestion": "Add wikilinks to connect this page to related concepts",
+                        }
+                    )
 
         return suggestions[:5]
 
@@ -353,7 +375,7 @@ class GraphAnalyzer:
     def _compute_stats(self, G) -> dict:
         """Compute graph statistics."""
         try:
-            import networkx as nx
+            import networkx as nx  # noqa: F401  (used by _build_networkx / G.degree)
         except ImportError:
             return {"error": "networkx required"}
 
@@ -361,8 +383,12 @@ class GraphAnalyzer:
             "nodes": G.number_of_nodes(),
             "edges": G.number_of_edges(),
             "density": round(nx.density(G), 4) if G.number_of_nodes() > 0 else 0,
-            "avg_degree": round(sum(dict(G.degree()).values()) / max(G.number_of_nodes(), 1), 2),
-            "is_connected": nx.is_weakly_connected(G) if G.number_of_nodes() > 0 else False,
+            "avg_degree": round(
+                sum(dict(G.degree()).values()) / max(G.number_of_nodes(), 1), 2
+            ),
+            "is_connected": (
+                nx.is_weakly_connected(G) if G.number_of_nodes() > 0 else False
+            ),
         }
 
     def get_suggested_pages_report(self) -> str:
@@ -388,29 +414,35 @@ class GraphAnalyzer:
         for item in analysis["centrality"].get("pagerank", [])[:5]:
             lines.append(f"- **{item['node']}** (score: {item['score']})")
 
-        lines.extend([
-            "",
-            "## Communities",
-            "",
-        ])
+        lines.extend(
+            [
+                "",
+                "## Communities",
+                "",
+            ]
+        )
 
         for _cid, comm in analysis["communities"].get("communities", {}).items():
             lines.append(f"- **{comm['label']}**: {comm['size']} nodes")
 
-        lines.extend([
-            "",
-            "## Bridge Nodes",
-            "",
-        ])
+        lines.extend(
+            [
+                "",
+                "## Bridge Nodes",
+                "",
+            ]
+        )
 
         for bridge in analysis["communities"].get("bridges", [])[:5]:
             lines.append(f"- **{bridge['node']}**: {bridge['observation']}")
 
-        lines.extend([
-            "",
-            "## Suggested Pages",
-            "",
-        ])
+        lines.extend(
+            [
+                "",
+                "## Suggested Pages",
+                "",
+            ]
+        )
 
         for sugg in analysis["suggestions"]:
             lines.append(f"- [{sugg['priority'].upper()}] {sugg['observation']}")

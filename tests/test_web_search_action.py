@@ -23,13 +23,11 @@ import pytest
 from llmwikify.apps.chat.skills import (
     SkillContext,
     SkillRegistry,
-    SkillResult,
     SkillRuntime,
 )
 from llmwikify.apps.chat.skills.actions import (
     ALL_ACTIONS,
     register_all_actions,
-    unregister_all_actions,
     web_search_skill,
 )
 from llmwikify.apps.research.web_search import SearchResult
@@ -96,9 +94,7 @@ class TestSkillInventory:
         assert fresh_registry.has("web_search")
         # Three qualified actions should be exposed
         qualified = [
-            f"{s.name}.{a.name}"
-            for s in fresh_registry
-            for a in s.actions.values()
+            f"{s.name}.{a.name}" for s in fresh_registry for a in s.actions.values()
         ]
         assert "web_search.search_web" in qualified
         assert "web_search.search_youtube" in qualified
@@ -111,7 +107,9 @@ class TestSkillInventory:
 class TestInputValidation:
     @pytest.mark.asyncio
     async def test_search_web_missing_query(
-        self, runtime: SkillRuntime, ctx: SkillContext,
+        self,
+        runtime: SkillRuntime,
+        ctx: SkillContext,
     ) -> None:
         r = await runtime.execute("web_search", "search_web", {}, ctx)
         assert r.status == "error"
@@ -119,32 +117,45 @@ class TestInputValidation:
 
     @pytest.mark.asyncio
     async def test_search_web_empty_query(
-        self, runtime: SkillRuntime, ctx: SkillContext,
+        self,
+        runtime: SkillRuntime,
+        ctx: SkillContext,
     ) -> None:
         r = await runtime.execute(
-            "web_search", "search_web", {"query": "   "}, ctx,
+            "web_search",
+            "search_web",
+            {"query": "   "},
+            ctx,
         )
         assert r.status == "error"
         assert "query" in r.error.lower()
 
     @pytest.mark.asyncio
     async def test_search_web_num_results_too_small(
-        self, runtime: SkillRuntime, ctx: SkillContext,
+        self,
+        runtime: SkillRuntime,
+        ctx: SkillContext,
     ) -> None:
         r = await runtime.execute(
-            "web_search", "search_web",
-            {"query": "x", "num_results": 0}, ctx,
+            "web_search",
+            "search_web",
+            {"query": "x", "num_results": 0},
+            ctx,
         )
         assert r.status == "error"
         assert "num_results" in r.error
 
     @pytest.mark.asyncio
     async def test_search_web_num_results_too_large(
-        self, runtime: SkillRuntime, ctx: SkillContext,
+        self,
+        runtime: SkillRuntime,
+        ctx: SkillContext,
     ) -> None:
         r = await runtime.execute(
-            "web_search", "search_web",
-            {"query": "x", "num_results": 100}, ctx,
+            "web_search",
+            "search_web",
+            {"query": "x", "num_results": 100},
+            ctx,
         )
         assert r.status == "error"
         assert "num_results" in r.error
@@ -156,18 +167,20 @@ class TestInputValidation:
 class TestHappyPath:
     @pytest.mark.asyncio
     async def test_search_web_returns_results(
-        self, runtime: SkillRuntime, ctx: SkillContext,
+        self,
+        runtime: SkillRuntime,
+        ctx: SkillContext,
     ) -> None:
-        with patch(
-            "llmwikify.apps.research.web_search.WebSearch"
-        ) as MockSearch:
+        with patch("llmwikify.apps.research.web_search.WebSearch") as MockSearch:
             instance = MagicMock()
             instance.search = AsyncMock(return_value=_mock_search_results())
             MockSearch.return_value = instance
 
             r = await runtime.execute(
-                "web_search", "search_web",
-                {"query": "python"}, ctx,
+                "web_search",
+                "search_web",
+                {"query": "python"},
+                ctx,
             )
 
         assert r.status == "ok"
@@ -182,74 +195,82 @@ class TestHappyPath:
 
     @pytest.mark.asyncio
     async def test_search_youtube_routes_with_site_prefix(
-        self, runtime: SkillRuntime, ctx: SkillContext,
+        self,
+        runtime: SkillRuntime,
+        ctx: SkillContext,
     ) -> None:
-        with patch(
-            "llmwikify.apps.research.web_search.WebSearch"
-        ) as MockSearch:
+        with patch("llmwikify.apps.research.web_search.WebSearch") as MockSearch:
             instance = MagicMock()
-            instance.search = AsyncMock(return_value=[
-                SearchResult("YT Video", "https://youtube.com/watch?v=1", "..."),
-            ])
+            instance.search = AsyncMock(
+                return_value=[
+                    SearchResult("YT Video", "https://youtube.com/watch?v=1", "..."),
+                ]
+            )
             MockSearch.return_value = instance
 
             r = await runtime.execute(
-                "web_search", "search_youtube",
-                {"query": "machine learning"}, ctx,
+                "web_search",
+                "search_youtube",
+                {"query": "machine learning"},
+                ctx,
             )
 
         assert r.status == "ok"
         # Verify the call included the site: prefix
         call_args = instance.search.call_args
         assert "site:youtube.com" in call_args.kwargs.get(
-            "query", call_args.args[0] if call_args.args else "",
-        ) or "site:youtube.com" in (
-            call_args.args[0] if call_args.args else ""
-        )
+            "query",
+            call_args.args[0] if call_args.args else "",
+        ) or "site:youtube.com" in (call_args.args[0] if call_args.args else "")
         assert r.data["source_prefix"] == "youtube"
 
     @pytest.mark.asyncio
     async def test_search_news_routes_with_news_prefix(
-        self, runtime: SkillRuntime, ctx: SkillContext,
+        self,
+        runtime: SkillRuntime,
+        ctx: SkillContext,
     ) -> None:
-        with patch(
-            "llmwikify.apps.research.web_search.WebSearch"
-        ) as MockSearch:
+        with patch("llmwikify.apps.research.web_search.WebSearch") as MockSearch:
             instance = MagicMock()
-            instance.search = AsyncMock(return_value=[
-                SearchResult("News", "https://news.example.com/1", "..."),
-            ])
+            instance.search = AsyncMock(
+                return_value=[
+                    SearchResult("News", "https://news.example.com/1", "..."),
+                ]
+            )
             MockSearch.return_value = instance
 
             r = await runtime.execute(
-                "web_search", "search_news",
-                {"query": "AI breakthrough"}, ctx,
+                "web_search",
+                "search_news",
+                {"query": "AI breakthrough"},
+                ctx,
             )
 
         assert r.status == "ok"
         # Verify site:news.google.com prefix
         call_args = instance.search.call_args
         query_used = (
-            call_args.args[0] if call_args.args
-            else call_args.kwargs.get("query", "")
+            call_args.args[0] if call_args.args else call_args.kwargs.get("query", "")
         )
         assert "site:news.google.com" in query_used
         assert r.data["source_prefix"] == "news"
 
     @pytest.mark.asyncio
     async def test_search_web_empty_results(
-        self, runtime: SkillRuntime, ctx: SkillContext,
+        self,
+        runtime: SkillRuntime,
+        ctx: SkillContext,
     ) -> None:
-        with patch(
-            "llmwikify.apps.research.web_search.WebSearch"
-        ) as MockSearch:
+        with patch("llmwikify.apps.research.web_search.WebSearch") as MockSearch:
             instance = MagicMock()
             instance.search = AsyncMock(return_value=[])
             MockSearch.return_value = instance
 
             r = await runtime.execute(
-                "web_search", "search_web",
-                {"query": "obscure"}, ctx,
+                "web_search",
+                "search_web",
+                {"query": "obscure"},
+                ctx,
             )
 
         assert r.status == "ok"
@@ -263,11 +284,11 @@ class TestHappyPath:
 class TestErrorPath:
     @pytest.mark.asyncio
     async def test_search_web_provider_exception(
-        self, runtime: SkillRuntime, ctx: SkillContext,
+        self,
+        runtime: SkillRuntime,
+        ctx: SkillContext,
     ) -> None:
-        with patch(
-            "llmwikify.apps.research.web_search.WebSearch"
-        ) as MockSearch:
+        with patch("llmwikify.apps.research.web_search.WebSearch") as MockSearch:
             instance = MagicMock()
             instance.search = AsyncMock(
                 side_effect=RuntimeError("all providers failed"),
@@ -275,8 +296,10 @@ class TestErrorPath:
             MockSearch.return_value = instance
 
             r = await runtime.execute(
-                "web_search", "search_web",
-                {"query": "x"}, ctx,
+                "web_search",
+                "search_web",
+                {"query": "x"},
+                ctx,
             )
 
         assert r.status == "error"

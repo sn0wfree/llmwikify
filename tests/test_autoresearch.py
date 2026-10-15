@@ -12,9 +12,7 @@ Covers:
 import asyncio
 import json
 import sqlite3
-import tempfile
-from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -70,13 +68,15 @@ def mock_wiki(tmp_path):
 def mock_llm():
     llm = MagicMock()
     # Default JSON response for clarify calls
-    llm.chat.return_value = json.dumps({
-        "context": "test context",
-        "boundaries": "test boundaries",
-        "position": "researcher view",
-        "premises": ["premise 1", "premise 2"],
-        "scope_check": True,
-    })
+    llm.chat.return_value = json.dumps(
+        {
+            "context": "test context",
+            "boundaries": "test boundaries",
+            "position": "researcher view",
+            "premises": ["premise 1", "premise 2"],
+            "scope_check": True,
+        }
+    )
     return llm
 
 
@@ -134,6 +134,7 @@ class TestDBMigrations:
         # (auto-migrated from autoresearch.db in v0.33.0).
         # init_autoresearch_db writes to the canonical path.
         from llmwikify.apps.db_base import get_app_db_path
+
         db_path = get_app_db_path(tmp_path)
         init_autoresearch_db(db_path)
         with sqlite3.connect(db_path) as conn:
@@ -149,6 +150,7 @@ class TestDBMigrations:
 
     def test_init_is_idempotent(self, tmp_path):
         from llmwikify.apps.db_base import get_app_db_path
+
         db_path = get_app_db_path(tmp_path)
         init_autoresearch_db(db_path)
         init_autoresearch_db(db_path)  # second call must not raise
@@ -160,20 +162,20 @@ class TestDBMigrations:
     def test_migrate_drops_legacy_columns(self, tmp_path):
         old_db = tmp_path / ".llmwiki_agent.db"
         with sqlite3.connect(old_db) as conn:
-            conn.execute(
-                """CREATE TABLE research_sessions (
+            conn.execute("""CREATE TABLE research_sessions (
                     id TEXT PRIMARY KEY,
                     wiki_id TEXT, query TEXT,
                     clarification_json TEXT, reasoning_json TEXT, structure_json TEXT
-                )"""
-            )
+                )""")
             conn.commit()
         n = migrate_research_six_step_columns(old_db, drop_columns=True)
         assert n == 3
         with sqlite3.connect(old_db) as conn:
             cols = {
                 row[1]
-                for row in conn.execute("PRAGMA table_info(research_sessions)").fetchall()
+                for row in conn.execute(
+                    "PRAGMA table_info(research_sessions)"
+                ).fetchall()
             }
         for col, _ in LEGACY_SHARED_COLUMNS:
             assert col not in cols
@@ -181,12 +183,10 @@ class TestDBMigrations:
     def test_migrate_dry_run(self, tmp_path):
         old_db = tmp_path / ".llmwiki_agent.db"
         with sqlite3.connect(old_db) as conn:
-            conn.execute(
-                """CREATE TABLE research_sessions (
+            conn.execute("""CREATE TABLE research_sessions (
                     id TEXT PRIMARY KEY,
                     clarification_json TEXT, reasoning_json TEXT
-                )"""
-            )
+                )""")
             conn.commit()
         n = migrate_research_six_step_columns(old_db, drop_columns=False)
         assert n == 2
@@ -194,7 +194,9 @@ class TestDBMigrations:
         with sqlite3.connect(old_db) as conn:
             cols = {
                 row[1]
-                for row in conn.execute("PRAGMA table_info(research_sessions)").fetchall()
+                for row in conn.execute(
+                    "PRAGMA table_info(research_sessions)"
+                ).fetchall()
             }
         assert "clarification_json" in cols
 
@@ -217,8 +219,7 @@ class TestDBMigrations:
         # Simulate a DB created before events_json column was introduced
         old_path = tmp_path / "old_ar.db"
         with sqlite3.connect(old_path) as conn:
-            conn.execute(
-                """CREATE TABLE autoresearch_sessions (
+            conn.execute("""CREATE TABLE autoresearch_sessions (
                     id TEXT PRIMARY KEY, wiki_id TEXT NOT NULL, query TEXT NOT NULL,
                     status TEXT NOT NULL DEFAULT 'clarifying', current_step TEXT,
                     progress REAL DEFAULT 0.0, result TEXT, wiki_page_name TEXT,
@@ -229,15 +230,16 @@ class TestDBMigrations:
                     self_loop_history_json TEXT, evidence_scores_json TEXT,
                     created_at TEXT DEFAULT (datetime('now')),
                     updated_at TEXT DEFAULT (datetime('now'))
-                )"""
-            )
+                )""")
             conn.commit()
         added = migrate_v3_add_events_column(old_path)
         assert added is True
         with sqlite3.connect(old_path) as conn:
             cols = {
                 row[1]
-                for row in conn.execute("PRAGMA table_info(autoresearch_sessions)").fetchall()
+                for row in conn.execute(
+                    "PRAGMA table_info(autoresearch_sessions)"
+                ).fetchall()
             }
         assert "events_json" in cols
 
@@ -270,10 +272,13 @@ class TestEventLogPersistence:
 
     def test_append_events_returns_count(self, db):
         sid = db.create_research_session("w", "q")
-        n = db.append_events(sid, [
-            {"type": "step", "message": "m1", "timestamp": "2026-06-05T10:00:00Z"},
-            {"type": "step", "message": "m2", "timestamp": "2026-06-05T10:00:01Z"},
-        ])
+        n = db.append_events(
+            sid,
+            [
+                {"type": "step", "message": "m1", "timestamp": "2026-06-05T10:00:00Z"},
+                {"type": "step", "message": "m2", "timestamp": "2026-06-05T10:00:01Z"},
+            ],
+        )
         assert n == 2
 
     def test_append_events_accumulates(self, db):
@@ -303,6 +308,7 @@ class TestEventLogPersistence:
         sid = db.create_research_session("w", "q")
         # Inject malformed JSON directly
         import sqlite3
+
         with sqlite3.connect(db.db_path) as conn:
             conn.execute(
                 "UPDATE autoresearch_sessions SET events_json = ? WHERE id = ?",
@@ -334,6 +340,7 @@ class TestEventsTableSchema:
 
     def test_events_table_exists(self, db):
         import sqlite3
+
         with sqlite3.connect(db.db_path) as conn:
             tables = {
                 r[0]
@@ -345,6 +352,7 @@ class TestEventsTableSchema:
 
     def test_events_table_index_exists(self, db):
         import sqlite3
+
         with sqlite3.connect(db.db_path) as conn:
             indexes = {
                 r[0]
@@ -360,10 +368,13 @@ class TestEventsTableReadWrite:
 
     def test_append_writes_to_table(self, db):
         sid = db.create_research_session("w", "q")
-        db.append_events(sid, [
-            {"type": "step", "message": "m1"},
-            {"type": "done", "message": "m2"},
-        ])
+        db.append_events(
+            sid,
+            [
+                {"type": "step", "message": "m1"},
+                {"type": "done", "message": "m2"},
+            ],
+        )
         assert db.count_event_rows(sid) == 2
 
     def test_get_reads_from_table(self, db):
@@ -378,6 +389,7 @@ class TestEventsTableReadWrite:
         db.append_events(sid, [{"type": "step", "message": "x"}])
         # Read the events_json column directly
         import sqlite3
+
         with sqlite3.connect(db.db_path) as conn:
             row = conn.execute(
                 "SELECT events_json FROM autoresearch_sessions WHERE id = ?",
@@ -385,6 +397,7 @@ class TestEventsTableReadWrite:
             ).fetchone()
         assert row[0] is not None
         import json
+
         parsed = json.loads(row[0])
         assert parsed == [{"type": "step", "message": "x"}]
 
@@ -410,6 +423,7 @@ class TestEventsTableMigration:
         # Inject blob directly to simulate pre-migration data
         import json
         import sqlite3
+
         with sqlite3.connect(db.db_path) as conn:
             conn.execute(
                 "UPDATE autoresearch_sessions SET events_json = ? WHERE id = ?",
@@ -423,6 +437,7 @@ class TestEventsTableMigration:
         sid = db.create_research_session("w", "q")
         import json
         import sqlite3
+
         events = [
             {"type": "step", "message": "a"},
             {"type": "step", "message": "b"},
@@ -445,6 +460,7 @@ class TestEventsTableMigration:
         sid = db.create_research_session("w", "q")
         import json
         import sqlite3
+
         events = [{"type": "step", "message": "a"}]
         with sqlite3.connect(db.db_path) as conn:
             conn.execute(
@@ -462,6 +478,7 @@ class TestEventsTableMigration:
         sid = db.create_research_session("w", "q")
         import json
         import sqlite3
+
         events = [{"type": "step", "message": "from_blob"}]
         with sqlite3.connect(db.db_path) as conn:
             conn.execute(
@@ -482,6 +499,7 @@ class TestEventsTableMigration:
     def test_migrate_malformed_blob_returns_zero(self, db):
         sid = db.create_research_session("w", "q")
         import sqlite3
+
         with sqlite3.connect(db.db_path) as conn:
             conn.execute(
                 "UPDATE autoresearch_sessions SET events_json = ? WHERE id = ?",
@@ -496,10 +514,13 @@ class TestEventsCursor:
 
     def test_get_events_since_returns_only_newer(self, db):
         sid = db.create_research_session("w", "q")
-        db.append_events(sid, [
-            {"type": "step", "message": "a"},
-            {"type": "step", "message": "b"},
-        ])
+        db.append_events(
+            sid,
+            [
+                {"type": "step", "message": "a"},
+                {"type": "step", "message": "b"},
+            ],
+        )
         # First read: get max ts
         all_events = db.get_events(sid)
         assert len(all_events) == 2
@@ -512,10 +533,13 @@ class TestEventsCursor:
             ).fetchall()
         cursor = float(rows[0]["ts"])
         # Append more events
-        db.append_events(sid, [
-            {"type": "step", "message": "c"},
-            {"type": "step", "message": "d"},
-        ])
+        db.append_events(
+            sid,
+            [
+                {"type": "step", "message": "c"},
+                {"type": "step", "message": "d"},
+            ],
+        )
         # Cursor fetch should return only c, d
         newer = db.get_events_since(sid, cursor)
         assert [e["message"] for e in newer] == ["c", "d"]
@@ -526,19 +550,19 @@ class TestEventsCursor:
         db.append_events(sid, [{"type": "step", "message": "a"}])
         with db._connect() as conn:
             conn.row_factory = sqlite3.Row
-            ts_a = float(conn.execute(
-                "SELECT ts FROM autoresearch_events WHERE session_id = ?",
-                (sid,),
-            ).fetchone()["ts"])
+            ts_a = float(
+                conn.execute(
+                    "SELECT ts FROM autoresearch_events WHERE session_id = ?",
+                    (sid,),
+                ).fetchone()["ts"]
+            )
         # since_ts == ts_a → a is NOT returned
         newer = db.get_events_since(sid, ts_a)
         assert newer == []
 
     def test_get_events_since_respects_limit(self, db):
         sid = db.create_research_session("w", "q")
-        db.append_events(sid, [
-            {"type": "step", "message": f"m{i}"} for i in range(10)
-        ])
+        db.append_events(sid, [{"type": "step", "message": f"m{i}"} for i in range(10)])
         # Use a cursor before all events so all 10 are returned, capped at 3
         newer = db.get_events_since(sid, since_ts=0.0, limit=3)
         assert len(newer) == 3
@@ -565,6 +589,7 @@ class TestEventBuffer:
     @pytest.mark.asyncio
     async def test_dedup_same_message_within_window(self, db, sid):
         from llmwikify.apps.chat.task_manager import EventBuffer
+
         buf = EventBuffer(sid, db)
         for _ in range(5):
             buf.add({"type": "progress", "message": "50% — gathering"})
@@ -574,6 +599,7 @@ class TestEventBuffer:
     @pytest.mark.asyncio
     async def test_different_messages_all_stored(self, db, sid):
         from llmwikify.apps.chat.task_manager import EventBuffer
+
         buf = EventBuffer(sid, db)
         for i in range(5):
             buf.add({"type": "step", "message": f"step {i}"})
@@ -583,12 +609,14 @@ class TestEventBuffer:
     @pytest.mark.asyncio
     async def test_dedup_window_expires(self, db, sid):
         from llmwikify.apps.chat.task_manager import EventBuffer
+
         buf = EventBuffer(sid, db)
         buf.add({"type": "progress", "message": "50% — gathering"})
         await buf.flush()
         assert len(db.get_events(sid)) == 1
         # Wait > DEDUP_WINDOW_S (2.0s)
         import time
+
         time.sleep(2.1)
         buf.add({"type": "progress", "message": "50% — gathering"})
         await buf.flush()
@@ -597,6 +625,7 @@ class TestEventBuffer:
     @pytest.mark.asyncio
     async def test_batch_size_triggers_auto_flush(self, db, sid):
         from llmwikify.apps.chat.task_manager import EventBuffer
+
         buf = EventBuffer(sid, db)
         for i in range(25):  # > BATCH_SIZE=20
             buf.add({"type": "step", "message": f"auto {i}"})
@@ -609,6 +638,7 @@ class TestEventBuffer:
     @pytest.mark.asyncio
     async def test_close_makes_subsequent_add_noop(self, db, sid):
         from llmwikify.apps.chat.task_manager import EventBuffer
+
         buf = EventBuffer(sid, db)
         buf.add({"type": "step", "message": "before close"})
         buf.close()
@@ -621,6 +651,7 @@ class TestEventBuffer:
     @pytest.mark.asyncio
     async def test_events_have_timestamp_and_source(self, db, sid):
         from llmwikify.apps.chat.task_manager import EventBuffer
+
         buf = EventBuffer(sid, db)
         buf.add({"type": "step", "message": "m"})
         await buf.flush()
@@ -632,6 +663,7 @@ class TestEventBuffer:
     async def test_existing_timestamp_preserved(self, db, sid):
         """If caller provides timestamp, it's kept (not overwritten)."""
         from llmwikify.apps.chat.task_manager import EventBuffer
+
         buf = EventBuffer(sid, db)
         ts = "2026-01-01T00:00:00+00:00"
         buf.add({"type": "step", "message": "m", "timestamp": ts})
@@ -641,6 +673,7 @@ class TestEventBuffer:
     @pytest.mark.asyncio
     async def test_flush_empty_is_safe(self, db, sid):
         from llmwikify.apps.chat.task_manager import EventBuffer
+
         buf = EventBuffer(sid, db)
         n = await buf.flush()
         assert n == 0
@@ -699,10 +732,19 @@ class TestResearchClarifier:
         assert len(result["premises"]) == 2
 
     def test_clarify_handles_code_fence(self, mock_llm):
-        mock_llm.chat.return_value = "```json\n" + json.dumps({
-            "context": "ctx", "boundaries": "bnd", "position": "pos",
-            "premises": ["p1"], "scope_check": True,
-        }) + "\n```"
+        mock_llm.chat.return_value = (
+            "```json\n"
+            + json.dumps(
+                {
+                    "context": "ctx",
+                    "boundaries": "bnd",
+                    "position": "pos",
+                    "premises": ["p1"],
+                    "scope_check": True,
+                }
+            )
+            + "\n```"
+        )
         clarifier = ResearchClarifier(mock_llm)
         result = _run_async(clarifier.clarify("Q?"))
         assert result["context"] == "ctx"
@@ -724,39 +766,69 @@ class TestResearchClarifier:
     def test_scope_check_false_triggers_retry(self, mock_llm):
         # First call: scope_check=false; second call: true
         mock_llm.chat.side_effect = [
-            json.dumps({
-                "context": "broad", "boundaries": "wide",
-                "position": "researcher", "premises": ["vague"],
-                "scope_check": False,
-            }),
-            json.dumps({
-                "context": "narrowed", "boundaries": "tight",
-                "position": "researcher", "premises": ["specific"],
-                "scope_check": True,
-            }),
+            json.dumps(
+                {
+                    "context": "broad",
+                    "boundaries": "wide",
+                    "position": "researcher",
+                    "premises": ["vague"],
+                    "scope_check": False,
+                }
+            ),
+            json.dumps(
+                {
+                    "context": "narrowed",
+                    "boundaries": "tight",
+                    "position": "researcher",
+                    "premises": ["specific"],
+                    "scope_check": True,
+                }
+            ),
         ]
-        clarifier = ResearchClarifier(mock_llm, config={"clarify_max_retries": 2, "self_loop_budget_ratio": 0.3})
-        result, history = _run_async(clarifier.clarify_with_loop("Q?", budget_remaining=1.0))
+        clarifier = ResearchClarifier(
+            mock_llm, config={"clarify_max_retries": 2, "self_loop_budget_ratio": 0.3}
+        )
+        result, history = _run_async(
+            clarifier.clarify_with_loop("Q?", budget_remaining=1.0)
+        )
         assert result["scope_check"] is True
         assert len(history) == 2  # initial + 1 retry
 
     def test_self_loop_respects_budget(self, mock_llm):
-        mock_llm.chat.return_value = json.dumps({
-            "context": "x", "boundaries": "y", "position": "z",
-            "premises": [], "scope_check": False,
-        })
-        clarifier = ResearchClarifier(mock_llm, config={"clarify_max_retries": 5, "self_loop_budget_ratio": 0.5})
-        result, history = _run_async(clarifier.clarify_with_loop("Q?", budget_remaining=0.1))  # < 0.5
+        mock_llm.chat.return_value = json.dumps(
+            {
+                "context": "x",
+                "boundaries": "y",
+                "position": "z",
+                "premises": [],
+                "scope_check": False,
+            }
+        )
+        clarifier = ResearchClarifier(
+            mock_llm, config={"clarify_max_retries": 5, "self_loop_budget_ratio": 0.5}
+        )
+        result, history = _run_async(
+            clarifier.clarify_with_loop("Q?", budget_remaining=0.1)
+        )  # < 0.5
         # Should stop after initial attempt
         assert len(history) == 1
 
     def test_self_loop_exhausted_adds_warning(self, mock_llm):
-        mock_llm.chat.return_value = json.dumps({
-            "context": "x", "boundaries": "y", "position": "z",
-            "premises": [], "scope_check": False,
-        })
-        clarifier = ResearchClarifier(mock_llm, config={"clarify_max_retries": 1, "self_loop_budget_ratio": 0.0})
-        result, history = _run_async(clarifier.clarify_with_loop("Q?", budget_remaining=0.5))
+        mock_llm.chat.return_value = json.dumps(
+            {
+                "context": "x",
+                "boundaries": "y",
+                "position": "z",
+                "premises": [],
+                "scope_check": False,
+            }
+        )
+        clarifier = ResearchClarifier(
+            mock_llm, config={"clarify_max_retries": 1, "self_loop_budget_ratio": 0.0}
+        )
+        result, history = _run_async(
+            clarifier.clarify_with_loop("Q?", budget_remaining=0.5)
+        )
         # 2 attempts (initial + 1 retry), but scope_check still false
         assert len(history) == 2
         assert "warnings" in result
@@ -811,19 +883,23 @@ class TestResearchClarifier:
         # (no narrowing with fallback placeholders)
         for i, msgs in enumerate(call_messages):
             user_msg = next(m for m in msgs if m["role"] == "user")["content"]
-            assert "original query" in user_msg, (
-                f"Call {i}: query was narrowed unexpectedly: {user_msg!r}"
-            )
+            assert (
+                "original query" in user_msg
+            ), f"Call {i}: query was narrowed unexpectedly: {user_msg!r}"
 
     def test_fallback_retry_can_succeed(self, mock_llm):
         """If LLM recovers on retry, we get a real clarification, not fallback."""
         mock_llm.chat.side_effect = [
             "",  # 1st: empty (parse error → fallback)
-            json.dumps({  # 2nd: real clarification
-                "context": "recovered", "boundaries": "clear",
-                "position": "researcher", "premises": ["p1"],
-                "scope_check": True,
-            }),
+            json.dumps(
+                {  # 2nd: real clarification
+                    "context": "recovered",
+                    "boundaries": "clear",
+                    "position": "researcher",
+                    "premises": ["p1"],
+                    "scope_check": True,
+                }
+            ),
         ]
         clarifier = ResearchClarifier(
             mock_llm,
@@ -886,7 +962,11 @@ class TestFrameworkComplianceGate:
         s = ResearchState(session_id="test", query="Q", max_rounds=5)
         s.clarification = {"context": "ctx", "scope_check": True}
         s.evidence_scores = {"src1": 0.8, "src2": 0.6}
-        s.synthesis = {"reinforced_claims": ["a"], "contradictions": [], "knowledge_gaps": []}
+        s.synthesis = {
+            "reinforced_claims": ["a"],
+            "contradictions": [],
+            "knowledge_gaps": [],
+        }
         s.reasoning_check = {"aggregate_score": 0.7, "scores": {}, "issues": []}
         s.report_md = "# Report\n\nContent."
         s.structure_check = {"aggregate_score": 0.8, "scores": {}, "issues": []}
@@ -921,7 +1001,9 @@ class TestFrameworkComplianceGate:
         result = engine._check_framework_compliance(state)
         assert result["missing"] == "synthesize"
 
-    def test_missing_reasoning_check_redirects_to_synthesize(self, mock_wiki, mock_llm, db):
+    def test_missing_reasoning_check_redirects_to_synthesize(
+        self, mock_wiki, mock_llm, db
+    ):
         """reasoning_check is populated by synthesize action."""
         engine = ResearchEngine(mock_wiki, db, mock_llm, {})
         state = self._full_compliant_state()
@@ -992,7 +1074,9 @@ class TestFrameworkComplianceGate:
         assert engine._can_replan(state) is False
 
     @pytest.mark.asyncio
-    async def test_action_incomplete_sets_status_and_persists(self, mock_wiki, mock_llm, db):
+    async def test_action_incomplete_sets_status_and_persists(
+        self, mock_wiki, mock_llm, db
+    ):
         """action_incomplete marks status='incomplete' and persists partial result."""
         from llmwikify.apps.chat.research_engine.actions import (
             action_incomplete,
@@ -1012,7 +1096,9 @@ class TestFrameworkComplianceGate:
 
         sid = db.create_research_session("w", "test incomplete")
         state.session_id = sid
-        ctx.session_manager.update_status(sid, "running", "gathering", 0.4, iteration_round=3)
+        ctx.session_manager.update_status(
+            sid, "running", "gathering", 0.4, iteration_round=3
+        )
 
         events = []
         async for ev in action_incomplete(ctx, state, "test reason"):
@@ -1042,11 +1128,11 @@ class TestAutoMigration:
     def test_init_runs_migration_on_existing_db(self, tmp_path):
         """Init against a DB that lacks events_json should add it."""
         import sqlite3
+
         # Create a pre-migration DB (no events_json column)
         db_path = tmp_path / "pre_migration.db"
         with sqlite3.connect(db_path) as conn:
-            conn.execute(
-                """CREATE TABLE autoresearch_sessions (
+            conn.execute("""CREATE TABLE autoresearch_sessions (
                     id TEXT PRIMARY KEY, wiki_id TEXT NOT NULL, query TEXT NOT NULL,
                     status TEXT NOT NULL DEFAULT 'clarifying', current_step TEXT,
                     progress REAL DEFAULT 0.0, result TEXT, wiki_page_name TEXT,
@@ -1057,8 +1143,7 @@ class TestAutoMigration:
                     self_loop_history_json TEXT, evidence_scores_json TEXT,
                     created_at TEXT DEFAULT (datetime('now')),
                     updated_at TEXT DEFAULT (datetime('now'))
-                )"""
-            )
+                )""")
             conn.commit()
         # Now init — should auto-migrate
         db = AutoResearchDatabase(tmp_path)
@@ -1078,10 +1163,15 @@ class TestEngineClarifyIntegration:
         # Engine.run needs LLM for clarify + planning + report. Mock in order:
         mock_llm.chat.side_effect = [
             # 1. Clarifier LLM call
-            json.dumps({
-                "context": "ctx", "boundaries": "bnd", "position": "p",
-                "premises": ["p1"], "scope_check": True,
-            }),
+            json.dumps(
+                {
+                    "context": "ctx",
+                    "boundaries": "bnd",
+                    "position": "p",
+                    "premises": ["p1"],
+                    "scope_check": True,
+                }
+            ),
             # 2. Plan LLM
             json.dumps([{"query": "sub", "source_type": "web", "url": ""}]),
             # 3. Reason: gather
@@ -1110,8 +1200,11 @@ class TestEngineClarifyIntegration:
         # The clarify must come before the first plan (in events list)
         clarify_idx = types.index("clarification_complete")
         first_plan_step = next(
-            (i for i, ev in enumerate(events)
-             if ev.get("type") == "step" and "Planning" in ev.get("message", "")),
+            (
+                i
+                for i, ev in enumerate(events)
+                if ev.get("type") == "step" and "Planning" in ev.get("message", "")
+            ),
             None,
         )
         # Clarification happens first in our flow (before _react_loop even starts)
@@ -1140,8 +1233,10 @@ class TestAutoresearchIntegration:
     def _stub_web_search(self, monkeypatch):
         """Stub WebSearch.search to return [] (no real DuckDuckGo in tests)."""
         from llmwikify.apps.research import web_search
+
         async def _empty_search(self, query, num_results=None, **kwargs):
             return []
+
         monkeypatch.setattr(web_search.WebSearch, "search", _empty_search)
 
     @staticmethod
@@ -1151,8 +1246,10 @@ class TestAutoresearchIntegration:
         Prevents the gatherer from hitting real DuckDuckGo during tests.
         """
         from llmwikify.apps.research import web_search
+
         async def _empty_search(self, query, num_results=None, **kwargs):
             return []
+
         return patch.object(web_search.WebSearch, "search", _empty_search)
 
     def _build_mock_llm_with_full_cycle(self):
@@ -1173,17 +1270,24 @@ class TestAutoresearchIntegration:
         llm = MagicMock()
         llm.chat.side_effect = [
             # 1. Clarify
-            json.dumps({
-                "context": "ctx", "boundaries": "bnd", "position": "p",
-                "premises": ["p1"], "scope_check": True,
-            }),
+            json.dumps(
+                {
+                    "context": "ctx",
+                    "boundaries": "bnd",
+                    "position": "p",
+                    "premises": ["p1"],
+                    "scope_check": True,
+                }
+            ),
             # 2. _reason → plan
             json.dumps({"thought": "need to plan", "action": "plan"}),
             # 3. Plan — list of sub_queries (must match seeded queries to be deduped)
-            json.dumps([
-                {"query": "sub query 1", "source_type": "web", "url": ""},
-                {"query": "sub query 2", "source_type": "wiki", "url": ""},
-            ]),
+            json.dumps(
+                [
+                    {"query": "sub query 1", "source_type": "web", "url": ""},
+                    {"query": "sub query 2", "source_type": "wiki", "url": ""},
+                ]
+            ),
             # 4. _reason → gather
             json.dumps({"thought": "need sources", "action": "gather"}),
             # 5. _reason → synthesize
@@ -1217,15 +1321,21 @@ class TestAutoresearchIntegration:
         sm = engine.session_manager
         content = ("Body " * source_content_words).strip()
         results: list = []
-        for i, (q, st, url) in enumerate([
-            ("sub query 1", "web", "https://example.com/a"),
-            ("sub query 2", "wiki", "https://wiki.local/b"),
-        ]):
+        for i, (q, st, url) in enumerate(
+            [
+                ("sub query 1", "web", "https://example.com/a"),
+                ("sub query 2", "wiki", "https://wiki.local/b"),
+            ]
+        ):
             sq_id = sm.add_sub_query(session_id, q, st, "")
             src_id = sm.add_source(
-                session_id=session_id, sub_query_id=sq_id, source_type=st,
-                url=url, title=f"Title {chr(65+i)}",
-                content_length=len(content), content_preview=content[:200],
+                session_id=session_id,
+                sub_query_id=sq_id,
+                source_type=st,
+                url=url,
+                title=f"Title {chr(65+i)}",
+                content_length=len(content),
+                content_preview=content[:200],
                 content=content,
             )
             results.append((sq_id, src_id))
@@ -1243,7 +1353,9 @@ class TestAutoresearchIntegration:
         config["gate_min_reinforced_claims"] = 0  # mocked synth has 0 reinforced
         config["gate_max_knowledge_gaps"] = 999
         config["gate_min_evidence_score"] = 0.0
-        config["gate_min_reasoning_score"] = 0  # 0/10 = always pass (gate divides by 10)
+        config["gate_min_reasoning_score"] = (
+            0  # 0/10 = always pass (gate divides by 10)
+        )
         config["gate_min_structure_score"] = 0.0
         return config
 
@@ -1268,7 +1380,9 @@ class TestAutoresearchIntegration:
         assert "structure_check_complete" in types
         assert "review_passed" in types or "review_issues" in types
 
-    def test_evidence_score_populated_after_gather(self, mock_wiki, mock_llm, db, config):
+    def test_evidence_score_populated_after_gather(
+        self, mock_wiki, mock_llm, db, config
+    ):
         """state.evidence_scores is populated and persisted after _action_gather."""
         mock_llm = self._build_mock_llm_with_full_cycle()
         config = self._lower_gates_for_test(dict(config))
@@ -1290,7 +1404,9 @@ class TestAutoresearchIntegration:
         for sid, score in scores.items():
             assert 0.0 <= score <= 1.0, f"score for {sid} out of range: {score}"
 
-    def test_reasoning_check_invoked_after_synthesize(self, mock_wiki, mock_llm, db, config):
+    def test_reasoning_check_invoked_after_synthesize(
+        self, mock_wiki, mock_llm, db, config
+    ):
         """ReasoningChecker runs in _action_synthesize, populates reasoning."""
         mock_llm = self._build_mock_llm_with_full_cycle()
         config = self._lower_gates_for_test(dict(config))
@@ -1311,7 +1427,9 @@ class TestAutoresearchIntegration:
         # 6 dimensions per the plan
         assert len(rc["scores"]) == 6
 
-    def test_structure_check_invoked_after_report(self, mock_wiki, mock_llm, db, config):
+    def test_structure_check_invoked_after_report(
+        self, mock_wiki, mock_llm, db, config
+    ):
         """StructureValidator runs in _action_report, populates structure."""
         mock_llm = self._build_mock_llm_with_full_cycle()
         config = self._lower_gates_for_test(dict(config))
@@ -1332,7 +1450,11 @@ class TestAutoresearchIntegration:
         assert len(sc["scores"]) == 3
 
     def test_six_step_context_passed_to_report_and_review(
-        self, mock_wiki, mock_llm, db, config,
+        self,
+        mock_wiki,
+        mock_llm,
+        db,
+        config,
     ):
         """six_step_context is built and non-None when report/review are called."""
         from llmwikify.apps.chat import actions as _actions
@@ -1364,7 +1486,11 @@ class TestAutoresearchIntegration:
         assert "evidence_scores" in last
 
     def test_six_step_gates_triggered_at_each_phase(
-        self, mock_wiki, mock_llm, db, config,
+        self,
+        mock_wiki,
+        mock_llm,
+        db,
+        config,
     ):
         """The 4 6-step QualityGate methods are invoked at the correct phases."""
         from llmwikify.apps.chat.harness.quality_gate import QualityGate
@@ -1391,10 +1517,12 @@ class TestAutoresearchIntegration:
             calls.append("framework")
             return original_framework(self, *args, **kwargs)
 
-        with patch.object(QualityGate, "check_evidence_quality", spy_evidence), \
-             patch.object(QualityGate, "check_reasoning_quality", spy_reasoning), \
-             patch.object(QualityGate, "check_structure_quality", spy_structure), \
-             patch.object(QualityGate, "check_framework_compliance", spy_framework):
+        with (
+            patch.object(QualityGate, "check_evidence_quality", spy_evidence),
+            patch.object(QualityGate, "check_reasoning_quality", spy_reasoning),
+            patch.object(QualityGate, "check_structure_quality", spy_structure),
+            patch.object(QualityGate, "check_framework_compliance", spy_framework),
+        ):
             mock_llm = self._build_mock_llm_with_full_cycle()
             config = self._lower_gates_for_test(dict(config))
             config["max_react_rounds"] = 8
@@ -1410,7 +1538,11 @@ class TestAutoresearchIntegration:
         assert "framework" in calls, f"check_framework_compliance never called: {calls}"
 
     def test_framework_compliance_failure_triggers_replan(
-        self, mock_wiki, mock_llm, db, config,
+        self,
+        mock_wiki,
+        mock_llm,
+        db,
+        config,
     ):
         """In a successful run, framework_compliance should pass with proceed."""
         from llmwikify.apps.chat.harness.quality_gate import QualityGate
@@ -1433,9 +1565,9 @@ class TestAutoresearchIntegration:
             _run_async(_collect_events(engine.run(session_id, "What is X?")))
 
         assert "result" in captured, "framework_compliance never invoked"
-        assert captured["result"].passed is True, (
-            f"expected passed=True, got {captured['result'].summary}"
-        )
+        assert (
+            captured["result"].passed is True
+        ), f"expected passed=True, got {captured['result'].summary}"
         assert captured["result"].suggestion == "proceed"
 
 
@@ -1448,6 +1580,7 @@ def _run_async(coro):
     except RuntimeError as e:
         if "cannot be called from a running event loop" in str(e):
             import concurrent.futures
+
             with concurrent.futures.ThreadPoolExecutor() as pool:
                 return pool.submit(asyncio.run, coro).result()
         raise
@@ -1506,7 +1639,12 @@ class TestSourceFilterEvidence:
     def test_traceability_breakdown(self):
         sf = SourceFilter()
         # Full traceability: url + title + author
-        full = {"url": "https://x.com", "title": "T", "author": "A", "content": "x" * 500}
+        full = {
+            "url": "https://x.com",
+            "title": "T",
+            "author": "A",
+            "content": "x" * 500,
+        }
         # No traceability
         none = {"url": "", "title": "", "author": "", "content": ""}
         assert sf._score_traceability(full) > sf._score_traceability(none)
@@ -1514,7 +1652,11 @@ class TestSourceFilterEvidence:
 
     def test_authority_boost_for_pdf(self):
         sf = SourceFilter()
-        web_unknown = {"url": "https://example.com/x", "content": "x" * 500, "source_type": "web"}
+        web_unknown = {
+            "url": "https://example.com/x",
+            "content": "x" * 500,
+            "source_type": "web",
+        }
         pdf = {**web_unknown, "source_type": "pdf"}
         assert sf._score_authority(pdf) >= sf._score_authority(web_unknown)
 
@@ -1524,7 +1666,9 @@ class TestReasoningChecker:
 
     def test_returns_six_dimension_scores(self):
         rc = ReasoningChecker()
-        result = rc.check(synthesis="Some text. [[Source:a]] Another.", evidence_sources=[{"id": "a"}])
+        result = rc.check(
+            synthesis="Some text. [[Source:a]] Another.", evidence_sources=[{"id": "a"}]
+        )
         assert "scores" in result
         for dim in ReasoningChecker.DIMENSIONS:
             assert dim in result["scores"]
@@ -1564,7 +1708,10 @@ class TestReasoningChecker:
     def test_issues_list_populated_for_warnings(self):
         rc = ReasoningChecker()
         # No citations, no causal markers, no uncertainty, no assumptions
-        result = rc.check(synthesis="Just a statement. Another one. Third.", evidence_sources=[{"id": "s"}])
+        result = rc.check(
+            synthesis="Just a statement. Another one. Third.",
+            evidence_sources=[{"id": "s"}],
+        )
         # Expect issues for causal, assumption_visibility, uncertainty_quantification
         assert len(result["issues"]) >= 2
 
@@ -1666,8 +1813,7 @@ class TestStructureValidator:
         result = sv.validate("Random content without headers.")
         # Should have at least one issue for section completeness
         section_issues = [
-            i for i in result["issues"]
-            if i.get("layer") == "section_completeness"
+            i for i in result["issues"] if i.get("layer") == "section_completeness"
         ]
         assert len(section_issues) >= 1
 
@@ -1740,9 +1886,12 @@ class TestReportAndReviewEnrichment:
 
     def test_report_renders_framework_block(self):
         from llmwikify.apps.chat.prompts import render_framework_block
+
         ctx = {
             "clarification": {
-                "context": "ctx", "boundaries": "bnd", "position": "pos",
+                "context": "ctx",
+                "boundaries": "bnd",
+                "position": "pos",
                 "premises": ["p1", "p2"],
             },
             "reasoning_check": {"aggregate_score": 0.7, "scores": {"x": 0.8, "y": 0.6}},
@@ -1759,11 +1908,13 @@ class TestReportAndReviewEnrichment:
 
     def test_report_renders_empty_when_no_context(self):
         from llmwikify.apps.chat.prompts import render_framework_block
+
         assert render_framework_block(None, "report") == ""
         assert render_framework_block({}, "report") == ""
 
     def test_review_renders_framework_block(self):
         from llmwikify.apps.chat.prompts import render_framework_block
+
         ctx = {
             "clarification": {"context": "ctx", "boundaries": "bnd", "position": "pos"},
             "reasoning_check": {"aggregate_score": 0.7},
@@ -1780,6 +1931,7 @@ class TestReportAndReviewEnrichment:
 
     def test_review_renders_empty_when_no_context(self):
         from llmwikify.apps.chat.prompts import render_framework_block
+
         assert render_framework_block(None, "review") == ""
         assert render_framework_block({}, "review") == ""
 
@@ -1793,6 +1945,7 @@ class TestRetryAsync:
     def test_returns_on_first_success(self):
         async def ok():
             return 42
+
         result = _run_async(retry_async(ok, max_attempts=3, base_delay=0.01))
         assert result == 42
 
@@ -1802,6 +1955,7 @@ class TestRetryAsync:
         async def fail():
             attempts[0] += 1
             raise ValueError("boom")
+
         with pytest.raises(ValueError):
             _run_async(retry_async(fail, max_attempts=3, base_delay=0.01))
         assert attempts[0] == 3
@@ -1814,6 +1968,7 @@ class TestRetryAsync:
             if attempts[0] < 3:
                 raise OSError("transient")
             return "ok"
+
         result = _run_async(retry_async(flaky, max_attempts=5, base_delay=0.01))
         assert result == "ok"
         assert attempts[0] == 3
@@ -1825,6 +1980,7 @@ class TestStageRetryManager:
     def test_succeeds_first_try(self):
         async def go():
             return "ok"
+
         mgr = StageRetryManager("s", max_attempts=2, allow_partial=True)
         result = _run_async(mgr.run(go))
         assert result["ok"] is True
@@ -1839,7 +1995,10 @@ class TestStageRetryManager:
             if attempts[0] < 2:
                 raise ValueError("boom")
             return "ok"
-        mgr = StageRetryManager("s", max_attempts=3, allow_partial=True, base_delay=0.01)
+
+        mgr = StageRetryManager(
+            "s", max_attempts=3, allow_partial=True, base_delay=0.01
+        )
         result = _run_async(mgr.run(flaky))
         assert result["ok"] is True
         assert result["value"] == "ok"
@@ -1848,7 +2007,10 @@ class TestStageRetryManager:
     def test_partial_fallback_on_full_failure(self):
         async def fail():
             raise ValueError("nope")
-        mgr = StageRetryManager("s", max_attempts=2, allow_partial=True, base_delay=0.01)
+
+        mgr = StageRetryManager(
+            "s", max_attempts=2, allow_partial=True, base_delay=0.01
+        )
         result = _run_async(mgr.run(fail, fallback={"partial": True}))
         assert result["ok"] is False
         assert result["value"] == {"partial": True}
@@ -1857,7 +2019,10 @@ class TestStageRetryManager:
     def test_no_partial_returns_none(self):
         async def fail():
             raise ValueError("nope")
-        mgr = StageRetryManager("s", max_attempts=2, allow_partial=False, base_delay=0.01)
+
+        mgr = StageRetryManager(
+            "s", max_attempts=2, allow_partial=False, base_delay=0.01
+        )
         result = _run_async(mgr.run(fail))
         assert result["ok"] is False
         assert result["value"] is None
@@ -1875,6 +2040,7 @@ class TestLLMRetryManager:
             if attempts[0] < 3:
                 raise Exception("rate limit exceeded")
             return "ok"
+
         mgr = LLMRetryManager(max_attempts=4, base_delay=0.01)
         result = _run_async(mgr.call(rate_limit))
         assert result == "ok"
@@ -1888,6 +2054,7 @@ class TestLLMRetryManager:
             if attempts[0] < 2:
                 raise Exception("503 service unavailable")
             return "ok"
+
         mgr = LLMRetryManager(max_attempts=3, base_delay=0.01)
         result = _run_async(mgr.call(server_err))
         assert result == "ok"
@@ -1898,6 +2065,7 @@ class TestLLMRetryManager:
         async def json_err():
             attempts[0] += 1
             raise Exception("json decode error: bad token")
+
         mgr = LLMRetryManager(max_attempts=3, base_delay=0.01)
         with pytest.raises(Exception, match="json decode"):
             _run_async(mgr.call(json_err))
@@ -1909,6 +2077,7 @@ class TestLLMRetryManager:
         async def val_err():
             attempts[0] += 1
             raise KeyError("missing key")
+
         mgr = LLMRetryManager(max_attempts=3, base_delay=0.01)
         with pytest.raises(KeyError):
             _run_async(mgr.call(val_err))
@@ -1926,6 +2095,7 @@ class TestDBRetryManager:
             if attempts[0] < 2:
                 raise sqlite3.OperationalError("database is locked")
             return "ok"
+
         mgr = DBRetryManager(max_attempts=3, base_delay=0.01)
         result = mgr.call(lock_then_succeed)
         assert result == "ok"
@@ -1934,6 +2104,7 @@ class TestDBRetryManager:
     def test_does_not_retry_non_transient(self):
         def syntax_err():
             raise sqlite3.OperationalError("syntax error")
+
         mgr = DBRetryManager(max_attempts=3, base_delay=0.01)
         with pytest.raises(sqlite3.OperationalError, match="syntax error"):
             mgr.call(syntax_err)
@@ -1993,8 +2164,11 @@ class TestAutoResearchDatabase:
         sid = db.create_research_session("w", "q")
         s = db.get_research_session(sid)
         for col in (
-            "clarification_json", "reasoning_json", "structure_json",
-            "self_loop_counts_json", "self_loop_history_json",
+            "clarification_json",
+            "reasoning_json",
+            "structure_json",
+            "self_loop_counts_json",
+            "self_loop_history_json",
             "evidence_scores_json",
         ):
             assert s[col] is None, f"{col} should default to None"
@@ -2105,6 +2279,7 @@ class TestAutoResearchDatabase:
 
     def test_get_autoresearch_db_path(self, tmp_path):
         from llmwikify.apps.chat.db import get_autoresearch_db_path
+
         p = get_autoresearch_db_path(tmp_path)
         # The canonical filename is now .llmwiki_agent.db
         # (auto-migrated from autoresearch.db in v0.33.0).
@@ -2124,16 +2299,25 @@ class TestResume:
 
     def test_resume_from_incomplete_allows_entry(self, db):
         """routes.py should allow resume from 'incomplete' status."""
-        from llmwikify.apps.chat.research_engine.routes import (
-            resume_autoresearch,
-        )
         sid = db.create_research_session("w", "q")
         db.update_research_status(sid, "incomplete", "done", 1.0)
         session = db.get_research_session(sid)
         # The whitelist check: incomplete should be in the allowed set
-        allowed = ("paused", "pausing", "gathering", "planning", "analyzing",
-                    "synthesizing", "report", "reviewing", "clarifying",
-                    "incomplete", "error", "timeout", "done")
+        allowed = (
+            "paused",
+            "pausing",
+            "gathering",
+            "planning",
+            "analyzing",
+            "synthesizing",
+            "report",
+            "reviewing",
+            "clarifying",
+            "incomplete",
+            "error",
+            "timeout",
+            "done",
+        )
         assert session["status"] in allowed
 
     def test_resume_from_done_allows_entry(self, db):
@@ -2141,9 +2325,21 @@ class TestResume:
         sid = db.create_research_session("w", "q")
         db.update_research_status(sid, "done", "done", 1.0)
         session = db.get_research_session(sid)
-        allowed = ("paused", "pausing", "gathering", "planning", "analyzing",
-                    "synthesizing", "report", "reviewing", "clarifying",
-                    "incomplete", "error", "timeout", "done")
+        allowed = (
+            "paused",
+            "pausing",
+            "gathering",
+            "planning",
+            "analyzing",
+            "synthesizing",
+            "report",
+            "reviewing",
+            "clarifying",
+            "incomplete",
+            "error",
+            "timeout",
+            "done",
+        )
         assert session["status"] in allowed
 
     def test_resume_resets_round_to_zero(self, mock_wiki, mock_llm, db, config):
@@ -2179,17 +2375,29 @@ class TestResume:
 
         assert state.evidence_scores == evidence
 
-    def test_resume_restores_all_framework_fields(self, mock_wiki, mock_llm, db, config):
+    def test_resume_restores_all_framework_fields(
+        self, mock_wiki, mock_llm, db, config
+    ):
         """_load_resume_state should restore all 6-step framework fields."""
         sid = db.create_research_session("w", "q")
-        clarification = {"context": "c", "boundaries": "b", "scope_check": True, "premises": []}
+        clarification = {
+            "context": "c",
+            "boundaries": "b",
+            "scope_check": True,
+            "premises": [],
+        }
         evidence = {"src1": 0.9}
-        synthesis = {"reinforced_claims": [], "knowledge_gaps": [], "contradictions": []}
+        synthesis = {
+            "reinforced_claims": [],
+            "knowledge_gaps": [],
+            "contradictions": [],
+        }
         reasoning = {"aggregate_score": 0.8, "issues": []}
         structure = {"aggregate_score": 0.7, "issues": []}
         review = {"approved": True, "score": 8, "feedback": "ok", "issues": []}
 
-        db.update_six_step_fields(sid,
+        db.update_six_step_fields(
+            sid,
             clarification=clarification,
             evidence_scores=evidence,
             reasoning=reasoning,
@@ -2220,7 +2428,8 @@ class TestResume:
         config["strict_exit"] = False
         sid = db.create_research_session("w", "q")
         # Pre-populate ALL framework fields so compliance gate passes
-        db.update_six_step_fields(sid,
+        db.update_six_step_fields(
+            sid,
             clarification={"context": "x", "scope_check": True, "premises": []},
             evidence_scores={"src1": 0.9},
             reasoning={"aggregate_score": 0.8, "issues": []},
@@ -2229,10 +2438,20 @@ class TestResume:
         with sqlite3.connect(str(db.db_path)) as conn:
             conn.execute(
                 "UPDATE autoresearch_sessions SET synthesis_json = ?, review_json = ?, result = ? WHERE id = ?",
-                (json.dumps({"reinforced_claims": [], "knowledge_gaps": [], "contradictions": []}),
-                 json.dumps({"approved": True, "score": 8, "feedback": "ok", "issues": []}),
-                 json.dumps({"markdown": "# Report", "quality_score": 8}),
-                 sid),
+                (
+                    json.dumps(
+                        {
+                            "reinforced_claims": [],
+                            "knowledge_gaps": [],
+                            "contradictions": [],
+                        }
+                    ),
+                    json.dumps(
+                        {"approved": True, "score": 8, "feedback": "ok", "issues": []}
+                    ),
+                    json.dumps({"markdown": "# Report", "quality_score": 8}),
+                    sid,
+                ),
             )
         db.update_research_status(sid, "incomplete", "done", 0.5)
 
@@ -2267,17 +2486,41 @@ class TestStrictExit:
         s = ResearchState(session_id="test", query="Q", max_rounds=5)
         s.clarification = {"context": "ctx", "scope_check": True}
         s.evidence_scores = {"src1": 0.8, "src2": 0.6, "src3": 0.7}
-        s.synthesis = {"reinforced_claims": ["a"], "contradictions": [], "knowledge_gaps": []}
+        s.synthesis = {
+            "reinforced_claims": ["a"],
+            "contradictions": [],
+            "knowledge_gaps": [],
+        }
         s.reasoning_check = {"aggregate_score": 0.7, "scores": {}, "issues": []}
         s.report_md = "# Report\n\nContent."
         s.structure_check = {"aggregate_score": 0.8, "scores": {}, "issues": []}
         s.review = {"approved": True, "score": 8, "issues": []}
-        s.quality_score = 8  # state.quality_score is what _check_quality_compliance reads
+        s.quality_score = (
+            8  # state.quality_score is what _check_quality_compliance reads
+        )
         # 3 mock sources to satisfy gate_min_sources=3
         s.sources = [
-            {"id": "src1", "title": "S1", "url": "http://1", "source_type": "web", "analysis": {"quality_assessment": {"credibility": 7}}},
-            {"id": "src2", "title": "S2", "url": "http://2", "source_type": "web", "analysis": {"quality_assessment": {"credibility": 6}}},
-            {"id": "src3", "title": "S3", "url": "http://3", "source_type": "web", "analysis": {"quality_assessment": {"credibility": 7}}},
+            {
+                "id": "src1",
+                "title": "S1",
+                "url": "http://1",
+                "source_type": "web",
+                "analysis": {"quality_assessment": {"credibility": 7}},
+            },
+            {
+                "id": "src2",
+                "title": "S2",
+                "url": "http://2",
+                "source_type": "web",
+                "analysis": {"quality_assessment": {"credibility": 6}},
+            },
+            {
+                "id": "src3",
+                "title": "S3",
+                "url": "http://3",
+                "source_type": "web",
+                "analysis": {"quality_assessment": {"credibility": 7}},
+            },
         ]
         for k, v in overrides.items():
             setattr(s, k, v)
@@ -2287,14 +2530,18 @@ class TestStrictExit:
         """DEFAULT_SIX_STEP_CONFIG should have strict_exit=True."""
         assert DEFAULT_SIX_STEP_CONFIG.get("strict_exit") is True
 
-    def test_strict_exit_passes_when_all_quality_ok(self, mock_wiki, mock_llm, db, config):
+    def test_strict_exit_passes_when_all_quality_ok(
+        self, mock_wiki, mock_llm, db, config
+    ):
         """All quality thresholds met → returns None (compliance passed)."""
         config["strict_exit"] = True
         engine = ResearchEngine(mock_wiki, db, mock_llm, config)
         state = self._compliant_state()
         assert engine._check_quality_compliance(state) is None
 
-    def test_strict_exit_blocks_unapproved_review(self, mock_wiki, mock_llm, db, config):
+    def test_strict_exit_blocks_unapproved_review(
+        self, mock_wiki, mock_llm, db, config
+    ):
         """Review not approved → returns {'missing': 'revise'}."""
         config["strict_exit"] = True
         engine = ResearchEngine(mock_wiki, db, mock_llm, config)
@@ -2315,15 +2562,20 @@ class TestStrictExit:
         engine = ResearchEngine(mock_wiki, db, mock_llm, config)
         state = self._compliant_state()
         state.review = {
-            "approved": True, "score": 8, "issues": [],
-            "skipped": True, "skip_reason": "Review LLM failed: timeout",
+            "approved": True,
+            "score": 8,
+            "issues": [],
+            "skipped": True,
+            "skip_reason": "Review LLM failed: timeout",
         }
         result = engine._check_quality_compliance(state)
         assert result is not None
         assert result["missing"] == "revise"
         assert "skipped" in result["reason"].lower()
 
-    def test_strict_exit_blocks_low_quality_score(self, mock_wiki, mock_llm, db, config):
+    def test_strict_exit_blocks_low_quality_score(
+        self, mock_wiki, mock_llm, db, config
+    ):
         """quality_score < threshold → returns {'missing': 'revise'}."""
         config["strict_exit"] = True
         config["quality_threshold"] = 8
@@ -2366,7 +2618,9 @@ class TestStrictExit:
         assert result["missing"] == "gather"
         assert "sources=3" in result["reason"]
 
-    def test_strict_exit_layer1_check_still_works(self, mock_wiki, mock_llm, db, config):
+    def test_strict_exit_layer1_check_still_works(
+        self, mock_wiki, mock_llm, db, config
+    ):
         """_check_quality_compliance delegates to _check_framework_compliance first."""
         config["strict_exit"] = True
         engine = ResearchEngine(mock_wiki, db, mock_llm, config)
@@ -2376,7 +2630,9 @@ class TestStrictExit:
         assert result is not None
         assert result["missing"] == "report"  # framework layer caught it first
 
-    def test_strict_exit_disabled_keeps_old_behavior(self, mock_wiki, mock_llm, db, config):
+    def test_strict_exit_disabled_keeps_old_behavior(
+        self, mock_wiki, mock_llm, db, config
+    ):
         """When strict_exit=False, _check_quality_compliance can be bypassed."""
         config["strict_exit"] = False
         engine = ResearchEngine(mock_wiki, db, mock_llm, config)
@@ -2391,9 +2647,11 @@ class TestStrictExit:
     def test_duplicate_action_done_removed(self):
         """actions.py should have only one action_done function."""
         from llmwikify.apps.chat import actions
+
         # Count action_done in the module
         count = sum(
-            1 for name, _ in vars(actions).items()
+            1
+            for name, _ in vars(actions).items()
             if name == "action_done" and callable(getattr(actions, name, None))
         )
         assert count == 1, f"Expected 1 action_done, found {count}"

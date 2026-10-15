@@ -41,7 +41,8 @@ def _format_run_not_found(run_id: Any, workflow_name: str | None = None) -> str:
     if not rid or not rid.startswith("wf_"):
         try:
             recent = RunStore.default().list_runs(
-                workflow_name=workflow_name, limit=3,
+                workflow_name=workflow_name,
+                limit=3,
             )
             recent_ids = [s.run_id for s in recent if s.run_id]
         except Exception:
@@ -53,6 +54,7 @@ def _format_run_not_found(run_id: Any, workflow_name: str | None = None) -> str:
             f"{hint}"
         )
     return f"no run with id {run_id!r}"
+
 
 PHASE_LABELS = {
     "clarify": "Clarify",
@@ -86,7 +88,9 @@ def _artifact_counts_from_outputs(outputs: dict[str, Any]) -> dict[str, int]:
     return {
         "evidence_items": len(final_report.get("evidence_items", []) or []),
         "findings": len(final_report.get("findings", []) or []),
-        "wiki_update_proposals": len(final_report.get("wiki_update_proposals", []) or []),
+        "wiki_update_proposals": len(
+            final_report.get("wiki_update_proposals", []) or []
+        ),
         "graph_relations": len(final_report.get("graph_relations", []) or []),
         "research_memory_candidates": len(
             (final_report.get("research_memory", {}) or {}).get("reusable_facts", [])
@@ -179,7 +183,9 @@ def _handle_status(args: dict[str, Any], ctx: SkillContext) -> SkillResult:
     include_details = bool(args.get("include_details", False))
     state = RunStore.default().load(run_id)
     if state is None:
-        return SkillResult.fail(_format_run_not_found(run_id, workflow_name=WORKFLOW_NAME))
+        return SkillResult.fail(
+            _format_run_not_found(run_id, workflow_name=WORKFLOW_NAME)
+        )
 
     phases_summary: dict[str, dict[str, Any]] = {}
     for pid, info in (state.phases or {}).items():

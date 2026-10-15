@@ -11,8 +11,6 @@ One of the 14 base actions per
 
 from __future__ import annotations
 
-from typing import Any
-
 from llmwikify.apps.chat.skills.actions._helpers import safe_call, wiki_from_ctx
 from llmwikify.apps.chat.skills.base import (
     Skill,

@@ -1,11 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Lightbulb, Sparkles, Network, RefreshCw, Loader2, FileText,
-  Link2, AlertTriangle, BarChart3, CheckCircle2, ArrowRight, Crown,
-  Users, Zap, AlertCircle,
+  Link2, AlertTriangle, BarChart3, CheckCircle2, ArrowRight,
+  AlertCircle,
 } from 'lucide-react';
-import { api } from '../../api';
+import { api, GraphAnalysis } from '../../api';
+import { GraphAnalysisPanel } from './GraphAnalysisPanel';
 import { LoadingState, EmptyState } from '../ui/states';
+import { useWikiStore } from '../../stores/wikiStore';
 import { cn } from '@/lib/utils';
 
 interface SynthesisResult {
@@ -16,23 +18,6 @@ interface SynthesisResult {
   knowledge_gaps?: Array<{ topic: string; description: string }>;
 }
 
-interface GraphAnalysis {
-  status: string;
-  centrality?: {
-    pagerank: Array<{ node: string; score: number }>;
-    hubs: Array<{ node: string; out_degree: number }>;
-    authorities: Array<{ node: string; in_degree: number }>;
-  };
-  communities?: {
-    num_communities: number;
-    modularity: number;
-    communities: Record<string, { label: string; size: number; members: string[] }>;
-    bridges: Array<{ node: string; communities_connected: number }>;
-  };
-  suggestions?: Array<{ type: string; node: string; priority: string; observation: string; suggestion: string }>;
-  stats?: { nodes: number; edges: number; density: number; avg_degree: number; is_connected: boolean };
-}
-
 export function Insights() {
   const [recommendations, setRecommendations] = useState<Array<Record<string, unknown>>>([]);
   const [synthesisResults, setSynthesisResults] = useState<SynthesisResult[]>([]);
@@ -40,13 +25,12 @@ export function Insights() {
   const [loading, setLoading] = useState(true);
   const [synthesisLoading, setSynthesisLoading] = useState(false);
   const [graphLoading, setGraphLoading] = useState(false);
+  const { currentWikiId } = useWikiStore();
 
-  useEffect(() => { loadInsights(); }, []);
-
-  const loadInsights = async () => {
+  const loadInsights = useCallback(async () => {
     setLoading(true);
     try {
-      const recs = await api.wiki.recommend() as unknown as Record<string, unknown>;
+      const recs = await api.wiki.recommend(currentWikiId || undefined) as unknown as Record<string, unknown>;
       const flattened: Array<Record<string, unknown>> = [];
       if (recs && typeof recs === 'object') {
         const missingPages = (recs.missing_pages as Array<Record<string, unknown>>) || [];
@@ -56,26 +40,28 @@ export function Insights() {
       }
       setRecommendations(flattened);
     } catch { setRecommendations([]); } finally { setLoading(false); }
-  };
+  }, [currentWikiId]);
 
-  const loadSynthesis = async () => {
+  const loadSynthesis = useCallback(async () => {
     setSynthesisLoading(true);
     try {
-      const result = await api.wiki.suggestSynthesis() as unknown as Record<string, unknown>;
+      const result = await api.wiki.suggestSynthesis(currentWikiId || undefined) as unknown as Record<string, unknown>;
       if (result && typeof result === 'object') {
         const suggestions = (result.suggestions as Array<Record<string, unknown>>) || [];
         setSynthesisResults(suggestions as unknown as SynthesisResult[]);
       }
     } catch { setSynthesisResults([]); } finally { setSynthesisLoading(false); }
-  };
+  }, [currentWikiId]);
 
-  const loadGraphAnalysis = async () => {
+  const loadGraphAnalysis = useCallback(async () => {
     setGraphLoading(true);
     try {
-      const result = await api.wiki.graphAnalyze();
+      const result = await api.wiki.graphAnalyze(currentWikiId || undefined);
       setGraphAnalysis(result as unknown as GraphAnalysis);
     } catch { setGraphAnalysis(null); } finally { setGraphLoading(false); }
-  };
+  }, [currentWikiId]);
+
+  useEffect(() => { loadInsights(); }, [loadInsights]);
 
   if (loading) return <LoadingState message="Loading insights…" />;
 
@@ -244,108 +230,12 @@ export function Insights() {
         </Section>
 
         {/* Graph Analysis */}
-        <Section
-          icon={Network}
-          title="Graph Analysis"
-          description="Central topics, community structure, and page suggestions"
-          actionLabel={graphLoading ? 'Loading…' : 'Run Analysis'}
-          onAction={loadGraphAnalysis}
+        <GraphAnalysisPanel
+          data={graphAnalysis}
           loading={graphLoading}
-        >
-          {!graphAnalysis ? (
-            <EmptyState
-              variant="compact"
-              icon={<Network className="w-5 h-5" />}
-              title="No graph analysis"
-              description='Click "Run Analysis" to compute centrality, communities, and suggestions.'
-            />
-          ) : (
-            <div className="space-y-3">
-              {graphAnalysis.stats && (
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-                  <StatTile label="Nodes" value={graphAnalysis.stats.nodes} />
-                  <StatTile label="Edges" value={graphAnalysis.stats.edges} />
-                  <StatTile label="Density" value={graphAnalysis.stats.density.toFixed(3)} />
-                  <StatTile label="Avg Degree" value={graphAnalysis.stats.avg_degree.toFixed(1)} />
-                  <StatTile label="Connected" value={graphAnalysis.stats.is_connected ? 'Yes' : 'No'} />
-                </div>
-              )}
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {graphAnalysis.centrality?.pagerank && graphAnalysis.centrality.pagerank.length > 0 && (
-                  <div className="rounded-lg glass p-4">
-                    <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
-                      <Crown className="w-3.5 h-3.5 text-primary" />
-                      Top Pages (PageRank)
-                    </h3>
-                    <div className="space-y-1.5">
-                      {graphAnalysis.centrality.pagerank.slice(0, 5).map((item, i) => (
-                        <div
-                          key={i}
-                          className="flex items-center justify-between text-xs px-2 py-1.5 rounded-md hover:bg-white/[0.04] transition-colors"
-                        >
-                          <div className="flex items-center gap-2 min-w-0">
-                            <span className="text-muted-foreground font-mono w-5 text-right tabular-nums">
-                              {i + 1}
-                            </span>
-                            <span className="text-foreground truncate">{item.node}</span>
-                          </div>
-                          <span className="text-muted-foreground font-mono tabular-nums shrink-0">
-                            {item.score.toFixed(4)}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {graphAnalysis.communities && (
-                  <div className="rounded-lg glass p-4">
-                    <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
-                      <Users className="w-3.5 h-3.5 text-primary" />
-                      Communities ({graphAnalysis.communities.num_communities})
-                    </h3>
-                    <p className="text-[10px] text-muted-foreground mb-3">
-                      Modularity: <span className="font-mono tabular-nums">{graphAnalysis.communities.modularity.toFixed(3)}</span>
-                    </p>
-                    <div className="space-y-1.5">
-                      {Object.entries(graphAnalysis.communities.communities).slice(0, 5).map(([cid, comm]) => (
-                        <div key={cid} className="flex items-center justify-between text-xs px-2 py-1.5 rounded-md hover:bg-white/[0.04] transition-colors">
-                          <span className="text-foreground truncate">{comm.label}</span>
-                          <span className="text-muted-foreground font-mono tabular-nums shrink-0 ml-2">
-                            {comm.size} nodes
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {graphAnalysis.suggestions && graphAnalysis.suggestions.length > 0 && (
-                <div className="rounded-lg glass p-4">
-                  <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
-                    <Zap className="w-3.5 h-3.5 text-primary" />
-                    Suggested Pages ({graphAnalysis.suggestions.length})
-                  </h3>
-                  <div className="space-y-2">
-                    {graphAnalysis.suggestions.slice(0, 5).map((sugg, i) => (
-                      <div key={i} className="flex items-start gap-2 text-xs p-2 rounded-md hover:bg-white/[0.04] transition-colors">
-                        <PriorityBadge priority={sugg.priority} />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-foreground">{sugg.observation}</p>
-                          {sugg.suggestion && (
-                            <p className="text-[10px] text-muted-foreground mt-0.5">{sugg.suggestion}</p>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </Section>
+          onRun={loadGraphAnalysis}
+          runLabel="Run Analysis"
+        />
       </div>
     </div>
   );
@@ -412,32 +302,5 @@ function InsightGroup({
       </h4>
       <div className="space-y-1 pl-4">{children}</div>
     </div>
-  );
-}
-
-function StatTile({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div className="rounded-md bg-white/[0.04] border border-border/30 p-2.5 text-center">
-      <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">
-        {label}
-      </div>
-      <div className="text-base font-bold text-foreground mt-0.5 tabular-nums">{value}</div>
-    </div>
-  );
-}
-
-function PriorityBadge({ priority }: { priority: string }) {
-  const tone: Record<string, string> = {
-    high: 'bg-destructive/15 text-destructive border-destructive/30',
-    medium: 'bg-warning/15 text-warning border-warning/30',
-    low: 'bg-white/[0.04] text-muted-foreground border-border/40',
-  };
-  return (
-    <span className={cn(
-      'inline-flex items-center px-1.5 py-0.5 rounded border text-[10px] font-semibold uppercase tracking-wider shrink-0',
-      tone[priority] || tone.low,
-    )}>
-      {priority}
-    </span>
   );
 }

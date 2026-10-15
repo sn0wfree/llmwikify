@@ -1,0 +1,56 @@
+{
+  "llm": {
+    "enabled": false,
+    "provider": null,
+    "model": null,
+    "base_url": null,
+    "api_key": "",
+    "timeout": 120,
+    "context_window": null,
+    "budget_on_exceed": "warn"
+  },
+  "research": {
+    "enabled": true,
+    "search_provider": "auto",
+    "minimax_api_key": "",
+    "minimax_api_host": ""
+  },
+  "mcp": {
+    "name": null,
+    "host": "127.0.0.1",
+    "port": 8765,
+    "transport": "stdio"
+  },
+  "web": {
+    "port": 8766,
+    "host": "127.0.0.1"
+  },
+  "search": {
+    "backend": "fts5",
+    "qmd": {
+      "host": "127.0.0.1",
+      "port": 8181,
+      "auto_start": false
+    }
+  },
+  "chat_mutable": {
+    "max_chat_rounds": 4,
+    "max_messages": 50,
+    "observation_limit": 10,
+    "llm_retry_max_attempts": 3,
+    "llm_retry_base_delay": 2.0,
+    "llm_retry_call_timeout": 120.0,
+    "llm_retry_max_delay": 30.0,
+    "chat_db_retry_max_attempts": 3,
+    "chat_db_retry_base_delay": 0.2
+  },
+  "research_mutable": {
+    "search_provider": "auto",
+    "max_sub_queries": 20,
+    "research_timeout_minutes": 30,
+    "max_parallel_gathering": 5,
+    "web_search_results_per_query": 5,
+    "max_retry_attempts": 3,
+    "max_review_rounds": 2
+  }
+}

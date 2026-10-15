@@ -29,6 +29,7 @@ Usage::
     results = await harness.run(run_my_app)
     print(results.summary())
 """
+
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
@@ -111,12 +112,16 @@ class Harness:
                 reply = await runner(case.inputs)
             except Exception as e:
                 report.results.append(
-                    CaseResult(name=case.name, passed=False, details=f"runner raised: {e}")
+                    CaseResult(
+                        name=case.name, passed=False, details=f"runner raised: {e}"
+                    )
                 )
                 continue
 
             ok, details = self._grade(case, reply)
-            report.results.append(CaseResult(name=case.name, passed=ok, details=details))
+            report.results.append(
+                CaseResult(name=case.name, passed=ok, details=details)
+            )
         return report
 
     def _grade(self, case: GoldenCase, reply: str) -> tuple[bool, str]:

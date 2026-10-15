@@ -1,10 +1,10 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import ReactMarkdown from 'react-markdown';
+import { useSearchParams } from 'react-router-dom';
 import remarkGfm from 'remark-gfm';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import {
   Save, FileText, Network, Eye, PanelLeftClose, PanelLeftOpen,
-  Check, AlertCircle, Loader2, Pencil, Hash,
+  Check, AlertCircle, Loader2, Pencil, Hash, Clock, FolderTree,
 } from 'lucide-react';
 import { api, WikiPage, GraphNode, GraphEdge } from '../../api';
 import { useWikiStore } from '../../stores/wikiStore';
@@ -13,6 +13,11 @@ import { EmptyState, LoadingState } from '../ui/states';
 import { FrontMatterPanel, FrontMatterData } from './FrontMatterPanel';
 import { GraphView } from './GraphView';
 import { PageTree } from './PageTree';
+import { EditHistory } from './EditHistory';
+import { FileTree } from './FileTree';
+import { WikiMarkdown } from './WikiMarkdown';
+import { ConfirmDialog } from './ConfirmDialog';
+import { PageExistsDialog } from './PageExistsDialog';
 import { cn } from '@/lib/utils';
 
 interface EditorProps {
@@ -21,7 +26,15 @@ interface EditorProps {
   currentWikiId?: string | null;
 }
 
-type ViewMode = 'edit' | 'graph' | 'preview';
+type ViewMode = 'edit' | 'graph' | 'preview' | 'history' | 'filetree';
+
+interface PendingUpdate {
+  token: string;
+  pageName: string;
+  content: string;
+  wordCount: number;
+  preview: string;
+}
 
 function parseFrontMatter(content: string): { metadata: FrontMatterData; body: string } {
   const match = content.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
@@ -54,11 +67,13 @@ function buildFrontMatter(metadata: FrontMatterData, body: string): string {
 }
 
 export function Editor({
-  selectedPage: initialPage, handlePageSelect: externalOnSelect, currentWikiId,
+  selectedPage: initialPage, handlePageSelect: externalOnSelect, currentWikiId: propWikiId,
 }: EditorProps) {
   const { addToast } = useToast();
-  const { isMultiWikiMode } = useWikiStore();
-  const [internalSelectedPage, setInternalSelectedPage] = useState<string | null>(initialPage || null);
+  const { isMultiWikiMode, currentWikiId: storeWikiId } = useWikiStore();
+  const currentWikiId = propWikiId ?? storeWikiId;
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlPage = searchParams.get('page');
   const [page, setPage] = useState<WikiPage | null>(null);
   const [content, setContent] = useState('');
   const [metadata, setMetadata] = useState<FrontMatterData>({});
@@ -74,20 +89,30 @@ export function Editor({
   const [allTypes, setAllTypes] = useState<string[]>([]);
   const [graphLoading, setGraphLoading] = useState(false);
   const [showLabels, setShowLabels] = useState(true);
+  const [pendingNav, setPendingNav] = useState<string | null>(null);
 
-  const selectedPage = internalSelectedPage;
+  const selectedPage = urlPage ?? initialPage ?? null;
+
+  const doNavigate = useCallback((pageName: string) => {
+    setDirty(false);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set('page', pageName);
+      return next;
+    }, { replace: true });
+    externalOnSelect?.(pageName);
+  }, [externalOnSelect, setSearchParams]);
 
   const handlePageSelect = useCallback((pageName: string) => {
-    if (dirty) {
-      const ok = window.confirm('You have unsaved changes. Discard and switch?');
-      if (!ok) return;
+    const current = urlPage ?? initialPage;
+    if (dirty && pageName !== current) {
+      setPendingNav(pageName);
+      return;
     }
-    setInternalSelectedPage(pageName);
-    setDirty(false);
-    externalOnSelect?.(pageName);
-  }, [externalOnSelect, dirty]);
+    doNavigate(pageName);
+  }, [dirty, initialPage, urlPage, doNavigate]);
 
-  useEffect(() => { loadTree(); }, []);
+  useEffect(() => { loadTree(currentWikiId || undefined); }, [currentWikiId]);
 
   useEffect(() => {
     if (selectedPage) {
@@ -100,10 +125,6 @@ export function Editor({
       setBody('');
     }
   }, [selectedPage, currentWikiId]);
-
-  useEffect(() => {
-    if (currentWikiId) loadTree(currentWikiId);
-  }, [currentWikiId]);
 
   const loadGraphData = useCallback(async (currentPage: string, wikiId?: string) => {
     setGraphLoading(true);
@@ -182,13 +203,53 @@ export function Editor({
       addToast('success', 'Page saved');
       setDirty(false);
       setSavedAt(Date.now());
-    } catch (e) {
+    } catch (e: unknown) {
+      if (e instanceof Error && (e as { status?: number }).status === 409) {
+        const detail = (e as { detail?: { confirmation_id?: string; message?: string; existing_page?: { word_count?: number; content_preview?: string } } }).detail;
+        if (detail?.confirmation_id) {
+          setPendingUpdate({
+            token: detail.confirmation_id,
+            pageName: page.page_name,
+            content,
+            wordCount: detail.existing_page?.word_count ?? 0,
+            preview: detail.existing_page?.content_preview ?? '',
+          });
+          return;
+        }
+      }
       const msg = e instanceof Error ? e.message : 'Unknown error';
       addToast('error', `Save failed: ${msg}`);
     } finally {
       setSaving(false);
     }
   }, [page, content, addToast, isMultiWikiMode, currentWikiId]);
+
+  const [pendingUpdate, setPendingUpdate] = useState<PendingUpdate | null>(null);
+
+  const confirmUpdate = useCallback(async () => {
+    if (!pendingUpdate) return;
+    setSaving(true);
+    try {
+      if (isMultiWikiMode && currentWikiId) {
+        await api.wiki.scoped.writePage(
+          currentWikiId, pendingUpdate.pageName, pendingUpdate.content, pendingUpdate.token,
+        );
+      } else {
+        await api.wiki.writePage(
+          pendingUpdate.pageName, pendingUpdate.content, pendingUpdate.token,
+        );
+      }
+      addToast('success', 'Page updated');
+      setDirty(false);
+      setSavedAt(Date.now());
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Unknown error';
+      addToast('error', `Update failed: ${msg}`);
+    } finally {
+      setSaving(false);
+      setPendingUpdate(null);
+    }
+  }, [pendingUpdate, addToast, isMultiWikiMode, currentWikiId]);
 
   // ⌘S / Ctrl+S to save
   useEffect(() => {
@@ -205,7 +266,31 @@ export function Editor({
   const hasMetadata = Object.keys(metadata).length > 0;
 
   return (
-    <div className="flex h-full">
+    <>
+      <ConfirmDialog
+        open={pendingNav !== null}
+        onOpenChange={(open) => { if (!open) setPendingNav(null); }}
+        title="Discard unsaved changes?"
+        description="You have unsaved changes. Switching pages will lose your edits."
+        confirmLabel="Discard"
+        cancelLabel="Stay"
+        destructive
+        onConfirm={() => {
+          const target = pendingNav;
+          setPendingNav(null);
+          if (target) doNavigate(target);
+        }}
+      />
+      <PageExistsDialog
+        open={pendingUpdate !== null}
+        onOpenChange={(open) => { if (!open) setPendingUpdate(null); }}
+        pageName={pendingUpdate?.pageName ?? ''}
+        wordCount={pendingUpdate?.wordCount ?? 0}
+        contentPreview={pendingUpdate?.preview ?? ''}
+        onConfirm={confirmUpdate}
+        onCancel={() => setPendingUpdate(null)}
+      />
+      <div className="flex h-full">
       {/* File Tree Sidebar */}
       <div
         className={cn(
@@ -268,8 +353,8 @@ export function Editor({
           <div className="flex items-center gap-1 ml-auto">
             {/* Mode toggle */}
             <div className="inline-flex p-0.5 rounded-md bg-white/[0.04] border border-border/40">
-              {(['edit', 'graph', 'preview'] as const).map((m) => {
-                const Icon = m === 'edit' ? Pencil : m === 'graph' ? Network : Eye;
+              {(['edit', 'graph', 'preview', 'history', 'filetree'] as const).map((m) => {
+                const Icon = m === 'edit' ? Pencil : m === 'graph' ? Network : m === 'preview' ? Eye : m === 'history' ? Clock : FolderTree;
                 return (
                   <button
                     key={m}
@@ -283,7 +368,7 @@ export function Editor({
                     )}
                   >
                     <Icon className="w-3 h-3" />
-                    <span className="hidden md:inline">{m === 'edit' ? 'Edit' : m === 'graph' ? 'Graph' : 'Preview'}</span>
+                    <span className="hidden md:inline">{m === 'edit' ? 'Edit' : m === 'graph' ? 'Graph' : m === 'preview' ? 'Preview' : m === 'history' ? 'History' : 'Tree'}</span>
                   </button>
                 );
               })}
@@ -318,7 +403,13 @@ export function Editor({
         </div>
 
         {/* Front Matter Panel */}
-        {hasMetadata && <FrontMatterPanel metadata={metadata} />}
+        {hasMetadata && (
+          <FrontMatterPanel
+            metadata={metadata}
+            currentWikiId={currentWikiId}
+            onPageClick={handlePageSelect}
+          />
+        )}
 
         {/* Content */}
         <div className="flex-1 overflow-hidden">
@@ -341,19 +432,15 @@ export function Editor({
               <PanelResizeHandle className="w-1 bg-border/40 hover:bg-primary/60 transition-colors cursor-col-resize" />
               <Panel defaultSize={50} minSize={25} className="overflow-hidden">
                 <div className="w-full h-full overflow-y-auto p-4 markdown-body">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                    {body || '*No content*'}
-                  </ReactMarkdown>
+                  <WikiMarkdown remarkPlugins={[remarkGfm]} source={body || '*No content*'} wikiId={currentWikiId || undefined} onPageSelect={handlePageSelect} />
                 </div>
               </Panel>
             </PanelGroup>
           ) : mode === 'preview' ? (
             <div className="w-full h-full overflow-y-auto p-6 markdown-body max-w-3xl mx-auto">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {body || '*No content*'}
-              </ReactMarkdown>
+              <WikiMarkdown remarkPlugins={[remarkGfm]} source={body || '*No content*'} wikiId={currentWikiId || undefined} onPageSelect={handlePageSelect} />
             </div>
-          ) : (
+          ) : mode === 'graph' ? (
             <PanelGroup direction="horizontal" className="h-full">
               <Panel defaultSize={60} minSize={30} className="overflow-hidden relative">
                 <div className="absolute inset-0">
@@ -371,15 +458,18 @@ export function Editor({
               <PanelResizeHandle className="w-1 bg-border/40 hover:bg-primary/60 transition-colors cursor-col-resize" />
               <Panel defaultSize={40} minSize={20} className="overflow-hidden">
                 <div className="w-full h-full overflow-y-auto p-4 markdown-body">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                    {body || '*No content*'}
-                  </ReactMarkdown>
+                  <WikiMarkdown remarkPlugins={[remarkGfm]} source={body || '*No content*'} wikiId={currentWikiId || undefined} onPageSelect={handlePageSelect} />
                 </div>
               </Panel>
             </PanelGroup>
+          ) : mode === 'history' ? (
+            <EditHistory />
+          ) : (
+            <FileTree onSelect={handlePageSelect} currentWikiId={currentWikiId || undefined} />
           )}
         </div>
       </div>
     </div>
+    </>
   );
 }

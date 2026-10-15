@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-from typing import Any
 
 from llmwikify.apps.chat.db import AutoResearchDatabase
 
@@ -11,7 +10,7 @@ from llmwikify.apps.chat.db import AutoResearchDatabase
 class ResearchSessionManager:
     """Manages research session lifecycle and sub-query/source tracking."""
 
-    def __init__(self, db: AutoResearchDatabase):
+    def __init__(self, db: AutoResearchDatabase) -> None:
         self.db = db
         self._session_id: str | None = None
 
@@ -46,7 +45,9 @@ class ResearchSessionManager:
         review_json: str | None = None,
     ) -> None:
         self.db.update_research_status(
-            session_id, status, step,
+            session_id,
+            status,
+            step,
             iteration_round=iteration_round,
             synthesis_json=synthesis_json,
             review_json=review_json,
@@ -54,7 +55,9 @@ class ResearchSessionManager:
         if progress is not None:
             self.db.update_research_progress(session_id, progress)
 
-    def add_sub_query(self, session_id: str, query: str, source_type: str, url: str | None = None) -> str:
+    def add_sub_query(
+        self, session_id: str, query: str, source_type: str, url: str | None = None
+    ) -> str:
         return self.db.save_sub_query(session_id, query, source_type, url)
 
     def complete_sub_query(self, sub_query_id: str, result: dict) -> None:
@@ -74,7 +77,16 @@ class ResearchSessionManager:
         content_preview: str | None = None,
         content: str | None = None,
     ) -> str:
-        return self.db.save_source(session_id, sub_query_id, source_type, url, title, content_length, content_preview, content=content)
+        return self.db.save_source(
+            session_id,
+            sub_query_id,
+            source_type,
+            url,
+            title,
+            content_length,
+            content_preview,
+            content=content,
+        )
 
     def update_source_analysis(self, source_id: str, analysis: dict) -> None:
         self.db.update_source_analysis(source_id, analysis)
@@ -84,6 +96,11 @@ class ResearchSessionManager:
         result_json = json.dumps(result) if result else None
         self.db.persist_report(session_id, result_json)
 
-    def finalize(self, session_id: str, result: dict | None = None, wiki_page_name: str | None = None) -> None:
+    def finalize(
+        self,
+        session_id: str,
+        result: dict | None = None,
+        wiki_page_name: str | None = None,
+    ) -> None:
         result_json = json.dumps(result) if result else None
         self.db.finalize_research(session_id, result_json, wiki_page_name)

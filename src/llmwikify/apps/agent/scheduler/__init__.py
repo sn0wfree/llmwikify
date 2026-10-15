@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 
 try:
     from croniter import croniter
+
     HAS_CRONITER = True
 except ImportError:
     HAS_CRONITER = False
@@ -94,7 +95,7 @@ class ScheduledTask:
 class WikiScheduler:
     """Cron scheduler for wiki system tasks."""
 
-    def __init__(self, data_dir: Path | None = None):
+    def __init__(self, data_dir: Path | None = None) -> None:
         self._tasks: dict[str, ScheduledTask] = {}
         self.data_dir = data_dir
         self._state_file = data_dir / "scheduler.json" if data_dir else None
@@ -141,27 +142,29 @@ class WikiScheduler:
             if task.should_run(now):
                 try:
                     result = task.run()
-                    results.append({
-                        "task": task.name,
-                        "success": True,
-                        "result": result,
-                        "is_write": task.is_write,
-                    })
+                    results.append(
+                        {
+                            "task": task.name,
+                            "success": True,
+                            "result": result,
+                            "is_write": task.is_write,
+                        }
+                    )
                 except Exception as e:
-                    results.append({
-                        "task": task.name,
-                        "success": False,
-                        "error": str(e),
-                        "is_write": task.is_write,
-                    })
+                    results.append(
+                        {
+                            "task": task.name,
+                            "success": False,
+                            "error": str(e),
+                            "is_write": task.is_write,
+                        }
+                    )
         return results
 
     def save_state(self) -> None:
         if self._state_file:
             state = {
-                "tasks": {
-                    name: task.to_dict() for name, task in self._tasks.items()
-                }
+                "tasks": {name: task.to_dict() for name, task in self._tasks.items()}
             }
             self._state_file.parent.mkdir(parents=True, exist_ok=True)
             self._state_file.write_text(json.dumps(state, indent=2))
@@ -174,7 +177,9 @@ class WikiScheduler:
                     if name in self._tasks:
                         task = self._tasks[name]
                         if task_data.get("last_run"):
-                            task.last_run = datetime.fromisoformat(task_data["last_run"])
+                            task.last_run = datetime.fromisoformat(
+                                task_data["last_run"]
+                            )
                         if task_data.get("run_count"):
                             task.run_count = task_data["run_count"]
             except Exception as e:
@@ -193,7 +198,7 @@ class WikiScheduler:
         - Manual tasks (is_write=True): write operations, generate proposals
         """
 
-        def wiki_dream_task():
+        def wiki_dream_task() -> Any:
             if wiki_dream_editor:
                 result = wiki_dream_editor.run_wiki_dream()
                 if notification_manager and result.get("pending_review", 0) > 0:
@@ -205,16 +210,16 @@ class WikiScheduler:
                 return result
             return {"status": "skipped", "reason": "no wiki dream editor"}
 
-        def check_raw_task():
+        def check_raw_task() -> dict[str, Any]:
             if hasattr(wiki, "raw_dir") and wiki.raw_dir.exists():
                 files = list(wiki.raw_dir.rglob("*"))
                 return {"status": "ok", "file_count": len(files)}
             return {"status": "ok", "file_count": 0}
 
-        def daily_lint():
+        def daily_lint() -> Any:
             return wiki.lint(mode="check", limit=10)
 
-        def weekly_gaps():
+        def weekly_gaps() -> Any:
             return wiki.lint(generate_investigations=True, limit=20)
 
         # Auto tasks (read-only, safe to execute automatically)

@@ -21,11 +21,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Iterator
 from typing import Any
 
 from llmwikify.apps.chat.bus.events import (
-    ALL_OUTBOUND_META,
     InboundMessage,
     OutboundMessage,
 )
@@ -84,7 +82,8 @@ class MessageBus:
         else:
             try:
                 msg = await asyncio.wait_for(
-                    self._inbound_q.get(), timeout=timeout,
+                    self._inbound_q.get(),
+                    timeout=timeout,
                 )
             except asyncio.TimeoutError:
                 return None
@@ -110,7 +109,8 @@ class MessageBus:
             logger.warning(
                 "MessageBus: outbound queue full, dropped message "
                 "(target=%s session=%s)",
-                msg.target_id, msg.session_key,
+                msg.target_id,
+                msg.session_key,
             )
             return False
         self._outbound_published += 1
@@ -129,7 +129,8 @@ class MessageBus:
         else:
             try:
                 msg = await asyncio.wait_for(
-                    self._outbound_q.get(), timeout=timeout,
+                    self._outbound_q.get(),
+                    timeout=timeout,
                 )
             except asyncio.TimeoutError:
                 return None

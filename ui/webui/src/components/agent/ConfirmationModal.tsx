@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { getAutoResearch } from '../../lib/autoresearch-api';
 import { Badge } from '../ui/legacy-badge';
 import { Button } from '../ui/legacy-button';
+import { Dialog, DialogContent } from '../ui/dialog';
 
 interface ConfirmationModalProps {
   confirmationId: string;
@@ -311,9 +312,11 @@ export function ConfirmationModal({
   const canEdit = tool === 'wiki_write_page' || tool === 'wiki_synthesize' || tool === 'graph_write';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onReject}>
-      <div className="w-full max-w-lg mx-4 bg-card rounded-lg shadow-xl border border-border overflow-hidden max-h-[85vh] flex flex-col"
-        onClick={e => e.stopPropagation()}>
+    <Dialog open onOpenChange={(open) => { if (!open) onReject(); }}>
+      <DialogContent
+        className="max-w-lg sm:max-w-lg max-h-[85vh] flex flex-col gap-0 p-0"
+        showCloseButton={false}
+      >
         <div className="px-4 py-3 border-b border-border bg-yellow-500/10 shrink-0">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -379,7 +382,7 @@ export function ConfirmationModal({
             {loading ? 'Approving...' : hasChanges ? 'Approve & Save Edits' : 'Approve'}
           </Button>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

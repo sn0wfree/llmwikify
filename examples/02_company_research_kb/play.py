@@ -16,7 +16,6 @@ synthesize 走 LLM 的步骤在 TUTORIAL §2.3 详述。
 
 from __future__ import annotations
 
-import json
 import shutil
 import sys
 import tempfile

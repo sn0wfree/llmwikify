@@ -100,15 +100,19 @@ def _lint_brief(result: dict) -> int:
 
     for issue in result.get("issues", []):
         if issue.get("type") == "orphan_page":
-            hints.append({
-                "priority": "medium",
-                "message": f"Orphan page: [[{issue.get('page', '')}]]",
-            })
+            hints.append(
+                {
+                    "priority": "medium",
+                    "message": f"Orphan page: [[{issue.get('page', '')}]]",
+                }
+            )
         elif issue.get("type") == "broken_link":
-            hints.append({
-                "priority": "high",
-                "message": f"Broken link in {issue.get('page', '')} → [[{issue.get('link', '')}]]",
-            })
+            hints.append(
+                {
+                    "priority": "high",
+                    "message": f"Broken link in {issue.get('page', '')} → [[{issue.get('link', '')}]]",
+                }
+            )
 
     print("=== Wiki Suggestions ===\n")
     if hints:
@@ -193,7 +197,9 @@ def run_lint(wiki: Any, args: Any) -> int:
     limit = getattr(args, "limit", 10)
     force = getattr(args, "force", False)
     result = wiki.lint(
-        mode=mode, limit=limit, force=force,
+        mode=mode,
+        limit=limit,
+        force=force,
         generate_investigations=generate_inv,
     )
 
@@ -221,23 +227,34 @@ class LintCommand(Command):
             raise TypeError("setup_parser requires an argparse subparsers action")
         p = subparsers.add_parser(self.name, help=self.help)
         p.add_argument(
-            "--format", "-f",
+            "--format",
+            "-f",
             choices=["full", "brief", "recommendations", "json"],
-            default="full", help="Output format (default: full)",
+            default="full",
+            help="Output format (default: full)",
         )
         p.add_argument(
-            "--generate-investigations", "-g", action="store_true",
+            "--generate-investigations",
+            "-g",
+            action="store_true",
             help="Use LLM to generate investigation suggestions",
         )
         p.add_argument(
-            "--mode", choices=["check", "fix"], default="check",
+            "--mode",
+            choices=["check", "fix"],
+            default="check",
             help="Lint mode: check (default) or fix",
         )
         p.add_argument(
-            "--limit", "-l", type=int, default=10,
+            "--limit",
+            "-l",
+            type=int,
+            default=10,
             help="Max LLM-detected issues to return (default: 10)",
         )
-        p.add_argument("--force", action="store_true", help="Force re-detection (ignore cache)")
+        p.add_argument(
+            "--force", action="store_true", help="Force re-detection (ignore cache)"
+        )
 
     def run(self, args: Any, wiki: Any, config: dict) -> int:
         return run_lint(wiki, args)

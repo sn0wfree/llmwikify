@@ -15,6 +15,7 @@ External code should import specific mixins from the
 appropriate subpackage; this ``__init__`` re-exports the most
 common names for convenience.
 """
+
 from .analysis import (
     WikiLintMixin,
     WikiLLMMixin,

@@ -1,0 +1,138 @@
+# docker-tests/Dockerfile.production
+# Production server image: llmwikify + prebuilt WebUI, CN-friendly mirrors.
+#
+# Build (context = repo root):
+#   docker build -f docker-tests/Dockerfile.production \
+#     -t llmwikify-server:0.40.2 -t llmwikify-server:latest .
+#
+# Why editable install (-e)?
+#   Both serve.py and utils/webui.py resolve the WebUI dist via
+#   ``Path(llmwikify.__file__).parents[5] / "ui/webui/dist"``. With an
+#   editable install, ``llmwikify.__file__`` stays at
+#   /app/src/llmwikify/__init__.py, so the resolved root is /app and the
+#   bundle at /app/ui/webui/dist is found. A regular install would
+#   resolve to site-packages and miss it.
+#
+# Note: relies on Dockerfile cache mounts (RUN --mount=type=cache);
+# requires BuildKit (default on Docker >= 23).
+
+ARG PYTHON_VERSION=3.11
+ARG NODE_VERSION=20
+
+# ─────────────────────────────────────────────────────────────────
+# Stage 1: WebUI bundle
+# ─────────────────────────────────────────────────────────────────
+FROM node:${NODE_VERSION}-slim AS webui
+ARG NPM_REGISTRY=https://registry.npmmirror.com
+WORKDIR /ui
+
+# Deps first (cached layer keyed on lockfile)
+COPY ui/webui/package.json ui/webui/package-lock.json ./
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci --no-audit --no-fund --registry=${NPM_REGISTRY}
+
+# Source + build (vite outDir=dist → /ui/dist)
+COPY ui/webui/ ./
+RUN npm run build
+
+# ─────────────────────────────────────────────────────────────────
+# Stage 2: Python runtime
+# ─────────────────────────────────────────────────────────────────
+FROM python:${PYTHON_VERSION}-slim
+
+ARG PIP_INDEX=https://mirrors.cloud.tencent.com/pypi/simple/
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    TZ=UTC
+
+# Debian apt → Tencent mirror (aliyun was measured at <0.03 MB/s, 2026-10-13)
+RUN set -eux; \
+    if [ -f /etc/apt/sources.list.d/debian.sources ]; then \
+        sed -i 's|deb.debian.org|mirrors.cloud.tencent.com|g' /etc/apt/sources.list.d/debian.sources; \
+    else \
+        sed -i 's|deb.debian.org|mirrors.cloud.tencent.com|g' /etc/apt/sources.list; \
+    fi
+
+# System deps: tini (PID 1) only.
+# git intentionally NOT installed (runtime never shells out to git; saves
+# ~84MB incl. perl). curl NOT installed either — the HEALTHCHECK below uses
+# Python urllib instead, dropping the libcurl dependency chain (~-20MB).
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        tini \
+    && rm -rf /var/lib/apt/lists/* \
+    && rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/info/*
+
+WORKDIR /app
+
+# Python project source
+COPY pyproject.toml README.md ./
+COPY src/ ./src/
+
+# WebUI bundle from stage 1 (must land at /app/ui/webui/dist)
+COPY --from=webui /ui/dist/ /app/ui/webui/dist/
+RUN test -f /app/ui/webui/dist/index.html
+
+# ── Dependency-resolution workaround (2026-10-13) ─────────────────
+# pyproject.toml caps keyring<24 (temporary jaraco-era pin, see
+# AGENTS.md "临时 jaraco 生态 pin"). All current fastmcp versions
+# require py-key-value-aio[keyring] → keyring>=25.6, which strict pip
+# cannot resolve together with that cap (ResolutionImpossible).
+# Fix for the image build only — repository pyproject.toml is untouched.
+# fastmcp is furthermore constrained to the 3.x major below: the line
+# verified by the project's existing docker images (2026-07-02 build
+# used fastmcp 3.4.2 + keyring 25.7.0) and by the dev environment.
+RUN set -eux; \
+    sed -i 's/keyring>=21\.2\.0,<24/keyring>=21.2.0/g' pyproject.toml; \
+    ! grep -q 'keyring>=21.2.0,<24' pyproject.toml
+
+# Editable install (keeps __file__ under /app/src, see header note).
+# Extras are parameterized so slim variants can be built:
+#   all (default)                     → full feature set
+#   extractors,mcp,config,watch,web,agent → no graph tools (~-80MB)
+#   mcp,config,watch,web,agent        → slim, no graph & no heavy extractors
+#                                        (PDF/Office/audio ingestion degrades;
+#                                        plain .md/.txt ingest keeps working)
+# --no-compile: skip .pyc bytecode (~-25MB; imports recompile in memory,
+# first boot a couple of seconds slower).
+# strip: drop symbol tables from native .so files (~111MB total → ~-12MB).
+# binutils is installed and purged within this same layer, so it never
+# ships in the final image.
+ARG LLMWIKIFY_EXTRAS=all
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --no-compile \
+        -i ${PIP_INDEX} \
+        -e ".[${LLMWIKIFY_EXTRAS}]" \
+        "fastmcp<4" \
+ && apt-get update -qq \
+ && apt-get install -y -qq --no-install-recommends binutils \
+ && find /usr/local/lib/python3.11/site-packages -name '*.so' -type f \
+        -exec strip --strip-unneeded {} + \
+ && apt-get purge -y -qq binutils \
+ && apt-get autoremove -y -qq \
+ && rm -rf /var/lib/apt/lists/* /usr/share/doc/* /usr/share/man/*
+
+# Non-root runtime user (uid 1000; host-side setgid group pairs with this)
+RUN useradd -m -u 1000 llmuser \
+    && mkdir -p /app/data \
+    && chown -R llmuser:llmuser /app
+USER llmuser
+
+# Defaults — all overridable at runtime (compose sets WIKI_ROOT etc.)
+ENV WIKI_ROOT=/app/data/wiki \
+    HOST=0.0.0.0 \
+    PORT=8765 \
+    LOG_LEVEL=INFO
+
+EXPOSE 8765
+
+# Python urllib healthcheck (no curl in the image).
+HEALTHCHECK --interval=5s --timeout=3s --start-period=30s --retries=20 \
+    CMD ["python3", "-c", "import sys,urllib.request; r=urllib.request.urlopen('http://127.0.0.1:8765/api/health', timeout=3); sys.exit(0 if r.status == 200 else 1)"]
+
+COPY --chown=llmuser:llmuser docker-tests/server-entrypoint.sh /app/server-entrypoint.sh
+RUN chmod +x /app/server-entrypoint.sh
+
+ENTRYPOINT ["/usr/bin/tini", "--", "/app/server-entrypoint.sh"]
+CMD ["serve", "--web", "--host", "0.0.0.0", "--port", "8765"]

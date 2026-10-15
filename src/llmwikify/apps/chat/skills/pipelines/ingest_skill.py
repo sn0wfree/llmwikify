@@ -25,7 +25,6 @@ Design ref: ``v0.32-skill-restructure.md`` §3.1 (#24)
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 from llmwikify.apps.chat.skills.actions._helpers import wiki_from_ctx
 from llmwikify.apps.chat.skills.base import (
@@ -86,14 +85,18 @@ async def _ingest(args: dict, ctx: SkillContext) -> SkillResult:
             from llmwikify.apps.chat.skills.actions.extract_action import (
                 extract_skill,
             )
+
             er = await extract_skill.actions["extract"].handler(
-                {"url_or_path": url_or_path}, ctx,
+                {"url_or_path": url_or_path},
+                ctx,
             )
             if er.status == "ok":
                 extracted_content = er.data.get("content", "")
                 was_extracted = True
                 if not page_name:
-                    page_name = er.data.get("page_name", "") or _derive_page_name(url_or_path)
+                    page_name = er.data.get("page_name", "") or _derive_page_name(
+                        url_or_path
+                    )
             else:
                 return SkillResult.fail(f"Extract failed: {er.error}")
         except Exception as e:
@@ -102,6 +105,7 @@ async def _ingest(args: dict, ctx: SkillContext) -> SkillResult:
         # skip_extract=True, no direct content — read from path
         if url_or_path:
             from pathlib import Path
+
             p = Path(url_or_path)
             if p.exists():
                 extracted_content = p.read_text(encoding="utf-8")
@@ -124,8 +128,10 @@ async def _ingest(args: dict, ctx: SkillContext) -> SkillResult:
             from llmwikify.apps.chat.skills.actions.write_action import (
                 write_skill,
             )
+
             wr = await write_skill.actions["write_page"].handler(
-                {"page_name": page_name, "content": extracted_content}, ctx,
+                {"page_name": page_name, "content": extracted_content},
+                ctx,
             )
             if wr.status == "ok":
                 was_written = True
@@ -141,25 +147,30 @@ async def _ingest(args: dict, ctx: SkillContext) -> SkillResult:
             from llmwikify.apps.chat.skills.actions.read_action import (
                 read_skill,
             )
+
             rr = await read_skill.actions["read_page"].handler(
-                {"page_name": page_name}, ctx,
+                {"page_name": page_name},
+                ctx,
             )
             if rr.status == "ok":
                 read_back = rr.data
         except Exception as e:
             logger.debug("Read-back failed for %s: %s", page_name, e)
 
-    return SkillResult.ok({
-        "page_name": page_name,
-        "extracted": was_extracted,
-        "written": was_written,
-        "read_back": read_back,
-    })
+    return SkillResult.ok(
+        {
+            "page_name": page_name,
+            "extracted": was_extracted,
+            "written": was_written,
+            "read_back": read_back,
+        }
+    )
 
 
 def _derive_page_name(url_or_path: str) -> str:
     """Derive a wiki page name from a URL or file path."""
     from pathlib import Path
+
     p = Path(url_or_path)
     name = p.stem if p.suffix else p.name
     # Clean up for wiki page naming

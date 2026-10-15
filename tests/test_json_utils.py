@@ -96,9 +96,9 @@ class TestSafeJsonLoadsStrictMode:
 
     def test_strict_does_not_affect_fence(self):
         # Fence strip is always applied (not part of truncation rescue)
-        assert safe_json_loads(
-            '```json\n{"a": 1}\n```', allow_truncate=False
-        ) == {"a": 1}
+        assert safe_json_loads('```json\n{"a": 1}\n```', allow_truncate=False) == {
+            "a": 1
+        }
 
     def test_strict_empty_still_raises(self):
         with pytest.raises(json.JSONDecodeError):
@@ -123,6 +123,4 @@ class TestSafeJsonLoadsGenuinelyBroken:
         # behavior (any number of open brackets are closed). This test
         # pins the **rescued** output rather than asserting a raise,
         # since the rescue is intentional.
-        assert safe_json_loads('{"outer": {"inner": 1') == {
-            "outer": {"inner": 1}
-        }
+        assert safe_json_loads('{"outer": {"inner": 1') == {"outer": {"inner": 1}}

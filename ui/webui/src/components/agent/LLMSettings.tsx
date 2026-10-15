@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, type ChangeEvent } from 'react';
 import { api, LLMConfig } from '../../api';
 import { useToast } from '../wiki/Toast';
+import { ConfirmDialog } from '../wiki/ConfirmDialog';
 import { Button } from '../ui/legacy-button';
 import { Panel } from '../ui/Panel';
 import { Select } from '../ui/native-select';
@@ -130,12 +131,17 @@ export function LLMSettings() {
     setOriginalApiKey(val);
   }, [apiKeyMode]);
 
+  const [showSaveWarning, setShowSaveWarning] = useState(false);
+
   const handleSave = useCallback(async () => {
     if (config.api_key && config.api_key.includes('***')) {
-      if (!window.confirm('API Key appears to be masked (contains ***). The real key will be preserved.\n\nIf you need to change the key, paste the new real key first.\n\nProceed with save?')) {
-        return;
-      }
+      setShowSaveWarning(true);
+      return;
     }
+    await doSave();
+  }, [config]);
+
+  const doSave = useCallback(async () => {
     setSaving(true);
     try {
       await api.agent.saveConfig(config);
@@ -167,6 +173,19 @@ export function LLMSettings() {
 
   return (
     <div className="flex flex-col h-full">
+      <ConfirmDialog
+        open={showSaveWarning}
+        onOpenChange={setShowSaveWarning}
+        title="API Key appears to be masked"
+        description="The current api_key contains *** characters, which means the real key will be preserved as-is. If you intended to change the key, paste the new real key in the field above first."
+        confirmLabel="Save anyway"
+        cancelLabel="Cancel"
+        destructive
+        onConfirm={async () => {
+          setShowSaveWarning(false);
+          await doSave();
+        }}
+      />
       <Panel border="top">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold text-primary">LLM Settings</h2>

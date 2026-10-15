@@ -17,10 +17,7 @@ Covers:
 
 from __future__ import annotations
 
-import asyncio
-import tempfile
 from pathlib import Path
-from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -29,7 +26,6 @@ from llmwikify.apps.chat.agent.agent_service import AgentService
 from llmwikify.apps.chat.memory.dream_scheduler import DreamScheduler
 from llmwikify.apps.chat.memory.memory_config import (
     DEFAULT_CONFIG_FILENAME,
-    MemoryConfig,
 )
 
 
@@ -88,7 +84,8 @@ class TestAgentServiceProviderInjection:
         assert svc.memory_manager.dream is not None
 
     def test_explicit_memory_manager_overrides_provider(
-        self, tmp_path: Path,
+        self,
+        tmp_path: Path,
     ) -> None:
         provider = _make_provider()
         explicit_mm = MagicMock()
@@ -117,9 +114,7 @@ class TestAgentServiceProviderInjection:
 
 class TestAgentServiceStartDreamScheduler:
     @pytest.mark.asyncio
-    async def test_start_with_provider_and_dream(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_start_with_provider_and_dream(self, tmp_path: Path) -> None:
         provider = _make_provider()
         svc = AgentService(
             wiki_registry=_make_wiki_registry(),
@@ -130,6 +125,7 @@ class TestAgentServiceStartDreamScheduler:
         from llmwikify.apps.chat.memory.memory_config import (
             write_default_memory_config,
         )
+
         write_default_memory_config(tmp_path)
         sched = await svc.start_dream_scheduler()
         assert sched is not None
@@ -174,6 +170,7 @@ class TestAgentServiceStartDreamScheduler:
         from llmwikify.apps.chat.memory.memory_config import (
             write_default_memory_config,
         )
+
         write_default_memory_config(tmp_path)
         s1 = await svc.start_dream_scheduler()
         s2 = await svc.start_dream_scheduler()
@@ -181,9 +178,7 @@ class TestAgentServiceStartDreamScheduler:
         await svc.stop_dream_scheduler()
 
     @pytest.mark.asyncio
-    async def test_start_loads_cron_from_config(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_start_loads_cron_from_config(self, tmp_path: Path) -> None:
         provider = _make_provider()
         svc = AgentService(
             wiki_registry=_make_wiki_registry(),
@@ -192,10 +187,15 @@ class TestAgentServiceStartDreamScheduler:
         )
         # Write custom config
         import json
-        (tmp_path / DEFAULT_CONFIG_FILENAME).write_text(json.dumps({
-            "consolidation": {},
-            "dream": {"enabled": True, "cron_expression": "0 */2 * * *"},
-        }))
+
+        (tmp_path / DEFAULT_CONFIG_FILENAME).write_text(
+            json.dumps(
+                {
+                    "consolidation": {},
+                    "dream": {"enabled": True, "cron_expression": "0 */2 * * *"},
+                }
+            )
+        )
         sched = await svc.start_dream_scheduler()
         assert sched is not None
         assert sched.cron_expression == "0 */2 * * *"
@@ -212,10 +212,15 @@ class TestAgentServiceStartDreamScheduler:
             provider=provider,
         )
         import json
-        (tmp_path / DEFAULT_CONFIG_FILENAME).write_text(json.dumps({
-            "consolidation": {},
-            "dream": {"enabled": False},
-        }))
+
+        (tmp_path / DEFAULT_CONFIG_FILENAME).write_text(
+            json.dumps(
+                {
+                    "consolidation": {},
+                    "dream": {"enabled": False},
+                }
+            )
+        )
         sched = await svc.start_dream_scheduler()
         assert sched is None  # config disabled
         assert svc.dream_scheduler is None
@@ -238,9 +243,7 @@ class TestAgentServiceStartDreamScheduler:
         await svc.stop_dream_scheduler()
 
     @pytest.mark.asyncio
-    async def test_start_explicit_cron_overrides_config(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_start_explicit_cron_overrides_config(self, tmp_path: Path) -> None:
         provider = _make_provider()
         svc = AgentService(
             wiki_registry=_make_wiki_registry(),
@@ -249,10 +252,15 @@ class TestAgentServiceStartDreamScheduler:
         )
         # Config has one cron, but we override
         import json
-        (tmp_path / DEFAULT_CONFIG_FILENAME).write_text(json.dumps({
-            "consolidation": {},
-            "dream": {"enabled": True, "cron_expression": "0 3 * * *"},
-        }))
+
+        (tmp_path / DEFAULT_CONFIG_FILENAME).write_text(
+            json.dumps(
+                {
+                    "consolidation": {},
+                    "dream": {"enabled": True, "cron_expression": "0 3 * * *"},
+                }
+            )
+        )
         sched = await svc.start_dream_scheduler(cron_expression="0 5 * * *")
         assert sched.cron_expression == "0 5 * * *"
         await svc.stop_dream_scheduler()
@@ -273,6 +281,7 @@ class TestAgentServiceStopDreamScheduler:
         from llmwikify.apps.chat.memory.memory_config import (
             write_default_memory_config,
         )
+
         write_default_memory_config(tmp_path)
         await svc.start_dream_scheduler()
         assert svc.dream_scheduler is not None
@@ -280,9 +289,7 @@ class TestAgentServiceStopDreamScheduler:
         assert svc.dream_scheduler is None
 
     @pytest.mark.asyncio
-    async def test_stop_without_start_is_noop(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_stop_without_start_is_noop(self, tmp_path: Path) -> None:
         svc = AgentService(
             wiki_registry=_make_wiki_registry(),
             data_dir=tmp_path,
@@ -303,6 +310,7 @@ class TestAgentServiceStopDreamScheduler:
         from llmwikify.apps.chat.memory.memory_config import (
             write_default_memory_config,
         )
+
         write_default_memory_config(tmp_path)
         await svc.start_dream_scheduler()
         await svc.stop_dream_scheduler()

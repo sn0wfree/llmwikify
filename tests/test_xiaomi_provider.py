@@ -16,7 +16,7 @@ class TestXiaomiProvider:
 
     def test_default_base_url(self):
         p = XiaomiProvider()
-        assert p.default_base_url() == "https://token-plan-cn.xiaomimimo.com/v1"
+        assert p.default_base_url() == "https://token-plan-cn.xiaomimimo.com"
 
     def test_default_model(self):
         p = XiaomiProvider()

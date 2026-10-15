@@ -1,0 +1,54 @@
+# .dockerignore (repo root — applies to all docker builds with context = repo root)
+#
+# Keeps the build context small and prevents host artifacts from leaking
+# into images. Verified against every Dockerfile's COPY list:
+#   - docker-tests/Dockerfile            needs: raw/, tests/, scripts/, src/, docker-tests/
+#   - docker-tests/Dockerfile.e2e-runner needs: docker-tests/
+#   - docker-tests/Dockerfile.server     needs: src/, docker-tests/
+#   - docker-tests/Dockerfile.production needs: src/, ui/webui/, docker-tests/
+# None of those paths are excluded below. The e2e wheel flow mounts
+# dist/ at *runtime* (-v), not build time, so it is unaffected.
+
+# ── VCS / CI / agent metadata ─────────────────────────────────────
+.git
+.github
+.claude
+.opencode
+
+# ── Python caches & coverage ──────────────────────────────────────
+**/__pycache__
+**/*.py[cod]
+.mypy_cache
+.pytest_cache
+.ruff_cache
+.import_linter_cache
+.coverage
+.coverage.*
+htmlcov
+
+# ── Python build metadata ─────────────────────────────────────────
+**/*.egg-info
+
+# ── Virtualenvs ───────────────────────────────────────────────────
+.venv
+venv
+
+# ── IDE ───────────────────────────────────────────────────────────
+.vscode
+.idea
+*.swp
+
+# ── Project outputs / local runtime data ──────────────────────────
+output
+graphify-out
+logs
+.llmwikify.db
+.wiki
+
+# ── WebUI: rebuilt inside the image; host artifacts must not leak in ──
+ui/webui/node_modules
+ui/webui/dist
+ui/webui/*.tsbuildinfo
+
+# ── Docker test outputs ───────────────────────────────────────────
+docker-tests/test-results

@@ -110,9 +110,7 @@ _CLARIFY_ACTIONS = [clarify_skill]
 # 4 web actions (v0.39 web_search + v0.41 web_fetch)
 _WEB_ACTIONS = [web_search_skill, web_fetch_skill]
 
-ALL_ACTIONS = (
-    _BASE_ACTIONS + _CLARIFY_ACTIONS + ALL_DETECT_SKILLS + _WEB_ACTIONS
-)
+ALL_ACTIONS = _BASE_ACTIONS + _CLARIFY_ACTIONS + ALL_DETECT_SKILLS + _WEB_ACTIONS
 
 assert len(ALL_ACTIONS) == 25, (
     f"Phase 5 contract violation: expected exactly 25 base "

@@ -22,7 +22,9 @@ logger = logging.getLogger(__name__)
 # ``kernel/wiki/mixins/core/utility.py`` (4 package levels
 # under ``llmwikify``), so the path needs 5 ``parent`` calls
 # to reach ``llmwikify/``, then descends into ``foundation/``.
-TEMPLATES_DIR = Path(__file__).parent.parent.parent.parent.parent / "foundation" / "templates"
+TEMPLATES_DIR = (
+    Path(__file__).parent.parent.parent.parent.parent / "foundation" / "templates"
+)
 
 
 class WikiUtilityMixin(WikiProtocol):
@@ -35,26 +37,27 @@ class WikiUtilityMixin(WikiProtocol):
         Handles aliases ([[Target|Display]]) and sections ([[Target#Section]]).
         Returns the clean target page name.
         """
-        return link.split('|')[0].split('#')[0].strip()
+        return link.split("|")[0].split("#")[0].strip()
 
     @staticmethod
     def _slugify(text: str) -> str:
         """Convert text to URL-friendly slug."""
         text = text.lower().strip()
-        text = re.sub(r'[^\w\s-]', '', text)
-        text = re.sub(r'[-\s]+', '-', text)
+        text = re.sub(r"[^\w\s-]", "", text)
+        text = re.sub(r"[-\s]+", "-", text)
         return text
 
     @staticmethod
     def _now() -> str:
         """Get current ISO timestamp."""
-        return datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
+        return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
     @staticmethod
     def _get_version() -> str:
         """Get llmwikify version."""
         try:
             from llmwikify import __version__
+
             return __version__
         except ImportError:
             return "0.0.0"
@@ -64,24 +67,25 @@ class WikiUtilityMixin(WikiProtocol):
         """Detect file type from extension."""
         ext = Path(filename).suffix.lower()
         type_map = {
-            '.md': 'markdown',
-            '.markdown': 'markdown',
-            '.pdf': 'pdf',
-            '.txt': 'text',
-            '.html': 'html',
-            '.htm': 'html',
-            '.csv': 'csv',
-            '.json': 'json',
-            '.xml': 'xml',
-            '.docx': 'docx',
-            '.doc': 'doc',
+            ".md": "markdown",
+            ".markdown": "markdown",
+            ".pdf": "pdf",
+            ".txt": "text",
+            ".html": "html",
+            ".htm": "html",
+            ".csv": "csv",
+            ".json": "json",
+            ".xml": "xml",
+            ".docx": "docx",
+            ".doc": "doc",
         }
-        return type_map.get(ext, 'unknown')
+        return type_map.get(ext, "unknown")
 
     @staticmethod
     def _render_template(name: str, **variables: Any) -> str:
         """Render a template file with Jinja2 variable substitution."""
         from jinja2 import BaseLoader, Environment
+
         template_path = TEMPLATES_DIR / name
         if not template_path.exists():
             return ""
@@ -92,6 +96,7 @@ class WikiUtilityMixin(WikiProtocol):
     def _get_prompt_registry(self) -> PromptRegistry:
         """Create a PromptRegistry instance with current provider and custom dir."""
         from ...prompt_registry import PromptRegistry
+
         provider = self.config.get("llm", {}).get("provider", "openai")
         return PromptRegistry(provider=provider, custom_dir=self._prompt_custom_dir)
 
@@ -115,28 +120,39 @@ class WikiUtilityMixin(WikiProtocol):
         """Return number of wiki pages."""
         if not self.wiki_dir.exists():
             return 0
-        return len([p for p in self.wiki_dir.rglob("*.md")
-                    if p.stem not in (self._index_page_name, self._log_page_name)
-                    and '.sink' not in str(p)
-                    and not is_path_excluded(p)])
+        return len(
+            [
+                p
+                for p in self.wiki_dir.rglob("*.md")
+                if p.stem not in (self._index_page_name, self._log_page_name)
+                and ".sink" not in str(p)
+                and not is_path_excluded(p)
+            ]
+        )
 
     def _get_existing_page_names(self) -> list[str]:
         """Return list of existing wiki page names (relative to wiki_dir)."""
         if not self.wiki_dir.exists():
             return []
-        return [str(p.relative_to(self.wiki_dir)) for p in self.wiki_dir.rglob("*.md")
-                if p.stem not in (self._index_page_name, self._log_page_name)
-                and '.sink' not in str(p)
-                and not is_path_excluded(p)]
+        return [
+            str(p.relative_to(self.wiki_dir))
+            for p in self.wiki_dir.rglob("*.md")
+            if p.stem not in (self._index_page_name, self._log_page_name)
+            and ".sink" not in str(p)
+            and not is_path_excluded(p)
+        ]
 
     def _wiki_pages(self) -> list[Path]:
         """Return all wiki pages recursively, excluding index, log, and .sink/."""
         if not self.wiki_dir.exists():
             return []
-        return [p for p in self.wiki_dir.rglob("*.md")
-                if p.stem not in (self._index_page_name, self._log_page_name)
-                and '.sink' not in str(p)
-                and not is_path_excluded(p)]
+        return [
+            p
+            for p in self.wiki_dir.rglob("*.md")
+            if p.stem not in (self._index_page_name, self._log_page_name)
+            and ".sink" not in str(p)
+            and not is_path_excluded(p)
+        ]
 
     def _page_display_name(self, page: Path) -> str:
         """Return display name for a page (relative path without .md)."""
@@ -144,6 +160,7 @@ class WikiUtilityMixin(WikiProtocol):
 
     @staticmethod
     def _parse_sections(content: str) -> list:
+        # TODO(refactor): C901=13 — too complex, consider splitting
         """Parse markdown into list of (section_header, section_body).
 
         Only parses H2 headers (## Header) for top-level sections.

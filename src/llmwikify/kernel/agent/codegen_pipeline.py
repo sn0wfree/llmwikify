@@ -7,6 +7,7 @@
 
 历史: 从 apps/chat/agent/unified/pipelines/codegen.py 搬迁。
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -39,6 +40,7 @@ class CodegenReasoner(Pipeline):
     def __init__(self, llm_client: Any = None) -> None:
         if llm_client is None:
             from llmwikify.foundation.llm.client import build_llm_client
+
             llm_client = build_llm_client()
         super().__init__(LLMCallStep(llm_client), ExtractCodeStep())
 
@@ -66,19 +68,25 @@ Output ONLY the code block (use FUNCTION FORM for QuantNodes operators)."""
         # Pipeline: messages → LLM text → code
         pipeline_result = await super().handle(messages, spec, ctx)
         if not pipeline_result.success:
-            return StepResult.ok(ReasonResponse(
-                error=pipeline_result.error,
-                is_valid=False,
-            ))
+            return StepResult.ok(
+                ReasonResponse(
+                    error=pipeline_result.error,
+                    is_valid=False,
+                )
+            )
 
         # 追加 assistant 消息到历史（供下轮 feedback 用）
         if pipeline_result.output and ctx is not None and hasattr(ctx, "messages"):
-            ctx.messages.append({"role": "assistant", "content": pipeline_result.output})
+            ctx.messages.append(
+                {"role": "assistant", "content": pipeline_result.output}
+            )
 
-        return StepResult.ok(ReasonResponse(
-            code=pipeline_result.output,
-            is_valid=pipeline_result.output is not None,
-        ))
+        return StepResult.ok(
+            ReasonResponse(
+                code=pipeline_result.output,
+                is_valid=pipeline_result.output is not None,
+            )
+        )
 
 
 class CodeActor(StepHandler):
@@ -98,15 +106,22 @@ class CodeActor(StepHandler):
         # 没有代码 → extract_failed
         if response.code is None:
             feedback_result = await self._feedback.handle(
-                CodeExecResult(success=False, error="no code", error_kind="extract_failed"),
-                spec, ctx,
+                CodeExecResult(
+                    success=False, error="no code", error_kind="extract_failed"
+                ),
+                spec,
+                ctx,
             )
-            return StepResult.ok(ActResult(
-                success=False,
-                error="no code",
-                error_kind="extract_failed",
-                messages_to_inject=[feedback_result.output] if feedback_result.output else [],
-            ))
+            return StepResult.ok(
+                ActResult(
+                    success=False,
+                    error="no code",
+                    error_kind="extract_failed",
+                    messages_to_inject=(
+                        [feedback_result.output] if feedback_result.output else []
+                    ),
+                )
+            )
 
         # 验证 + 执行
         exec_result = await self._executor.handle(response.code, spec, ctx)
@@ -121,33 +136,44 @@ class CodeActor(StepHandler):
                     error=exec_result.error,
                     error_kind="pipeline_error",
                 ),
-                spec, ctx,
+                spec,
+                ctx,
             )
-            return StepResult.ok(ActResult(
-                success=False,
-                error=exec_result.error,
-                error_kind="pipeline_error",
-                code=response.code,
-                messages_to_inject=[feedback_result.output] if feedback_result.output else [],
-            ))
+            return StepResult.ok(
+                ActResult(
+                    success=False,
+                    error=exec_result.error,
+                    error_kind="pipeline_error",
+                    code=response.code,
+                    messages_to_inject=(
+                        [feedback_result.output] if feedback_result.output else []
+                    ),
+                )
+            )
 
         # 执行成功
         if code_result.success:
-            return StepResult.ok(ActResult(
-                success=True,
-                output=code_result.series,
-                code=code_result.code,
-            ))
+            return StepResult.ok(
+                ActResult(
+                    success=True,
+                    output=code_result.series,
+                    code=code_result.code,
+                )
+            )
 
         # 执行失败 → 构建 feedback
         feedback_result = await self._feedback.handle(code_result, spec, ctx)
-        return StepResult.ok(ActResult(
-            success=False,
-            error=code_result.error,
-            error_kind=code_result.error_kind,
-            code=code_result.code,
-            messages_to_inject=[feedback_result.output] if feedback_result.output else [],
-        ))
+        return StepResult.ok(
+            ActResult(
+                success=False,
+                error=code_result.error,
+                error_kind=code_result.error_kind,
+                code=code_result.code,
+                messages_to_inject=(
+                    [feedback_result.output] if feedback_result.output else []
+                ),
+            )
+        )
 
 
 # ─── 便利函数 ──────────────────────────────────────────────
@@ -207,6 +233,7 @@ async def generate_factor_code(
     actor = CodeActor()
 
     from .steps.checks import CheckSuccessStep
+
     loop = UnifiedAgentLoop(
         reasoner=reasoner,
         actor=actor,

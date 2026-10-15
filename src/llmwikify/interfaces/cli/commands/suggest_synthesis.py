@@ -43,12 +43,18 @@ def run_suggest_synthesis(wiki: Any, args: Any) -> int:
         if suggestion.get("reinforced_claims"):
             print(f"\n  ✅ Reinforced Claims ({len(suggestion['reinforced_claims'])})")
             for claim in suggestion["reinforced_claims"][:3]:
-                print(f"    • {claim['claim'][:80]}... (confirmed by {claim['confirmed_by_count']} source(s))")
+                print(
+                    f"    • {claim['claim'][:80]}... (confirmed by {claim['confirmed_by_count']} source(s))"
+                )
 
         if suggestion.get("new_contradictions"):
-            print(f"\n  ⚠️ Potential Contradictions ({len(suggestion['new_contradictions'])})")
+            print(
+                f"\n  ⚠️ Potential Contradictions ({len(suggestion['new_contradictions'])})"
+            )
             for contra in suggestion["new_contradictions"][:3]:
-                print(f"    • {contra.get('contradiction', contra.get('new_claim', 'unknown'))[:80]}...")
+                print(
+                    f"    • {contra.get('contradiction', contra.get('new_claim', 'unknown'))[:80]}..."
+                )
 
         if suggestion.get("knowledge_gaps"):
             print(f"\n  🔍 Knowledge Gaps ({len(suggestion['knowledge_gaps'])})")
@@ -83,7 +89,12 @@ class SuggestSynthesisCommand(Command):
         if not isinstance(subparsers, _SubParsersAction):
             raise TypeError("setup_parser requires an argparse subparsers action")
         p = subparsers.add_parser(self.name, help=self.help)
-        p.add_argument("source", nargs="?", default=None, help="Specific source to analyze (default: all unanalyzed sources)")
+        p.add_argument(
+            "source",
+            nargs="?",
+            default=None,
+            help="Specific source to analyze (default: all unanalyzed sources)",
+        )
         p.add_argument("--json", action="store_true", help="Output as JSON")
 
     def run(self, args: Any, wiki: Any, config: dict) -> int:

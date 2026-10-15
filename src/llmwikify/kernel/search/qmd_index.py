@@ -23,7 +23,7 @@ class QmdIndex:
     delegating to a QMD MCP server via HTTP.
     """
 
-    def __init__(self, wiki_root: Path, config: dict | None = None):
+    def __init__(self, wiki_root: Path, config: dict | None = None) -> None:
         self.wiki_root = wiki_root
         self.config = config or {}
 
@@ -36,11 +36,12 @@ class QmdIndex:
         self._available: bool | None = None  # Cached availability state
 
     @property
-    def client(self):
+    def client(self) -> Any:
         """Lazy load QMD client."""
         if self._client is None:
             try:
                 from .qmd_client import QmdClient
+
                 self._client = QmdClient(host=self.host, port=self.port)
             except ImportError:
                 pass
@@ -130,6 +131,7 @@ class QmdIndex:
         # Fallback if client not loaded
         try:
             from .qmd_client import QmdClient
+
             return QmdClient.get_install_guide(QmdClient)
         except Exception:
             return "Could not load QMD installation guide."

@@ -16,7 +16,6 @@ Usage:
 
 import json
 import sys
-import time
 
 import httpx
 

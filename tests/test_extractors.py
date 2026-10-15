@@ -74,8 +74,8 @@ class TestLinkParsing:
         links = index._parse_links(content, "Test Page")
 
         assert len(links) == 1
-        assert links[0]['target'] == 'Page Name'
-        assert links[0]['display'] == 'Page Name'
+        assert links[0]["target"] == "Page Name"
+        assert links[0]["display"] == "Page Name"
 
     def test_parse_custom_display(self, temp_wiki):
         content = "See [[page|Custom Text]]"
@@ -84,8 +84,8 @@ class TestLinkParsing:
         links = index._parse_links(content, "Test Page")
 
         assert len(links) == 1
-        assert links[0]['target'] == 'page'
-        assert links[0]['display'] == 'Custom Text'
+        assert links[0]["target"] == "page"
+        assert links[0]["display"] == "Custom Text"
 
     def test_parse_section_link(self, temp_wiki):
         content = "Go to [[page#section]]"
@@ -94,8 +94,8 @@ class TestLinkParsing:
         links = index._parse_links(content, "Test Page")
 
         assert len(links) == 1
-        assert links[0]['target'] == 'page'
-        assert links[0]['section'] == '#section'
+        assert links[0]["target"] == "page"
+        assert links[0]["section"] == "#section"
 
     def test_parse_full_link(self, temp_wiki):
         content = "Link: [[page#section|Display]]"
@@ -104,9 +104,9 @@ class TestLinkParsing:
         links = index._parse_links(content, "Test Page")
 
         assert len(links) == 1
-        assert links[0]['target'] == 'page'
-        assert links[0]['section'] == '#section'
-        assert links[0]['display'] == 'Display'
+        assert links[0]["target"] == "page"
+        assert links[0]["section"] == "#section"
+        assert links[0]["display"] == "Display"
 
     def test_parse_multiple_links(self, temp_wiki):
         content = "[[A]] and [[B|Display B]] and [[C#section]]"
@@ -115,10 +115,10 @@ class TestLinkParsing:
         links = index._parse_links(content, "Test Page")
 
         assert len(links) == 3
-        targets = [l['target'] for l in links]
-        assert 'A' in targets
-        assert 'B' in targets
-        assert 'C' in targets
+        targets = [link["target"] for link in links]
+        assert "A" in targets
+        assert "B" in targets
+        assert "C" in targets
 
 
 class TestExtractedContent:

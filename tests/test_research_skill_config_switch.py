@@ -46,13 +46,12 @@ def _patch_gather_handler(return_data: dict | None = None):
     """
     import importlib
     import sys
+
     # Ensure the gather_skill module is fully loaded.
     importlib.import_module(
         "llmwikify.apps.chat.skills.pipelines.gather_skill",
     )
-    gs_mod = sys.modules[
-        "llmwikify.apps.chat.skills.pipelines.gather_skill"
-    ]
+    gs_mod = sys.modules["llmwikify.apps.chat.skills.pipelines.gather_skill"]
 
     if return_data is None:
         return_data = {
@@ -66,10 +65,14 @@ def _patch_gather_handler(return_data: dict | None = None):
     )
     fake_actions = {"gather_for_research": MagicMock(handler=fake_handler)}
 
-    return patch.object(
-        gs_mod, "gather_skill",
-        MagicMock(actions=fake_actions),
-    ), fake_handler
+    return (
+        patch.object(
+            gs_mod,
+            "gather_skill",
+            MagicMock(actions=fake_actions),
+        ),
+        fake_handler,
+    )
 
 
 # ─── Default behavior ───────────────────────────────────────────
@@ -89,8 +92,7 @@ class TestDefaultBehavior:
         call_args = fake_handler.call_args
         passed_args = call_args.args[0]
         assert passed_args["enable_web_search"] is True, (
-            "Default should be True; got "
-            f"{passed_args.get('enable_web_search')!r}"
+            "Default should be True; got " f"{passed_args.get('enable_web_search')!r}"
         )
 
 
@@ -134,9 +136,11 @@ class TestConfigSwitch:
     @pytest.mark.asyncio
     async def test_other_research_keys_ignored(self) -> None:
         """Other research.* keys shouldn't affect the switch."""
-        ctx = _make_ctx({
-            "research": {"max_concurrent": 4, "enable_web_search": False},
-        })
+        ctx = _make_ctx(
+            {
+                "research": {"max_concurrent": 4, "enable_web_search": False},
+            }
+        )
         state = _make_state([{"q": "x", "status": "pending"}])
 
         ctx_patch, fake_handler = _patch_gather_handler()
@@ -153,10 +157,12 @@ class TestPassThrough:
     @pytest.mark.asyncio
     async def test_sub_queries_passed(self) -> None:
         ctx = _make_ctx({"research": {"enable_web_search": True}})
-        state = _make_state([
-            {"q": "alpha", "status": "pending"},
-            {"q": "beta", "status": "pending"},
-        ])
+        state = _make_state(
+            [
+                {"q": "alpha", "status": "pending"},
+                {"q": "beta", "status": "pending"},
+            ]
+        )
 
         ctx_patch, fake_handler = _patch_gather_handler()
         with ctx_patch:
@@ -175,11 +181,13 @@ class TestPassThrough:
             "sources": [{"url": "https://a", "source_type": "wiki"}],
         }
 
-        ctx_patch, fake_handler = _patch_gather_handler({
-            "sources": [{"url": "https://a"}],
-            "_new_sources": 0,
-            "_failed_queries": [],
-        })
+        ctx_patch, fake_handler = _patch_gather_handler(
+            {
+                "sources": [{"url": "https://a"}],
+                "_new_sources": 0,
+                "_failed_queries": [],
+            }
+        )
         with ctx_patch:
             await _act_gather(state, ctx)
 

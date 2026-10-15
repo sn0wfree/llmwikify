@@ -70,8 +70,9 @@ def step_1_init_wiki_if_needed() -> None:
 
 def step_2_start_server() -> subprocess.Popen | None:
     section("step 2: start llmwikify serve --web")
-    log_path = THIS_DIR.parent / "expected" / "02-server.log"
-    log_path.parent.mkdir(parents=True, exist_ok=True)
+    # 2026-10-15: 日志写 WIKI_ROOT（容器内 /app/examples 挂载点不可写;
+    # 主机上也不应在 repo 树里遗留运行产物）
+    log_path = WIKI_ROOT / "02-server.log"
     log_fh = log_path.open("wb")
 
     # The generic runner image already has `llmwikify` on PATH. On a

@@ -27,7 +27,7 @@ import sys
 from dataclasses import dataclass
 
 from ._errors import AuthError
-from .db import UserRepository, auto_first_admin
+from .db import auto_first_admin
 
 
 @dataclass

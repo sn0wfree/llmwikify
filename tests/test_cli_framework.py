@@ -19,9 +19,6 @@ from __future__ import annotations
 
 import io
 import json
-import os
-import sys
-from pathlib import Path
 
 import pytest
 
@@ -129,15 +126,23 @@ def test_registered_command_names_is_sorted():
     class CmdZ:
         name = "z_cmd"
         help = ""
-        def setup_parser(self, sp): pass
-        def run(self, *a, **kw): return 0
+
+        def setup_parser(self, sp):
+            pass
+
+        def run(self, *a, **kw):
+            return 0
 
     @register_command
     class CmdA:
         name = "a_cmd"
         help = ""
-        def setup_parser(self, sp): pass
-        def run(self, *a, **kw): return 0
+
+        def setup_parser(self, sp):
+            pass
+
+        def run(self, *a, **kw):
+            return 0
 
     try:
         names = registered_command_names()

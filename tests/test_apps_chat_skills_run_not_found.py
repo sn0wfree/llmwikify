@@ -36,16 +36,22 @@ def run_store(monkeypatch, tmp_path: Path):
     # RunStore.default() ignores env vars and always returns the home
     # directory. Patch it so our test can control the listing.
     from llmwikify.apps.chat.skills import workflows as wf_mod
+
     monkeypatch.setattr(
-        wf_mod.run_store.RunStore, "default", classmethod(lambda cls: store),
+        wf_mod.run_store.RunStore,
+        "default",
+        classmethod(lambda cls: store),
     )
     # Also patch the importers in the two helper modules
     from llmwikify.apps.chat.skills import (
         autoresearch_compound_skill,
     )
     from llmwikify.apps.chat.skills import workflows as wf_pkg
+
     monkeypatch.setattr(
-        autoresearch_compound_skill, "RunStore", wf_mod.run_store.RunStore,
+        autoresearch_compound_skill,
+        "RunStore",
+        wf_mod.run_store.RunStore,
     )
     # workflows.skill already uses RunStore via module-level import.
     # Replace it with our patched class so its .default() returns the temp store.
@@ -92,10 +98,13 @@ class TestAutoresearchFormatHelper:
 
     def test_non_wf_lists_recent_runs(self, run_store: RunStore) -> None:
         """When the LLM clearly gave a wrong run_id, list recent ones to help."""
-        _seed_runs(run_store, [
-            "wf_2026-06-16T10-00-00_aaaa1111",
-            "wf_2026-06-16T10-01-00_bbbb2222",
-        ])
+        _seed_runs(
+            run_store,
+            [
+                "wf_2026-06-16T10-00-00_aaaa1111",
+                "wf_2026-06-16T10-01-00_bbbb2222",
+            ],
+        )
         msg = _format_run_not_found("user-typo", workflow_name="autoresearch-compound")
         assert "Recent run_ids:" in msg
         assert "wf_2026-06-16T10-00-00_aaaa1111" in msg
@@ -109,12 +118,16 @@ class TestAutoresearchFormatHelper:
 
     def test_non_wf_filters_by_workflow_name(self, run_store: RunStore) -> None:
         """When workflow_name is given, recent runs are filtered."""
-        _seed_runs(run_store, [
-            "wf_other_wf_a1b2c3d4",
-            "wf_match_me_e5f6g7h8",
-        ])
+        _seed_runs(
+            run_store,
+            [
+                "wf_other_wf_a1b2c3d4",
+                "wf_match_me_e5f6g7h8",
+            ],
+        )
         msg = _format_run_not_found(
-            "garbage", workflow_name="autoresearch-compound",
+            "garbage",
+            workflow_name="autoresearch-compound",
         )
         # Note: seeded runs have workflow_name="autoresearch-compound" so both
         # appear. Verify the listing logic works (both run_ids listed).
@@ -157,14 +170,20 @@ class TestBackwardsCompatibility:
     the substring 'no run with id'. Make sure all 4 patched sites still
     contain that substring for the wf_*-prefixed case."""
 
-    @pytest.mark.parametrize("helper,run_id,expected_substr", [
-        (_format_run_not_found, "wf_x", "no run with id"),
-        (_format_run_not_found_workflow, "wf_x", "no run with id"),
-        (_format_run_not_found, "study: x", "no run with id"),
-        (_format_run_not_found_workflow, "study: x", "no run with id"),
-    ])
+    @pytest.mark.parametrize(
+        "helper,run_id,expected_substr",
+        [
+            (_format_run_not_found, "wf_x", "no run with id"),
+            (_format_run_not_found_workflow, "wf_x", "no run with id"),
+            (_format_run_not_found, "study: x", "no run with id"),
+            (_format_run_not_found_workflow, "study: x", "no run with id"),
+        ],
+    )
     def test_substring_preserved(
-        self, helper, run_id: str, expected_substr: str,
+        self,
+        helper,
+        run_id: str,
+        expected_substr: str,
     ) -> None:
         msg = helper(run_id)
         assert expected_substr in msg

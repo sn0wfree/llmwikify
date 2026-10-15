@@ -134,7 +134,11 @@ def parse_minimax_tool_call(body: str) -> tuple[str, dict[str, str]] | None:
         key.strip(): value.strip()
         for key, value in MINIMAX_PARAM_RE.findall(m.group(2))
     }
-    if tool_name == "autoresearch_compound_run" and "question" not in args and "topic" in args:
+    if (
+        tool_name == "autoresearch_compound_run"
+        and "question" not in args
+        and "topic" in args
+    ):
         args["question"] = args["topic"]
     return tool_name, args
 
@@ -195,7 +199,10 @@ class TextModeParser:
         """
         if event.get("type") != "content":
             if self._buffer and event.get("type") in (
-                "done", "thinking", "tool_call", "error",
+                "done",
+                "thinking",
+                "tool_call",
+                "error",
             ):
                 yield {"type": "content", "text": self._buffer}
                 self._buffer = ""
@@ -208,7 +215,8 @@ class TextModeParser:
         self._buffer += chunk
         while True:
             matches = [
-                m for m in (
+                m
+                for m in (
                     TOOL_CALL_RE.search(self._buffer),
                     MINIMAX_TOOL_CALL_RE.search(self._buffer),
                 )
@@ -231,7 +239,7 @@ class TextModeParser:
                     "tool": tool_name,
                     "args": json.dumps(args, ensure_ascii=False),
                 }
-            self._buffer = self._buffer[m.end():]
+            self._buffer = self._buffer[m.end() :]
 
     def flush(self) -> list[dict[str, Any]]:
         """Flush any remaining buffered text as a single content event."""

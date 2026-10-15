@@ -10,9 +10,8 @@ from __future__ import annotations
 
 import pytest
 
-from llmwikify.apps.chat.skills import SkillContext, SkillResult
+from llmwikify.apps.chat.skills import SkillContext
 from llmwikify.apps.chat.skills.pipelines.ingest_skill import (
-    IngestSkill,
     _derive_page_name,
     _ingest,
     ingest_skill,
@@ -140,7 +139,6 @@ class TestIngestWithWiki:
         ctx = SkillContext(db=None, config={})
         ctx.wiki = MockWiki()
 
-
         # Mock extract
         mock_extract_result = MagicMock()
         mock_extract_result.status = "ok"
@@ -168,15 +166,19 @@ class TestIngestWithWiki:
             "read_page": MagicMock(handler=AsyncMock(return_value=mock_read_result))
         }
 
-        with patch(
-            "llmwikify.apps.chat.skills.actions.extract_action.extract_skill",
-            mock_extract_skill,
-        ), patch(
-            "llmwikify.apps.chat.skills.actions.write_action.write_skill",
-            mock_write_skill,
-        ), patch(
-            "llmwikify.apps.chat.skills.actions.read_action.read_skill",
-            mock_read_skill,
+        with (
+            patch(
+                "llmwikify.apps.chat.skills.actions.extract_action.extract_skill",
+                mock_extract_skill,
+            ),
+            patch(
+                "llmwikify.apps.chat.skills.actions.write_action.write_skill",
+                mock_write_skill,
+            ),
+            patch(
+                "llmwikify.apps.chat.skills.actions.read_action.read_skill",
+                mock_read_skill,
+            ),
         ):
             result = await _ingest(
                 {"url_or_path": "https://example.com/article"},

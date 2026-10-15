@@ -13,7 +13,6 @@ Covers:
 
 from __future__ import annotations
 
-import asyncio
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
@@ -83,7 +82,8 @@ async def test_start_auto_compact_wires_instance(tmp_path: Path) -> None:
         provider=_make_provider(),
     )
     out = await svc.start_auto_compact(
-        ttl_minutes=15, interval_seconds=3600.0,
+        ttl_minutes=15,
+        interval_seconds=3600.0,
     )
     try:
         assert out is svc.auto_compact
@@ -103,10 +103,12 @@ async def test_start_auto_compact_idempotent(tmp_path: Path) -> None:
         provider=_make_provider(),
     )
     a = await svc.start_auto_compact(
-        ttl_minutes=10, interval_seconds=3600.0,
+        ttl_minutes=10,
+        interval_seconds=3600.0,
     )
     b = await svc.start_auto_compact(
-        ttl_minutes=99, interval_seconds=3600.0,
+        ttl_minutes=99,
+        interval_seconds=3600.0,
     )
     try:
         assert a is b

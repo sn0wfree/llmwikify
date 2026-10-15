@@ -13,8 +13,6 @@ algorithm as ``SkillToolAdapter._tool_name``).
 
 from __future__ import annotations
 
-import pytest
-
 from llmwikify.apps.chat.skills.base import Skill, SkillAction, SkillResult
 from llmwikify.apps.chat.skills.registry import SkillRegistry
 
@@ -25,6 +23,7 @@ def _noop(args, ctx):
 
 class _StudySkill(Skill):
     """The /study skill under test."""
+
     name = "autoresearch_compound"
     description = "Run compound research"
     actions = {
@@ -41,6 +40,7 @@ class _StudySkill(Skill):
 
 class _DashedSkill(Skill):
     """Skill with dashes in name and action."""
+
     name = "my-skill"
     description = "Test"
     actions = {
@@ -56,6 +56,7 @@ class _DashedSkill(Skill):
 
 class _DottedSkill(Skill):
     """Skill with dots in name."""
+
     name = "foo.bar"
     description = "Test"
     actions = {
@@ -71,6 +72,7 @@ class _DottedSkill(Skill):
 
 class _DynamicWorkflowSkill(Skill):
     """The general workflow runner skill."""
+
     name = "dynamic_workflow"
     description = "Dynamic workflow runner"
     actions = {
@@ -86,6 +88,7 @@ class _DynamicWorkflowSkill(Skill):
 
 class _NoTriggersSkill(Skill):
     """Skill with action that has no triggers."""
+
     name = "no_triggers_skill"
     description = "Test"
     actions = {
@@ -195,6 +198,6 @@ def test_all_triggers_tool_name_matches_skill_tool_adapter() -> None:
     adapter_tools = {t["name"] for t in adapter.list_tools()}
 
     # Every trigger tool must be in the adapter's tool list
-    assert trigger_tools.issubset(adapter_tools), (
-        f"trigger tools {trigger_tools} not in adapter tools {adapter_tools}"
-    )
+    assert trigger_tools.issubset(
+        adapter_tools
+    ), f"trigger tools {trigger_tools} not in adapter tools {adapter_tools}"

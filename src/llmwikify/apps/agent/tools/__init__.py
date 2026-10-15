@@ -10,14 +10,15 @@ import hashlib
 import json
 import logging
 import re
-import uuid
 from collections.abc import Callable
 from datetime import datetime, timezone
 from typing import Any
 
+from llmwikify.apps.wiki.db import WikiDatabase
+
 logger = logging.getLogger(__name__)
 
-_SOURCE_CITATION_RE = re.compile(r'\[\[Source:([a-f0-9]+)\]\]')
+_SOURCE_CITATION_RE = re.compile(r"\[\[Source:([a-f0-9]+)\]\]")
 
 
 class WikiToolRegistry:
@@ -30,7 +31,7 @@ class WikiToolRegistry:
     - requires_confirmation="pre": create confirmation, return confirmation_id
     """
 
-    def __init__(self, wiki: Any, db: Any = None, wiki_id: str | None = None):
+    def __init__(self, wiki: Any, db: Any = None, wiki_id: str | None = None) -> None:
         self.wiki = wiki
         self.db = db
         self.wiki_id = wiki_id
@@ -51,14 +52,20 @@ class WikiToolRegistry:
         # No confirmation needed
         self._register(
             "wiki_init",
-            lambda args: json.dumps(self.wiki.init(overwrite=args.get("overwrite", False))),
+            lambda args: json.dumps(
+                self.wiki.init(overwrite=args.get("overwrite", False))
+            ),
             description="Initialize a wiki",
             action_type="write",
             requires_confirmation=False,
             parameters={
                 "type": "object",
                 "properties": {
-                    "overwrite": {"type": "boolean", "description": "Whether to overwrite existing wiki", "default": False},
+                    "overwrite": {
+                        "type": "boolean",
+                        "description": "Whether to overwrite existing wiki",
+                        "default": False,
+                    },
                 },
                 "required": [],
             },
@@ -72,16 +79,17 @@ class WikiToolRegistry:
             parameters={
                 "type": "object",
                 "properties": {
-                    "page_name": {"type": "string", "description": "Name or path of the page to read"},
+                    "page_name": {
+                        "type": "string",
+                        "description": "Name or path of the page to read",
+                    },
                 },
                 "required": ["page_name"],
             },
         )
         self._register(
             "wiki_search",
-            lambda args: self.wiki.search(
-                args.get("query", ""), args.get("limit", 10)
-            ),
+            lambda args: self.wiki.search(args.get("query", ""), args.get("limit", 10)),
             description="Full-text search across wiki pages",
             action_type="read",
             requires_confirmation=False,
@@ -89,7 +97,11 @@ class WikiToolRegistry:
                 "type": "object",
                 "properties": {
                     "query": {"type": "string", "description": "Search query string"},
-                    "limit": {"type": "integer", "description": "Max results to return", "default": 10},
+                    "limit": {
+                        "type": "integer",
+                        "description": "Max results to return",
+                        "default": 10,
+                    },
                 },
                 "required": ["query"],
             },
@@ -110,10 +122,27 @@ class WikiToolRegistry:
             parameters={
                 "type": "object",
                 "properties": {
-                    "mode": {"type": "string", "enum": ["check", "fix"], "description": "Lint mode", "default": "check"},
-                    "limit": {"type": "integer", "description": "Max issues to return", "default": 10},
-                    "force": {"type": "boolean", "description": "Force re-lint", "default": False},
-                    "generate_investigations": {"type": "boolean", "description": "Generate investigation questions", "default": False},
+                    "mode": {
+                        "type": "string",
+                        "enum": ["check", "fix"],
+                        "description": "Lint mode",
+                        "default": "check",
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Max issues to return",
+                        "default": 10,
+                    },
+                    "force": {
+                        "type": "boolean",
+                        "description": "Force re-lint",
+                        "default": False,
+                    },
+                    "generate_investigations": {
+                        "type": "boolean",
+                        "description": "Generate investigation questions",
+                        "default": False,
+                    },
                 },
                 "required": [],
             },
@@ -131,8 +160,15 @@ class WikiToolRegistry:
             parameters={
                 "type": "object",
                 "properties": {
-                    "source_path": {"type": "string", "description": "Path to the source file to analyze"},
-                    "force": {"type": "boolean", "description": "Force re-analysis", "default": False},
+                    "source_path": {
+                        "type": "string",
+                        "description": "Path to the source file to analyze",
+                    },
+                    "force": {
+                        "type": "boolean",
+                        "description": "Force re-analysis",
+                        "default": False,
+                    },
                 },
                 "required": ["source_path"],
             },
@@ -146,10 +182,25 @@ class WikiToolRegistry:
             parameters={
                 "type": "object",
                 "properties": {
-                    "page_name": {"type": "string", "description": "Page to get references for"},
-                    "detail": {"type": "boolean", "description": "Include context snippets", "default": False},
-                    "inbound": {"type": "boolean", "description": "Only show inbound links", "default": False},
-                    "outbound": {"type": "boolean", "description": "Only show outbound links", "default": False},
+                    "page_name": {
+                        "type": "string",
+                        "description": "Page to get references for",
+                    },
+                    "detail": {
+                        "type": "boolean",
+                        "description": "Include context snippets",
+                        "default": False,
+                    },
+                    "inbound": {
+                        "type": "boolean",
+                        "description": "Only show inbound links",
+                        "default": False,
+                    },
+                    "outbound": {
+                        "type": "boolean",
+                        "description": "Only show outbound links",
+                        "default": False,
+                    },
                 },
                 "required": ["page_name"],
             },
@@ -172,14 +223,20 @@ class WikiToolRegistry:
         )
         self._register(
             "wiki_build_index",
-            lambda args: self.wiki.build_index(auto_export=args.get("auto_export", True)),
+            lambda args: self.wiki.build_index(
+                auto_export=args.get("auto_export", True)
+            ),
             description="Build reference index",
             action_type="write",
             requires_confirmation=False,
             parameters={
                 "type": "object",
                 "properties": {
-                    "auto_export": {"type": "boolean", "description": "Auto-export after building", "default": True},
+                    "auto_export": {
+                        "type": "boolean",
+                        "description": "Auto-export after building",
+                        "default": True,
+                    },
                 },
                 "required": [],
             },
@@ -211,7 +268,10 @@ class WikiToolRegistry:
             parameters={
                 "type": "object",
                 "properties": {
-                    "source_name": {"type": "string", "description": "Filter by source name"},
+                    "source_name": {
+                        "type": "string",
+                        "description": "Filter by source name",
+                    },
                 },
                 "required": [],
             },
@@ -219,7 +279,9 @@ class WikiToolRegistry:
         self._register(
             "wiki_knowledge_gaps",
             lambda args: json.dumps(
-                self.wiki.lint(generate_investigations=True, limit=args.get("limit", 20))
+                self.wiki.lint(
+                    generate_investigations=True, limit=args.get("limit", 20)
+                )
             ),
             description="Detect knowledge gaps",
             action_type="read",
@@ -227,7 +289,11 @@ class WikiToolRegistry:
             parameters={
                 "type": "object",
                 "properties": {
-                    "limit": {"type": "integer", "description": "Max gaps to return", "default": 20},
+                    "limit": {
+                        "type": "integer",
+                        "description": "Max gaps to return",
+                        "default": 20,
+                    },
                 },
                 "required": [],
             },
@@ -268,7 +334,10 @@ class WikiToolRegistry:
             parameters={
                 "type": "object",
                 "properties": {
-                    "source": {"type": "string", "description": "Path or URL of the source to ingest"},
+                    "source": {
+                        "type": "string",
+                        "description": "Path or URL of the source to ingest",
+                    },
                 },
                 "required": ["source"],
             },
@@ -286,8 +355,14 @@ class WikiToolRegistry:
             parameters={
                 "type": "object",
                 "properties": {
-                    "page_name": {"type": "string", "description": "Page path (e.g. entities/PersonName)"},
-                    "content": {"type": "string", "description": "Markdown content to write"},
+                    "page_name": {
+                        "type": "string",
+                        "description": "Page path (e.g. entities/PersonName)",
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "Markdown content to write",
+                    },
                 },
                 "required": ["page_name", "content"],
             },
@@ -304,8 +379,14 @@ class WikiToolRegistry:
             parameters={
                 "type": "object",
                 "properties": {
-                    "session_id": {"type": "string", "description": "Research session ID"},
-                    "page_name": {"type": "string", "description": "Wiki page name (auto-generated if omitted)"},
+                    "session_id": {
+                        "type": "string",
+                        "description": "Research session ID",
+                    },
+                    "page_name": {
+                        "type": "string",
+                        "description": "Wiki page name (auto-generated if omitted)",
+                    },
                     "include_sources": {
                         "type": "boolean",
                         "description": "Save raw source content to wiki (raw/ + index). Default true.",
@@ -337,12 +418,36 @@ class WikiToolRegistry:
                 "properties": {
                     "query": {"type": "string", "description": "The original question"},
                     "answer": {"type": "string", "description": "The answer to save"},
-                    "source_pages": {"type": "array", "items": {"type": "string"}, "description": "Source page names used"},
-                    "raw_sources": {"type": "array", "items": {"type": "string"}, "description": "Raw source references"},
-                    "page_name": {"type": "string", "description": "Target page name (auto-generated if omitted)"},
-                    "auto_link": {"type": "boolean", "description": "Auto-create entity links", "default": True},
-                    "auto_log": {"type": "boolean", "description": "Auto-log to wiki log", "default": True},
-                    "mode": {"type": "string", "enum": ["sink", "entity", "concept"], "description": "Synthesis mode", "default": "sink"},
+                    "source_pages": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Source page names used",
+                    },
+                    "raw_sources": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Raw source references",
+                    },
+                    "page_name": {
+                        "type": "string",
+                        "description": "Target page name (auto-generated if omitted)",
+                    },
+                    "auto_link": {
+                        "type": "boolean",
+                        "description": "Auto-create entity links",
+                        "default": True,
+                    },
+                    "auto_log": {
+                        "type": "boolean",
+                        "description": "Auto-log to wiki log",
+                        "default": True,
+                    },
+                    "mode": {
+                        "type": "string",
+                        "enum": ["sink", "entity", "concept"],
+                        "description": "Synthesis mode",
+                        "default": "sink",
+                    },
                 },
                 "required": ["query", "answer"],
             },
@@ -356,15 +461,48 @@ class WikiToolRegistry:
             parameters={
                 "type": "object",
                 "properties": {
-                    "action": {"type": "string", "enum": ["query", "path", "stats", "write"], "description": "Graph action", "default": "query"},
-                    "concept": {"type": "string", "description": "Concept name (for query action)"},
-                    "direction": {"type": "string", "enum": ["inbound", "outbound", "both"], "description": "Link direction", "default": "both"},
-                    "confidence": {"type": "string", "description": "Filter by confidence level"},
-                    "source": {"type": "string", "description": "Source concept (for path action)"},
-                    "target": {"type": "string", "description": "Target concept (for path action)"},
-                    "max_length": {"type": "integer", "description": "Max path length", "default": 5},
-                    "relations": {"type": "array", "items": {"type": "object"}, "description": "Relations to write (for write action)"},
-                    "source_file": {"type": "string", "description": "Source file for relations"},
+                    "action": {
+                        "type": "string",
+                        "enum": ["query", "path", "stats", "write"],
+                        "description": "Graph action",
+                        "default": "query",
+                    },
+                    "concept": {
+                        "type": "string",
+                        "description": "Concept name (for query action)",
+                    },
+                    "direction": {
+                        "type": "string",
+                        "enum": ["inbound", "outbound", "both"],
+                        "description": "Link direction",
+                        "default": "both",
+                    },
+                    "confidence": {
+                        "type": "string",
+                        "description": "Filter by confidence level",
+                    },
+                    "source": {
+                        "type": "string",
+                        "description": "Source concept (for path action)",
+                    },
+                    "target": {
+                        "type": "string",
+                        "description": "Target concept (for path action)",
+                    },
+                    "max_length": {
+                        "type": "integer",
+                        "description": "Max path length",
+                        "default": 5,
+                    },
+                    "relations": {
+                        "type": "array",
+                        "items": {"type": "object"},
+                        "description": "Relations to write (for write action)",
+                    },
+                    "source_file": {
+                        "type": "string",
+                        "description": "Source file for relations",
+                    },
                 },
                 "required": [],
             },
@@ -384,7 +522,8 @@ class WikiToolRegistry:
             "description": description,
             "action_type": action_type,
             "requires_confirmation": requires_confirmation,
-            "parameters": parameters or {"type": "object", "properties": {}, "required": []},
+            "parameters": parameters
+            or {"type": "object", "properties": {}, "required": []},
         }
 
     def _get_references(self, args: dict) -> dict:
@@ -394,9 +533,13 @@ class WikiToolRegistry:
         outbound = args.get("outbound", False)
         result = {"page": page_name, "inbound": [], "outbound": []}
         if not outbound:
-            result["inbound"] = self.wiki.get_inbound_links(page_name, include_context=detail)
+            result["inbound"] = self.wiki.get_inbound_links(
+                page_name, include_context=detail
+            )
         if not inbound:
-            result["outbound"] = self.wiki.get_outbound_links(page_name, include_context=detail)
+            result["outbound"] = self.wiki.get_outbound_links(
+                page_name, include_context=detail
+            )
         return result
 
     def _graph_action(self, args: dict) -> dict:
@@ -450,8 +593,9 @@ class WikiToolRegistry:
     def _slugify(text: str) -> str:
         """Convert text to a URL-friendly slug."""
         import re
-        slug = re.sub(r'[^a-z0-9\u4e00-\u9fff]+', '-', text.lower()).strip('-')
-        return slug[:60] or 'untitled'
+
+        slug = re.sub(r"[^a-z0-9\u4e00-\u9fff]+", "-", text.lower()).strip("-")
+        return slug[:60] or "untitled"
 
     @staticmethod
     def _source_slug(url: str, title: str) -> str | None:
@@ -465,7 +609,9 @@ class WikiToolRegistry:
         key = (url or "").strip() or (title or "").strip()
         if not key:
             return None
-        h = hashlib.md5(key.encode()).hexdigest()[:12]
+        h = hashlib.md5(key.encode()).hexdigest()[
+            :12
+        ]  # noqa: S324 — short ID, not cryptographic
         return f"src-{h}"
 
     @staticmethod
@@ -485,7 +631,9 @@ class WikiToolRegistry:
             if not key:
                 continue
             display_title = title_raw or url or "untitled"
-            h = hashlib.md5(key.encode()).hexdigest()[:12]
+            h = hashlib.md5(key.encode()).hexdigest()[
+                :12
+            ]  # noqa: S324 — short ID, not cryptographic
             slug = f"src-{h}"
             link_map[h] = {"slug": slug, "title": display_title, "url": url}
         return link_map
@@ -513,7 +661,8 @@ class WikiToolRegistry:
         if n_replaced:
             logger.info(
                 "Linkified %d/%d inline source citations in research save",
-                n_replaced, total,
+                n_replaced,
+                total,
             )
         return new_md
 
@@ -589,20 +738,20 @@ class WikiToolRegistry:
         self.wiki.write_page(synthesis_page, synthesis_md)
 
         # 7. Update session wiki_page_name
-        with sqlite3.connect(self.db.db_path) as conn:
-            conn.execute(
-                "UPDATE autoresearch_sessions SET wiki_page_name = ? WHERE id = ?",
-                (page_name, session_id),
-            )
-            conn.commit()
+        self.db._mgr.execute_write(
+            "UPDATE autoresearch_sessions SET wiki_page_name = ? WHERE id = ?",
+            (page_name, session_id),
+        )
 
-        return json.dumps({
-            "page_name": page_name,
-            "sources_saved": sources_saved,
-            "synthesis_page": synthesis_page,
-            "include_sources": include_sources,
-            "message": f"Saved to wiki: {page_name}",
-        })
+        return json.dumps(
+            {
+                "page_name": page_name,
+                "sources_saved": sources_saved,
+                "synthesis_page": synthesis_page,
+                "include_sources": include_sources,
+                "message": f"Saved to wiki: {page_name}",
+            }
+        )
 
     def _analyze_impact(self, tool_name: str, arguments: dict) -> dict:
         """Analyze the impact of a tool call for confirmation preview."""
@@ -630,7 +779,11 @@ class WikiToolRegistry:
                             if s.get("source_type") != "wiki" and s.get("content")
                         )
                 except Exception:
-                    pass
+                    logger.debug(
+                        "Failed to count raw sources for session %s",
+                        session_id,
+                        exc_info=True,
+                    )
 
             return {
                 "session_id": session_id,
@@ -674,7 +827,9 @@ class WikiToolRegistry:
                 "description": info["description"],
                 "action_type": info["action_type"],
                 "requires_confirmation": info["requires_confirmation"],
-                "parameters": info.get("parameters", {"type": "object", "properties": {}, "required": []}),
+                "parameters": info.get(
+                    "parameters", {"type": "object", "properties": {}, "required": []}
+                ),
             }
             for name, info in self._tools.items()
         ]
@@ -684,8 +839,7 @@ class WikiToolRegistry:
         if tool is None:
             available = ", ".join(sorted(self._tools.keys()))
             raise ValueError(
-                f"Unknown tool: {name!r}. "
-                f"Available tools: [{available}]"
+                f"Unknown tool: {name!r}. " f"Available tools: [{available}]"
             )
 
         confirmation_mode = tool.get("requires_confirmation", False)
@@ -696,7 +850,8 @@ class WikiToolRegistry:
         # had no caller).
         if confirmation_mode not in (False, "posthoc"):
             if self.db and self.db.has_always_permission(
-                name, session_id=getattr(self, "wiki_id", None),
+                name,
+                session_id=getattr(self, "wiki_id", None),
             ):
                 return tool["handler"](arguments)
 
@@ -713,7 +868,9 @@ class WikiToolRegistry:
         else:
             impact = self._analyze_impact(name, arguments)
             group = self._classify_page_group(arguments)
-            confirmation_id = str(uuid.uuid4())[:8]
+            confirmation_id = (
+                WikiDatabase.make_confirmation_id()
+            )  # 8-char hex (single source of truth)
 
             confirmation = {
                 "id": confirmation_id,
@@ -749,27 +906,39 @@ class WikiToolRegistry:
         }
         self._ingest_log.append(log_entry)
         if len(self._ingest_log) > self._max_ingest_log:
-            self._ingest_log = self._ingest_log[-self._max_ingest_log:]
+            self._ingest_log = self._ingest_log[-self._max_ingest_log :]
 
-    def confirm_execution(self, confirmation_id: str, arguments: dict | None = None) -> Any:
+    def confirm_execution(
+        self, confirmation_id: str, arguments: dict | None = None
+    ) -> Any:
         if self.db:
-            conf = self.db.get_confirmation(confirmation_id)
+            conf = self.db.get_confirmation_with_decoded_args(confirmation_id)
             if conf and conf.get("wiki_id") == self.wiki_id:
                 if conf["status"] != "pending":
-                    return {"status": "error", "error": f"Confirmation already {conf['status']}"}
+                    return {
+                        "status": "error",
+                        "error": f"Confirmation already {conf['status']}",
+                    }
                 tool = self._tools.get(conf["tool"])
                 if tool is None:
-                    return {"status": "error", "error": f"Tool not found: {conf['tool']}"}
+                    return {
+                        "status": "error",
+                        "error": f"Tool not found: {conf['tool']}",
+                    }
                 try:
-                    args = arguments if arguments is not None else (
-                        json.loads(conf["arguments"]) if isinstance(conf["arguments"], str) else conf["arguments"]
-                    )
+                    args = arguments if arguments is not None else conf["arguments"]
                     if arguments is not None:
-                        self.db.update_confirmation_arguments(confirmation_id, arguments)
+                        self.db.update_confirmation_arguments(
+                            confirmation_id, arguments
+                        )
                     result = tool["handler"](args)
                     self.db.update_confirmation_status(confirmation_id, "approved")
                     self._pending_confirmations.pop(confirmation_id, None)
-                    return {"status": "executed", "confirmation_id": confirmation_id, "result": result}
+                    return {
+                        "status": "executed",
+                        "confirmation_id": confirmation_id,
+                        "result": result,
+                    }
                 except Exception as e:
                     self.db.update_confirmation_status(confirmation_id, "rejected")
                     self._pending_confirmations.pop(confirmation_id, None)
@@ -777,17 +946,27 @@ class WikiToolRegistry:
 
         confirmation = self._pending_confirmations.pop(confirmation_id, None)
         if confirmation is None:
-            return {"status": "error", "error": f"Invalid confirmation ID: {confirmation_id}"}
+            return {
+                "status": "error",
+                "error": f"Invalid confirmation ID: {confirmation_id}",
+            }
         tool = self._tools.get(confirmation["tool"])
         if tool is None:
-            return {"status": "error", "error": f"Tool not found: {confirmation['tool']}"}
+            return {
+                "status": "error",
+                "error": f"Tool not found: {confirmation['tool']}",
+            }
         try:
             args = arguments if arguments is not None else confirmation["arguments"]
             if arguments is not None:
                 confirmation["arguments"] = arguments
             result = tool["handler"](args)
             confirmation["status"] = "approved"
-            return {"status": "executed", "confirmation_id": confirmation_id, "result": result}
+            return {
+                "status": "executed",
+                "confirmation_id": confirmation_id,
+                "result": result,
+            }
         except Exception as e:
             confirmation["status"] = "rejected"
             return {"status": "error", "error": str(e)}
@@ -802,7 +981,10 @@ class WikiToolRegistry:
 
         confirmation = self._pending_confirmations.pop(confirmation_id, None)
         if confirmation is None:
-            return {"status": "error", "error": f"Invalid confirmation ID: {confirmation_id}"}
+            return {
+                "status": "error",
+                "error": f"Invalid confirmation ID: {confirmation_id}",
+            }
         confirmation["status"] = "rejected"
         return {"status": "rejected", "confirmation_id": confirmation_id}
 
@@ -824,7 +1006,9 @@ class WikiToolRegistry:
 
     def get_pending_confirmations(self) -> list[dict]:
         """Get all pending confirmations."""
-        return [c for c in self._pending_confirmations.values() if c["status"] == "pending"]
+        return [
+            c for c in self._pending_confirmations.values() if c["status"] == "pending"
+        ]
 
     def get_pending_by_group(self) -> dict[str, list[dict]]:
         """Get pending confirmations grouped by page type."""
@@ -853,9 +1037,7 @@ class WikiToolRegistry:
 # ─── get_skill_commands (standalone tool) ────────────────────────
 
 
-async def handle_get_skill_commands(
-    args: dict[str, Any], ctx: Any
-) -> Any:
+async def handle_get_skill_commands(args: dict[str, Any], ctx: Any) -> Any:
     """Return all available skill triggers/commands.
 
     The LLM calls this tool to discover which ``/commands`` are

@@ -11,14 +11,12 @@ from __future__ import annotations
 
 import json
 import sqlite3
-import tempfile
-from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 import pytest
 
 from llmwikify.apps.agent.tools import WikiToolRegistry
 from llmwikify.apps.chat.db import ChatDatabase
+from llmwikify.apps.db import AppDatabase
 from llmwikify.kernel.wiki.wiki import Wiki
 
 # ─── Fixtures ──────────────────────────────────────────────────────────
@@ -55,7 +53,7 @@ def registry(wiki, db):
 
 
 def _make_research_session(
-    db: AgentDatabase,
+    db: AppDatabase,
     query: str = "Test query?",
     markdown: str = "Report body.",
     sources: list[dict] | None = None,
@@ -64,15 +62,17 @@ def _make_research_session(
 
     Returns the auto-generated session id.
     """
-    result_blob = json.dumps({
-        "query": query,
-        "markdown": markdown,
-        "synthesis_summary": {
-            "reinforced_claims": ["claim 1", "claim 2"],
-            "contradictions": ["contradiction 1"],
-            "knowledge_gaps": ["gap 1"],
-        },
-    })
+    result_blob = json.dumps(
+        {
+            "query": query,
+            "markdown": markdown,
+            "synthesis_summary": {
+                "reinforced_claims": ["claim 1", "claim 2"],
+                "contradictions": ["contradiction 1"],
+                "knowledge_gaps": ["gap 1"],
+            },
+        }
+    )
     session_id = db.create_research_session(wiki_id="test_wiki", query=query)
     with sqlite3.connect(db.db_path) as conn:
         conn.execute(
@@ -83,9 +83,21 @@ def _make_research_session(
 
     if sources:
         for i, src in enumerate(sources):
+            # Create a sub_query first (sources has FK to
+            # autoresearch_sub_queries.id). Use deterministic id so
+            # the test's "sq-{i}" naming matches the saved sub_query.
+            sq_id = f"sq-{i}"
+            with sqlite3.connect(db.db_path) as conn:
+                conn.execute(
+                    "INSERT OR IGNORE INTO autoresearch_sub_queries "
+                    "(id, session_id, query, source_type) "
+                    "VALUES (?, ?, ?, ?)",
+                    (sq_id, session_id, f"query-{i}", src["source_type"]),
+                )
+                conn.commit()
             db.save_source(
                 session_id=session_id,
-                sub_query_id=f"sq-{i}",
+                sub_query_id=sq_id,
                 source_type=src["source_type"],
                 url=src.get("url", ""),
                 title=src.get("title", ""),
@@ -155,15 +167,29 @@ class TestHandlerSlugCollisionIntegration:
     """End-to-end: handler writes raw files with hash-based slugs."""
 
     def test_two_sources_with_same_title_get_distinct_raw_files(
-        self, registry, wiki, db, tmp_wiki_root,
+        self,
+        registry,
+        wiki,
+        db,
+        tmp_wiki_root,
     ):
         sid = _make_research_session(
             db,
             sources=[
-                {"url": "https://a.com/x", "title": "Same Title",
-                 "source_type": "web", "content": "Content A", "summary": "A"},
-                {"url": "https://b.com/y", "title": "Same Title",
-                 "source_type": "web", "content": "Content B", "summary": "B"},
+                {
+                    "url": "https://a.com/x",
+                    "title": "Same Title",
+                    "source_type": "web",
+                    "content": "Content A",
+                    "summary": "A",
+                },
+                {
+                    "url": "https://b.com/y",
+                    "title": "Same Title",
+                    "source_type": "web",
+                    "content": "Content B",
+                    "summary": "B",
+                },
             ],
         )
         result = json.loads(registry._handle_research_save({"session_id": sid}))
@@ -186,8 +212,13 @@ class TestIncludeSourcesToggle:
         sid = _make_research_session(
             db,
             sources=[
-                {"url": "https://a.com", "title": "A",
-                 "source_type": "web", "content": "Content A", "summary": "A"},
+                {
+                    "url": "https://a.com",
+                    "title": "A",
+                    "source_type": "web",
+                    "content": "Content A",
+                    "summary": "A",
+                },
             ],
         )
         result = json.loads(registry._handle_research_save({"session_id": sid}))
@@ -199,15 +230,27 @@ class TestIncludeSourcesToggle:
         sid = _make_research_session(
             db,
             sources=[
-                {"url": "https://a.com", "title": "A",
-                 "source_type": "web", "content": "Content A", "summary": "A"},
-                {"url": "https://b.com", "title": "B",
-                 "source_type": "web", "content": "Content B", "summary": "B"},
+                {
+                    "url": "https://a.com",
+                    "title": "A",
+                    "source_type": "web",
+                    "content": "Content A",
+                    "summary": "A",
+                },
+                {
+                    "url": "https://b.com",
+                    "title": "B",
+                    "source_type": "web",
+                    "content": "Content B",
+                    "summary": "B",
+                },
             ],
         )
-        result = json.loads(registry._handle_research_save(
-            {"session_id": sid, "include_sources": False}
-        ))
+        result = json.loads(
+            registry._handle_research_save(
+                {"session_id": sid, "include_sources": False}
+            )
+        )
         assert result["sources_saved"] == 0
         assert result["include_sources"] is False
         assert list(wiki.raw_dir.glob("src-*.md")) == []
@@ -218,13 +261,16 @@ class TestIncludeSourcesToggle:
             db,
             query="My Test Query",
             sources=[
-                {"url": "https://a.com", "title": "A",
-                 "source_type": "web", "content": "C", "summary": "S"},
+                {
+                    "url": "https://a.com",
+                    "title": "A",
+                    "source_type": "web",
+                    "content": "C",
+                    "summary": "S",
+                },
             ],
         )
-        registry._handle_research_save(
-            {"session_id": sid, "include_sources": False}
-        )
+        registry._handle_research_save({"session_id": sid, "include_sources": False})
         # Report page exists (slugified)
         assert (wiki.wiki_dir / "research" / "my-test-query.md").exists()
         # Synthesis page exists
@@ -235,8 +281,13 @@ class TestIncludeSourcesToggle:
         sid = _make_research_session(
             db,
             sources=[
-                {"url": "", "title": "Existing Wiki Page",
-                 "source_type": "wiki", "content": "Wiki content", "summary": "WP"},
+                {
+                    "url": "",
+                    "title": "Existing Wiki Page",
+                    "source_type": "wiki",
+                    "content": "Wiki content",
+                    "summary": "WP",
+                },
             ],
         )
         result = json.loads(registry._handle_research_save({"session_id": sid}))
@@ -248,8 +299,13 @@ class TestIncludeSourcesToggle:
         sid = _make_research_session(
             db,
             sources=[
-                {"url": "https://a.com", "title": "Empty",
-                 "source_type": "web", "content": "", "summary": "S"},
+                {
+                    "url": "https://a.com",
+                    "title": "Empty",
+                    "source_type": "web",
+                    "content": "",
+                    "summary": "S",
+                },
             ],
         )
         result = json.loads(registry._handle_research_save({"session_id": sid}))
@@ -260,9 +316,11 @@ class TestIncludeSourcesToggle:
         """Response includes the toggle value for confirmation display."""
         sid = _make_research_session(db)
         r1 = json.loads(registry._handle_research_save({"session_id": sid}))
-        r2 = json.loads(registry._handle_research_save(
-            {"session_id": sid, "include_sources": False}
-        ))
+        _r2 = json.loads(
+            registry._handle_research_save(
+                {"session_id": sid, "include_sources": False}
+            )
+        )
         # Second call hits "already saved" path; create a fresh session
         # Just check r1 includes the key
         assert "include_sources" in r1
@@ -276,17 +334,36 @@ class TestAnalyzeImpactSourceCount:
         sid = _make_research_session(
             db,
             sources=[
-                {"url": "https://a.com", "title": "A",
-                 "source_type": "web", "content": "C", "summary": "S"},
-                {"url": "https://b.com", "title": "B",
-                 "source_type": "web", "content": "C", "summary": "S"},
-                {"url": "", "title": "WikiPage",
-                 "source_type": "wiki", "content": "C", "summary": "S"},
+                {
+                    "url": "https://a.com",
+                    "title": "A",
+                    "source_type": "web",
+                    "content": "C",
+                    "summary": "S",
+                },
+                {
+                    "url": "https://b.com",
+                    "title": "B",
+                    "source_type": "web",
+                    "content": "C",
+                    "summary": "S",
+                },
+                {
+                    "url": "",
+                    "title": "WikiPage",
+                    "source_type": "wiki",
+                    "content": "C",
+                    "summary": "S",
+                },
             ],
         )
-        impact = registry._analyze_impact("research_save_to_wiki", {
-            "session_id": sid, "include_sources": True,
-        })
+        impact = registry._analyze_impact(
+            "research_save_to_wiki",
+            {
+                "session_id": sid,
+                "include_sources": True,
+            },
+        )
         assert impact["include_sources"] is True
         assert impact["raw_sources_to_save"] == 2  # wiki one excluded
 
@@ -294,13 +371,22 @@ class TestAnalyzeImpactSourceCount:
         sid = _make_research_session(
             db,
             sources=[
-                {"url": "https://a.com", "title": "A",
-                 "source_type": "web", "content": "C", "summary": "S"},
+                {
+                    "url": "https://a.com",
+                    "title": "A",
+                    "source_type": "web",
+                    "content": "C",
+                    "summary": "S",
+                },
             ],
         )
-        impact = registry._analyze_impact("research_save_to_wiki", {
-            "session_id": sid, "include_sources": False,
-        })
+        impact = registry._analyze_impact(
+            "research_save_to_wiki",
+            {
+                "session_id": sid,
+                "include_sources": False,
+            },
+        )
         assert impact["include_sources"] is False
         assert impact["raw_sources_to_save"] == 0
         assert "sources skipped" in impact["description"]
@@ -316,9 +402,11 @@ class TestBuildSourceLinkMap:
         assert WikiToolRegistry._build_source_link_map([]) == {}
 
     def test_url_and_title_both_present(self):
-        m = WikiToolRegistry._build_source_link_map([
-            {"url": "https://a.com/x", "title": "A Title"},
-        ])
+        m = WikiToolRegistry._build_source_link_map(
+            [
+                {"url": "https://a.com/x", "title": "A Title"},
+            ]
+        )
         assert len(m) == 1
         h = next(iter(m))
         assert m[h]["slug"].startswith("src-")
@@ -326,23 +414,29 @@ class TestBuildSourceLinkMap:
         assert m[h]["url"] == "https://a.com/x"
 
     def test_url_empty_uses_title(self):
-        m = WikiToolRegistry._build_source_link_map([
-            {"url": "", "title": "Title Only"},
-        ])
+        m = WikiToolRegistry._build_source_link_map(
+            [
+                {"url": "", "title": "Title Only"},
+            ]
+        )
         assert len(m) == 1
         assert next(iter(m.values()))["title"] == "Title Only"
 
     def test_source_without_url_or_title_skipped(self):
-        m = WikiToolRegistry._build_source_link_map([
-            {"url": "", "title": ""},
-        ])
+        m = WikiToolRegistry._build_source_link_map(
+            [
+                {"url": "", "title": ""},
+            ]
+        )
         assert m == {}
 
     def test_title_falls_back_to_url(self):
         """When title is empty, use url as display label."""
-        m = WikiToolRegistry._build_source_link_map([
-            {"url": "https://a.com/x", "title": ""},
-        ])
+        m = WikiToolRegistry._build_source_link_map(
+            [
+                {"url": "https://a.com/x", "title": ""},
+            ]
+        )
         h = next(iter(m))
         assert m[h]["title"] == "https://a.com/x"
 
@@ -352,11 +446,14 @@ class TestLinkifySourceCitations:
 
     def test_replaces_matching_hash(self):
         import hashlib
+
         url = "https://a.com/x"
         h = hashlib.md5(url.encode()).hexdigest()[:12]
-        link_map = WikiToolRegistry._build_source_link_map([
-            {"url": url, "title": "A Title"},
-        ])
+        link_map = WikiToolRegistry._build_source_link_map(
+            [
+                {"url": url, "title": "A Title"},
+            ]
+        )
         md = f"See [[Source:{h}]] for details."
         out = WikiToolRegistry._linkify_source_citations(md, link_map)
         assert f"[[src-{h}|A Title]]" in out
@@ -364,9 +461,11 @@ class TestLinkifySourceCitations:
 
     def test_unmatched_hash_preserved(self):
         """Bogus hash left unchanged (no error)."""
-        link_map = WikiToolRegistry._build_source_link_map([
-            {"url": "https://a.com", "title": "A"},
-        ])
+        link_map = WikiToolRegistry._build_source_link_map(
+            [
+                {"url": "https://a.com", "title": "A"},
+            ]
+        )
         md = "See [[Source:ffffffffffff]] for something unknown."
         out = WikiToolRegistry._linkify_source_citations(md, link_map)
         assert "[[Source:ffffffffffff]]" in out
@@ -392,11 +491,14 @@ class TestLinkifySourceCitations:
     def test_multiple_citations_same_hash_replaced(self):
         """A hash referenced N times is replaced N times."""
         import hashlib
+
         url = "https://a.com"
         h = hashlib.md5(url.encode()).hexdigest()[:12]
-        link_map = WikiToolRegistry._build_source_link_map([
-            {"url": url, "title": "A"},
-        ])
+        link_map = WikiToolRegistry._build_source_link_map(
+            [
+                {"url": url, "title": "A"},
+            ]
+        )
         md = f"First [[Source:{h}]] and second [[Source:{h}]]."
         out = WikiToolRegistry._linkify_source_citations(md, link_map)
         assert out.count(f"[[src-{h}|A]]") == 2
@@ -404,11 +506,14 @@ class TestLinkifySourceCitations:
     def test_mixed_match_and_miss(self):
         """Mix of known and unknown hashes: replace known, preserve unknown."""
         import hashlib
+
         known_url = "https://known.com"
         known_h = hashlib.md5(known_url.encode()).hexdigest()[:12]
-        link_map = WikiToolRegistry._build_source_link_map([
-            {"url": known_url, "title": "Known Title"},
-        ])
+        link_map = WikiToolRegistry._build_source_link_map(
+            [
+                {"url": known_url, "title": "Known Title"},
+            ]
+        )
         md = f"[[Source:{known_h}]] and [[Source:fff000fff000]]."
         out = WikiToolRegistry._linkify_source_citations(md, link_map)
         assert f"[[src-{known_h}|Known Title]]" in out
@@ -422,9 +527,13 @@ class TestHandlerEndToEndLinkifyAndSlug:
     """Full handler flow: report markdown is linkified, raw files are hash-slugged."""
 
     def test_full_flow_inline_citations_become_wikilinks(
-        self, registry, wiki, db,
+        self,
+        registry,
+        wiki,
+        db,
     ):
         import hashlib
+
         url_a = "https://a.com/article"
         url_b = "https://b.com/paper"
         h_a = hashlib.md5(url_a.encode()).hexdigest()[:12]
@@ -439,10 +548,20 @@ class TestHandlerEndToEndLinkifyAndSlug:
             query="Linkify Test",
             markdown=markdown,
             sources=[
-                {"url": url_a, "title": "Article A",
-                 "source_type": "web", "content": "A body", "summary": "s"},
-                {"url": url_b, "title": "Paper B",
-                 "source_type": "pdf", "content": "B body", "summary": "s"},
+                {
+                    "url": url_a,
+                    "title": "Article A",
+                    "source_type": "web",
+                    "content": "A body",
+                    "summary": "s",
+                },
+                {
+                    "url": url_b,
+                    "title": "Paper B",
+                    "source_type": "pdf",
+                    "content": "B body",
+                    "summary": "s",
+                },
             ],
         )
 
@@ -472,13 +591,17 @@ class TestHandlerEndToEndLinkifyAndSlug:
         assert slugs_to_paths[f"src-{h_b}"] == f"raw/src-{h_b}.md"
 
     def test_included_false_disables_linkify_too(
-        self, registry, wiki, db,
+        self,
+        registry,
+        wiki,
+        db,
     ):
         """When include_sources=False, raw files are not created, so
         linkified wikilinks would be broken. Linkify is also skipped
         to keep the report consistent (no dangling wikilinks).
         """
         import hashlib
+
         url = "https://a.com"
         h = hashlib.md5(url.encode()).hexdigest()[:12]
         markdown = f"See [[Source:{h}]]."
@@ -487,13 +610,20 @@ class TestHandlerEndToEndLinkifyAndSlug:
             query="NoSourceSave",
             markdown=markdown,
             sources=[
-                {"url": url, "title": "A",
-                 "source_type": "web", "content": "C", "summary": "s"},
+                {
+                    "url": url,
+                    "title": "A",
+                    "source_type": "web",
+                    "content": "C",
+                    "summary": "s",
+                },
             ],
         )
-        result = json.loads(registry._handle_research_save(
-            {"session_id": sid, "include_sources": False}
-        ))
+        result = json.loads(
+            registry._handle_research_save(
+                {"session_id": sid, "include_sources": False}
+            )
+        )
         assert result["sources_saved"] == 0
         # No raw files (toggle off)
         assert list(wiki.raw_dir.glob("src-*.md")) == []

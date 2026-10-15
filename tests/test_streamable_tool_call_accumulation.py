@@ -16,8 +16,6 @@ from __future__ import annotations
 
 import json
 
-import pytest
-
 
 def _accumulate_tool_calls(chunks: list[dict]) -> list[dict]:
     """Simulate the accumulation logic from streamable.py astream_chat.
@@ -55,24 +53,33 @@ def _accumulate_tool_calls(chunks: list[dict]) -> list[dict]:
         finish = chunk.get("choices", [{}])[0].get("finish_reason", "")
         if finish in ("stop", "tool_calls", "length"):
             for entry in tool_call_buffer.values():
-                events.append({
-                    "type": "tool_call",
-                    "tool": entry["name"],
-                    "args": "".join(entry["args_parts"]),
-                })
+                events.append(
+                    {
+                        "type": "tool_call",
+                        "tool": entry["name"],
+                        "args": "".join(entry["args_parts"]),
+                    }
+                )
             tool_call_buffer.clear()
-            events.append({
-                "type": "done",
-                "content": accumulated,
-                "finish_reason": finish,
-            })
+            events.append(
+                {
+                    "type": "done",
+                    "content": accumulated,
+                    "finish_reason": finish,
+                }
+            )
             break
 
     return events
 
 
-def _tc(index: int = 0, *, name: str | None = None,
-        arguments: str | None = None, call_id: str | None = None) -> dict:
+def _tc(
+    index: int = 0,
+    *,
+    name: str | None = None,
+    arguments: str | None = None,
+    call_id: str | None = None,
+) -> dict:
     """Build a tool_call delta chunk."""
     func: dict = {}
     if name is not None:
@@ -95,10 +102,10 @@ class TestToolCallAccumulation:
     def test_single_tool_call_split_across_chunks(self):
         """A single tool call split across 4 chunks should emit one tool_call."""
         chunks = [
-            _tc(0, name="check", call_id="call_1"),    # name here
-            _tc(0, arguments='{"mo'),                    # partial args
-            _tc(0, arguments='del":'),                   # partial args
-            _tc(0, arguments='"check"}'),                # final args
+            _tc(0, name="check", call_id="call_1"),  # name here
+            _tc(0, arguments='{"mo'),  # partial args
+            _tc(0, arguments='del":'),  # partial args
+            _tc(0, arguments='"check"}'),  # final args
             _done("tool_calls"),
         ]
         events = _accumulate_tool_calls(chunks)
@@ -142,8 +149,7 @@ class TestToolCallAccumulation:
     def test_no_raw_fallback(self):
         """Arguments should NEVER be wrapped in {"raw": ...} anymore."""
         chunks = [
-            _tc(0, name="test_tool", call_id="c1",
-                arguments='{"key":"value"}'),
+            _tc(0, name="test_tool", call_id="c1", arguments='{"key":"value"}'),
             _done("tool_calls"),
         ]
         events = _accumulate_tool_calls(chunks)
@@ -194,19 +200,64 @@ class TestToolCallAccumulation:
         """Simulate the actual MiniMax M2.7 streaming pattern."""
         chunks = [
             {"choices": [{"delta": {"content": ""}, "finish_reason": None}]},
-            {"choices": [{"delta": {"tool_calls": [
-                {"index": 0, "id": "call_abc123",
-                 "function": {"name": "wiki_write_page", "arguments": ""}}
-            ]}, "finish_reason": None}]},
-            {"choices": [{"delta": {"tool_calls": [
-                {"index": 0, "function": {"arguments": '{"title":'}}
-            ]}, "finish_reason": None}]},
-            {"choices": [{"delta": {"tool_calls": [
-                {"index": 0, "function": {"arguments": '"Test Page",'}}
-            ]}, "finish_reason": None}]},
-            {"choices": [{"delta": {"tool_calls": [
-                {"index": 0, "function": {"arguments": '"content":"Hello"}'}},
-            ]}, "finish_reason": None}]},
+            {
+                "choices": [
+                    {
+                        "delta": {
+                            "tool_calls": [
+                                {
+                                    "index": 0,
+                                    "id": "call_abc123",
+                                    "function": {
+                                        "name": "wiki_write_page",
+                                        "arguments": "",
+                                    },
+                                }
+                            ]
+                        },
+                        "finish_reason": None,
+                    }
+                ]
+            },
+            {
+                "choices": [
+                    {
+                        "delta": {
+                            "tool_calls": [
+                                {"index": 0, "function": {"arguments": '{"title":'}}
+                            ]
+                        },
+                        "finish_reason": None,
+                    }
+                ]
+            },
+            {
+                "choices": [
+                    {
+                        "delta": {
+                            "tool_calls": [
+                                {"index": 0, "function": {"arguments": '"Test Page",'}}
+                            ]
+                        },
+                        "finish_reason": None,
+                    }
+                ]
+            },
+            {
+                "choices": [
+                    {
+                        "delta": {
+                            "tool_calls": [
+                                {
+                                    "index": 0,
+                                    "function": {"arguments": '"content":"Hello"}'},
+                                },
+                            ]
+                        },
+                        "finish_reason": None,
+                    }
+                ]
+            },
             {"choices": [{"delta": {}, "finish_reason": "tool_calls"}]},
         ]
         events = _accumulate_tool_calls(chunks)

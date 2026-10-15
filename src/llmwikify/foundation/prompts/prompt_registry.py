@@ -15,6 +15,7 @@ from jinja2 import BaseLoader, Environment
 @dataclass
 class PromptTemplate:
     """A loaded prompt template with metadata."""
+
     name: str
     description: str
     version: str
@@ -23,7 +24,9 @@ class PromptTemplate:
     user: str = ""
     document: str = ""
     text: str = ""
-    trigger: dict[str, str] = field(default_factory=lambda: {"type": "api_call", "when": ""})
+    trigger: dict[str, str] = field(
+        default_factory=lambda: {"type": "api_call", "when": ""}
+    )
     preconditions: list[str] = field(default_factory=list)
     context_injection: dict[str, Any] = field(default_factory=dict)
     post_process: dict[str, Any] = field(default_factory=dict)
@@ -52,7 +55,9 @@ class PromptRegistry:
     ):
         self.provider = provider
         self.custom_dir = custom_dir
-        self._defaults_dir = Path(__file__).parent.parent.parent / "foundation" / "prompts" / "_defaults"
+        self._defaults_dir = (
+            Path(__file__).parent.parent.parent / "foundation" / "prompts" / "_defaults"
+        )
 
         self._env = Environment(
             loader=BaseLoader(),
@@ -244,7 +249,13 @@ class PromptRegistry:
                         result[key] = method(**params)
                     else:
                         result[key] = str(method)
-                except (AttributeError, TypeError, ValueError, OSError, RuntimeError) as e:
+                except (
+                    AttributeError,
+                    TypeError,
+                    ValueError,
+                    OSError,
+                    RuntimeError,
+                ) as e:
                     result[key] = f"[context error: {method_name}: {type(e).__name__}]"
             else:
                 result[key] = ""
@@ -296,7 +307,9 @@ class PromptRegistry:
                 errors.append("'topics' must be an array")
             if "entities" in output and not isinstance(output["entities"], list):
                 errors.append("'entities' must be an array")
-            if "suggested_pages" in output and not isinstance(output["suggested_pages"], list):
+            if "suggested_pages" in output and not isinstance(
+                output["suggested_pages"], list
+            ):
                 errors.append("'suggested_pages' must be an array")
             if "content_type" in output and not isinstance(output["content_type"], str):
                 errors.append("'content_type' must be a string")
@@ -317,10 +330,19 @@ class PromptRegistry:
                 if not isinstance(answer, str) or not answer.strip():
                     errors.append("'answer' must not be empty")
                 else:
-                    if not any(answer.strip().startswith(h) for h in ("#", "##", "###")):
+                    if not any(
+                        answer.strip().startswith(h) for h in ("#", "##", "###")
+                    ):
                         errors.append("Answer should start with a markdown heading")
                     if len(answer.strip()) < 20:
                         errors.append("Answer is too short to be a useful wiki page")
+
+        elif schema_name == "section_selection":
+            if not isinstance(output, dict):
+                return [f"Expected object, got {type(output).__name__}"]
+            for key in ("selected_sections", "reasoning"):
+                if key not in output:
+                    errors.append(f"Missing required key: {key}")
 
         elif schema_name == "operations_array":
             if not isinstance(output, list):
@@ -328,7 +350,9 @@ class PromptRegistry:
 
             for i, op in enumerate(output):
                 if not isinstance(op, dict):
-                    errors.append(f"Operation {i}: expected object, got {type(op).__name__}")
+                    errors.append(
+                        f"Operation {i}: expected object, got {type(op).__name__}"
+                    )
                     continue
 
                 action = op.get("action")

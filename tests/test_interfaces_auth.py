@@ -65,7 +65,6 @@ from llmwikify.foundation.auth import (  # noqa: E402
     UserRepository,
     encode,
     generate_pat,
-    hash_pat,
     require_secret,
     set_secret,
 )
@@ -123,6 +122,7 @@ class _FakeRegistry:
 
     def list_wikis(self):
         from types import SimpleNamespace
+
         return [SimpleNamespace(wiki_id=i) for i in self.ids]
 
 
@@ -333,7 +333,10 @@ class TestTokenManagement:
     def test_unauthenticated_create_token_returns_401(self):
         client = TestClient(_make_app())
         resp = client.post("/api/auth/tokens", json={"name": "test"})
-        assert resp.status_code in (401, 403)  # 401 if no public_read, 403 if public_read
+        assert resp.status_code in (
+            401,
+            403,
+        )  # 401 if no public_read, 403 if public_read
 
 
 # ─── JWTAuthMiddleware: scope + wikis claim (decisions 1, 4, 7) ────

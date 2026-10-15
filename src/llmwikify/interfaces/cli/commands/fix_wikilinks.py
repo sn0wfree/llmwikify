@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from .._base import Command
-from .._output import ICON_SUCCESS, ICON_WARNING, print_warning
+from .._output import ICON_SUCCESS, print_warning
 
 
 def run_fix_wikilinks(wiki: Any, args: Any) -> int:
@@ -40,7 +40,9 @@ def run_fix_wikilinks(wiki: Any, args: Any) -> int:
                 )
 
     if result["ambiguous"] > 0:
-        print_warning(f"{result['ambiguous']} ambiguous link(s) require manual resolution.")
+        print_warning(
+            f"{result['ambiguous']} ambiguous link(s) require manual resolution."
+        )
         return 1
     return 0
 
@@ -58,7 +60,9 @@ class FixWikilinksCommand(Command):
             raise TypeError("setup_parser requires an argparse subparsers action")
         p = subparsers.add_parser(self.name, help=self.help)
         p.add_argument(
-            "--dry-run", "-n", action="store_true",
+            "--dry-run",
+            "-n",
+            action="store_true",
             help="Preview changes without modifying files",
         )
 

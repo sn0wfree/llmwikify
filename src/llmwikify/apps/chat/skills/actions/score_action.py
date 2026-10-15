@@ -31,10 +31,12 @@ async def _score(args: dict, ctx: SkillContext) -> SkillResult:
         "citations": 0.7 if "[[Source:" in text or "http" in text else 0.3,
     }
     avg = sum(by_dimension.values()) / max(1, len(by_dimension))
-    return SkillResult.ok({
-        "score": round(avg, 3),
-        "by_dimension": by_dimension,
-    })
+    return SkillResult.ok(
+        {
+            "score": round(avg, 3),
+            "by_dimension": by_dimension,
+        }
+    )
 
 
 class ScoreSkill(Skill):

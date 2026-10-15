@@ -5,6 +5,7 @@ import logging
 import re
 from difflib import SequenceMatcher
 from pathlib import Path
+from typing import Any
 
 from llmwikify.kernel.storage.backend import is_path_excluded
 
@@ -14,12 +15,19 @@ logger = logging.getLogger(__name__)
 
 # Default relation types (overridden by wiki.md if available)
 DEFAULT_RELATION_TYPES = {
-    "is_a", "uses", "related_to", "contradicts",
-    "supports", "replaces", "optimizes", "extends",
+    "is_a",
+    "uses",
+    "related_to",
+    "contradicts",
+    "supports",
+    "replaces",
+    "optimizes",
+    "extends",
 }
 
 # Valid confidence levels
 CONFIDENCE_LEVELS = {"EXTRACTED", "INFERRED", "AMBIGUOUS"}
+
 
 class RelationEngine:
     """Manage knowledge graph relations stored in SQLite.
@@ -30,7 +38,7 @@ class RelationEngine:
         relations = engine.get_neighbors("Attention")
     """
 
-    def __init__(self, index: WikiIndex, wiki_root: Path | None = None):
+    def __init__(self, index: WikiIndex, wiki_root: Path | None = None) -> None:
         self.index = index
         self.wiki_root = wiki_root
         self._relation_types = self._load_relation_types()
@@ -41,7 +49,9 @@ class RelationEngine:
         if self.wiki_root is None:
             # Try to infer wiki root from index.db path
             try:
-                db_path = Path(self.index.conn.execute("PRAGMA database_list").fetchone()["file"]).parent
+                db_path = Path(
+                    self.index.conn.execute("PRAGMA database_list").fetchone()["file"]
+                ).parent
                 self.wiki_root = db_path
             except Exception as e:
                 logger.warning("Failed to infer wiki root from index.db: %s", e)
@@ -57,15 +67,17 @@ class RelationEngine:
             # Pattern 1: bullet list under "Relation Types" section
             types = set()
             # Match lines like "- `is_a` — description" or "- is_a — description"
-            pattern = r'-\s*`?(\w+)`?\s*[—\-]'
+            pattern = r"-\s*`?(\w+)`?\s*[—\-]"
             in_relation_section = False
-            for line in content.split('\n'):
-                if 'relation type' in line.lower() or line.strip().startswith('### Relation Types'):
+            for line in content.split("\n"):
+                if "relation type" in line.lower() or line.strip().startswith(
+                    "### Relation Types"
+                ):
                     in_relation_section = True
                     continue
                 if in_relation_section:
                     # Stop if we hit a new major section
-                    if line.startswith('## ') and 'relation' not in line.lower():
+                    if line.startswith("## ") and "relation" not in line.lower():
                         break
                     match = re.match(pattern, line.strip())
                     if match:
@@ -135,7 +147,9 @@ class RelationEngine:
             pages.append(page_name)
         return pages
 
-    def _fuzzy_match_entity(self, name: str, candidates: list[str], threshold: float = 0.85) -> str | None:
+    def _fuzzy_match_entity(
+        self, name: str, candidates: list[str], threshold: float = 0.85
+    ) -> str | None:
         """Find best fuzzy match among candidates.
 
         The fuzzy match uses SequenceMatcher.ratio() which
@@ -179,7 +193,9 @@ class RelationEngine:
                 # Same length: standard fuzzy match.
                 # This is the case where typos / 1-char
                 # differences are caught.
-                score = SequenceMatcher(None, normalized_name, normalized_candidate).ratio()
+                score = SequenceMatcher(
+                    None, normalized_name, normalized_candidate
+                ).ratio()
                 # Apply a stricter effective threshold for
                 # same-length pairs to avoid prefix-only
                 # false positives like "ConceptA" vs
@@ -218,6 +234,7 @@ class RelationEngine:
         return best_match
 
     def resolve_entity(self, name: str, fuzzy_threshold: float = 0.85) -> str:
+        # TODO(refactor): C901=14 — too complex, consider splitting
         """Resolve entity name to canonical form.
 
         Resolution order:
@@ -266,7 +283,9 @@ class RelationEngine:
         candidates = wiki_pages.copy()
 
         # Also add existing canonical names from aliases
-        cursor = self.index.conn.execute("SELECT DISTINCT canonical FROM entity_aliases")
+        cursor = self.index.conn.execute(
+            "SELECT DISTINCT canonical FROM entity_aliases"
+        )
         for row in cursor.fetchall():
             if row["canonical"] not in candidates:
                 candidates.append(row["canonical"])
@@ -292,7 +311,13 @@ class RelationEngine:
         # 4. Return original name (new entity)
         return name
 
-    def add_alias(self, alias: str, canonical: str, source: str = "manual", confidence: float = 1.0) -> None:
+    def add_alias(
+        self,
+        alias: str,
+        canonical: str,
+        source: str = "manual",
+        confidence: float = 1.0,
+    ) -> None:
         """Add an alias mapping for an entity.
 
         Args:
@@ -313,7 +338,12 @@ class RelationEngine:
         if existing:
             # Update if different canonical
             if existing["canonical"] != canonical:
-                logger.info("Updating alias %s from %s to %s", alias, existing["canonical"], canonical)
+                logger.info(
+                    "Updating alias %s from %s to %s",
+                    alias,
+                    existing["canonical"],
+                    canonical,
+                )
                 self.index.conn.execute(
                     "UPDATE entity_aliases SET canonical = ?, source = ?, confidence = ? WHERE id = ?",
                     (canonical, source, confidence, existing["id"]),
@@ -369,9 +399,13 @@ class RelationEngine:
             Row id of the inserted relation, or existing id if duplicate.
         """
         if relation not in self._relation_types:
-            raise ValueError(f"Unknown relation type: {relation}. Valid: {sorted(self._relation_types)}")
+            raise ValueError(
+                f"Unknown relation type: {relation}. Valid: {sorted(self._relation_types)}"
+            )
         if confidence not in CONFIDENCE_LEVELS:
-            raise ValueError(f"Unknown confidence: {confidence}. Valid: {CONFIDENCE_LEVELS}")
+            raise ValueError(
+                f"Unknown confidence: {confidence}. Valid: {CONFIDENCE_LEVELS}"
+            )
 
         # Resolve entity names if enabled
         canonical_source = self.resolve_entity(source) if resolve else source
@@ -397,8 +431,12 @@ class RelationEngine:
             """INSERT INTO relations (source, target, relation, confidence, source_file, context, wiki_pages)
                VALUES (?, ?, ?, ?, ?, ?, ?)""",
             (
-                canonical_source, canonical_target, relation, confidence,
-                source_file, context,
+                canonical_source,
+                canonical_target,
+                relation,
+                confidence,
+                source_file,
+                context,
                 json.dumps(wiki_pages) if wiki_pages else None,
             ),
         )
@@ -503,12 +541,14 @@ class RelationEngine:
                     (path[i], path[i + 1]),
                 ).fetchall()
                 for r in rels:
-                    edges.append({
-                        "source": path[i],
-                        "target": path[i + 1],
-                        "relation": r["relation"],
-                        "confidence": r["confidence"],
-                    })
+                    edges.append(
+                        {
+                            "source": path[i],
+                            "target": path[i + 1],
+                            "relation": r["relation"],
+                            "confidence": r["confidence"],
+                        }
+                    )
 
             return {"path": path, "edges": edges}
         except nx.NetworkXNoPath:
@@ -561,8 +601,7 @@ class RelationEngine:
 
     def detect_contradictions(self) -> list[dict]:
         """Find contradictory relations between same source/target pairs."""
-        cursor = self.index.conn.execute(
-            """SELECT r1.source, r1.target,
+        cursor = self.index.conn.execute("""SELECT r1.source, r1.target,
                       r1.relation as relation1, r1.confidence as conf1, r1.source_file as file1,
                       r2.relation as relation2, r2.confidence as conf2, r2.source_file as file2
                FROM relations r1
@@ -575,29 +614,26 @@ class RelationEngine:
                      OR (r1.relation = 'contradicts' AND r2.relation = 'supports')
                      OR (r1.relation = 'uses' AND r2.relation = 'replaces')
                      OR (r1.relation = 'replaces' AND r2.relation = 'uses')
-                 )"""
-        )
+                 )""")
         return [dict(row) for row in cursor.fetchall()]
 
     def find_orphan_concepts(self) -> list[str]:
         """Find concepts in relations that have no corresponding wiki page."""
-        cursor = self.index.conn.execute(
-            """SELECT DISTINCT concept FROM (
+        cursor = self.index.conn.execute("""SELECT DISTINCT concept FROM (
                 SELECT source AS concept FROM relations
                 WHERE source NOT IN (SELECT page_name FROM pages)
                 UNION
                 SELECT target AS concept FROM relations
                 WHERE target NOT IN (SELECT page_name FROM pages)
-            )"""
-        )
+            )""")
         return [row["concept"] for row in cursor.fetchall()]
 
-    def _build_networkx_graph(self):
+    def _build_networkx_graph(self) -> Any:
         """Build a NetworkX graph from relations."""
         try:
             import networkx as nx
         except ImportError:
-            raise ImportError("networkx is required for graph operations")
+            raise ImportError("networkx is required for graph operations") from None
 
         G = nx.MultiDiGraph()
 

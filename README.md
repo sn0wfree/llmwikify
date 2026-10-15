@@ -1,18 +1,29 @@
 # llmwikify
 
-> **Build persistent, LLM-maintained knowledge bases — and reproduce quant research from papers.**
+> **Knowledge + Chat + Research Assistant — LLM-maintained knowledge bases with chat & general research capabilities.**
 
 [![PyPI version](https://badge.fury.io/py/llmwikify.svg)](https://pypi.org/project/llmwikify/)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Tests](https://img.shields.io/badge/tests-6100%2B%20passed-brightgreen.svg)](https://github.com/sn0wfree/llmwikify)
-[![Version](https://img.shields.io/badge/version-0.38.0-blue.svg)](pyproject.toml)
+[![Tests](https://img.shields.io/badge/tests-4300%2B%20passed-brightgreen.svg)](https://github.com/sn0wfree/llmwikify)
+[![Version](https://img.shields.io/badge/version-0.40.2-blue.svg)](pyproject.toml)
 [![CI Tests](https://github.com/sn0wfree/llmwikify/actions/workflows/tests.yml/badge.svg)](https://github.com/sn0wfree/llmwikify/actions/workflows/tests.yml)
 [![Lint](https://github.com/sn0wfree/llmwikify/actions/workflows/lint.yml/badge.svg)](https://github.com/sn0wfree/llmwikify/actions/workflows/lint.yml)
-[![codecov](https://codecov.io/gh/sn0wfree/llmwikify/branch/main/graph/badge.svg)](https://codecov.io/gh/sn0wfree/llmwikify)
+[![codecov](https://codecov.io/gh/sn0wfree/llmwikify/branch/main/graph/badge.svg)](https://codecov.io/gh/sn0wfree/llmwikify/branch/main/graph/badge.svg)
 
 **llmwikify** is a Python CLI + library + unified server for building **persistent,
-LLM-maintained knowledge bases** with a dedicated **quant research reproduction pipeline**.
+LLM-maintained knowledge bases** with **chat** and **general research assistant** capabilities.
+
+> **v0.40 Refocus** — quant research pipeline (paper → factor → backtest) has moved to
+> [**quantnodes.research**](https://github.com/sn0wfree/quantnodes) (>=4.0). llmwikify
+> now focuses exclusively on wiki + chat + research-assistant use cases.
+>
+> ⚠️ **v0.40.2 BREAKING for HTTP clients**: `POST /page` to an existing page
+> now returns **409 Conflict** with a `confirmation_id` (one-shot, TTL 300s)
+> instead of silently overwriting. Re-POST with the token (query string
+> `?confirm_token=<id>` is the primary path; body `{"confirm_token": "..."}`
+> is the back-compat shim) to confirm. See
+> [docs/releases/v0.40.2.md](docs/releases/v0.40.2.md) for details.
 
 ![Dashboard](docs/screenshots/dashboard.png)
 
@@ -25,23 +36,33 @@ LLM-maintained knowledge bases** with a dedicated **quant research reproduction 
 
 | | |
 |---|---|
+| 📚 **Knowledge Base** | LLM-maintained wiki with auto-linting, multi-wiki registry, section anchors |
+| 💬 **Chat Agent** | Streaming chat with tool calling, 50+ skills, subagents, memory |
+| 🔬 **Research Assistant** | Adaptive ReAct loop, multi-source synthesis, quality gates |
 | 🔍 **Smart Search** | SQLite FTS5 + optional QMD hybrid (BM25 + vector + LLM reranking) |
 | 🔗 **Bidirectional Links** | Automatic `[[wikilink]]` detection with section-level granularity |
 | 🧠 **Knowledge Graph** | 8 relation types, PageRank, community detection, interactive D3.js visualization |
-| 🤖 **ReAct Agent** | Streaming chat with tool calling, confirmations, and 26 MCP tools |
-| 📊 **Quant Pipeline** | Paper → 6-layer Factor YAML → DuckDB → Backtest → L5 reflection |
 | 🌐 **Unified Server** | MCP + REST + WebSocket + Web UI in one process |
 
 ---
 
 ## Features
 
-### Chat + ReAct Agent ⚠️ Under Active Development
-Streaming chat with tool calling, confirmations, and 26 MCP tools. The agent can search your wiki, analyze sources, and generate insights — all with human-in-the-loop confirmations.
-
-> ⚠️ **Note:** This feature is under active development and may be unstable.
+### 💬 Chat + Skills Agent
+Streaming chat with tool calling, confirmations, and 50+ built-in skills (CRUD,
+research, subagent, scheduler). The agent can search your wiki, manage pages,
+and orchestrate multi-step research — all with human-in-the-loop confirmations.
 
 ![Chat](docs/screenshots/chat.png)
+
+### 🔬 Research Assistant
+Adaptive ReAct research engine that breaks down questions into sub-queries,
+gathers sources, applies quality gates, and synthesizes structured reports.
+Configuration-driven via `~/.llmwikify/llmwikify.json`.
+
+### 📚 Knowledge Base (Wiki)
+LLM-maintained wiki with bidirectional wikilinks, multi-wiki registry,
+section-level anchors, YAML frontmatter + DuckDB storage, FTS5 full-text search.
 
 ### Markdown Editor
 Split-pane live markdown editor with page tree, front-matter panel, and wikilink autocomplete. Edit, preview, and manage your wiki pages in one view.
@@ -155,16 +176,34 @@ llmwikify doctor --json              # JSON output for CI/scripts
 | 3 | **Core deps** | llmwikify, yaml, duckdb, jinja2 |
 | 4 | **Optional extras** | fastapi, fastmcp, watchdog, networkx, markitdown, tiktoken, httpx |
 | 5 | **LLM connectivity** | Actually calls provider API (5s timeout) with `"Say hi"` — verifies key works |
-| 6 | **Wiki directory** | wiki.md, .llmwikify.db, index.md, raw/ present |
+| 6 | **Wiki directory** | 4 functional paths (`raw/`, `wiki/`, `.llmwikify.db`, `wiki.md`) + all page-type subdirs declared in `wiki.md` (parsed dynamically from `Directory Structure` + `Page Types` sections). See [`docs/DOCTOR.md`](docs/DOCTOR.md#3-wiki-check-the-interesting-one) |
 | 7 | **Permissions** | `~/.llmwikify/` and wiki root are writable |
 | 8 | **WebUI bundle** | `ui/webui/dist/index.html` exists |
 | 9 | **Server** | `GET /api/health` returns 200 |
+
+### Severity and fix
+
+Every fail or actionable warn carries a **fix dict** (commands + docs +
+cost + risk + auto). In text mode these are aggregated at the bottom
+under **📋 Recommended actions**:
+
+```
+📋 Recommended actions:
+
+  [FAIL 1/1] wiki (4 functional paths missing)
+      Fix:   llmwikify init
+      Docs:  docs/ONBOARDING.md#init
+      Cost:  ~5s    Risk: low    Auto: True
+```
+
+In JSON mode (`--json`), each check has a `fix` field on actionable
+items. Severity: **FAIL** blocks exit 0; **WARN** and **INFO** do not.
 
 ### Exit codes
 
 | Code | Meaning |
 |------|---------|
-| 0 | All checks passed |
+| 0 | All checks passed (warnings/info allowed) |
 | 1 | One or more checks failed |
 | 2 | Config missing — run `llmwikify init-llm` |
 
@@ -176,7 +215,13 @@ llmwikify doctor --json --skip-llm | jq -e '.summary.failed == 0'
 
 # Quick check before running expensive operations
 llmwikify doctor --skip-llm  # ~1 second
+
+# Check a specific wiki
+llmwikify doctor --wiki-root /home/ll/Public/comovement
 ```
+
+For the full reference (all 9 checks, fix dict schema, troubleshooting,
+CI recipes), see [`docs/DOCTOR.md`](docs/DOCTOR.md).
 
 ---
 
@@ -205,10 +250,10 @@ New to llmwikify? Start with our **5 end-to-end scenarios**:
 | **Smart Lint** | Broken links, orphans, contradictions, outdated pages, knowledge gaps |
 | **Knowledge Graph** | 8 relation types, PageRank, community detection, HTML/SVG/GraphML export |
 | **Chat + Agent** | ReAct streaming, 26 MCP tools, skills system, research engine |
-| **Quant Reproduction** | Paper extraction, 6-layer factors, DuckDB, backtesting, L5 reflection |
-| **Web UI** | React SPA: editor, graph, dashboard, chat, quant pages |
+| **Research Assistant** | Adaptive ReAct loop, multi-source synthesis, quality gates (general purpose) |
+| **Web UI** | React SPA: editor, graph, dashboard, chat pages |
 | **Extraction** | PDF, Word, Excel, PowerPoint, images, audio, web, YouTube |
-| **MCP Server** | 26 tools over stdio + HTTP, multi-wiki support |
+| **MCP Server** | 28 tools over stdio + HTTP, multi-wiki support |
 
 ---
 
@@ -255,10 +300,14 @@ graph TB
     UI --> Chat
     Chat --> Engine
     Research --> LLM
-    Paper --> LLM
-    Factor --> Storage
-    Backtest --> Factor
 ```
+
+> **v0.40 architecture**: strict 4-layer `foundation → kernel → apps →
+> interfaces` with single-direction dependencies. The quant module
+> (paper / factor / backtest / strategy) was stripped and migrated to
+> the sibling project [`quantnodes`](docs/quantnodes.md).
+> See [`docs/REFACTORING.md`](docs/REFACTORING.md) for the full
+> refactor history, dependency matrix, and cross-project migration.
 
 ---
 
@@ -346,10 +395,9 @@ pip install llmwikify[extractors]  # PDF/Office/media
 
 ### Quant Research
 
-| Command | Description |
-|---------|-------------|
-| `quant-init` | Scaffold `quant/` directory structure |
-| `reproduce` | Paper reproduction pipeline (Stage 0/1 + Track A/B) |
+> **v0.40 BREAKING**: `quant-init` and `reproduce` commands removed.
+> Quant research pipeline moved to [`quantnodes.research`](https://github.com/sn0wfree/quantnodes) (>=4.0).
+> Use `quantnodes reproduce` instead.
 
 ### Database & Health
 
@@ -460,6 +508,7 @@ Multi-wiki management:
 - [`examples/`](examples/README.md) — 8 runnable playbooks
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) — Layered architecture, modules, data flow
 - [`docs/CONFIGURATION_GUIDE.md`](docs/CONFIGURATION_GUIDE.md) — All config options + Doctor
+- [`docs/DOCTOR.md`](docs/DOCTOR.md) — `llmwikify doctor` reference: 9 checks, fix dicts, CI integration (v0.40+)
 - [`CONTRIBUTING.md`](CONTRIBUTING.md) — Development setup and workflow
 
 ---

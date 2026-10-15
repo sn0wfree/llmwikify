@@ -3,8 +3,6 @@
 import json
 import urllib.request
 
-import pytest
-
 
 def test_debug_insights_dom(page, wiki_server):
     """Debug: Inspect DOM structure of Insights page."""
@@ -34,7 +32,7 @@ def test_debug_insights_dom(page, wiki_server):
     # Check DOM structure
     print("\n=== DOM Structure ===")
 
-    main_div = page.locator('.max-w-6xl').count()
+    main_div = page.locator(".max-w-6xl").count()
     print(f"  .max-w-6xl containers: {main_div}")
 
     h2_count = page.locator('h2:has-text("Insights")').count()
@@ -44,7 +42,7 @@ def test_debug_insights_dom(page, wiki_server):
         h3_count = page.locator(f'h3:has-text("{section}")').count()
         print(f"  h3 '{section}': {h3_count}")
 
-    loading = page.locator('text=Loading insights').count()
+    loading = page.locator("text=Loading insights").count()
     print(f"  Loading state: {loading}")
 
     # Get full HTML for debugging
@@ -93,10 +91,15 @@ def test_debug_network_requests(page, wiki_server):
     network_responses = []
 
     page.on("request", lambda req: network_requests.append(req.url))
-    page.on("response", lambda resp: network_responses.append({
-        "url": resp.url,
-        "status": resp.status,
-    }))
+    page.on(
+        "response",
+        lambda resp: network_responses.append(
+            {
+                "url": resp.url,
+                "status": resp.status,
+            }
+        ),
+    )
 
     page.goto(wiki_server)
     page.wait_for_load_state("networkidle")

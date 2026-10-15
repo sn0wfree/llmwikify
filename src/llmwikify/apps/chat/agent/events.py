@@ -10,6 +10,7 @@ The research-side state machine (:mod:`research_runner`) keeps its own
 its vocabulary is a v0.50 compatibility contract, so it should not be
 merged into this chat vocabulary.
 """
+
 from __future__ import annotations
 
 # ── session lifecycle ──────────────────────────────────────────

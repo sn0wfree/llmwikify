@@ -20,13 +20,22 @@ Per the design doc §3.5, this file is **~50 LOC** of
 adapter code; the real research logic remains in
 ``engine.py``.
 """
+
 from __future__ import annotations
 
 import asyncio
 from collections.abc import AsyncIterator
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from llmwikify.apps.chat.research_engine.engine import ResearchEngine
+# Lazy import: ResearchEngine lives in llmwikify.apps.research.engine.
+# Use lazy local import inside __init__ to avoid circular dependency
+# (research_engine.engine imports chat.__init__ which imports this file).
+# TYPE_CHECKING guard keeps the type annotation resolvable by
+# typing.get_type_hints() (PEP 563 alone would lazy-eval the string but
+# any introspecting tool would still fail to resolve the name).
+
+if TYPE_CHECKING:
+    from llmwikify.apps.research.engine import ResearchEngine
 
 from .base import ChatBase
 
@@ -37,8 +46,10 @@ class ResearchAgent(ChatBase):
     Args:
         llm_client: any object with a ``.chat(messages, **kwargs)``
             method. Typically a ``StreamableLLMClient``.
-        engine: optional pre-constructed ``ResearchEngine``.
-            If None, one is built from the ``llm_client``.
+        engine: pre-constructed ``ResearchEngine``. Required in practice:
+            ResearchEngine needs ``wiki`` + ``db``, so the wrapper cannot
+            build one from ``llm_client`` alone (passing ``None`` raises
+            ``TypeError`` with guidance).
         system_prompt: default system prompt prepended to
             every session.
     """
@@ -54,7 +65,18 @@ class ResearchAgent(ChatBase):
         ),
     ) -> None:
         super().__init__(llm_client=llm_client, system_prompt=system_prompt)
-        self.engine = engine or ResearchEngine(llm_client=llm_client)
+        if engine is None:
+            # 2026-10-14 fix (Bug 3): the llm_client-only fallback built
+            # ResearchEngine(llm_client=...) which has been missing the
+            # now-required wiki/db args since the v0.40 apps/research
+            # migration (commit 91ef936); every such construction raised a
+            # bare TypeError. Fail fast with an actionable message instead.
+            raise TypeError(
+                "ResearchAgent requires an explicit `engine=...`: "
+                "ResearchEngine needs wiki + db. Build "
+                "ResearchEngine(wiki=..., db=..., llm_client=...) and pass it in."
+            )
+        self.engine = engine
 
     # ── canonical chat-style interface ─────────────────────
 

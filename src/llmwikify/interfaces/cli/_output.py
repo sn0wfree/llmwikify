@@ -88,16 +88,18 @@ def print_json(payload: Any, file: Any = None) -> None:
 # codebase. Centralized here so adding a new status value is a
 # one-line change.
 
-KNOWN_STATUSES: frozenset[str] = frozenset({
-    "ok",
-    "already_exists",
-    "mcp_config_added",
-    "created",
-    "skipped",
-    "error",
-    "pending",
-    "done",
-})
+KNOWN_STATUSES: frozenset[str] = frozenset(
+    {
+        "ok",
+        "already_exists",
+        "mcp_config_added",
+        "created",
+        "skipped",
+        "error",
+        "pending",
+        "done",
+    }
+)
 
 
 def is_known_status(status: str) -> bool:

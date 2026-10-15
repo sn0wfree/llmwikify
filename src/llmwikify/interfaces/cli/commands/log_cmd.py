@@ -48,7 +48,9 @@ class LogCommand(Command):
         p.add_argument("operation", nargs="?", help="Operation name (positional)")
         p.add_argument("description", nargs="?", help="Description (positional)")
         p.add_argument(
-            "--operation", "-o", dest="op_flag",
+            "--operation",
+            "-o",
+            dest="op_flag",
             help="Operation name (flag)",
         )
         p.add_argument("--details", "-d", help="Description (flag)")

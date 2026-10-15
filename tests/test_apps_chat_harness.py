@@ -13,8 +13,6 @@ Target: 30+ tests, no I/O, no real LLM calls.
 
 from __future__ import annotations
 
-import pytest
-
 from llmwikify.apps.chat.harness import (
     GateResult,
     QualityGate,
@@ -31,10 +29,13 @@ from llmwikify.apps.chat.harness import (
 class TestPackageExports:
     def test_all_5_classes_exported(self) -> None:
         from llmwikify.apps.chat import harness
+
         expected = {
-            "QualityGate", "GateResult",
+            "QualityGate",
+            "GateResult",
             "SourceFilter",
-            "ResearchReviewer", "ResearchRevisor",
+            "ResearchReviewer",
+            "ResearchRevisor",
             "StructureValidator",
             "SourceAnalyzer",
         }
@@ -51,6 +52,7 @@ class TestPackageExports:
         from llmwikify.apps.chat.harness.source_analyzer import SourceAnalyzer
         from llmwikify.apps.chat.harness.source_filter import SourceFilter
         from llmwikify.apps.chat.harness.structure_validator import StructureValidator
+
         assert QualityGate is not None
         assert GateResult is not None
         assert SourceFilter is not None
@@ -110,7 +112,9 @@ class TestGateResult:
 
     def test_default_suggestion(self) -> None:
         r = GateResult(
-            gate_name="x", passed=False, summary="bad",
+            gate_name="x",
+            passed=False,
+            summary="bad",
         )
         # Default suggestion is "proceed" per the dataclass default
         assert r.suggestion == "proceed"
@@ -121,7 +125,9 @@ class TestGateResult:
 
     def test_details_can_carry_extra_info(self) -> None:
         r = GateResult(
-            gate_name="t", passed=False, summary="bad",
+            gate_name="t",
+            passed=False,
+            summary="bad",
             details={"missing": ["a", "b"]},
         )
         assert r.details == {"missing": ["a", "b"]}
@@ -139,10 +145,12 @@ class TestQualityGate:
         assert qg.min_type_diversity == 2
 
     def test_minimum_instantiation_with_config(self) -> None:
-        qg = QualityGate({
-            "gate_min_sources": 5,
-            "gate_min_avg_credibility": 7,
-        })
+        qg = QualityGate(
+            {
+                "gate_min_sources": 5,
+                "gate_min_avg_credibility": 7,
+            }
+        )
         # Config is unpacked into individual attributes
         assert qg.min_sources == 5
         assert qg.min_avg_credibility == 7
@@ -270,6 +278,7 @@ class TestComposition:
         from llmwikify.apps.chat.harness import (
             StructureValidator as NewSV,
         )
+
         assert OldQG is NewQG
         assert OldGR is NewGR
         assert OldSF is NewSF
@@ -278,10 +287,15 @@ class TestComposition:
     def test_5_classes_count(self) -> None:
         """Contract: exactly 5 eval classes in the harness/ subpackage."""
         from llmwikify.apps.chat import harness
+
         # The 5 main classes
         main_classes = [
-            "QualityGate", "SourceFilter", "SourceAnalyzer",
-            "ResearchReviewer", "ResearchRevisor", "StructureValidator",
+            "QualityGate",
+            "SourceFilter",
+            "SourceAnalyzer",
+            "ResearchReviewer",
+            "ResearchRevisor",
+            "StructureValidator",
         ]
         for c in main_classes:
             assert hasattr(harness, c), f"missing main class: {c}"
@@ -304,6 +318,7 @@ class TestPyprojectRegistration:
         except ImportError:
             import tomli as tomllib  # type: ignore[no-redef]
         from pathlib import Path
+
         with open(Path(__file__).parent.parent / "pyproject.toml", "rb") as f:
             data = tomllib.load(f)
         setuptools = data["tool"]["setuptools"]

@@ -12,14 +12,12 @@ All subprocess spawning is real — we just stub the LLM. The
 ``LLMWIKIFY_SUBAGENT_DRIVER=mock`` env var is set for the duration
 of the test session.
 """
+
 from __future__ import annotations
 
-import json
 import os
 from pathlib import Path
 from textwrap import dedent
-
-import pytest
 
 # Force the mock driver for every test in this module
 os.environ.setdefault("LLMWIKIFY_SUBAGENT_DRIVER", "mock")
@@ -30,14 +28,12 @@ from llmwikify.apps.chat.skills.workflows import (
     RunStore,
     WorkflowExecutor,
     WorkflowInputs,
-    build_dag,
     load_workflow,
     resolve_dollar_refs,
     validate_workflow,
 )
 from llmwikify.apps.chat.skills.workflows.builtins import (
     get_builtin,
-    iter_builtins,
     list_builtin_names,
 )
 
@@ -96,8 +92,7 @@ def test_resolve_dollar_ref_missing_key_kept_as_placeholder():
 def _make_minimal_workflow(tmp_path: Path, *, with_gather: bool = True) -> Path:
     """Write a workflow to a tmp file. with_gather=False → 1 phase only."""
     if not with_gather:
-        text = dedent(
-            """
+        text = dedent("""
             version: 1
             workflow:
               name: tiny
@@ -115,11 +110,9 @@ def _make_minimal_workflow(tmp_path: Path, *, with_gather: bool = True) -> Path:
                   inputs:
                     question: $inputs.question
                   outputs: plan
-            """
-        )
+            """)
     else:
-        text = dedent(
-            """
+        text = dedent("""
             version: 1
             workflow:
               name: tiny
@@ -165,8 +158,7 @@ def _make_minimal_workflow(tmp_path: Path, *, with_gather: bool = True) -> Path:
                     filtered_findings: $gather.filtered_findings
                     review_summary: $review.summary
                   outputs: final
-            """
-        )
+            """)
     p = tmp_path / "tiny.yaml"
     p.write_text(text)
     return p
@@ -242,7 +234,9 @@ def test_executor_resume_completes_only_remaining_phases(tmp_path: Path):
     assert r1.status == "ok"
     baseline_agents = r1.total_agents_spawned
     # Reload and "resume" — but there's nothing left to do.
-    e2 = WorkflowExecutor.from_run_id(r1.run_id, base_dir=wf_path.parent, run_store=store)
+    e2 = WorkflowExecutor.from_run_id(
+        r1.run_id, base_dir=wf_path.parent, run_store=store
+    )
     r2 = e2.run()
     # No new agents spawned → delta is 0
     delta = r2.total_agents_spawned - baseline_agents
@@ -256,6 +250,7 @@ def test_executor_halted_when_budget_exceeded(tmp_path: Path):
     spec = load_workflow(wf_path)
     # Force an impossibly low budget
     import dataclasses
+
     spec = dataclasses.replace(
         spec,
         budget=dataclasses.replace(spec.budget, max_total_tokens=1, on_exceed="halt"),
@@ -295,8 +290,11 @@ def test_skill_run_uses_mock_driver_and_persists(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("LLMWIKIFY_SUBAGENT_DRIVER", "mock")
     # Use a tmp run store so we don't pollute ~/.llmwikify
     from llmwikify.apps.chat.skills.workflows import run_store as rs_mod
+
     monkeypatch.setattr(
-        rs_mod.RunStore, "default", classmethod(lambda cls: rs_mod.RunStore(tmp_path / "runs"))
+        rs_mod.RunStore,
+        "default",
+        classmethod(lambda cls: rs_mod.RunStore(tmp_path / "runs")),
     )
 
     skill = DynamicWorkflowSkill()
@@ -349,8 +347,11 @@ def test_skill_run_validates_required_inputs():
 def test_skill_status_returns_run_state(tmp_path: Path, monkeypatch):
     # Set up a run first
     from llmwikify.apps.chat.skills.workflows import run_store as rs_mod
+
     monkeypatch.setattr(
-        rs_mod.RunStore, "default", classmethod(lambda cls: rs_mod.RunStore(tmp_path / "runs"))
+        rs_mod.RunStore,
+        "default",
+        classmethod(lambda cls: rs_mod.RunStore(tmp_path / "runs")),
     )
     skill = DynamicWorkflowSkill()
     skill.setup()
@@ -401,8 +402,6 @@ def test_get_builtin_returns_spec():
     assert b is not None
     assert b.spec.name == "llmwikify-research"
     # 4 actors: planner, researcher, verifier, synthesizer
-    assert set(b.actor_names) == {
-        "planner", "researcher", "verifier", "synthesizer"
-    }
+    assert set(b.actor_names) == {"planner", "researcher", "verifier", "synthesizer"}
     # 4 phase templates (gather template + plan + verify + synthesize)
     assert b.phase_count == 4

@@ -1,4 +1,5 @@
 """Tests for unified/registry.py — register_mode + create_agent_loop。"""
+
 from __future__ import annotations
 
 import pytest
@@ -10,7 +11,6 @@ from llmwikify.apps.chat.agent.unified.registry import (
     list_modes,
     register_mode,
 )
-from llmwikify.apps.chat.agent.unified.spec import ActResult, BaseSpec, ReasonResponse
 
 # ── Mock handlers ─────────────────────────────────────────
 
@@ -27,19 +27,26 @@ def test_register_and_list():
     """注册后 list_modes 可见。"""
     modes_before = set(list_modes())
 
-    register_mode(AgentModeConfig(
-        name="__test_mode__",
-        reasoner=_SimpleStep(),
-        actor=_SimpleStep(),
-    ))
+    register_mode(
+        AgentModeConfig(
+            name="__test_mode__",
+            reasoner=_SimpleStep(),
+            actor=_SimpleStep(),
+        )
+    )
 
     modes_after = list_modes()
     assert "__test_mode__" in modes_after
     assert len(modes_after) == len(modes_before) + 1
 
 
-def test_create_agent_loop_codegen():
+def test_create_agent_loop_codegen(monkeypatch):
     """create_agent_loop('codegen') 正确构造。"""
+    # 2026-10-15: stub 默认 client 构建 — 不依赖本机 LLM 配置 (CI 无 config)
+    monkeypatch.setattr(
+        "llmwikify.foundation.llm.client.build_llm_client",
+        lambda *a, **k: object(),
+    )
     loop = create_agent_loop("codegen")
     assert loop is not None
     assert loop._reasoner is not None
@@ -70,11 +77,13 @@ def test_create_agent_loop_with_factory():
         received_kwargs.update(kwargs)
         return _SimpleStep()
 
-    register_mode(AgentModeConfig(
-        name="__test_factory__",
-        reasoner=_capture_reasoner,
-        actor=_SimpleStep(),
-    ))
+    register_mode(
+        AgentModeConfig(
+            name="__test_factory__",
+            reasoner=_capture_reasoner,
+            actor=_SimpleStep(),
+        )
+    )
 
     create_agent_loop("__test_factory__", custom_arg="hello")
     assert received_kwargs.get("custom_arg") == "hello"

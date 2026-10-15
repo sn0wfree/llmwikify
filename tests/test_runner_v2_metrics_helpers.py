@@ -15,7 +15,6 @@ Covers:
 from __future__ import annotations
 
 import asyncio
-from typing import Any
 
 import pytest
 
@@ -102,6 +101,7 @@ class TestIterWithMetrics:
             async def _src():
                 for i in range(5):
                     yield {"type": "content", "text": str(i)}
+
             return _src()
 
         async def _collect():

@@ -24,8 +24,6 @@ Tests cover the 3 reason methods that now live in
 
 import inspect
 
-import pytest
-
 from llmwikify.apps.chat.state import ResearchState
 
 
@@ -34,12 +32,11 @@ def test_engine_constructs_reasoner():
     # We can't construct a full engine without deps, so use a
     # mock: assert the attribute is set in __init__.
     import llmwikify.apps.chat.research_engine.engine as engine_mod
-    from llmwikify.apps.chat.research_engine.reasoner import ResearchReasoner
 
     src = inspect.getsource(engine_mod.ResearchEngine.__init__)
-    assert "self.reasoner = ResearchReasoner(self)" in src, (
-        "ResearchEngine.__init__ should construct a ResearchReasoner"
-    )
+    assert (
+        "self.reasoner = ResearchReasoner(self)" in src
+    ), "ResearchEngine.__init__ should construct a ResearchReasoner"
 
 
 def test_reasoner_holds_back_refs_to_engine_deps():
@@ -69,19 +66,20 @@ def test_engine_reason_delegates_to_reasoner():
 
     src = inspect.getsource(engine_mod.ResearchEngine._reason)
     # The body must reference self.reasoner.reason
-    assert "self.reasoner.reason" in src, (
-        "ResearchEngine._reason should delegate to self.reasoner.reason"
-    )
+    assert (
+        "self.reasoner.reason" in src
+    ), "ResearchEngine._reason should delegate to self.reasoner.reason"
     # And the body should be 1 line (return + self.reasoner.reason(state))
     body_lines = [
-        line.strip() for line in src.splitlines()
+        line.strip()
+        for line in src.splitlines()
         if line.strip()
         and not line.strip().startswith("def ")
         and not line.strip().startswith("'''")
         and not line.strip().startswith('"""')
     ]
     # Should have just a docstring + the return
-    return_lines = [l for l in body_lines if l.startswith("return ")]
+    return_lines = [ln for ln in body_lines if ln.startswith("return ")]
     assert len(return_lines) == 1, (
         f"ResearchEngine._reason should have exactly 1 return statement "
         f"(the delegator), got {len(return_lines)}"
@@ -105,8 +103,7 @@ def test_engine_llm_reason_delegates_to_reasoner():
 
     src = inspect.getsource(engine_mod.ResearchEngine._llm_reason)
     assert "self.reasoner._llm_reason" in src, (
-        "ResearchEngine._llm_reason should delegate to "
-        "self.reasoner._llm_reason"
+        "ResearchEngine._llm_reason should delegate to " "self.reasoner._llm_reason"
     )
 
 
@@ -209,15 +206,58 @@ def test_rule_based_does_not_replan_after_report():
     state.budget_remaining = 0.9  # plenty of budget
     # round=0 < _max_replan+1 (=3): pre-fix, this would return "plan"
     result = r.rule_based(state)
-    assert result != "plan", (
-        f"rule_based should not replan after report_md is set, got {result!r}"
-    )
+    assert (
+        result != "plan"
+    ), f"rule_based should not replan after report_md is set, got {result!r}"
     # Should fall through to the review branch (report exists, review missing)
     assert result == "review", f"expected 'review', got {result!r}"
 
 
 def test_rule_based_replans_before_report():
-    """When no report exists yet, gaps+round+budget → 'plan' (replan)."""
+    """When no synthesis AND no report exist, gaps+round+budget → 'plan'.
+
+    Anti-spin design: once synthesis exists, the reasoner never
+    replans (gaps should be addressed in the report, not by an
+    infinite gather→analyze→synthesize loop). This test verifies
+    the pre-synthesis replan path.
+    """
+    from llmwikify.apps.chat.research_engine.reasoner import ResearchReasoner
+
+    class FakeDB:
+        def get_sources(self, session_id):
+            return []
+
+    class FakeEngine:
+        db = FakeDB()
+        config = {}
+        _action_ctx = None
+        _max_replan = 2
+
+    r = ResearchReasoner(FakeEngine())
+    # pre-synthesize state: no synthesis, no report, gaps detected
+    state = ResearchState(
+        round=0,
+        max_rounds=5,
+        clarification={"q": "x"},
+        sub_queries=[{"id": 1}],
+        sources=[{"sub_query_id": 1, "analysis": {}}],
+        synthesis=None,
+        report_md=None,
+    )
+    state.knowledge_gaps = ["gap1"]
+    state.budget_remaining = 0.9
+    # The reasoner must still synthesize first (no synthesis yet),
+    # not replan. Replan only fires after synthesize completes.
+    assert r.rule_based(state) == "synthesize"
+
+
+def test_rule_based_does_not_replan_after_synthesis():
+    """Once synthesis exists, knowledge_gaps → 'report' (not replan).
+
+    Anti-spin design: replanning after synthesis produces 0 new
+    sub-queries (all deduped) and burns max_rounds on no-op cycles.
+    Gaps are addressed in the report instead.
+    """
     from llmwikify.apps.chat.research_engine.reasoner import ResearchReasoner
 
     class FakeDB:
@@ -238,11 +278,12 @@ def test_rule_based_replans_before_report():
         sub_queries=[{"id": 1}],
         sources=[{"sub_query_id": 1, "analysis": {}}],
         synthesis={"text": "s", "knowledge_gaps": ["gap1"]},
-        report_md=None,  # no report yet → replan is still useful
+        report_md=None,
     )
     state.knowledge_gaps = ["gap1"]
     state.budget_remaining = 0.9
-    assert r.rule_based(state) == "plan"
+    # Must fall through to 'report', not 'plan' (anti-spin).
+    assert r.rule_based(state) == "report"
 
 
 def test_rule_based_does_not_replan_when_budget_low():
@@ -273,9 +314,7 @@ def test_rule_based_does_not_replan_when_budget_low():
     state.knowledge_gaps = ["gap1"]
     state.budget_remaining = 0.05  # below 0.15 threshold
     result = r.rule_based(state)
-    assert result != "plan", (
-        f"low budget should suppress replan, got {result!r}"
-    )
+    assert result != "plan", f"low budget should suppress replan, got {result!r}"
     # No report yet → falls through to 'report'
     assert result == "report", f"expected 'report', got {result!r}"
 
@@ -288,12 +327,18 @@ def test_valid_actions_allowlist_matches_engine_legacy_set():
     #   valid = {"plan", "gather", "analyze", "synthesize",
     #            "report", "review", "revise", "done"}
     expected = {
-        "plan", "gather", "analyze", "synthesize",
-        "report", "review", "revise", "done",
+        "plan",
+        "gather",
+        "analyze",
+        "synthesize",
+        "report",
+        "review",
+        "revise",
+        "done",
     }
-    assert VALID_ACTIONS == expected, (
-        f"VALID_ACTIONS should be {expected}, got {VALID_ACTIONS}"
-    )
+    assert (
+        VALID_ACTIONS == expected
+    ), f"VALID_ACTIONS should be {expected}, got {VALID_ACTIONS}"
 
 
 def test_legacy_rule_based_block_not_in_engine():

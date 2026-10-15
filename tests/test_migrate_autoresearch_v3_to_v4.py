@@ -28,25 +28,19 @@ SCRIPT = Path(__file__).parent.parent / "scripts" / "migrate_autoresearch_v3_to_
 def _make_legacy_db(path: Path) -> None:
     """Create a fake .llmwiki_agent.db with 3 legacy autoresearch columns."""
     with sqlite3.connect(path) as conn:
-        conn.execute(
-            """CREATE TABLE research_sessions (
+        conn.execute("""CREATE TABLE research_sessions (
                 id TEXT PRIMARY KEY,
                 wiki_id TEXT, query TEXT, status TEXT,
                 clarification_json TEXT, reasoning_json TEXT, structure_json TEXT
-            )"""
-        )
+            )""")
         conn.execute("CREATE TABLE chat_sessions (id TEXT PRIMARY KEY)")
         conn.execute("CREATE TABLE ppt_tasks (id TEXT PRIMARY KEY)")
-        conn.execute(
-            """CREATE TABLE research_sub_queries (
+        conn.execute("""CREATE TABLE research_sub_queries (
                 id TEXT PRIMARY KEY, session_id TEXT, query TEXT, source_type TEXT
-            )"""
-        )
-        conn.execute(
-            """CREATE TABLE research_sources (
+            )""")
+        conn.execute("""CREATE TABLE research_sources (
                 id TEXT PRIMARY KEY, session_id TEXT, source_type TEXT
-            )"""
-        )
+            )""")
         conn.commit()
 
 
@@ -62,7 +56,9 @@ def fake_agent(tmp_path, monkeypatch):
 def _run_script(*args: str, env: dict | None = None) -> subprocess.CompletedProcess:
     return subprocess.run(
         [sys.executable, str(SCRIPT), *args],
-        capture_output=True, text=True, timeout=10,
+        capture_output=True,
+        text=True,
+        timeout=10,
         env=env,
     )
 
@@ -77,10 +73,9 @@ def test_script_exists():
 def test_clean_db_exits_0(fake_agent, monkeypatch):
     """No migration needed → exit 0."""
     import os
+
     with sqlite3.connect(fake_agent / ".llmwiki_agent.db") as conn:
-        conn.execute(
-            "CREATE TABLE research_sessions (id TEXT PRIMARY KEY, query TEXT)"
-        )
+        conn.execute("CREATE TABLE research_sessions (id TEXT PRIMARY KEY, query TEXT)")
         conn.commit()
     env = os.environ.copy()
     env["LLMWIKIFY_AGENT_DIR"] = str(fake_agent)
@@ -92,6 +87,7 @@ def test_clean_db_exits_0(fake_agent, monkeypatch):
 
 def test_json_output_is_well_formed(fake_agent):
     import os
+
     _make_legacy_db(fake_agent / ".llmwiki_agent.db")
     env = os.environ.copy()
     env["LLMWIKIFY_AGENT_DIR"] = str(fake_agent)
@@ -106,6 +102,7 @@ def test_json_output_is_well_formed(fake_agent):
 
 def test_apply_drops_columns_and_creates_backup(fake_agent):
     import os
+
     _make_legacy_db(fake_agent / ".llmwiki_agent.db")
     env = os.environ.copy()
     env["LLMWIKIFY_AGENT_DIR"] = str(fake_agent)
@@ -135,6 +132,7 @@ def test_apply_drops_columns_and_creates_backup(fake_agent):
 
 def test_dry_run_does_not_modify_db(fake_agent):
     import os
+
     _make_legacy_db(fake_agent / ".llmwiki_agent.db")
     env = os.environ.copy()
     env["LLMWIKIFY_AGENT_DIR"] = str(fake_agent)
@@ -156,12 +154,11 @@ def test_dry_run_does_not_modify_db(fake_agent):
 def test_detects_clarifying_status_sessions(fake_agent):
     """A session with status=clarifying should trigger migration need."""
     import os
+
     with sqlite3.connect(fake_agent / ".llmwiki_agent.db") as conn:
-        conn.execute(
-            """CREATE TABLE research_sessions (
+        conn.execute("""CREATE TABLE research_sessions (
                 id TEXT PRIMARY KEY, status TEXT DEFAULT 'clarifying'
-            )"""
-        )
+            )""")
         conn.execute(
             "INSERT INTO research_sessions (id, status) VALUES ('s1', 'clarifying')"
         )
@@ -177,13 +174,13 @@ def test_detects_clarifying_status_sessions(fake_agent):
 def test_report_function_directly(fake_agent):
     """Direct call to report() returns the expected dict shape."""
     _make_legacy_db(fake_agent / ".llmwiki_agent.db")
-    spec = importlib.util.spec_from_file_location(
-        "migrate_script", str(SCRIPT)
-    )
+    spec = importlib.util.spec_from_file_location("migrate_script", str(SCRIPT))
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     data = mod.report(agent_dir=fake_agent)
     assert data["legacy_columns_present"] == [
-        "clarification_json", "reasoning_json", "structure_json",
+        "clarification_json",
+        "reasoning_json",
+        "structure_json",
     ]
     assert data["needs_migration"] is True

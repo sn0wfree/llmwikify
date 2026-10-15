@@ -5,6 +5,217 @@ All notable changes to llmwikify will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **`LLMWIKIFY_PUBLIC_READ` environment switch** (`interfaces/cli/commands/serve.py`).
+  The previously hardcoded `public_read=True` (decision 1 / Phase 2a, "本地开发友好")
+  is now wired to the environment: set `LLMWIKIFY_PUBLIC_READ=false` to require a
+  token (PAT/JWT) even for GET reads — token-less reads then return
+  **401 `auth_required`**. Default stays `true` (fully backward compatible).
+  Wires the middleware `public_read=False` branch (`_deny_no_token`) that was
+  implemented but had no configuration entry point. Verified live: no-token GET
+  → 401, PAT bearer → 200, default mode → 200 unchanged.
+
+### Fixed
+- **MCP over HTTP returned 500 on every authenticated request**
+  (`interfaces/server/core.py`). Starlette's `app.mount()` does not run the
+  sub-app's ASGI lifespan, so FastMCP's `StreamableHTTPSessionManager` task
+  group never initialized (`RuntimeError: ... task group was not initialized`).
+  The server now uses a combined lifespan that enters the MCP app's lifespan
+  first (via `AsyncExitStack`), then the wiki subsystems lifespan. The MCP ASGI
+  app is captured once at build time (`asgi_app` is a property that builds a
+  *fresh* app per access) so the lifespan-initialized instance is exactly the
+  mounted one. Verified with a real `fastmcp` client: `initialize` + 20 tools
+  listed + `wiki_search` call succeeded (previously: 500).
+  Note: the effective endpoint is `/mcp/mcp` (mount prefix `/mcp` + http_app
+  internal path `/mcp`); older docs referencing `/mcp` need updating.
+
+## [0.40.2] - 2026-07-21 — Wiki HTTP Confirmation + WebUI Modal Unification
+
+> Wiki write-path confirmation flow lands. Every `POST /page` to an existing
+> page now requires a one-shot 8-char confirmation token (TTL 300s, wiki-bound)
+> instead of silently overwriting. Companion release unifies WebUI dialogs on
+> Radix Dialog primitives and consolidates backend background-task / ID-generation
+> helpers.
+
+### Added
+- **POST `/page` confirmation flow** (`interfaces/server/http/wiki/_wiki_ops.py:write_page`).
+  Returns **409 Conflict** with `confirmation_id` (8 lowercase hex chars,
+  `uuid.uuid4().hex[:8]` via `WikiDatabase.make_confirmation_id`) + `existing_page`
+  word count + 500-char content preview when the target page already exists.
+  Retry with valid `confirm_token` returns **200** and consumes the row.
+  Tokens are **wiki-bound** (cross-wiki replay blocked), **page-bound**, and
+  **one-shot** (`db.delete_confirmation` after success).
+- **Background cleanup of expired confirmation tokens**
+  (`apps/wiki/db.py:delete_expired_confirmations` + `apps/chat/agent/agent_service.py:start_confirmations_cleanup`).
+  `MemoryConfig.confirmations_cleanup` section drives the interval
+  (`enabled: true, interval_seconds: 300.0` defaults). Lifespan-managed on
+  the `WikiServer`. INFO log emitted on non-zero row count.
+- **`WikiDatabase.make_confirmation_id()` static method** — single source of
+  truth for the 8-char hex ID (replaces three near-identical `uuid.uuid4().hex[:8]`
+  / `str(uuid.uuid4())[:8]` call sites across `_wiki_ops.py`, `tools/__init__.py`,
+  and `tools/skill_adapter.py`).
+
+### Changed
+- **WebUI modal unification on Radix Dialog** — 9 modals now share a consistent
+  Radix Dialog primitive (Escape, focus trap, ARIA role="dialog", backdrop
+  click to close). Two modals (`WikiDreamProposals` "Apply All", `WikiManager`
+  panel) gained Escape / backdrop-close they previously lacked — broken
+  behaviour fixed without anyone noticing.
+- **`WikiManager` design-system migration** — `slate-*` colors replaced
+  with design tokens (`bg-card`, `border-border`, `text-foreground`,
+  `bg-muted`, `bg-primary text-primary-foreground`). Inner `<svg>` icons
+  swapped for lucide-react (`X`, `Plus`, `RefreshCw`, `Trash2`).
+- **AgentService refactors** — `start_auto_compact` and `start_confirmations_cleanup`
+  share `_run_periodic_loop(task_name, interval_seconds, tick_fn)` helper
+  (consolidates ~25 lines of asyncio sleep-loop body). `WikiServer._feature_running(enable_attr, holder_attr)`
+  collapses 6 duplicated health-endpoint feature-flag blocks into a single
+  call site. `WikiToolRegistry.confirm_execution` now uses
+  `db.get_confirmation_with_decoded_args` instead of inline `json.loads(arguments)`.
+- **Token transport priority** (v0.40.2 final):
+  - **Primary**: `?confirm_token=<id>` query string (highest priority).
+    Restored for legacy v0.40 callers; takes precedence over body token
+    on disagreement.
+  - **Back-compat shim**: body `{"confirm_token": "..."}`.
+  - **Disagreement**: query wins. INFO log emits `query_token_len=N body_token_len=M`,
+    **never** the token values themselves.
+
+### Security
+- **Token format / storage**: existing `confirmations` table, `arguments` JSON
+  column carries `{page_name, expires_at}` (no schema change). Cross-wiki
+  replay protection via top-level `wiki_id` column.
+- **Query string transport**: still leaks the token to HTTP access logs
+  (preserved as back-compat). New callers should prefer body transport.
+
+### Migration Guide (from v0.40.1 → v0.40.2)
+- **POST `/page` to existing pages now returns 409 instead of silent overwrite**
+  (BREAKING for clients that relied on silent overwrite). Surface the
+  `confirmation_id` to the user and re-POST with `?confirm_token=<id>` or
+  body `{"confirm_token": "..."}` — query wins on disagreement.
+- **`memory_config.json`** auto-merges new `confirmations_cleanup` section
+  with defaults (`enabled: true, interval_seconds: 300.0`). No manual
+  migration required.
+- **WebUI bundle hash changed** — Editor chunk grew ~33 kB for Radix Dialog
+  primitives; hard-refresh once.
+- **No schema migration**, no CLI breaking changes.
+
+### Hygiene
+- **`docs/TODO.md` removed** — 67 lines were 100% quant-era tasks (`sub_factors`
+  field, Polars/Pandas compatibility, 101 Alphas merge input, FactorDetail.tsx
+  display). All obsolete after [0.40.0] Refocus removed `reproduction/`.
+  Future task tracking uses [GitHub Issues](https://github.com/sn0wfree/llmwikify/issues).
+- **`docs/designs/v0.41-chat-service-split.md` archived** — moved to
+  `docs/designs/archive/implemented/` with frontmatter noting the plan was
+  *partially* implemented in v0.40 (4 components exist at
+  `apps/chat/agent/{orchestrator,prompt_builder,context_manager,tool_executor}.py`
+  but at 1968 LOC total vs planned 1050; future further split of orchestrator
+  is a separate workstream).
+
+---
+
+## [0.40.1] - 2026-07-07 — Search CJK Recall Fix
+
+### Changed
+- **FTS5 schema**: `pages_fts` switched from `tokenize='porter unicode61'` to
+  `tokenize='unicode61 categories "L* N* Co Mn" tokenchars "_"'`. This
+  drops the `porter` stemmer (English-specific noise) and explicitly opts
+  into Letter / Number / Combining / Connector categories for tokenization.
+  Mixed Chinese+English content (e.g. "机器学习 algorithm") tokenizes better.
+- **Startup migration**: `WikiIndex.initialize()` auto-detects legacy `porter
+  unicode61` schema and rebuilds `pages_fts` from the `pages` metadata table.
+  No user action required; first server start after upgrade takes ~1s extra.
+- **LIKE fallback expanded**: When FTS5 MATCH returns 0 rows (regardless of
+  reason), the search now transparently retries with `LIKE '%query%'` against
+  the content table. This is what actually rescues short (2-3 char) Chinese
+  queries like `配置` / `中文` / `算法`, since SQLite's unicode61 tokenizer
+  (even with `categories` configured) still treats contiguous CJK text as a
+  single token.
+
+### Removed
+- `porter` stemmer from FTS5 tokenizer — was English-specific noise without
+  meaningful benefit for non-English queries.
+
+### Migration Guide (v0.40.0 → v0.40.1)
+- **Automatic**: Just restart the server. The migration is one-shot and idempotent.
+- **Manual verification** (optional):
+  ```python
+  import sqlite3
+  from pathlib import Path
+  db = sqlite3.connect(Path.home() / ".llmwikify" / "index.db")
+  print(db.execute("SELECT sql FROM sqlite_master WHERE name='pages_fts'").fetchone()[0])
+  # Should contain: tokenize = 'unicode61 categories ...
+  ```
+- **Index size**: Slight decrease for English-heavy wikis (no porter stemmer).
+  Negligible for personal wikis.
+
+### Notes
+- **Important**: SQLite FTS5 has no built-in CJK word-segmentation tokenizer.
+  Short (2-3 character) Chinese queries like `配置` will fall through FTS5
+  and hit the LIKE fallback. Results from LIKE fallback have score=0 (no
+  BM25 ranking). For best Chinese recall, consider:
+  - Using longer (4+ char) queries
+  - Running `llmwikify build-index` periodically to keep the index fresh
+- Snippet highlighting still uses FTS5's `snippet()` function — works correctly
+  with the new tokenizer.
+- BM25 ranking preserved for English queries — no regression.
+- The `backend="qmd"` path is unchanged (still a silent no-op until QMD ships).
+
+See [docs/releases/v0.40.1-search-cjk.md](docs/releases/v0.40.1-search-cjk.md).
+
+---
+
+## [0.40.0] - 2026-07-06 — Refocus (BREAKING)
+
+> **Project repositioning**: llmwikify is now a focused **Knowledge + Chat +
+> Research Assistant** tool. The quant research pipeline (paper → factor →
+> backtest) has been moved to [quantnodes](https://github.com/sn0wfree/quantnodes)
+> (>=4.0) as `quantnodes.research`. See [docs/migration/from-v0.39.md](docs/migration/from-v0.39.md).
+
+### Removed (BREAKING)
+- `reproduction/` package (24K LoC, 119 files) — moved to `quantnodes.research`
+- `tests/reproduction/` (91 files, 17K LoC)
+- `examples/05_paper_to_factor/`
+- HTTP routes: `/api/factor`, `/api/paper`, `/api/reproduction`, `/api/strategy`
+- CLI commands: `llmwikify quant-init`, `llmwikify reproduce`
+- 30 quant scripts in `scripts/` (alpha analysis, validation, factor migration)
+- `apps/agent/tools/quant_adapter.py`
+- 22 orphan `repro_*.yaml` prompt templates in `foundation/prompts/_defaults/`
+- 3 quant design docs in `docs/designs/` (loop_v4, workflow-pipeline, mcts_alpha)
+- `quantnodes` optional dependency (no longer needed)
+
+### Changed
+- **Project scope**: Knowledge + Chat + Research Assistant (no quant pipeline)
+- **Architecture**: `apps.research` becomes the canonical research package;
+  `apps.chat.research_engine/` becomes a thin backward-compat shim.
+  All 9 research submodules (engine, actions, gates, llm_step, observer,
+  reasoner, report, resume, routes) are now primary exports of `apps.research`.
+- **Tests**: 6,100+ → 4,300+ (test count focused on KB/Chat/Research)
+- **Total LoC**: ~130K → ~42K (-68%)
+- **README + CHANGELOG**: rewritten for new positioning
+- **version**: 0.38.0 → 0.40.0
+
+### Migration Guide (from v0.39 → v0.40)
+
+If you previously used:
+
+| Old (v0.39) | New (v0.40+) |
+|---|---|
+| `from llmwikify.reproduction.X import Y` | `from quantnodes.research.X import Y` (quantnodes>=4.0) |
+| `llmwikify reproduce` | `quantnodes reproduce` |
+| HTTP `/api/{factor,paper,reproduction,strategy}/*` | moved to `quantnodes` server |
+| `llmwikify quant-init` | removed (use `quantnodes research init`) |
+| `scripts/run_101_alphas_v2.py` etc. | moved to `quantnodes/scripts/research/` |
+
+### Notes
+- llmwikify is now a **leaf package** (no dependency on quantnodes).
+- The `llmwikify.apps.research` package hosts the **general-purpose** research
+  assistant (ReAct loop, multi-source synthesis). It is unrelated to quant
+  paper reproduction.
+- All migration work tracked in `plan/v0.40-refocus.md`.
+
+---
+
 ## [0.38.0] - 2026-07-02 — Onboarding + CI (actual release)
 
 > **Note**: This is the **actual published release** of v0.38.0. The previous

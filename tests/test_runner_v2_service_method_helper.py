@@ -12,10 +12,7 @@ behaviour of the two callers.
 
 from __future__ import annotations
 
-import asyncio
 from unittest.mock import MagicMock
-
-import pytest
 
 from llmwikify.apps.chat.agent.runner_v2 import ChatRunnerV2
 
@@ -37,7 +34,8 @@ class TestCallServiceMethod:
         cs._truncate_messages = MagicMock(return_value=["x", "y"])
         runner = _make_runner(cs)
         result = runner._call_service_method(
-            "_truncate_messages", ["a", "b"],
+            "_truncate_messages",
+            ["a", "b"],
             default=None,
         )
         assert result == ["x", "y"]
@@ -47,7 +45,8 @@ class TestCallServiceMethod:
         cs = MagicMock(spec=[])  # no _truncate_messages
         runner = _make_runner(cs)
         result = runner._call_service_method(
-            "_truncate_messages", [],
+            "_truncate_messages",
+            [],
             default=["fallback"],
         )
         assert result == ["fallback"]
@@ -57,7 +56,8 @@ class TestCallServiceMethod:
         cs._truncate_messages = MagicMock(side_effect=RuntimeError("boom"))
         runner = _make_runner(cs)
         result = runner._call_service_method(
-            "_truncate_messages", [],
+            "_truncate_messages",
+            [],
             default=["fallback"],
         )
         assert result == ["fallback"]
@@ -65,14 +65,17 @@ class TestCallServiceMethod:
     def test_coroutine_result_returns_default(self):
         """If the method is async, helper can't await — return default."""
         cs = MagicMock()
+
         # A Future / coroutine-like object that ``inspect.iscoroutine``
         # treats as a coroutine. We use a real coroutine here.
         async def _async_get_specs(reg):
             return [{"name": "tool"}]
+
         cs._get_toolspec = _async_get_specs
         runner = _make_runner(cs)
         result = runner._call_service_method(
-            "_get_toolspec", MagicMock(),
+            "_get_toolspec",
+            MagicMock(),
             default=[],
         )
         assert result == []
@@ -84,7 +87,9 @@ class TestCallServiceMethod:
         runner = _make_runner(cs)
         # No exception propagates; the helper logs and returns default.
         result = runner._call_service_method(
-            "_truncate_messages", [], default=None,
+            "_truncate_messages",
+            [],
+            default=None,
         )
         assert result is None
 

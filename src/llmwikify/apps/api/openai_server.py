@@ -35,7 +35,7 @@ import uuid
 from collections.abc import AsyncIterator
 from typing import Any
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from llmwikify.apps.chat.agent.agent_service import AgentService
@@ -322,7 +322,7 @@ async def _stream_chat_completion(
         finally:
             await queue.put(None)
 
-    pump_task = asyncio.create_task(_pump())
+    pump_task = asyncio.create_task(_pump(), name="openai_pump")
     try:
         while True:
             chunk = await asyncio.wait_for(queue.get(), timeout=timeout_s)
@@ -344,13 +344,14 @@ async def _stream_chat_completion(
         yield translator.final_sentinel()
 
 
-def _make_chat_handler(model: str, request_timeout: float):
+def _make_chat_handler(model: str, request_timeout: float) -> Any:
     """Build a chat-completions handler bound to ``model`` + ``request_timeout``.
 
     Mirrors nanobot's ``create_app(agent_loop, model_name, request_timeout)``
     pattern: route handlers capture config via closure, so the router
     factory can produce a fully-wired APIRouter in one call.
     """
+
     async def handle_chat_completions(request: Request) -> Any:
         """POST /v1/chat/completions — JSON body, OpenAI-shaped."""
         service: AgentService = get_agent_service()
@@ -376,6 +377,7 @@ def _make_chat_handler(model: str, request_timeout: float):
         lock = await _LOCKS.lock_for(session_key)
 
         if stream:
+
             async def _body() -> AsyncIterator[bytes]:
                 async with lock:
                     async for chunk in _stream_chat_completion(
@@ -420,11 +422,15 @@ def _make_chat_handler(model: str, request_timeout: float):
                     )
                 except Exception:
                     return openai_error_response(
-                        500, "Internal server error", err_type="server_error",
+                        500,
+                        "Internal server error",
+                        err_type="server_error",
                     )
         except Exception:
             return openai_error_response(
-                500, "Internal server error", err_type="server_error",
+                500,
+                "Internal server error",
+                err_type="server_error",
             )
 
         # Prefer the final_response (already complete) when present;
@@ -445,8 +451,9 @@ def _make_chat_handler(model: str, request_timeout: float):
     return handle_chat_completions
 
 
-def _make_models_handler(model: str):
+def _make_models_handler(model: str) -> Any:
     """Build a /v1/models handler bound to ``model``."""
+
     async def handle_models(_request: Request) -> JSONResponse:
         """GET /v1/models — return the single configured model."""
         return JSONResponse(

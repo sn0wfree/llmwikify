@@ -5,9 +5,9 @@
 - 工具错误处理
 - 边界情况
 """
+
 from __future__ import annotations
 
-import json
 from typing import Any
 
 import pytest
@@ -51,6 +51,7 @@ class _StubExecutor:
 
 class _MockChatReasoner(StepHandler):
     """Mock reasoner that returns pre-built ReasonResponses."""
+
     def __init__(self, responses: list[ReasonResponse]) -> None:
         self._responses = list(responses)
         self._call_count = 0
@@ -65,11 +66,15 @@ class _MockChatReasoner(StepHandler):
 
 class _MockToolActor(StepHandler):
     """Mock actor that returns success ActResult."""
+
     async def handle(self, input, spec, ctx):
-        return StepResult.ok(ActResult(
-            success=True, output="ok",
-            messages_to_inject=[{"role": "tool", "content": "ok"}],
-        ))
+        return StepResult.ok(
+            ActResult(
+                success=True,
+                output="ok",
+                messages_to_inject=[{"role": "tool", "content": "ok"}],
+            )
+        )
 
 
 # ── ChatReasoner tests ────────────────────────────────────
@@ -78,9 +83,11 @@ class _MockToolActor(StepHandler):
 @pytest.mark.asyncio
 async def test_chat_reasoner_done_content_fallback():
     """When parser produces no content, fallback to done content."""
-    service = _StubLLMService([
-        {"type": "done", "content": "fallback content"},
-    ])
+    service = _StubLLMService(
+        [
+            {"type": "done", "content": "fallback content"},
+        ]
+    )
     reasoner = ChatReasoner(chat_service=service)
     spec = ChatSpec(messages=[{"role": "user", "content": "hi"}])
 
@@ -113,9 +120,11 @@ async def test_chat_reasoner_empty_llm():
 @pytest.mark.asyncio
 async def test_chat_reasoner_preserves_tool_calls():
     """LLM tool calls are preserved in ReasonResponse."""
-    service = _StubLLMService([
-        {"type": "done", "content": "I'll search for that."},
-    ])
+    service = _StubLLMService(
+        [
+            {"type": "done", "content": "I'll search for that."},
+        ]
+    )
     reasoner = ChatReasoner(chat_service=service)
     spec = ChatSpec(messages=[{"role": "user", "content": "hi"}])
 
@@ -134,16 +143,20 @@ async def test_chat_reasoner_preserves_tool_calls():
 @pytest.mark.asyncio
 async def test_tool_actor_multiple_tools():
     """Multiple tool calls executed sequentially."""
-    executor = _StubExecutor(results={
-        "read_file": {"status": "ok", "content": "file content"},
-        "grep": {"status": "ok", "matches": ["line1", "line2"]},
-    })
+    executor = _StubExecutor(
+        results={
+            "read_file": {"status": "ok", "content": "file content"},
+            "grep": {"status": "ok", "matches": ["line1", "line2"]},
+        }
+    )
     actor = ToolActor(tool_executor=executor)
 
-    response = ReasonResponse(tool_calls=[
-        {"name": "read_file", "args": {"path": "/test.py"}},
-        {"name": "grep", "args": {"pattern": "def ", "path": "/test.py"}},
-    ])
+    response = ReasonResponse(
+        tool_calls=[
+            {"name": "read_file", "args": {"path": "/test.py"}},
+            {"name": "grep", "args": {"pattern": "def ", "path": "/test.py"}},
+        ]
+    )
     spec = ChatSpec(messages=[], tool_registry=None, session_id="test")
 
     events = []
@@ -169,12 +182,16 @@ async def test_tool_actor_multiple_tools():
 @pytest.mark.asyncio
 async def test_tool_actor_partial_failure():
     """One tool fails, others succeed — partial failure."""
-    executor = _StubExecutor(results={
-        "read_file": {"status": "ok", "content": "file content"},
-    })
+    executor = _StubExecutor(
+        results={
+            "read_file": {"status": "ok", "content": "file content"},
+        }
+    )
+
     # grep will raise
     async def failing_grep(*args, **kwargs):
         raise RuntimeError("grep exploded")
+
     original_execute = executor.execute
 
     async def dispatch(*args, **kwargs):
@@ -182,13 +199,16 @@ async def test_tool_actor_partial_failure():
         if tool_name == "grep":
             raise RuntimeError("grep exploded")
         return await original_execute(*args, **kwargs)
+
     executor.execute = dispatch
 
     actor = ToolActor(tool_executor=executor)
-    response = ReasonResponse(tool_calls=[
-        {"name": "read_file", "args": {"path": "/test.py"}},
-        {"name": "grep", "args": {"pattern": "def "}},
-    ])
+    response = ReasonResponse(
+        tool_calls=[
+            {"name": "read_file", "args": {"path": "/test.py"}},
+            {"name": "grep", "args": {"pattern": "def "}},
+        ]
+    )
     spec = ChatSpec(messages=[], tool_registry=None, session_id="test")
 
     events = []
@@ -213,13 +233,17 @@ async def test_tool_actor_partial_failure():
 @pytest.mark.asyncio
 async def test_tool_actor_error_status():
     """Tool returns error status → TOOL_CALL_ERROR event."""
-    executor = _StubExecutor(results={
-        "wiki_read": {"status": "error", "error": "Page not found"},
-    })
+    executor = _StubExecutor(
+        results={
+            "wiki_read": {"status": "error", "error": "Page not found"},
+        }
+    )
     actor = ToolActor(tool_executor=executor)
-    response = ReasonResponse(tool_calls=[
-        {"name": "wiki_read", "args": {"page_name": "nonexistent"}},
-    ])
+    response = ReasonResponse(
+        tool_calls=[
+            {"name": "wiki_read", "args": {"page_name": "nonexistent"}},
+        ]
+    )
     spec = ChatSpec(messages=[], tool_registry=None, session_id="test")
 
     events = []
@@ -245,9 +269,11 @@ async def test_tool_actor_string_args():
     executor = _StubExecutor()
     actor = ToolActor(tool_executor=executor)
 
-    response = ReasonResponse(tool_calls=[
-        {"name": "wiki_read", "args": '{"page_name": "test"}'},  # string args
-    ])
+    response = ReasonResponse(
+        tool_calls=[
+            {"name": "wiki_read", "args": '{"page_name": "test"}'},  # string args
+        ]
+    )
     spec = ChatSpec(messages=[], tool_registry=None, session_id="test")
 
     result = None
@@ -266,9 +292,11 @@ async def test_tool_actor_malformed_args():
     executor = _StubExecutor()
     actor = ToolActor(tool_executor=executor)
 
-    response = ReasonResponse(tool_calls=[
-        {"name": "wiki_read", "args": "not json"},  # malformed string
-    ])
+    response = ReasonResponse(
+        tool_calls=[
+            {"name": "wiki_read", "args": "not json"},  # malformed string
+        ]
+    )
     spec = ChatSpec(messages=[], tool_registry=None, session_id="test")
 
     result = None
@@ -287,9 +315,11 @@ async def test_tool_actor_call_id_generation():
     executor = _StubExecutor()
     actor = ToolActor(tool_executor=executor)
 
-    response = ReasonResponse(tool_calls=[
-        {"name": "wiki_read", "args": {}},  # no id
-    ])
+    response = ReasonResponse(
+        tool_calls=[
+            {"name": "wiki_read", "args": {}},  # no id
+        ]
+    )
     spec = ChatSpec(messages=[], tool_registry=None, session_id="test")
 
     events = []
@@ -306,13 +336,17 @@ async def test_tool_actor_call_id_generation():
 @pytest.mark.asyncio
 async def test_tool_actor_tool_message_format():
     """Tool messages have correct format for LLM consumption."""
-    executor = _StubExecutor(results={
-        "wiki_read": {"status": "ok", "content": "page content"},
-    })
+    executor = _StubExecutor(
+        results={
+            "wiki_read": {"status": "ok", "content": "page content"},
+        }
+    )
     actor = ToolActor(tool_executor=executor)
-    response = ReasonResponse(tool_calls=[
-        {"name": "wiki_read", "args": {"page_name": "test"}, "id": "call_abc123"},
-    ])
+    response = ReasonResponse(
+        tool_calls=[
+            {"name": "wiki_read", "args": {"page_name": "test"}, "id": "call_abc123"},
+        ]
+    )
     spec = ChatSpec(messages=[], tool_registry=None, session_id="test")
 
     result = None
@@ -342,7 +376,8 @@ async def test_loop_yields_session_init():
     reasoner = _MockChatReasoner(responses=[])
     actor = _MockToolActor()
     loop = UnifiedAgentLoop(
-        reasoner=reasoner, actor=actor,
+        reasoner=reasoner,
+        actor=actor,
         deciders={"after_reason": CheckEmptyStep("tool_calls", "no_tool_calls")},
         hook=_WantsStreamingHook(),
     )
@@ -362,22 +397,35 @@ async def test_loop_yields_session_init():
 @pytest.mark.asyncio
 async def test_loop_injects_assistant_tool_calls():
     """Loop injects assistant message with tool_calls array after REASON."""
-    reasoner = _MockChatReasoner(responses=[
-        ReasonResponse(
-            raw_content="I'll read the file",
-            tool_calls=[{"id": "call_0", "name": "read_file", "arguments": '{"path": "/tmp"}'}],
-        ),
-    ])
+    reasoner = _MockChatReasoner(
+        responses=[
+            ReasonResponse(
+                raw_content="I'll read the file",
+                tool_calls=[
+                    {
+                        "id": "call_0",
+                        "name": "read_file",
+                        "arguments": '{"path": "/tmp"}',
+                    }
+                ],
+            ),
+        ]
+    )
     actor = _MockToolActor()
     loop = UnifiedAgentLoop(
-        reasoner=reasoner, actor=actor,
+        reasoner=reasoner,
+        actor=actor,
         deciders={"after_reason": CheckEmptyStep("tool_calls", "no_tool_calls")},
     )
     spec = ChatSpec(messages=[{"role": "user", "content": "read"}])
     result = await loop.run_to_completion(spec)
 
     # Messages should contain the assistant message with tool_calls
-    assistant_msgs = [m for m in result.messages if m.get("role") == "assistant" and m.get("tool_calls")]
+    assistant_msgs = [
+        m
+        for m in result.messages
+        if m.get("role") == "assistant" and m.get("tool_calls")
+    ]
     assert len(assistant_msgs) >= 1
     assert assistant_msgs[0]["tool_calls"][0]["id"] == "call_0"
     assert assistant_msgs[0]["tool_calls"][0]["function"]["name"] == "read_file"
@@ -413,23 +461,38 @@ async def test_loop_paused():
 
 class _ToolNameActor(_MockToolActor):
     """Mock actor that sets tool_name on ActResult."""
+
     async def handle(self, input, spec, ctx):
-        return StepResult.ok(ActResult(
-            success=True,
-            output="ok",
-            tool_name="read_file",
-            messages_to_inject=[{"role": "tool", "content": "ok", "tool_call_id": "c0", "name": "read_file"}],
-        ))
+        return StepResult.ok(
+            ActResult(
+                success=True,
+                output="ok",
+                tool_name="read_file",
+                messages_to_inject=[
+                    {
+                        "role": "tool",
+                        "content": "ok",
+                        "tool_call_id": "c0",
+                        "name": "read_file",
+                    }
+                ],
+            )
+        )
 
 
 @pytest.mark.asyncio
 async def test_loop_tools_used_accumulated():
     """Loop accumulates tools_used from actor results."""
-    reasoner = _MockChatReasoner(responses=[
-        ReasonResponse(tool_calls=[{"id": "c0", "name": "read_file", "arguments": "{}"}]),
-    ])
+    reasoner = _MockChatReasoner(
+        responses=[
+            ReasonResponse(
+                tool_calls=[{"id": "c0", "name": "read_file", "arguments": "{}"}]
+            ),
+        ]
+    )
     loop = UnifiedAgentLoop(
-        reasoner=reasoner, actor=_ToolNameActor(),
+        reasoner=reasoner,
+        actor=_ToolNameActor(),
         deciders={"after_reason": CheckEmptyStep("tool_calls", "no_tool_calls")},
     )
     spec = ChatSpec(messages=[{"role": "user", "content": "read"}])

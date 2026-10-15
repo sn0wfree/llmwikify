@@ -20,6 +20,10 @@ class WikiLLMMixin(WikiProtocol):
         Phase 3: Targeted reading of selected sections
         Phase 4: Full analysis on selected content
         Phase 5: Generate wiki operations
+
+        Workflow optimizations:
+        - Short docs (<5000 chars): skip select_sections, read everything
+        - Empty analysis: skip generate_wiki_ops (no entities = no ops)
         """
         from .....foundation.llm import LLMClient
 
@@ -34,16 +38,25 @@ class WikiLLMMixin(WikiProtocol):
             section_metadata = self.extract_section_metadata(content, title)
 
         max_chars = 32000
-        selected_sections = self._select_sections(
-            section_metadata=section_metadata,
-            content_type=source_data.get("source_type", "unknown"),
-        )
 
-        targeted_content, content_truncated = self.targeted_read(
-            content=content,
-            selected_sections=selected_sections.get("selected_sections", []),
-            max_chars=max_chars,
-        )
+        # OPTIMIZATION 1: short docs skip select_sections LLM call
+        sections = section_metadata.get("sections", [])
+        content_len = len(content)
+        if content_len < 5000 or len(sections) <= 5:
+            # Short doc or few sections: read everything (no LLM call needed)
+            targeted_content = content[:max_chars]
+            content_truncated = content_len > max_chars
+        else:
+            # Long doc with many sections: use LLM to select
+            selected_sections_result = self._select_sections(
+                section_metadata=section_metadata,
+                content_type=source_data.get("source_type", "unknown"),
+            )
+            targeted_content, content_truncated = self.targeted_read(
+                content=content,
+                selected_sections=selected_sections_result.get("selected_sections", []),
+                max_chars=max_chars,
+            )
 
         wiki_schema = ""
         if self.wiki_md_file.exists():
@@ -61,16 +74,40 @@ class WikiLLMMixin(WikiProtocol):
         )
         analysis_params = registry.get_api_params("analyze_source")
 
-        analysis = self._call_llm_with_retry("analyze_source", analysis_messages, analysis_params)
+        analysis = self._call_llm_with_retry(
+            "analyze_source", analysis_messages, analysis_params
+        )
 
         errors = registry.validate_output("analyze_source", analysis)
         if errors:
             raise ValueError(f"Analysis validation failed: {'; '.join(errors)}")
 
+        # OPTIMIZATION 2: skip generate_wiki_ops if analysis is empty
+        entities = analysis.get("entities", [])
+        relations = analysis.get("relations", [])
+        claims = analysis.get("claims", [])
+        suggested = analysis.get("suggested_pages", [])
+
+        if not entities and not relations and not claims and not suggested:
+            # Nothing to generate operations for — analysis found no extractable content
+            return {
+                "status": "success",
+                "operations": [],
+                "relations": [],
+                "entities": [],
+                "claims": [],
+                "analysis": analysis,
+                "source_title": title,
+                "mode": "chained",
+                "empty": True,
+            }
+
         template = registry._load_template("generate_wiki_ops")
         dynamic_context = {}
         if template.context_injection:
-            dynamic_context = registry.inject_context(template.context_injection, wiki=self)
+            dynamic_context = registry.inject_context(
+                template.context_injection, wiki=self
+            )
 
         ops_messages = registry.get_messages(
             "generate_wiki_ops",
@@ -80,21 +117,25 @@ class WikiLLMMixin(WikiProtocol):
         )
         ops_params = registry.get_api_params("generate_wiki_ops")
 
-        operations = self._call_llm_with_retry("generate_wiki_ops", ops_messages, ops_params)
+        operations = self._call_llm_with_retry(
+            "generate_wiki_ops", ops_messages, ops_params
+        )
 
         errors = registry.validate_output("generate_wiki_ops", operations)
         if errors:
             raise ValueError(f"Operations validation failed: {'; '.join(errors)}")
 
         if not isinstance(operations, list):
-            raise ValueError(f"Expected list of operations, got {type(operations).__name__}")
+            raise ValueError(
+                f"Expected list of operations, got {type(operations).__name__}"
+            )
 
         return {
             "status": "success",
             "operations": operations,
-            "relations": analysis.get("relations", []),
-            "entities": analysis.get("entities", []),
-            "claims": analysis.get("claims", []),
+            "relations": relations,
+            "entities": entities,
+            "claims": claims,
             "analysis": analysis,
             "source_title": title,
             "mode": "chained",
@@ -113,10 +154,16 @@ class WikiLLMMixin(WikiProtocol):
 
         sections = section_metadata.get("sections", [])
         if not sections:
-            return {"selected_sections": [1, 2, 3, 4, 5], "reasoning": "No sections detected, using fallback"}
+            return {
+                "selected_sections": [1, 2, 3, 4, 5],
+                "reasoning": "No sections detected, using fallback",
+            }
 
         if len(sections) <= 5:
-            return {"selected_sections": list(range(1, len(sections) + 1)), "reasoning": "Few sections, reading all"}
+            return {
+                "selected_sections": list(range(1, len(sections) + 1)),
+                "reasoning": "Few sections, reading all",
+            }
 
         try:
             messages = registry.get_messages(
@@ -148,7 +195,10 @@ class WikiLLMMixin(WikiProtocol):
     def _fallback_section_selection(self, sections: list[dict]) -> dict:
         """Fallback section selection: first 5 sections."""
         selected = [s["id"] for s in sections[:5] if "id" in s]
-        return {"selected_sections": selected, "reasoning": "Fallback: selecting first sections"}
+        return {
+            "selected_sections": selected,
+            "reasoning": "Fallback: selecting first sections",
+        }
 
     def _call_llm_with_retry(
         self,
@@ -176,18 +226,33 @@ class WikiLLMMixin(WikiProtocol):
                 last_errors = errors
                 if attempt < max_attempts:
                     error_text = "\n".join(f"- {e}" for e in errors)
-                    retry_prompt = (
-                        f"Your previous response had errors:\n{error_text}\n\n"
-                        f"Please fix and return a corrected response."
-                    )
-                    messages = [
-                        messages[0],
-                        {"role": "user", "content": retry_prompt},
-                    ]
+                    retry_msg = {
+                        "role": "user",
+                        "content": (
+                            f"The previous response had validation errors:\n"
+                            f"{error_text}\n\n"
+                            f"Please fix and return a corrected JSON response."
+                        ),
+                    }
+                    messages = messages + [retry_msg]
 
             except (ConnectionError, ValueError) as e:
                 last_errors = [str(e)]
-                if attempt >= max_attempts:
+                if attempt < max_attempts:
+                    # Append feedback as a new user message — keep all
+                    # previous messages (including the document content in
+                    # the original user message) so the LLM can self-correct.
+                    retry_msg = {
+                        "role": "user",
+                        "content": (
+                            f"The previous response had errors:\n{e}\n\n"
+                            f"Please fix and return a corrected JSON response. "
+                            f"Return ONLY valid JSON matching the schema — no "
+                            f"markdown, no <think> tags, no explanations."
+                        ),
+                    }
+                    messages = messages + [retry_msg]
+                elif attempt >= max_attempts:
                     raise
 
         raise ValueError(
@@ -238,6 +303,7 @@ class WikiLLMMixin(WikiProtocol):
         """
         try:
             from .....foundation.llm import LLMClient
+
             client = LLMClient.from_config(self.config)
         except (ImportError, ValueError, OSError):
             return {
@@ -250,27 +316,33 @@ class WikiLLMMixin(WikiProtocol):
         registry = self._get_prompt_registry()
 
         source_page_data = []
-        for page_name in (source_pages or []):
+        for page_name in source_pages or []:
             page_path = self.wiki_dir / f"{page_name}.md"
             if page_path.exists():
-                source_page_data.append({
-                    "name": page_name,
-                    "content": page_path.read_text(),
-                })
+                source_page_data.append(
+                    {
+                        "name": page_name,
+                        "content": page_path.read_text(),
+                    }
+                )
 
         raw_source_data = []
-        for raw_path in (raw_sources or []):
+        for raw_path in raw_sources or []:
             full_path = self.root / raw_path
             if full_path.exists():
-                raw_source_data.append({
-                    "name": raw_path,
-                    "content": full_path.read_text(),
-                })
+                raw_source_data.append(
+                    {
+                        "name": raw_path,
+                        "content": full_path.read_text(),
+                    }
+                )
 
         template = registry._load_template("wiki_synthesize")
         dynamic_context = {}
         if template.context_injection:
-            dynamic_context = registry.inject_context(template.context_injection, wiki=self)
+            dynamic_context = registry.inject_context(
+                template.context_injection, wiki=self
+            )
 
         variables = {
             **dynamic_context,

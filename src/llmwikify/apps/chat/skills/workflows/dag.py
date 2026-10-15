@@ -24,6 +24,7 @@ Public surface:
   - ``build_dag(spec) -> Dag``: dependency graph + topological order
   - ``WorkflowParseError``, ``WorkflowValidationError``: error types
 """
+
 from __future__ import annotations
 
 import json
@@ -107,8 +108,8 @@ class ActorSpec:
 class FanOutSpec:
     """Data-driven fan-out: spawn one phase per item in a referenced list."""
 
-    from_ref: str            # e.g. ``"$plan.phases"``
-    id_prefix: str           # e.g. ``"gather_"``; instance ids become ``gather_0``, ...
+    from_ref: str  # e.g. ``"$plan.phases"``
+    id_prefix: str  # e.g. ``"gather_"``; instance ids become ``gather_0``, ...
     per_item_actor: str
     per_item_inputs: Mapping[str, str] = field(default_factory=dict)
 
@@ -208,9 +209,7 @@ class LimitsSpec:
         if self.max_total_agents < 1:
             raise WorkflowValidationError("max_total_agents must be >= 1")
         if self.max_phase_timeout_seconds < 1:
-            raise WorkflowValidationError(
-                "max_phase_timeout_seconds must be >= 1"
-            )
+            raise WorkflowValidationError("max_phase_timeout_seconds must be >= 1")
         if self.max_wallclock_seconds < 1:
             raise WorkflowValidationError("max_wallclock_seconds must be >= 1")
 
@@ -308,9 +307,7 @@ def _parse_actor(name: str, raw: Mapping[str, Any]) -> ActorSpec:
 
 def _parse_fan_out(phase_id: str, raw: Mapping[str, Any]) -> FanOutSpec:
     if not isinstance(raw, Mapping):
-        raise WorkflowParseError(
-            f"phase {phase_id!r}: fan_out must be a mapping"
-        )
+        raise WorkflowParseError(f"phase {phase_id!r}: fan_out must be a mapping")
     return FanOutSpec(
         from_ref=_require(raw, "from", f"phase {phase_id!r}.fan_out"),
         id_prefix=_require(raw, "id_prefix", f"phase {phase_id!r}.fan_out"),
@@ -394,7 +391,7 @@ def _parse_workflow_block(raw: Mapping[str, Any]) -> WorkflowSpec:
     return WorkflowSpec(
         name=name,
         description=description,
-        version=1,                                # default; version is set by parse_yaml
+        version=1,  # default; version is set by parse_yaml
         inputs=_parse_inputs(raw.get("inputs")),
         actors=actors,
         phases=phases,
@@ -602,6 +599,7 @@ def _alias_model_allowed() -> bool:
     ``false``; the validator rejects them with a clear message.
     """
     import os
+
     val = os.environ.get("LLM_ALLOW_ALIAS_MODEL", "false").strip().lower()
     return val in ("true", "1", "yes", "on")
 
@@ -715,7 +713,7 @@ def _walk_dollar_refs(
             if root == "env":
                 return
             if root == "inputs":
-                sub = value[len("$inputs."):].split(".", 1)[0]
+                sub = value[len("$inputs.") :].split(".", 1)[0]
                 if sub not in available_inputs:
                     raise WorkflowValidationError(
                         f"phase {phase_id!r}: $ref {value!r} under key {key!r} "
@@ -736,14 +734,22 @@ def _walk_dollar_refs(
     elif isinstance(value, Mapping):
         for k, v in value.items():
             _walk_dollar_refs(
-                phase_id, f"{key}.{k}", v,
-                available_inputs, available_outputs, available_fanout_templates,
+                phase_id,
+                f"{key}.{k}",
+                v,
+                available_inputs,
+                available_outputs,
+                available_fanout_templates,
             )
     elif isinstance(value, list):
         for i, v in enumerate(value):
             _walk_dollar_refs(
-                phase_id, f"{key}[{i}]", v,
-                available_inputs, available_outputs, available_fanout_templates,
+                phase_id,
+                f"{key}[{i}]",
+                v,
+                available_inputs,
+                available_outputs,
+                available_fanout_templates,
             )
 
 

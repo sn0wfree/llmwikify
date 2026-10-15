@@ -23,8 +23,6 @@ import pytest
 from llmwikify.apps.chat.bus import (
     BusAdapter,
     MessageBus,
-    WSTranslatedType,
-    get_default_bus,
     reset_default_bus,
 )
 from llmwikify.apps.chat.bus.adapter import WSTranslatedType as _WT
@@ -165,7 +163,8 @@ class TestMirrorSseEventDefensive:
         adapter = BusAdapter(BrokenBus())
         # Should not raise
         ok = adapter.mirror_sse_event(
-            {"type": "x"}, target_id="c",
+            {"type": "x"},
+            target_id="c",
         )
         assert ok is False
 
@@ -210,12 +209,14 @@ class TestTranslateSseToWsError:
 
 class TestTranslateSseToWsToolCall:
     def test_tool_call_start(self) -> None:
-        out = BusAdapter.translate_sse_to_ws({
-            "type": "tool_call_start",
-            "tool": "read_file",
-            "args": {"path": "/x"},
-            "call_id": "c1",
-        })
+        out = BusAdapter.translate_sse_to_ws(
+            {
+                "type": "tool_call_start",
+                "tool": "read_file",
+                "args": {"path": "/x"},
+                "call_id": "c1",
+            }
+        )
         assert out["type"] == _WT.TOOL_CALL
         assert out["phase"] == "start"
         assert out["tool"] == "read_file"
@@ -223,13 +224,15 @@ class TestTranslateSseToWsToolCall:
         assert out["call_id"] == "c1"
 
     def test_tool_call_end(self) -> None:
-        out = BusAdapter.translate_sse_to_ws({
-            "type": "tool_call_end",
-            "tool": "read_file",
-            "result": "ok",
-            "call_id": "c1",
-            "duration_ms": 100,
-        })
+        out = BusAdapter.translate_sse_to_ws(
+            {
+                "type": "tool_call_end",
+                "tool": "read_file",
+                "result": "ok",
+                "call_id": "c1",
+                "duration_ms": 100,
+            }
+        )
         assert out["type"] == _WT.TOOL_CALL
         assert out["phase"] == "end"
         assert out["result"] == "ok"
@@ -239,31 +242,38 @@ class TestTranslateSseToWsToolCall:
         assert out["duration_ms"] == 100
 
     def test_tool_call_error(self) -> None:
-        out = BusAdapter.translate_sse_to_ws({
-            "type": "tool_call_error",
-            "tool": "x",
-            "error": "boom",
-            "call_id": "c1",
-        })
+        out = BusAdapter.translate_sse_to_ws(
+            {
+                "type": "tool_call_error",
+                "tool": "x",
+                "error": "boom",
+                "call_id": "c1",
+            }
+        )
         assert out["type"] == _WT.TOOL_CALL
         assert out["phase"] == "error"
         assert out["error"] == "boom"
 
 
 class TestTranslateSseToWsPassthrough:
-    @pytest.mark.parametrize("sse_type,ws_type", [
-        ("confirmation_required", _WT.CONFIRMATION_REQUIRED),
-        ("compacted", _WT.COMPACTED),
-        ("phase", _WT.PHASE),
-        ("save_warning", _WT.SAVE_WARNING),
-        ("command_done", _WT.COMMAND_DONE),
-        ("research_run_started", _WT.RESEARCH_RUN_STARTED),
-        ("session_created", _WT.SESSION_CREATED),
-        ("session_init", _WT.SESSION_INIT),
-        ("timeout", _WT.TIMEOUT),
-    ])
+    @pytest.mark.parametrize(
+        "sse_type,ws_type",
+        [
+            ("confirmation_required", _WT.CONFIRMATION_REQUIRED),
+            ("compacted", _WT.COMPACTED),
+            ("phase", _WT.PHASE),
+            ("save_warning", _WT.SAVE_WARNING),
+            ("command_done", _WT.COMMAND_DONE),
+            ("research_run_started", _WT.RESEARCH_RUN_STARTED),
+            ("session_created", _WT.SESSION_CREATED),
+            ("session_init", _WT.SESSION_INIT),
+            ("timeout", _WT.TIMEOUT),
+        ],
+    )
     def test_passthrough_preserves_payload(
-        self, sse_type: str, ws_type: str,
+        self,
+        sse_type: str,
+        ws_type: str,
     ) -> None:
         ev = {"type": sse_type, "x": 1, "y": "z"}
         out = BusAdapter.translate_sse_to_ws(ev)
@@ -343,6 +353,7 @@ class TestRoundTripSseBusWs:
             WebSocketManager,
             _Connection,
         )
+
         manager = WebSocketManager()
         # Fake conn
         conn = _Connection(

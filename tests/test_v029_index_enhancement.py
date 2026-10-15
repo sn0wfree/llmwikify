@@ -14,7 +14,7 @@ def test_wiki():
     """Create a temporary wiki with various page types."""
     tmp = Path(tempfile.mkdtemp())
     wiki = Wiki(tmp)
-    wiki.init(agent='generic')
+    wiki.init(agent="generic")
     return wiki, tmp
 
 
@@ -48,7 +48,9 @@ class TestExtractPageSummary:
         wiki, tmp = test_wiki
         page = wiki.wiki_dir / "entities" / "Test Entity.md"
         page.parent.mkdir(parents=True, exist_ok=True)
-        page.write_text("# Test Entity\n\nThis is the first paragraph after the title.\n\nMore content.")
+        page.write_text(
+            "# Test Entity\n\nThis is the first paragraph after the title.\n\nMore content."
+        )
         result = wiki._extract_page_summary(page)
         assert result == "This is the first paragraph after the title."
 
@@ -89,7 +91,9 @@ class TestExtractPageSummary:
         wiki, tmp = test_wiki
         page = wiki.wiki_dir / "concepts" / "Comment Page.md"
         page.parent.mkdir(parents=True, exist_ok=True)
-        page.write_text("# Comment Page\n\n<!-- some comment -->\n\nActual content here.")
+        page.write_text(
+            "# Comment Page\n\n<!-- some comment -->\n\nActual content here."
+        )
         result = wiki._extract_page_summary(page)
         assert result == "Actual content here."
 
@@ -101,6 +105,46 @@ class TestExtractPageSummary:
         page.write_text("")
         result = wiki._extract_page_summary(page)
         assert result == "Blank"
+
+    def test_truncation_does_not_cut_wikilink(self, test_wiki):
+        """截断点落在 [[wikilink]] 内部时回退, 结果括号平衡.
+
+        回归 (2026-10): 未闭合 [[ 会吞掉 index.md 后续跨行文本,
+        并产生无法解析的 link target。
+        """
+        wiki, tmp = test_wiki
+        page = wiki.wiki_dir / "sectors" / "Board.md"
+        page.parent.mkdir(parents=True, exist_ok=True)
+        # 第 117 个字符 (max_len-3) 落在 [[symbols/纯碱]] 内部 (占位 110..123)
+        para = "x" * 110 + "[[symbols/纯碱]]" + " 尾部内容" * 5
+        page.write_text(f"# Board\n\n{para}\n")
+        result = wiki._extract_page_summary(page, max_len=120)
+        assert result.count("[[") == result.count("]]")
+        assert result.endswith("...")
+        assert result.startswith("x" * 110)
+
+    def test_truncation_with_closed_link_before_cut(self, test_wiki):
+        """完整 [[..]] 落在截断点之前时, 正常截断且括号平衡 (不回退)."""
+        wiki, tmp = test_wiki
+        page = wiki.wiki_dir / "sectors" / "Board2.md"
+        page.parent.mkdir(parents=True, exist_ok=True)
+        para = "x" * 60 + "[[symbols/纯碱]]" + "y" * 60
+        page.write_text(f"# Board2\n\n{para}\n")
+        result = wiki._extract_page_summary(page, max_len=120)
+        assert result.count("[[") == result.count("]]")
+        assert result.endswith("...")
+        assert len(result) == 120
+
+    def test_truncation_rolls_back_to_last_unclosed_link(self, test_wiki):
+        """多个链接时回退到最后一个未闭合 [[ 之前."""
+        wiki, tmp = test_wiki
+        page = wiki.wiki_dir / "sectors" / "Board Links.md"
+        page.parent.mkdir(parents=True, exist_ok=True)
+        para = "z" * 40 + "[[a1]]" + "w" * 60 + "[[symbols/纯碱]]" + " 尾" * 10
+        page.write_text(f"# Board Links\n\n{para}\n")
+        result = wiki._extract_page_summary(page, max_len=120)
+        assert result.count("[[") == result.count("]]")
+        assert result.endswith("...")
 
 
 class TestGetSourceAnalysisSummary:
@@ -120,10 +164,12 @@ class TestGetSourceAnalysisSummary:
         wiki, tmp = test_wiki
         page = wiki.wiki_dir / "sources" / "Cached.md"
         page.parent.mkdir(parents=True, exist_ok=True)
-        analysis_json = json.dumps({
-            "topics": ["AI", "Machine Learning"],
-            "entities": [{"name": "DeepMind", "type": "organization"}],
-        })
+        analysis_json = json.dumps(
+            {
+                "topics": ["AI", "Machine Learning"],
+                "entities": [{"name": "DeepMind", "type": "organization"}],
+            }
+        )
         comment = f'<!-- llmwikify:analysis {{"version":1,"hash":"abc","analyzed_at":"2026-01-01","data":{analysis_json}}} -->'
         page.write_text(f"# Cached Source\n\n## Summary\nTest.\n\n{comment}")
         result = wiki._get_source_analysis_summary(page)
@@ -139,12 +185,24 @@ class TestUpdateIndexFile:
         """Index should group pages by directory type."""
         wiki, tmp = test_wiki
         # Create pages of different types
-        (wiki.wiki_dir / "sources" / "Source A.md").parent.mkdir(parents=True, exist_ok=True)
-        (wiki.wiki_dir / "sources" / "Source A.md").write_text("# Source A\n\nA summary of source A.")
-        (wiki.wiki_dir / "concepts" / "Concept B.md").parent.mkdir(parents=True, exist_ok=True)
-        (wiki.wiki_dir / "concepts" / "Concept B.md").write_text("# Concept B\n\nA concept about B.")
-        (wiki.wiki_dir / "entities" / "Entity C.md").parent.mkdir(parents=True, exist_ok=True)
-        (wiki.wiki_dir / "entities" / "Entity C.md").write_text("# Entity C\n\nAn entity named C.")
+        (wiki.wiki_dir / "sources" / "Source A.md").parent.mkdir(
+            parents=True, exist_ok=True
+        )
+        (wiki.wiki_dir / "sources" / "Source A.md").write_text(
+            "# Source A\n\nA summary of source A."
+        )
+        (wiki.wiki_dir / "concepts" / "Concept B.md").parent.mkdir(
+            parents=True, exist_ok=True
+        )
+        (wiki.wiki_dir / "concepts" / "Concept B.md").write_text(
+            "# Concept B\n\nA concept about B."
+        )
+        (wiki.wiki_dir / "entities" / "Entity C.md").parent.mkdir(
+            parents=True, exist_ok=True
+        )
+        (wiki.wiki_dir / "entities" / "Entity C.md").write_text(
+            "# Entity C\n\nAn entity named C."
+        )
 
         wiki._update_index_file()
         content = wiki.index_file.read_text()
@@ -159,8 +217,12 @@ class TestUpdateIndexFile:
     def test_includes_summaries(self, test_wiki):
         """Each page entry should include a summary."""
         wiki, tmp = test_wiki
-        (wiki.wiki_dir / "concepts" / "Test.md").parent.mkdir(parents=True, exist_ok=True)
-        (wiki.wiki_dir / "concepts" / "Test.md").write_text("# Test\n\nThis is a test page summary for indexing.")
+        (wiki.wiki_dir / "concepts" / "Test.md").parent.mkdir(
+            parents=True, exist_ok=True
+        )
+        (wiki.wiki_dir / "concepts" / "Test.md").write_text(
+            "# Test\n\nThis is a test page summary for indexing."
+        )
 
         wiki._update_index_file()
         content = wiki.index_file.read_text()
@@ -211,12 +273,16 @@ class TestUpdateIndexFile:
         wiki, tmp = test_wiki
         page = wiki.wiki_dir / "sources" / "Analyzed.md"
         page.parent.mkdir(parents=True, exist_ok=True)
-        analysis_json = json.dumps({
-            "topics": ["Risk Parity", "Portfolio"],
-            "entities": [{"name": "Ray Dalio", "type": "person"}],
-        })
+        analysis_json = json.dumps(
+            {
+                "topics": ["Risk Parity", "Portfolio"],
+                "entities": [{"name": "Ray Dalio", "type": "person"}],
+            }
+        )
         comment = f'<!-- llmwikify:analysis {{"version":1,"hash":"abc","analyzed_at":"2026-01-01","data":{analysis_json}}} -->'
-        page.write_text(f"# Analyzed Source\n\n## Summary\nA detailed analysis.\n\n{comment}")
+        page.write_text(
+            f"# Analyzed Source\n\n## Summary\nA detailed analysis.\n\n{comment}"
+        )
 
         wiki._update_index_file()
         content = wiki.index_file.read_text()
@@ -231,7 +297,9 @@ class TestLintFixIndexUpdate:
     def test_lint_fix_updates_index(self, test_wiki):
         """Running lint with mode=fix should update index.md."""
         wiki, tmp = test_wiki
-        (wiki.wiki_dir / "concepts" / "Test.md").parent.mkdir(parents=True, exist_ok=True)
+        (wiki.wiki_dir / "concepts" / "Test.md").parent.mkdir(
+            parents=True, exist_ok=True
+        )
         (wiki.wiki_dir / "concepts" / "Test.md").write_text("# Test\n\nA concept page.")
 
         # Reset index to old format

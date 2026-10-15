@@ -53,7 +53,9 @@ def run_graph_query(wiki: Any, args: Any) -> int:
             return 0
         print(f"Path: {' → '.join(result['path'])}")
         for e in result["edges"]:
-            print(f"  {e['source']} -[{e['relation']}]-> {e['target']} ({e['confidence']})")
+            print(
+                f"  {e['source']} -[{e['relation']}]-> {e['target']} ({e['confidence']})"
+            )
 
     elif subcommand == "stats":
         stats = engine.get_stats()
@@ -98,10 +100,15 @@ class GraphQueryCommand(Command):
             raise TypeError("setup_parser requires an argparse subparsers action")
         p = subparsers.add_parser(self.name, help=self.help)
         p.add_argument(
-            "subcommand", choices=["neighbors", "path", "stats", "context"],
+            "subcommand",
+            choices=["neighbors", "path", "stats", "context"],
             help="Query type",
         )
-        p.add_argument("args", nargs="*", help="Arguments (concept name, path endpoints, relation id)")
+        p.add_argument(
+            "args",
+            nargs="*",
+            help="Arguments (concept name, path endpoints, relation id)",
+        )
 
     def run(self, args: Any, wiki: Any, config: dict) -> int:
         return run_graph_query(wiki, args)

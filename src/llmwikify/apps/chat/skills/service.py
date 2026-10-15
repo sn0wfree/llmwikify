@@ -25,13 +25,19 @@ logger = logging.getLogger(__name__)
 class SkillService:
     """Facade over apps/chat/skills/ (Registry + Runtime)."""
 
-    def __init__(self, registry: Any = None, runtime: Any = None,
-                 memory_manager: Any = None, wiki_service: Any = None):
+    def __init__(
+        self,
+        registry: Any = None,
+        runtime: Any = None,
+        memory_manager: Any = None,
+        wiki_service: Any = None,
+    ):
         self.registry = registry
         self.runtime = runtime
         self.memory_manager = memory_manager
         self.wiki_service = wiki_service
         self._initialized = False
+        self._actions_registered = False
 
     def initialize(self) -> None:
         """Initialize registry + runtime if not provided.
@@ -44,9 +50,11 @@ class SkillService:
             from llmwikify.apps.chat.skills.registry import (
                 default_registry,
             )
+
             self.registry = default_registry()
         if self.runtime is None:
             from llmwikify.apps.chat.skills.runtime import SkillRuntime
+
             self.runtime = SkillRuntime(self.registry)
         self._initialized = True
 
@@ -55,21 +63,17 @@ class SkillService:
         self.initialize()
 
     def register_all(self) -> None:
-        """Register all built-in skills.
-
-        This includes:
-        - 23 base actions (Phase 5)
-        - 4 CRUD skills (Phase 12b)
-        - 2 pipelines (Phase 12a)
-        - 1 aggregator (Phase 12c)
-        - research_skill (Phase 6)
-        """
+        """Register all built-in skills. Idempotent — safe to call repeatedly."""
         self.initialize()
+        if self._actions_registered:
+            return
+        self._actions_registered = True
         # 23 base actions
         try:
             from llmwikify.apps.chat.skills.actions import (
                 register_all_actions,
             )
+
             register_all_actions(self.registry)
         except ImportError:
             logger.debug("Base actions not available")
@@ -83,6 +87,7 @@ class SkillService:
                 subagent_skill,
                 wiki_dream_skill,
             )
+
             self.registry.register(memory_skill)
             self.registry.register(notify_skill)
             self.registry.register(scheduler_skill)
@@ -98,6 +103,7 @@ class SkillService:
                 ingest_skill,
                 report_skill,
             )
+
             self.registry.register(gather_skill)
             self.registry.register(ingest_skill)
             self.registry.register(report_skill)
@@ -108,6 +114,7 @@ class SkillService:
             from llmwikify.apps.chat.skills.research_skill import (
                 research_skill,
             )
+
             self.registry.register(research_skill)
         except ImportError:
             logger.debug("research_skill not available")
@@ -116,6 +123,7 @@ class SkillService:
             from llmwikify.apps.chat.skills.wiki_query_skill import (
                 wiki_query_skill,
             )
+
             self.registry.register(wiki_query_skill)
         except ImportError:
             logger.debug("wiki_query_skill not available")
@@ -124,6 +132,7 @@ class SkillService:
             from llmwikify.apps.chat.skills.workflows.skill import (
                 DynamicWorkflowSkill,
             )
+
             self.registry.register(DynamicWorkflowSkill())
         except ImportError:
             logger.debug("dynamic_workflow skill not available")
@@ -132,12 +141,14 @@ class SkillService:
             from llmwikify.apps.chat.skills.autoresearch_compound_skill import (
                 autoresearch_compound_skill,
             )
+
             self.registry.register(autoresearch_compound_skill)
         except ImportError:
             logger.debug("autoresearch_compound skill not available")
         # plugin skills (~/.llmwikify/skills/)
         try:
             from llmwikify.apps.chat.skills.plugin_loader import load_plugins
+
             load_plugins(self.registry)
         except Exception:
             logger.debug("plugin loader failed")

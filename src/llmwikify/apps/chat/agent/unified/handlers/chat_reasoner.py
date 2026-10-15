@@ -15,10 +15,10 @@
         else:
             yield event  # 透传给 SSE
 """
+
 from __future__ import annotations
 
 import inspect
-import json
 import logging
 from collections.abc import AsyncIterator
 from typing import Any
@@ -26,10 +26,8 @@ from typing import Any
 from llmwikify.apps.chat.agent.unified.core import (
     StepResult,
     StreamingHandler,
-    UnifiedContext,
-    _maybe_await,
 )
-from llmwikify.apps.chat.agent.unified.spec import BaseSpec, ReasonResponse
+from llmwikify.apps.chat.agent.unified.spec import ReasonResponse
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +44,10 @@ class ChatReasoner(StreamingHandler):
         self._prompt_builder = prompt_builder
 
     async def stream(
-        self, input: Any, spec: Any, ctx: Any,
+        self,
+        input: Any,
+        spec: Any,
+        ctx: Any,
     ) -> AsyncIterator[dict[str, Any] | StepResult]:
         from llmwikify.apps.chat.agent.text_mode_tool import TextModeParser
 
@@ -137,11 +138,13 @@ class ChatReasoner(StreamingHandler):
         if not content_from_parser and final_done_content:
             accumulated = final_done_content
 
-        yield StepResult.ok(ReasonResponse(
-            raw_content=accumulated,
-            tool_calls=list(tool_calls),
-            thinking=thinking,
-        ))
+        yield StepResult.ok(
+            ReasonResponse(
+                raw_content=accumulated,
+                tool_calls=list(tool_calls),
+                thinking=thinking,
+            )
+        )
 
     async def _build_system_prompt(self, spec: Any) -> str:
         """构建 system prompt — 包装 prompt_builder。"""
@@ -150,6 +153,7 @@ class ChatReasoner(StreamingHandler):
         try:
             if hasattr(self._prompt_builder, "build_with_context"):
                 from llmwikify.apps.chat.agent.prompt_builder import BuildContext
+
                 ctx = BuildContext(
                     wiki_id=getattr(spec, "wiki_id", None),
                     workspace=getattr(spec, "workspace", None),
@@ -195,7 +199,9 @@ class ChatReasoner(StreamingHandler):
             return []
 
     async def _stream_llm(
-        self, messages: list[dict[str, Any]], tools: list[dict[str, Any]],
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]],
     ) -> AsyncIterator[dict[str, Any]]:
         """流式 LLM 调用 — 包装 runner_v2._stream_llm 逻辑。"""
         from llmwikify.apps.chat.agent.llm_metrics import (
@@ -203,7 +209,9 @@ class ChatReasoner(StreamingHandler):
             iter_with_metrics,
         )
 
-        chars_in = sum(len(str(m.get("content", ""))) for m in messages if isinstance(m, dict))
+        chars_in = sum(
+            len(str(m.get("content", ""))) for m in messages if isinstance(m, dict)
+        )
 
         # 路径 1: chat_service._llm_stream_with_retry
         retry = getattr(self._chat_service, "_llm_stream_with_retry", None)
@@ -218,7 +226,10 @@ class ChatReasoner(StreamingHandler):
 
         # 路径 2: wiki_service.get_llm().astream_chat
         llm = None
-        if hasattr(self._chat_service, "wiki_service") and self._chat_service.wiki_service is not None:
+        if (
+            hasattr(self._chat_service, "wiki_service")
+            and self._chat_service.wiki_service is not None
+        ):
             llm_getter = getattr(self._chat_service.wiki_service, "get_llm", None)
             llm = llm_getter() if callable(llm_getter) else None
 

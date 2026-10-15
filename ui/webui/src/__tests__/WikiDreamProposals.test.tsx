@@ -8,10 +8,12 @@ const mockReject = vi.fn();
 
 vi.mock('../api', () => ({
   api: {
-    dream: {
+    wikiDream: {
       proposals: () => mockProposals(),
       approve: (...args: unknown[]) => mockApprove(...args),
       reject: (...args: unknown[]) => mockReject(...args),
+      batchApprove: vi.fn().mockResolvedValue({ approved: 1, results: [] }),
+      apply: vi.fn().mockResolvedValue({ applied: 1, errors: [] }),
     },
   },
 }));

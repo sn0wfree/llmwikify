@@ -1,12 +1,12 @@
 """Tests for unified/handlers/ — ChatReasoner + ToolActor (mock LLM)。"""
+
 from __future__ import annotations
 
-import json
 from typing import Any
 
 import pytest
 
-from llmwikify.apps.chat.agent.unified.core import StepResult, StreamingHandler
+from llmwikify.apps.chat.agent.unified.core import StepResult
 from llmwikify.apps.chat.agent.unified.spec import ActResult, ChatSpec, ReasonResponse
 
 # ── Mock LLM service ──────────────────────────────────────
@@ -52,9 +52,11 @@ async def test_chat_reasoner_yields_events():
     from llmwikify.apps.chat.agent.unified.handlers.chat_reasoner import ChatReasoner
 
     # LLM returns done with content (TextModeParser will parse it as content)
-    service = _StubLLMService([
-        {"type": "done", "content": "Hello world"},
-    ])
+    service = _StubLLMService(
+        [
+            {"type": "done", "content": "Hello world"},
+        ]
+    )
     reasoner = ChatReasoner(chat_service=service)
     spec = ChatSpec(messages=[{"role": "user", "content": "hi"}])
 
@@ -75,9 +77,11 @@ async def test_chat_reasoner_yields_events():
 async def test_chat_reasoner_no_tools():
     from llmwikify.apps.chat.agent.unified.handlers.chat_reasoner import ChatReasoner
 
-    service = _StubLLMService([
-        {"type": "done", "content": "simple answer"},
-    ])
+    service = _StubLLMService(
+        [
+            {"type": "done", "content": "simple answer"},
+        ]
+    )
     reasoner = ChatReasoner(chat_service=service)
     spec = ChatSpec(messages=[{"role": "user", "content": "hi"}])
 
@@ -98,12 +102,16 @@ async def test_chat_reasoner_no_tools():
 async def test_tool_actor_success():
     from llmwikify.apps.chat.agent.unified.handlers.tool_actor import ToolActor
 
-    executor = _StubExecutor(results={"wiki_read": {"status": "ok", "content": "page content"}})
+    executor = _StubExecutor(
+        results={"wiki_read": {"status": "ok", "content": "page content"}}
+    )
     actor = ToolActor(tool_executor=executor)
 
-    response = ReasonResponse(tool_calls=[
-        {"name": "wiki_read", "args": {"page_name": "test"}},
-    ])
+    response = ReasonResponse(
+        tool_calls=[
+            {"name": "wiki_read", "args": {"page_name": "test"}},
+        ]
+    )
     spec = ChatSpec(messages=[], tool_registry=None, session_id="test")
 
     events = []
@@ -150,9 +158,11 @@ async def test_tool_actor_tool_error():
     from llmwikify.apps.chat.agent.unified.handlers.tool_actor import ToolActor
 
     executor = _StubExecutor()
+
     # Override execute to raise
     async def failing_execute(*args, **kwargs):
         raise RuntimeError("tool exploded")
+
     executor.execute = failing_execute
 
     actor = ToolActor(tool_executor=executor)
@@ -160,10 +170,9 @@ async def test_tool_actor_tool_error():
     spec = ChatSpec(messages=[], tool_registry=None, session_id="test")
 
     events = []
-    result = None
     async for event in actor.stream(response, spec, None):
         if isinstance(event, StepResult):
-            result = event.output
+            _result = event.output
         else:
             events.append(event)
 
@@ -176,12 +185,20 @@ async def test_tool_actor_tool_error():
 async def test_tool_actor_confirmation():
     from llmwikify.apps.chat.agent.unified.handlers.tool_actor import ToolActor
 
-    executor = _StubExecutor(results={
-        "wiki_write": {"status": "confirmation_required", "confirmation_id": "abc123", "impact": {}},
-    })
+    executor = _StubExecutor(
+        results={
+            "wiki_write": {
+                "status": "confirmation_required",
+                "confirmation_id": "abc123",
+                "impact": {},
+            },
+        }
+    )
     actor = ToolActor(tool_executor=executor)
 
-    response = ReasonResponse(tool_calls=[{"name": "wiki_write", "args": {"page": "test"}}])
+    response = ReasonResponse(
+        tool_calls=[{"name": "wiki_write", "args": {"page": "test"}}]
+    )
     spec = ChatSpec(messages=[], tool_registry=None, session_id="test")
 
     result = None

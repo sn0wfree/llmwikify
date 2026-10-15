@@ -31,25 +31,19 @@ A simple constructor pattern is used::
 
 from __future__ import annotations
 
-import asyncio
 import inspect
 import logging
 from typing import Any
 
 from llmwikify.apps.chat.skills.base import (
-    AsyncHandler,
-    Skill,
     SkillAction,
     SkillContext,
     SkillResult,
 )
 from llmwikify.apps.chat.skills.errors import (
-    ActionNotFoundError,
     ConfirmationRequiredError,
     SkillError,
     SkillExecutionError,
-    SkillNotFoundError,
-    SkillValidationError,
 )
 from llmwikify.apps.chat.skills.registry import SkillRegistry
 
@@ -90,9 +84,7 @@ def _check_type(value: Any, declared: str | list[str]) -> bool:
     return False
 
 
-def _validate_args(
-    action: SkillAction, args: dict[str, Any]
-) -> list[str]:
+def _validate_args(action: SkillAction, args: dict[str, Any]) -> list[str]:
     """Run the subset of JSON Schema validation we support.
 
     Returns a list of error messages (empty = OK). The runtime
@@ -109,9 +101,7 @@ def _validate_args(
     # 1. required
     for required in schema.get("required", []) or []:
         if required not in args:
-            errors.append(
-                f"missing required argument {required!r}"
-            )
+            errors.append(f"missing required argument {required!r}")
 
     # 2. property types
     properties = schema.get("properties", {}) or {}
@@ -134,8 +124,7 @@ def _validate_args(
         for key in args:
             if key not in properties:
                 errors.append(
-                    f"unexpected argument {key!r} "
-                    f"(additionalProperties=False)"
+                    f"unexpected argument {key!r} " f"(additionalProperties=False)"
                 )
 
     return errors
@@ -204,7 +193,10 @@ class SkillRuntime:
         except SkillExecutionError as e:
             logger.error(
                 "Skill %s.%s failed: %s",
-                skill_name, action_name, e, exc_info=True,
+                skill_name,
+                action_name,
+                e,
+                exc_info=True,
             )
             return SkillResult.fail(
                 str(e),
@@ -214,7 +206,10 @@ class SkillRuntime:
         except Exception as e:
             logger.error(
                 "Skill %s.%s unhandled exception: %s",
-                skill_name, action_name, e, exc_info=True,
+                skill_name,
+                action_name,
+                e,
+                exc_info=True,
             )
             return SkillResult.fail(
                 f"internal error: {e!r}",
@@ -245,9 +240,7 @@ class SkillRuntime:
     ) -> SkillResult:
         """Call the handler, await if needed, normalize the return value."""
         if action.handler is None:
-            raise SkillExecutionError(
-                f"action {action.name!r} has no handler"
-            )
+            raise SkillExecutionError(f"action {action.name!r} has no handler")
 
         # Pre-execution confirmation gate. The bridge (ChatBase
         # tool-call loop) intercepts ConfirmationRequiredError
@@ -259,6 +252,7 @@ class SkillRuntime:
             from llmwikify.apps.chat.skills.errors import (
                 ConfirmationRequiredError,
             )
+
             # The handler is responsible for the actual
             # confirmation_id; we don't gate the call here.
             # (We re-raise only if the handler explicitly

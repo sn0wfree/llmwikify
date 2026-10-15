@@ -30,6 +30,7 @@ created after the target message's rowid). The tool_calls portion
 is exposed via the ``tool_call_delete_after_rowid`` hook which the
 ChatDatabase facade calls before invoking the messages update.
 """
+
 from __future__ import annotations
 
 import json
@@ -47,9 +48,8 @@ class ChatMessageRepository(ChatDBBase):
     """Repository for the ``chat_messages`` table."""
 
     def _init_schema(self) -> None:
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute(
-                """
+        with self._mgr.transaction() as conn:
+            conn.execute("""
                 CREATE TABLE IF NOT EXISTS chat_messages (
                     id TEXT PRIMARY KEY,
                     session_id TEXT NOT NULL,
@@ -59,14 +59,11 @@ class ChatMessageRepository(ChatDBBase):
                     created_at TEXT DEFAULT (datetime('now')),
                     FOREIGN KEY (session_id) REFERENCES chat_sessions(id)
                 )
-                """
-            )
-            conn.execute(
-                """
+                """)
+            conn.execute("""
                 CREATE INDEX IF NOT EXISTS idx_chat_messages_session
                 ON chat_messages(session_id, created_at DESC)
-                """
-            )
+                """)
             # v0.40: reverted column for session revert
             try:
                 conn.execute(
@@ -76,8 +73,12 @@ class ChatMessageRepository(ChatDBBase):
                 pass  # column already exists
             # v0.40: token/cost columns
             for col in (
-                "tokens_input", "tokens_output", "tokens_reasoning",
-                "tokens_cache_read", "tokens_cache_write", "cost",
+                "tokens_input",
+                "tokens_output",
+                "tokens_reasoning",
+                "tokens_cache_read",
+                "tokens_cache_write",
+                "cost",
             ):
                 try:
                     default = "0" if col != "cost" else "0.0"
@@ -93,7 +94,6 @@ class ChatMessageRepository(ChatDBBase):
                 )
             except sqlite3.OperationalError:
                 pass  # column already exists
-            conn.commit()
 
     def save_chat_message(self, message: dict[str, Any]) -> None:
         """Insert a message (or ignore if id already exists)."""
@@ -102,9 +102,7 @@ class ChatMessageRepository(ChatDBBase):
         role = message.get("role", "")
         content = message.get("content", "")
         tool_calls = (
-            json.dumps(message["tool_calls"])
-            if message.get("tool_calls")
-            else None
+            json.dumps(message["tool_calls"]) if message.get("tool_calls") else None
         )
         tokens_input = message.get("tokens_input", 0)
         tokens_output = message.get("tokens_output", 0)
@@ -113,30 +111,36 @@ class ChatMessageRepository(ChatDBBase):
         tokens_cache_write = message.get("tokens_cache_write", 0)
         cost = message.get("cost", 0.0)
         research_run_id = message.get("research_run_id")
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute(
-                """INSERT OR IGNORE INTO chat_messages
-                   (id, session_id, role, content, tool_calls,
-                    tokens_input, tokens_output, tokens_reasoning,
-                    tokens_cache_read, tokens_cache_write, cost,
-                    research_run_id)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (msg_id, session_id, role, content, tool_calls,
-                 tokens_input, tokens_output, tokens_reasoning,
-                 tokens_cache_read, tokens_cache_write, cost,
-                 research_run_id),
-            )
-            conn.commit()
+        self._mgr.execute_write(
+            """INSERT OR IGNORE INTO chat_messages
+               (id, session_id, role, content, tool_calls,
+                tokens_input, tokens_output, tokens_reasoning,
+                tokens_cache_read, tokens_cache_write, cost,
+                research_run_id)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                msg_id,
+                session_id,
+                role,
+                content,
+                tool_calls,
+                tokens_input,
+                tokens_output,
+                tokens_reasoning,
+                tokens_cache_read,
+                tokens_cache_write,
+                cost,
+                research_run_id,
+            ),
+        )
 
     def update_chat_message(self, message_id: str, content: str) -> bool:
         """Update a message's content in-place. Returns True if updated."""
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.execute(
-                "UPDATE chat_messages SET content = ? WHERE id = ?",
-                (content, message_id),
-            )
-            conn.commit()
-            return cursor.rowcount > 0
+        cursor = self._mgr.execute_write(
+            "UPDATE chat_messages SET content = ? WHERE id = ?",
+            (content, message_id),
+        )
+        return cursor.rowcount > 0
 
     def get_chat_messages(
         self,
@@ -155,23 +159,22 @@ class ChatMessageRepository(ChatDBBase):
 
         Returns messages in chronological (oldest-first) order.
         """
-        with self._connect() as conn:
-            reverted_clause = "" if include_reverted else " AND reverted = 0"
-            if before:
-                rows = conn.execute(
-                    f"""SELECT * FROM chat_messages
-                       WHERE session_id = ? AND created_at < ?{reverted_clause}
-                       ORDER BY created_at DESC LIMIT ?""",
-                    (session_id, before, limit),
-                ).fetchall()
-            else:
-                rows = conn.execute(
-                    f"""SELECT * FROM chat_messages
-                       WHERE session_id = ?{reverted_clause}
-                       ORDER BY created_at DESC LIMIT ?""",
-                    (session_id, limit),
-                ).fetchall()
-            return [dict(r) for r in reversed(rows)]
+        reverted_clause = "" if include_reverted else " AND reverted = 0"
+        if before:
+            rows = self._mgr.conn.execute(
+                f"""SELECT * FROM chat_messages
+                   WHERE session_id = ? AND created_at < ?{reverted_clause}
+                   ORDER BY created_at DESC LIMIT ?""",
+                (session_id, before, limit),
+            ).fetchall()
+        else:
+            rows = self._mgr.conn.execute(
+                f"""SELECT * FROM chat_messages
+                   WHERE session_id = ?{reverted_clause}
+                   ORDER BY created_at DESC LIMIT ?""",
+                (session_id, limit),
+            ).fetchall()
+        return [dict(r) for r in reversed(rows)]
 
     def revert_to_message(
         self,
@@ -195,33 +198,27 @@ class ChatMessageRepository(ChatDBBase):
 
         Returns the number of messages reverted (0 if target not found).
         """
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute("PRAGMA foreign_keys = ON")
-            try:
-                conn.execute("BEGIN IMMEDIATE")
-                row = conn.execute(
-                    "SELECT rowid FROM chat_messages WHERE id = ? AND session_id = ?",
-                    (message_id, session_id),
-                ).fetchone()
-                if not row:
-                    conn.execute("ROLLBACK")
-                    return 0
-                target_rowid = row[0]
-                cursor = conn.execute(
-                    """UPDATE chat_messages
-                       SET reverted = 1
-                       WHERE session_id = ? AND rowid > ? AND reverted = 0""",
-                    (session_id, target_rowid),
+        with self._mgr.transaction() as conn:
+            row = conn.execute(
+                "SELECT rowid FROM chat_messages WHERE id = ? AND session_id = ?",
+                (message_id, session_id),
+            ).fetchone()
+            if not row:
+                return 0
+            target_rowid = row[0]
+            cursor = conn.execute(
+                """UPDATE chat_messages
+                   SET reverted = 1
+                   WHERE session_id = ? AND rowid > ? AND reverted = 0""",
+                (session_id, target_rowid),
+            )
+            if tool_call_delete_after_rowid is not None:
+                tool_call_delete_after_rowid(
+                    conn,
+                    session_id,
+                    target_rowid,
                 )
-                if tool_call_delete_after_rowid is not None:
-                    tool_call_delete_after_rowid(
-                        conn, session_id, target_rowid,
-                    )
-                conn.execute("COMMIT")
-                return cursor.rowcount
-            except Exception:
-                conn.execute("ROLLBACK")
-                raise
+            return cursor.rowcount
 
 
 __all__ = ["ChatMessageRepository"]

@@ -65,7 +65,9 @@ class AgentService:
 
         # WikiService (multi-wiki registry)
         self.wiki_service = WikiService(
-            wiki_registry, self.data_dir, self.app_db.chat,
+            wiki_registry,
+            self.data_dir,
+            self.app_db.chat,
         )
 
         # MemoryManager (6 memory stores + Phase 6 Consolidator/Dream).
@@ -78,6 +80,7 @@ class AgentService:
             self.memory_manager = memory_manager
         else:
             from llmwikify.apps.chat.memory import MemoryManager
+
             self.memory_manager = MemoryManager(
                 self.app_db,
                 wiki=None,  # Wired on first skill invocation
@@ -99,6 +102,7 @@ class AgentService:
             self.skill_service = skill_service
         else:
             from llmwikify.apps.chat.skills.service import SkillService
+
             self.skill_service = SkillService()
 
         # HarnessService (lazy init for eval primitives)
@@ -106,6 +110,7 @@ class AgentService:
             self.harness_service = harness_service
         else:
             from llmwikify.apps.chat.harness.service import HarnessService
+
             self.harness_service = HarnessService(
                 config=config,
                 wiki=None,  # Wired on first skill invocation
@@ -130,6 +135,12 @@ class AgentService:
         self.auto_compact: Any = None
         self._auto_compact_task: Any = None
 
+        # v0.40: ConfirmationsCleanup lifecycle hook. Deletes
+        # pending POST /page confirmation tokens whose ``expires_at``
+        # has passed. Same shape as auto_compact: asyncio sleep loop
+        # driven by ``interval_seconds``.
+        self._confirmations_cleanup_task: Any = None
+
     # ─── DB facade shortcut ─────────────────────────────────────
 
     @property
@@ -144,10 +155,11 @@ class AgentService:
         message: str,
         session_id: str | None = None,
         wiki_id: str | None = None,
-        jwt_token: str | None = None,
     ) -> AsyncIterator[dict]:
         async for event in self.chat_service.chat(
-            message, session_id, wiki_id, jwt_token,
+            message,
+            session_id,
+            wiki_id,
         ):
             yield event
 
@@ -209,9 +221,7 @@ class AgentService:
         # Load cron from memory_config.json if not supplied
         if cron_expression is None:
             cfg_dir = (
-                Path(config_path).parent
-                if config_path is not None
-                else self.data_dir
+                Path(config_path).parent if config_path is not None else self.data_dir
             )
             cfg_path = cfg_dir / DEFAULT_CONFIG_FILENAME
             # First-run convenience: write defaults ONLY if file missing.
@@ -220,9 +230,7 @@ class AgentService:
             # Pass the directory, NOT the full path (load_memory_config
             # internally appends the filename).
             mem_cfg = load_memory_config(cfg_dir)
-            cron_expression = (
-                mem_cfg.dream.get("cron_expression") or CRON_DAILY_03
-            )
+            cron_expression = mem_cfg.dream.get("cron_expression") or CRON_DAILY_03
             dream_enabled = mem_cfg.dream.get("enabled", True)
             if not dream_enabled:
                 logger.info(
@@ -260,6 +268,65 @@ class AgentService:
             )
         finally:
             self.dream_scheduler = None
+
+    # ─── Shared periodic-task helper (B2 refactor) ────────────
+
+    def _run_periodic_loop(
+        self,
+        task_name: str,
+        interval_seconds: float,
+        tick_fn,
+        success_log: str | None = None,
+    ) -> Any:
+        """Schedule an asyncio sleep-loop that calls ``tick_fn`` every
+        ``interval_seconds``.
+
+        v0.40 refactor (B2): previously inlined twice (auto_compact +
+        confirmations_cleanup). Centralised here so both callers share
+        the cancel/await/swallow semantics without renaming the
+        public/private attributes that production code and unit tests
+        depend on (``_auto_compact_task`` / ``_confirmations_cleanup_task``).
+
+        Args:
+            task_name: name registered with ``asyncio.create_task``
+                (visible in ``asyncio.all_tasks()``).
+            interval_seconds: how often to wake between ticks.
+            tick_fn: zero-arg callable. May be sync (returns a value)
+                or async (returns a coroutine). Both shapes are awaited
+                / consumed correctly. Exceptions are logged at WARNING
+                and swallowed so one bad tick doesn't kill the loop.
+            success_log: optional format string with one ``%d``-style
+                placeholder for the tick return value when the tick is
+                the "deleted N rows" style; pass ``None`` to skip.
+
+        Returns:
+            The created ``asyncio.Task`` instance (caller is responsible
+            for ``.cancel()`` + ``await`` on shutdown).
+        """
+        import asyncio
+        import inspect
+
+        async def _periodic_loop() -> None:
+            try:
+                while True:
+                    await asyncio.sleep(interval_seconds)
+                    try:
+                        result = tick_fn()
+                        if inspect.iscoroutine(result):
+                            await result
+                            result = None
+                        if success_log is not None and result:
+                            logger.info(success_log, result)
+                    except Exception:
+                        logger.warning(
+                            "AgentService: %s tick failed",
+                            task_name,
+                            exc_info=True,
+                        )
+            except asyncio.CancelledError:
+                raise
+
+        return asyncio.create_task(_periodic_loop(), name=task_name)
 
     # ─── Phase 9 AutoCompact lifecycle (2026-06-20) ────────────
 
@@ -311,29 +378,20 @@ class AgentService:
             ttl_minutes=ttl_minutes,
         )
 
-        async def _periodic_tick() -> None:
-            import asyncio
-            try:
-                while True:
-                    await asyncio.sleep(interval_seconds)
-                    try:
-                        active = self._active_session_keys()
-                        await self.auto_compact.check_expired(
-                            active_session_keys=active,
-                        )
-                    except Exception:
-                        logger.warning(
-                            "AgentService: auto_compact tick failed",
-                            exc_info=True,
-                        )
-            except asyncio.CancelledError:
-                raise
+        def _auto_compact_tick():
+            return self.auto_compact.check_expired(
+                active_session_keys=self._active_session_keys(),
+            )
 
-        import asyncio
-        self._auto_compact_task = asyncio.create_task(_periodic_tick())
+        self._auto_compact_task = self._run_periodic_loop(
+            "auto_compact_tick",
+            interval_seconds,
+            _auto_compact_tick,
+        )
         logger.info(
             "AgentService: auto_compact started (ttl=%dm, interval=%.0fs)",
-            ttl_minutes, interval_seconds,
+            ttl_minutes,
+            interval_seconds,
         )
         return self.auto_compact
 
@@ -349,10 +407,114 @@ class AgentService:
         try:
             await self._auto_compact_task
         except BaseException:  # noqa: BLE001 — CancelledError + bubbled errors
-            pass
+            logger.debug("AutoCompact task cancellation settled", exc_info=True)
         finally:
             self._auto_compact_task = None
             self.auto_compact = None
+
+    # ─── v0.40 ConfirmationsCleanup lifecycle ──────────────────
+
+    async def start_confirmations_cleanup(
+        self,
+        interval_seconds: float = 300.0,
+        enabled: bool = True,
+    ) -> Any:
+        """Start a periodic task that deletes expired POST /page confirmation tokens.
+
+        Confirmation tokens issued by ``_wiki_ops.write_page`` carry an
+        ``expires_at`` (default TTL 300s). If the user never confirms, the
+        token leaks into the ``confirmations`` table forever. This task
+        walks the table on a fixed interval and deletes pending tokens
+        whose ``expires_at`` has passed.
+
+        Idempotent: re-calling returns the existing task. ``enabled=False``
+        short-circuits to ``None``.
+
+        Args:
+            interval_seconds: how often to wake up and call
+                :meth:`WikiDatabase.delete_expired_confirmations`. The first
+                tick fires ``interval_seconds`` after start.
+            enabled: short-circuits to ``None`` so callers can disable
+                via config without restructuring lifespan code.
+        """
+        if not enabled:
+            logger.info(
+                "AgentService: confirmations_cleanup disabled, skipping start",
+            )
+            return None
+
+        if self._confirmations_cleanup_task is not None:
+            logger.debug("AgentService: confirmations_cleanup already running")
+            return self._confirmations_cleanup_task
+
+        wiki_db = getattr(self.wiki_service, "_wiki_db", None)
+        if wiki_db is None:
+            logger.warning(
+                "AgentService: confirmations_cleanup start skipped — "
+                "WikiService has no _wiki_db",
+            )
+            return None
+
+        self._confirmations_cleanup_task = self._run_periodic_loop(
+            "confirmations_cleanup_tick",
+            interval_seconds,
+            wiki_db.delete_expired_confirmations,
+            success_log=(
+                "AgentService: confirmations_cleanup deleted %d expired tokens"
+            ),
+        )
+        logger.info(
+            "AgentService: confirmations_cleanup started (interval=%.0fs)",
+            interval_seconds,
+        )
+        return self._confirmations_cleanup_task
+
+    async def stop_confirmations_cleanup(self) -> None:
+        """Stop the confirmations cleanup task.
+
+        Idempotent: safe to call even if cleanup was never started.
+        """
+        if self._confirmations_cleanup_task is None:
+            return
+        self._confirmations_cleanup_task.cancel()
+        try:
+            await self._confirmations_cleanup_task
+        except BaseException:  # noqa: BLE001 — CancelledError + bubbled errors
+            logger.debug(
+                "confirmations_cleanup task cancellation settled",
+                exc_info=True,
+            )
+        finally:
+            self._confirmations_cleanup_task = None
+
+    def _load_memory_config_or_default(self) -> Any:
+        """Load ``<data_dir>/memory_config.json`` defensively.
+
+        Convenience wrapper used by callers (and tests) that want a
+        :class:`MemoryConfig` with all default keys populated even when
+        the file is missing or malformed. Falls back to
+        :class:`MemoryConfig()` defaults, matching ``load_memory_config``'s
+        own error-recovery path.
+
+        NOTE: not currently called from :mod:`interfaces.server.core`
+        (lifespan reads the config directly via ``load_memory_config``)
+        — kept here so unit tests / external scripts have a single
+        stable method on the AgentService to call.
+        """
+        try:
+            from llmwikify.apps.chat.memory.memory_config import (
+                load_memory_config,
+            )
+
+            return load_memory_config(self.data_dir)
+        except Exception:
+            logger.warning(
+                "AgentService: load_memory_config failed, using defaults",
+                exc_info=True,
+            )
+            from llmwikify.apps.chat.memory.memory_config import MemoryConfig
+
+            return MemoryConfig()
 
     def _active_session_keys(self) -> list[str]:
         """Return ids of sessions currently marked as active.
@@ -365,6 +527,7 @@ class AgentService:
             from llmwikify.apps.chat.agent.autocompact import (
                 active_keys_from_status_map,
             )
+
             status_map = self.chat_service.get_all_session_status()
             return list(active_keys_from_status_map(status_map))
         except Exception:
@@ -382,7 +545,10 @@ class AgentService:
         arguments: dict | None = None,
     ) -> AsyncIterator[dict]:
         async for event in self.chat_service.approve_confirmation_continue(
-            confirmation_id, session_id, wiki_id, arguments,
+            confirmation_id,
+            session_id,
+            wiki_id,
+            arguments,
         ):
             yield event
 
@@ -392,7 +558,9 @@ class AgentService:
         return await self.wiki_service.run_wiki_dream(wiki_id)
 
     def get_wiki_dream_log(
-        self, wiki_id: str | None = None, limit: int = 20,
+        self,
+        wiki_id: str | None = None,
+        limit: int = 20,
     ) -> list[dict]:
         return self.wiki_service.get_wiki_dream_log(wiki_id, limit)
 
@@ -409,13 +577,16 @@ class AgentService:
         return self.wiki_service.batch_approve_wiki_dream_proposals(proposal_ids)
 
     async def apply_wiki_dream_proposals(
-        self, wiki_id: str | None = None,
+        self,
+        wiki_id: str | None = None,
         proposal_ids: list[str] | None = None,
     ) -> dict:
         return await self.wiki_service.apply_wiki_dream_proposals(wiki_id, proposal_ids)
 
     def list_notifications(
-        self, wiki_id: str | None = None, unread_only: bool = False,
+        self,
+        wiki_id: str | None = None,
+        unread_only: bool = False,
     ) -> list[dict]:
         return self.wiki_service.list_notifications(wiki_id, unread_only)
 
@@ -447,43 +618,57 @@ class AgentService:
         from llmwikify.apps.chat.agent.confirmation_manager import (
             ConfirmationManager as _CM,
         )
+
         return _CM.is_unknown_confirmation(result)
 
     async def approve_confirmation(
-        self, confirmation_id: str, wiki_id: str | None = None,
+        self,
+        confirmation_id: str,
+        wiki_id: str | None = None,
         arguments: dict | None = None,
         response: str = "once",
     ) -> dict:
         result = await self.chat_service.approve_confirmation(
-            confirmation_id, wiki_id, arguments,
+            confirmation_id,
+            wiki_id,
+            arguments,
         )
         if not self._is_unknown_confirmation(result):
             return result
         return await self.wiki_service.approve_confirmation(
-            confirmation_id, wiki_id, arguments, response=response,
+            confirmation_id,
+            wiki_id,
+            arguments,
+            response=response,
         )
 
     async def reject_confirmation(
-        self, confirmation_id: str, wiki_id: str | None = None,
+        self,
+        confirmation_id: str,
+        wiki_id: str | None = None,
     ) -> dict:
         result = await self.chat_service.reject_confirmation(confirmation_id, wiki_id)
         if not self._is_unknown_confirmation(result):
             return result
         return await self.wiki_service.reject_confirmation(
-            confirmation_id, wiki_id,
+            confirmation_id,
+            wiki_id,
         )
 
     async def batch_approve_confirmations(
-        self, confirmation_ids: list[str], wiki_id: str | None = None,
+        self,
+        confirmation_ids: list[str],
+        wiki_id: str | None = None,
     ) -> dict:
         results = [
-            await self.approve_confirmation(cid, wiki_id)
-            for cid in confirmation_ids
+            await self.approve_confirmation(cid, wiki_id) for cid in confirmation_ids
         ]
         return {"approved": len(results), "results": results}
 
     def get_ingest_log(
-        self, wiki_id: str | None = None, limit: int = 20,
+        self,
+        wiki_id: str | None = None,
+        limit: int = 20,
     ) -> list[dict]:
         return self.wiki_service.get_ingest_log(wiki_id, limit)
 
@@ -505,10 +690,14 @@ class AgentService:
         if state is None:
             return {
                 "status": "error",
-                "error": _format_run_not_found(run_id, workflow_name="autoresearch-compound"),
+                "error": _format_run_not_found(
+                    run_id, workflow_name="autoresearch-compound"
+                ),
             }
         synthesize = state.phases.get("synthesize", {}) if state.phases else {}
-        final_report = synthesize.get("output") if isinstance(synthesize, dict) else None
+        final_report = (
+            synthesize.get("output") if isinstance(synthesize, dict) else None
+        )
         outputs = {"final_report": final_report} if final_report else {}
         return {
             "run_id": state.run_id,

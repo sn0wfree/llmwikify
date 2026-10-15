@@ -1,8 +1,5 @@
 """Tests for multi-wiki management system (Phase 1)."""
 
-from datetime import datetime
-from pathlib import Path
-
 import pytest
 
 from llmwikify.kernel.multi_wiki.discovery import WikiDiscovery

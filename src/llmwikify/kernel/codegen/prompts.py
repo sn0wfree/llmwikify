@@ -3,6 +3,7 @@
 C1: extracted from `reproduction/codegen/llm_code.py`. Pure string constant
 — no imports beyond `__future__`. No external dependencies.
 """
+
 from __future__ import annotations
 
 SYSTEM_PROMPT_CODE = """You are a quant factor code generator.

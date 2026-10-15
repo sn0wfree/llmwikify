@@ -36,11 +36,10 @@ Phase 6 (2026-06-19). See ``docs/poc/compare.md`` §10.8.
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import re
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -48,7 +47,6 @@ from llmwikify.apps.chat.memory.consolidation_store import (
     MemoryConsolidationStore,
 )
 from llmwikify.apps.chat.memory.facts_store import (
-    FactSource,
     MemoryFactsStore,
 )
 
@@ -325,12 +323,14 @@ class Dream:
                 continue
             # Pick the most recent session_id in the batch (best effort)
             source_session_id = records[-1].session_id
-            facts.append({
-                "content": fact_content,
-                "source_session_id": source_session_id,
-                "source_type": "dream_extraction",
-                "confidence": 1.0,
-            })
+            facts.append(
+                {
+                    "content": fact_content,
+                    "source_session_id": source_session_id,
+                    "source_type": "dream_extraction",
+                    "confidence": 1.0,
+                }
+            )
         return facts
 
     async def _write_facts(self, facts: list[dict[str, Any]]) -> int:
@@ -353,9 +353,7 @@ class Dream:
                 logger.warning("Dream: write_fact failed", exc_info=True)
         return written
 
-    def _write_fact_markdown(
-        self, fact_id: str, fact: dict[str, Any]
-    ) -> None:
+    def _write_fact_markdown(self, fact_id: str, fact: dict[str, Any]) -> None:
         """Write per-fact markdown + append to index."""
         try:
             self._facts_dir.mkdir(parents=True, exist_ok=True)
@@ -374,16 +372,14 @@ class Dream:
             # Append to index
             index_path = self._facts_dir / "index.md"
             with index_path.open("a", encoding="utf-8") as f:
-                f.write(
-                    f"- [{timestamp}] [{fact_id[:8]}] {fact['content']}\n"
-                )
+                f.write(f"- [{timestamp}] [{fact_id[:8]}] {fact['content']}\n")
         except OSError:
             logger.warning("Dream: markdown write failed", exc_info=True)
 
     # ─── helpers ───────────────────────────────────────────────
 
     @staticmethod
-    def _batched(items: list, size: int):
+    def _batched(items: list, size: int) -> None:
         """Yield successive ``size``-sized chunks from ``items``."""
         for i in range(0, len(items), size):
             yield items[i : i + size]

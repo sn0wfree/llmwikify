@@ -35,7 +35,9 @@ class TestWikiSynthesizeTemplate:
         template = registry._load_template("wiki_synthesize")
         assert template.post_process.get("validate_schema") == "synthesize_output"
         assert "answer" in template.post_process.get("required_keys", [])
-        assert template.post_process.get("retry_on_failure", {}).get("max_attempts") == 2
+        assert (
+            template.post_process.get("retry_on_failure", {}).get("max_attempts") == 2
+        )
 
     def test_template_has_params(self):
         registry = PromptRegistry()
@@ -60,7 +62,7 @@ class TestWikiSynthesizeTemplate:
 
     def test_ollama_override_in_system(self):
         registry = PromptRegistry(provider="ollama")
-        template = registry._load_template("wiki_synthesize")
+        _template = registry._load_template("wiki_synthesize")
         messages = registry.get_messages("wiki_synthesize", query="test")
         system_content = messages[0]["content"]
         assert "IMPORTANT" in system_content
@@ -120,7 +122,7 @@ class TestWikiSynthesizeTemplate:
             wiki_index="Index summary",
             recent_log="Recent activity",
         )
-        system_content = messages[0]["content"]
+        _system_content = messages[0]["content"]
         user_content = messages[1]["content"]
         assert "10 pages" in user_content or "Current Wiki State: 10" in user_content
 

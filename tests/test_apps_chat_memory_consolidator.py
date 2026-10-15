@@ -14,10 +14,7 @@ Tests cover:
 
 from __future__ import annotations
 
-import asyncio
-import time
 from pathlib import Path
-from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -154,9 +151,7 @@ class TestConsolidatorEviction:
         assert len(sent_messages) == 7
 
     @pytest.mark.asyncio
-    async def test_evict_messages_passed_to_llm(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_evict_messages_passed_to_llm(self, tmp_path: Path) -> None:
         provider = _make_provider()
         consol = Consolidator(
             memory_manager=MagicMock(),
@@ -225,10 +220,14 @@ class TestConsolidatorThrottling:
         )
         # s1 and s2 are independent
         r1 = await consol.maybe_consolidate(
-            "s1", _make_messages(20), 5000,
+            "s1",
+            _make_messages(20),
+            5000,
         )
         r2 = await consol.maybe_consolidate(
-            "s2", _make_messages(20), 5000,
+            "s2",
+            _make_messages(20),
+            5000,
         )
         assert r1 is not None
         assert r2 is not None
@@ -247,10 +246,14 @@ class TestConsolidatorThrottling:
             ),
         )
         r1 = await consol.maybe_consolidate(
-            "s1", _make_messages(20), 5000,
+            "s1",
+            _make_messages(20),
+            5000,
         )
         r2 = await consol.maybe_consolidate(
-            "s1", _make_messages(20), 5000,
+            "s1",
+            _make_messages(20),
+            5000,
         )
         # interval=0 → both run
         assert r1 is not None
@@ -275,7 +278,9 @@ class TestConsolidatorLLMFailure:
             data_dir=tmp_path,
         )
         result = await consol.maybe_consolidate(
-            "s1", _make_messages(20), 5000,
+            "s1",
+            _make_messages(20),
+            5000,
         )
         assert result is None
         # No SQLite record written on failure
@@ -292,7 +297,9 @@ class TestConsolidatorLLMFailure:
             data_dir=tmp_path,
         )
         result = await consol.maybe_consolidate(
-            "s1", _make_messages(20), 5000,
+            "s1",
+            _make_messages(20),
+            5000,
         )
         assert result is None
 
@@ -312,7 +319,9 @@ class TestConsolidatorMarkdownWrite:
             config=ConsolidatorConfig(enable_md_write=True),
         )
         result = await consol.maybe_consolidate(
-            "sess-abc", _make_messages(20), 5000,
+            "sess-abc",
+            _make_messages(20),
+            5000,
         )
         assert result is not None
         assert result.md_path is not None
@@ -334,7 +343,9 @@ class TestConsolidatorMarkdownWrite:
             config=ConsolidatorConfig(enable_md_write=False),
         )
         result = await consol.maybe_consolidate(
-            "s1", _make_messages(20), 5000,
+            "s1",
+            _make_messages(20),
+            5000,
         )
         assert result is not None
         assert result.md_path is None
@@ -356,7 +367,9 @@ class TestConsolidatorMarkdownWrite:
         # (Easier: make _memory_sessions_dir unwritable)
         consol._memory_sessions_dir = Path("/nonexistent_path/xyz/blocked")
         result = await consol.maybe_consolidate(
-            "s1", _make_messages(20), 5000,
+            "s1",
+            _make_messages(20),
+            5000,
         )
         # Should still succeed via SQLite
         assert result is not None
@@ -379,7 +392,9 @@ class TestConsolidatorSQLite:
             config=ConsolidatorConfig(enable_md_write=False),
         )
         result = await consol.maybe_consolidate(
-            "s1", _make_messages(20), 5000,
+            "s1",
+            _make_messages(20),
+            5000,
         )
         assert result is not None
         # Verify SQLite has the record
@@ -432,6 +447,7 @@ class TestMemoryManagerConsolidatorIntegration:
         # Dream is wired in Step 3 (Phase 6)
         assert mm.dream is not None
         from llmwikify.apps.chat.memory.dream import Dream
+
         assert isinstance(mm.dream, Dream)
 
     @pytest.mark.asyncio
@@ -446,7 +462,9 @@ class TestMemoryManagerConsolidatorIntegration:
         # Override config to skip md write for test isolation
         mm.consolidator.config.enable_md_write = False
         result = await mm.consolidate_session(
-            "s1", _make_messages(20), 5000,
+            "s1",
+            _make_messages(20),
+            5000,
         )
         assert result is not None
         assert result.messages_evicted == 12
@@ -460,14 +478,14 @@ class TestMemoryManagerConsolidatorIntegration:
             provider=None,
         )
         result = await mm.consolidate_session(
-            "s1", _make_messages(20), 5000,
+            "s1",
+            _make_messages(20),
+            5000,
         )
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_dream_run_no_provider_returns_none(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_dream_run_no_provider_returns_none(self, tmp_path: Path) -> None:
         mm = MemoryManager(
             app_db=_make_app_db_mock(tmp_path),
             wiki=None,

@@ -24,8 +24,8 @@ keep this an opt-in TTL trigger instead of an aggressive default.
 
 from __future__ import annotations
 
-import asyncio
 import logging
+import sqlite3
 from collections.abc import Awaitable, Callable, Collection, Iterable
 from datetime import datetime, timedelta
 from typing import Any
@@ -35,11 +35,13 @@ logger = logging.getLogger(__name__)
 # nanobot defaults: 8 most recent messages preserved verbatim, the rest
 # are LLM-summarized. We respect Consolidator's own keep_recent_messages
 # config; AutoCompact only owns the TTL decision.
-_ACTIVE_STATUSES: frozenset[str] = frozenset({
-    "running",
-    "in_progress",
-    "confirmation_required",
-})
+_ACTIVE_STATUSES: frozenset[str] = frozenset(
+    {
+        "running",
+        "in_progress",
+        "confirmation_required",
+    }
+)
 
 
 def _parse_ts(value: Any) -> datetime | None:
@@ -102,7 +104,10 @@ class AutoCompact:
         return self._ttl_minutes
 
     def is_expired(
-        self, updated_at: Any, *, now: datetime | None = None,
+        self,
+        updated_at: Any,
+        *,
+        now: datetime | None = None,
     ) -> bool:
         """True iff ``updated_at`` is at least ``ttl_minutes`` in the past."""
         if self._ttl_minutes <= 0:
@@ -129,8 +134,15 @@ class AutoCompact:
         out: list[dict[str, Any]] = []
         try:
             sessions = self.chat_db.list_chat_sessions()
+        except (OSError, sqlite3.Error) as exc:
+            logger.warning(
+                "AutoCompact: list_chat_sessions failed: %s", exc, exc_info=True
+            )
+            return out
         except Exception:
-            logger.warning("AutoCompact: list_chat_sessions failed", exc_info=True)
+            logger.warning(
+                "AutoCompact: list_chat_sessions UNEXPECTED failure", exc_info=True
+            )
             return out
         for row in sessions:
             sid = row.get("id")
@@ -181,9 +193,7 @@ class AutoCompact:
             messages = self._load_messages(session_id)
             if not messages:
                 return None
-            session_tokens = sum(
-                len(str(m.get("content", ""))) // 4 for m in messages
-            )
+            session_tokens = sum(len(str(m.get("content", ""))) // 4 for m in messages)
             return await self.memory_manager.consolidate_session(
                 session_id=session_id,
                 messages=messages,
@@ -191,7 +201,8 @@ class AutoCompact:
             )
         except Exception:
             logger.warning(
-                "AutoCompact: consolidate failed for %s", session_id,
+                "AutoCompact: consolidate failed for %s",
+                session_id,
                 exc_info=True,
             )
             return None
@@ -202,11 +213,13 @@ class AutoCompact:
         """Load up to ``max_messages_per_session`` messages for one session."""
         try:
             return self.chat_db.get_chat_messages(
-                session_id, limit=self._max_messages_per_session,
+                session_id,
+                limit=self._max_messages_per_session,
             )
         except Exception:
             logger.warning(
-                "AutoCompact: get_chat_messages failed for %s", session_id,
+                "AutoCompact: get_chat_messages failed for %s",
+                session_id,
                 exc_info=True,
             )
             return []

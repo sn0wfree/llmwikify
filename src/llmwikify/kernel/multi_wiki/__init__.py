@@ -12,6 +12,7 @@ from a single Python process:
 - ``remote``: an HTTP-backed ``RemoteWiki`` for accessing a
   wiki running on another host.
 """
+
 from .discovery import WikiDiscovery
 from .instance import WikiInstance, WikiStatus, WikiType
 from .registry import WikiRegistry

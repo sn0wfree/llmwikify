@@ -13,12 +13,17 @@ class WikiInitMixin(WikiProtocol):
 
     def is_initialized(self) -> bool:
         """Check if wiki is initialized."""
-        return (self.raw_dir.exists() and
-                self.wiki_dir.exists() and
-                self.db_path.exists())
+        return (
+            self.raw_dir.exists() and self.wiki_dir.exists() and self.db_path.exists()
+        )
 
-    def init(self, overwrite: bool = False, agent: str | None = None,
-             force: bool = False, merge: bool = False) -> dict:
+    def init(
+        self,
+        overwrite: bool = False,
+        agent: str | None = None,
+        force: bool = False,
+        merge: bool = False,
+    ) -> dict:
         """Initialize wiki directory structure.
 
         Args:
@@ -37,7 +42,9 @@ class WikiInitMixin(WikiProtocol):
 
         return self._create_new_init(agent, force, merge, overwrite)
 
-    def _handle_existing_init(self, agent: str | None, merge: bool, force: bool) -> dict:
+    def _handle_existing_init(
+        self, agent: str | None, merge: bool, force: bool
+    ) -> dict:
         """Handle initialization when wiki already exists."""
         created = []
         skipped = []
@@ -62,7 +69,9 @@ class WikiInitMixin(WikiProtocol):
             else:
                 skipped.append("wiki.md (up-to-date)")
 
-        self._generate_mcp_config_if_needed(agent, force, merge, created, skipped, warnings)
+        self._generate_mcp_config_if_needed(
+            agent, force, merge, created, skipped, warnings
+        )
 
         raw_stats = self._analyze_raw()
         status_msg = "already_exists" if not created else "mcp_config_added"
@@ -77,7 +86,9 @@ class WikiInitMixin(WikiProtocol):
             "message": f"Wiki already initialized at {self.root}",
         }
 
-    def _create_new_init(self, agent: str | None, force: bool, merge: bool, overwrite: bool = False) -> dict:
+    def _create_new_init(
+        self, agent: str | None, force: bool, merge: bool, overwrite: bool = False
+    ) -> dict:
         """Handle initialization for new wiki."""
         created = []
         skipped = []
@@ -87,7 +98,9 @@ class WikiInitMixin(WikiProtocol):
         self.index.initialize()
         self._create_core_files(created, skipped, overwrite)
         self._handle_wiki_md_schema(created, skipped, warnings, force, merge)
-        self._generate_mcp_config_if_needed(agent, force, merge, created, skipped, warnings)
+        self._generate_mcp_config_if_needed(
+            agent, force, merge, created, skipped, warnings
+        )
         self._generate_gitignore_if_needed(created)
         self._generate_skill_files_if_needed(created)
 
@@ -112,7 +125,14 @@ class WikiInitMixin(WikiProtocol):
             else:
                 skipped.append(name)
 
-        for subdir in ["sources", "entities", "concepts", "comparisons", "synthesis", "claims"]:
+        for subdir in [
+            "sources",
+            "entities",
+            "concepts",
+            "comparisons",
+            "synthesis",
+            "claims",
+        ]:
             sub_path = self.wiki_dir / subdir
             if not sub_path.exists():
                 sub_path.mkdir(parents=True, exist_ok=True)
@@ -126,12 +146,25 @@ class WikiInitMixin(WikiProtocol):
         else:
             skipped.append("wiki/.sink/")
 
-    def _create_core_files(self, created: list, skipped: list, overwrite: bool = False) -> None:
+        meta_dir = self.root / ".wiki"
+        if not meta_dir.exists():
+            meta_dir.mkdir(parents=True, exist_ok=True)
+            created.append(".wiki/")
+        else:
+            skipped.append(".wiki/")
+
+    def _create_core_files(
+        self, created: list, skipped: list, overwrite: bool = False
+    ) -> None:
         """Create index.md, log.md, overview.md, and config example."""
         for file_path, name, generator in [
             (self.index_file, "index.md", self._generate_index_content),
             (self.log_file, "log.md", self._generate_log_content),
-            (self.wiki_dir / "overview.md", "overview.md", self._generate_overview_content),
+            (
+                self.wiki_dir / "overview.md",
+                "overview.md",
+                self._generate_overview_content,
+            ),
         ]:
             if not file_path.exists() or overwrite:
                 file_path.write_text(generator())
@@ -139,17 +172,18 @@ class WikiInitMixin(WikiProtocol):
             else:
                 skipped.append(name)
 
-        config_example = self.root / '.wiki-config.yaml.example'
+        config_example = self.root / ".wiki-config.yaml.example"
         if not config_example.exists():
             config_example.write_text(self._generate_config_example())
             created.append(".wiki-config.yaml.example")
         else:
             skipped.append(".wiki-config.yaml.example")
 
-    def _handle_wiki_md_schema(self, created: list, skipped: list, warnings: list,
-                                force: bool, merge: bool) -> None:
+    def _handle_wiki_md_schema(
+        self, created: list, skipped: list, warnings: list, force: bool, merge: bool
+    ) -> None:
         """Handle wiki.md schema creation, merging, or skipping."""
-        legacy_wiki = self.root / 'WIKI.md'
+        legacy_wiki = self.root / "WIKI.md"
         has_wiki = self.wiki_md_file.exists()
         has_WIKI = legacy_wiki.exists()
 
@@ -180,14 +214,23 @@ class WikiInitMixin(WikiProtocol):
                 "Consider removing or merging WIKI.md."
             )
 
-    def _generate_mcp_config_if_needed(self, agent: str | None, force: bool, merge: bool,
-                                        created: list, skipped: list, warnings: list) -> None:
+    def _generate_mcp_config_if_needed(
+        self,
+        agent: str | None,
+        force: bool,
+        merge: bool,
+        created: list,
+        skipped: list,
+        warnings: list,
+    ) -> None:
         """Generate MCP config and skill files if agent is specified."""
         if not agent or agent == "generic":
             return
 
-        mcp_filename = ".mcp.json" if agent == "claude" else (
-            "opencode.json" if agent == "opencode" else ".opencode.json"
+        mcp_filename = (
+            ".mcp.json"
+            if agent == "claude"
+            else ("opencode.json" if agent == "opencode" else ".opencode.json")
         )
         mcp_path = self.root / mcp_filename
         if not mcp_path.exists() or force or merge:
@@ -205,7 +248,7 @@ class WikiInitMixin(WikiProtocol):
 
     def _generate_gitignore_if_needed(self, created: list) -> None:
         """Generate .gitignore if it doesn't exist."""
-        gitignore_path = self.root / '.gitignore'
+        gitignore_path = self.root / ".gitignore"
         if not gitignore_path.exists():
             content = self._generate_gitignore()
             if content:
@@ -229,11 +272,7 @@ class WikiInitMixin(WikiProtocol):
 
     def _generate_log_content(self) -> str:
         """Generate initial log.md content."""
-        return (
-            "# Wiki Log\n\n"
-            f"Initialized: {self._now()}\n\n"
-            "---\n"
-        )
+        return "# Wiki Log\n\n" f"Initialized: {self._now()}\n\n" "---\n"
 
     def _generate_overview_content(self) -> str:
         """Generate initial overview.md content."""
@@ -254,7 +293,7 @@ class WikiInitMixin(WikiProtocol):
             "## Current State\n\n"
             "*(Summary of current understanding based on ingested sources)*\n\n"
             "## Key Themes\n\n"
-            "*(List key themes with [[wikilinks]] to relevant pages)*\n\n"
+            "*(List key themes with wikilinks to relevant pages)*\n\n"
             "## Working Theses\n\n"
             "*(Working hypotheses or arguments the wiki is building)*\n\n"
             "## Open Questions\n\n"
@@ -272,7 +311,7 @@ class WikiInitMixin(WikiProtocol):
             "#   wiki: wiki\n\n"
             "# Override database name\n"
             "# database:\n"
-            "#   name: \".llmwikify.db\"\n\n"
+            '#   name: ".llmwikify.db"\n\n'
             "# Orphan detection exclusions\n"
             "# orphan_detection:\n"
             "#   exclude_patterns:\n"
@@ -307,12 +346,20 @@ class WikiInitMixin(WikiProtocol):
 
         for item in sorted(self.raw_dir.iterdir()):
             if item.is_dir():
-                count = len([f for f in item.rglob("*") if f.is_file() and f.suffix in (".md", ".txt")])
+                count = len(
+                    [
+                        f
+                        for f in item.rglob("*")
+                        if f.is_file() and f.suffix in (".md", ".txt")
+                    ]
+                )
                 if count > 0:
                     result["categories"][item.name] = count
                     result["total"] += count
             elif item.suffix in (".md", ".txt", ".pdf", ".html"):
-                result["categories"]["(root)"] = result["categories"].get("(root)", 0) + 1
+                result["categories"]["(root)"] = (
+                    result["categories"].get("(root)", 0) + 1
+                )
                 result["total"] += 1
 
         return result

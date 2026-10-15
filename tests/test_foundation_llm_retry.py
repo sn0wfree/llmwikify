@@ -9,6 +9,7 @@ Covers the retry behavior added to StreamableLLMClient:
 - All retries exhausted -> last exception re-raised
 - Backoff timing: 1s, 2s, 4s with up to 0.5s jitter
 """
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
@@ -333,9 +334,7 @@ class TestStreamChatRetry:
             "httpx.Client.stream",
             side_effect=[httpx.ReadTimeout("timeout"), stream_ctx],
         ) as mock_stream:
-            chunks = list(
-                client.stream_chat([{"role": "user", "content": "hi"}])
-            )
+            chunks = list(client.stream_chat([{"role": "user", "content": "hi"}]))
         # Got the content + done
         assert any(c.get("text") == "hello" for c in chunks)
         assert any(c.get("type") == "done" for c in chunks)
@@ -391,7 +390,5 @@ class TestPostWithRetryDirect:
             side_effect=httpx.ReadTimeout("timeout"),
         ) as mock_post:
             with pytest.raises(httpx.ReadTimeout):
-                _post_with_retry_sync(
-                    "http://test/x", {}, {}, timeout_seconds=5
-                )
+                _post_with_retry_sync("http://test/x", {}, {}, timeout_seconds=5)
         assert mock_post.call_count == 4  # 1 + 3 retries

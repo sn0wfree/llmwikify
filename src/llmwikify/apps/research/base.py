@@ -31,10 +31,11 @@ any import-path change.
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
+from functools import lru_cache
+from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -67,8 +68,40 @@ async def _get_wiki_lock(engine: Any) -> asyncio.Lock:
         return lock
 
 
+def _load_research_defaults() -> dict[str, Any]:
+    """Load research defaults from config_defaults.yaml.
+
+    Mutable and immutable are merged together. Override on a
+    per-key basis happens in ``merge_research_config``.
+    """
+    _DEFAULTS_FILE = Path(__file__).parent / "config_defaults.yaml"
+
+    @lru_cache(maxsize=1)
+    def _load() -> dict[str, Any]:
+        if not _DEFAULTS_FILE.exists():
+            return {}
+        import yaml
+
+        try:
+            data = yaml.safe_load(_DEFAULTS_FILE.read_text(encoding="utf-8"))
+            if not isinstance(data, dict):
+                return {}
+            merged: dict[str, Any] = {}
+            merged.update(data.get("immutable", {}))
+            merged.update(data.get("mutable", {}))
+            return merged
+        except Exception:
+            return {}
+
+    return _load()
+
+
 class BaseResearchConfig:
     """Shared default config keys + merge helper for both packages.
+
+    v0.41: DEFAULT 改为从 ``apps/research/config_defaults.yaml`` 读取，
+    代码中不再硬编码 31 个 key。mutable/immutable 分类用于控制 API/UI
+    暴露范围。
 
     The 31 keys defined here were duplicated verbatim between
     ``apps/research/config.py::DEFAULT_RESEARCH_CONFIG`` and
@@ -83,45 +116,7 @@ class BaseResearchConfig:
     config dict.
     """
 
-    DEFAULT: dict[str, Any] = {
-        "max_sub_queries": 20,
-        "max_source_content_length": 500000,
-        "research_timeout_minutes": 30,
-        "max_parallel_gathering": 5,
-        "web_search_results_per_query": 5,
-        "max_retry_attempts": 3,
-        "similarity_threshold": 0.92,
-        "max_review_rounds": 2,
-        "planning_model": None,
-        "report_model": None,
-        "llm_call_timeout_seconds": 120,
-        # Search provider config
-        "search_provider": "auto",       # "auto", "searxng", "minimax", "tavily", "duckduckgo"
-        "searxng_url": None,             # e.g. "http://localhost:8888"
-        "minimax_api_key": None,         # MiniMax Token Plan API key
-        "minimax_api_host": "https://api.minimaxi.com",  # domestic endpoint
-        "tavily_api_key": None,          # e.g. "tvly-xxxxx"
-        # ReAct config
-        "max_react_rounds": 10,          # Max ReAct loop iterations
-        "quality_threshold": 7,          # Score >= 7 is approved
-        "max_replan_attempts": 2,        # Max replanning for knowledge gaps
-        "parallel_wiki_search": True,    # Search local wiki alongside web results
-        # Source filter config
-        "source_filter_enabled": True,   # Enable rule-based source pre-filter
-        "source_min_content_length": 100,  # Min content length to keep
-        "source_min_quality_score": 0.3,   # Min quality score to keep
-        # Report content budget
-        "report_max_per_source": 4000,     # Max chars per source in report prompt
-        "report_max_total_content": 60000, # Max total source chars in report prompt
-        # Quality gate config (base 4 gates)
-        "gate_enabled": True,            # Enable quality gates
-        "gate_min_sources": 3,           # Min sources after gathering
-        "gate_min_type_diversity": 2,    # Min source type diversity
-        "gate_min_analyzed": 2,          # Min analyzed sources
-        "gate_min_avg_credibility": 5,   # Min avg credibility after analysis
-        "gate_max_knowledge_gaps": 3,    # Max knowledge gaps after synthesis
-        "gate_min_reinforced_claims": 2, # Min reinforced claims after synthesis
-    }
+    DEFAULT: dict[str, Any] = _load_research_defaults()
 
     @classmethod
     def merge(cls, overrides: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -167,7 +162,7 @@ class BaseQualityGate:
     ``check_framework_compliance``).
     """
 
-    def __init__(self, config: dict[str, Any] | None = None):
+    def __init__(self, config: dict[str, Any] | None = None) -> None:
         config = config or {}
         self.min_sources = config.get("gate_min_sources", 3)
         self.min_type_diversity = config.get("gate_min_type_diversity", 2)
@@ -176,7 +171,9 @@ class BaseQualityGate:
         self.max_knowledge_gaps = config.get("gate_max_knowledge_gaps", 3)
         self.min_reinforced_claims = config.get("gate_min_reinforced_claims", 2)
 
-    def check_after_gathering(self, sources: list[dict], sub_queries: list[dict]) -> BaseGateResult:
+    def check_after_gathering(
+        self, sources: list[dict], sub_queries: list[dict]
+    ) -> BaseGateResult:
         """Check after gathering: enough sources and type diversity."""
         source_count = len(sources)
 
@@ -187,7 +184,8 @@ class BaseQualityGate:
         type_diversity = len(type_set)
 
         long_content = sum(
-            1 for s in sources
+            1
+            for s in sources
             if len(s.get("content") or s.get("content_preview") or "") > 500
         )
 
@@ -195,7 +193,9 @@ class BaseQualityGate:
         if source_count < self.min_sources:
             issues.append(f"Need {self.min_sources}+ sources, have {source_count}")
         if type_diversity < self.min_type_diversity:
-            issues.append(f"Need {self.min_type_diversity}+ source types, have {type_diversity}")
+            issues.append(
+                f"Need {self.min_type_diversity}+ source types, have {type_diversity}"
+            )
         if long_content == 0 and source_count > 0:
             issues.append("No sources with substantial content (>500 chars)")
 
@@ -227,15 +227,21 @@ class BaseQualityGate:
         avg_cred = 0.0
 
         if analyzed_count < self.min_analyzed:
-            issues.append(f"Need {self.min_analyzed}+ analyzed sources, have {analyzed_count}")
+            issues.append(
+                f"Need {self.min_analyzed}+ analyzed sources, have {analyzed_count}"
+            )
         else:
             cred_scores = [
-                s.get("analysis", {}).get("quality_assessment", {}).get("credibility", 5)
+                s.get("analysis", {})
+                .get("quality_assessment", {})
+                .get("credibility", 5)
                 for s in analyzed
             ]
             avg_cred = sum(cred_scores) / len(cred_scores) if cred_scores else 0
             if avg_cred < self.min_avg_credibility:
-                issues.append(f"Avg credibility {avg_cred:.1f}/{self.min_avg_credibility}")
+                issues.append(
+                    f"Avg credibility {avg_cred:.1f}/{self.min_avg_credibility}"
+                )
 
         passed = len(issues) == 0
         summary = (
@@ -267,9 +273,13 @@ class BaseQualityGate:
 
         issues: list[str] = []
         if len(reinforced) < self.min_reinforced_claims:
-            issues.append(f"Need {self.min_reinforced_claims}+ reinforced claims, have {len(reinforced)}")
+            issues.append(
+                f"Need {self.min_reinforced_claims}+ reinforced claims, have {len(reinforced)}"
+            )
         if len(gaps) > self.max_knowledge_gaps:
-            issues.append(f"Too many knowledge gaps: {len(gaps)} > {self.max_knowledge_gaps}")
+            issues.append(
+                f"Too many knowledge gaps: {len(gaps)} > {self.max_knowledge_gaps}"
+            )
 
         passed = len(issues) == 0
         summary = (
@@ -289,7 +299,9 @@ class BaseQualityGate:
             suggestion="proceed" if passed else "replan_for_gaps",
         )
 
-    def check_before_report(self, synthesis: dict | None, sources: list[dict]) -> BaseGateResult:
+    def check_before_report(
+        self, synthesis: dict | None, sources: list[dict]
+    ) -> BaseGateResult:
         """Check before report: synthesis exists and enough sources."""
         issues: list[str] = []
 
@@ -309,7 +321,10 @@ class BaseQualityGate:
             passed=passed,
             gate_name="before_report",
             summary=summary,
-            details={"has_synthesis": synthesis is not None, "source_count": len(sources)},
+            details={
+                "has_synthesis": synthesis is not None,
+                "source_count": len(sources),
+            },
             suggestion="proceed" if passed else "synthesize_again",
         )
 
@@ -457,8 +472,9 @@ class BaseResearchTaskManager:
         Issue#10: signal the per-task ``_wakeup_event`` after each put
         so idle SSE consumers stop busy-waiting on a 1s timeout.
         """
-        lock = _get_wiki_lock(engine)
+        lock = await _get_wiki_lock(engine)
         wakeup = self._wakeup_events.get(session_id)
+
         # Issue#2: emit callback that puts events onto the same queue
         # the outer for-loop reads from. Safe because asyncio.Queue.put
         # is awaitable and we just need to schedule it on this loop.
@@ -467,10 +483,14 @@ class BaseResearchTaskManager:
             self._on_event(session_id, ev)
             if wakeup is not None:
                 wakeup.set()
+
         async with lock:
             try:
                 async for event in engine.run(
-                    session_id, query, resume=resume, emit=_emit,
+                    session_id,
+                    query,
+                    resume=resume,
+                    emit=_emit,
                 ):
                     await queue.put(event)
                     self._on_event(session_id, event)
@@ -481,13 +501,27 @@ class BaseResearchTaskManager:
                 try:
                     db = engine.db
                     session = db.get_research_session(session_id)
-                    if session and session.get("status") not in ("done", "cancelled", "paused", "timeout", "error"):
-                        db.update_research_status(session_id, "paused", session.get("current_step"))
+                    if session and session.get("status") not in (
+                        "done",
+                        "cancelled",
+                        "paused",
+                        "timeout",
+                        "error",
+                    ):
+                        db.update_research_status(
+                            session_id, "paused", session.get("current_step")
+                        )
                 except Exception:
-                    pass
+                    logger.debug(
+                        "Failed to pause research session %s on cancel",
+                        session_id,
+                        exc_info=True,
+                    )
                 raise
             except Exception as e:
-                logger.error("Research task %s failed: %s", session_id, e, exc_info=True)
+                logger.error(
+                    "Research task %s failed: %s", session_id, e, exc_info=True
+                )
                 err_event = {"type": "error", "error": str(e)}
                 await queue.put(err_event)
                 self._on_event(session_id, err_event)

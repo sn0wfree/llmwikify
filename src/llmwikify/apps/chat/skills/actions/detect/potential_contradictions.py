@@ -30,4 +30,7 @@ class DetectPotentialContradictionsSkill(DetectActionSkill):
 detect_potential_contradictions_skill = DetectPotentialContradictionsSkill()
 
 
-__all__ = ["DetectPotentialContradictionsSkill", "detect_potential_contradictions_skill"]
+__all__ = [
+    "DetectPotentialContradictionsSkill",
+    "detect_potential_contradictions_skill",
+]

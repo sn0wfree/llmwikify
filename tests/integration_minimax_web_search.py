@@ -18,7 +18,6 @@ A passing run here proves the upstream contract that the code depends on.
 
 from __future__ import annotations
 
-import json
 import os
 
 import httpx
