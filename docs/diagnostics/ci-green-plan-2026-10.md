@@ -237,8 +237,8 @@ fastmcp>=3.0               → fastmcp-slim[client,server]==X
 | 3 | `61fa079` | ruff 109→0（I001/F841/E712 批量 + B008 FastAPI 豁免 + 24 项手工） | ✅ ruff 绿 |
 | 4 | `8edd50f` | mypy baseline：138 存量模块 `ignore_errors`（`__init__` 归一化为包名） | ✅ mypy 全绿 401 files |
 | 5 | `e52c90f` + `d9af82d` 等 | keyring 解禁 + fastmcp/starlette 栈对齐 + dev 补 pytest-asyncio/polars + llm/e2e marker 门禁 + 依赖升级兼容（youtube 1.x / markitdown 0.1.8）+ 测试污染修复（PEP 562 实体化）+ flaky 去除 | ✅ 全量 4795 passed / 0 failed |
-| 6 | — | e2e docker `run-e2e.sh` | 🔶 执行中 |
-| 7 | — | push + PR + CI 三绿 | 待做 |
+| 6 | `7404599`..`86feeb6` | e2e 根因修复（非法 YAML / jieba / watchdog / 01 lint 模板断链 / 02 日志路径） | ✅ CI e2e 全链通过 |
+| 7 | PR #6 | push + PR + CI 三绿 + merge | ✅ `0d71ce1`（2026-10-15） |
 
 执行顺序调整：deps 修复（原第 5 步前半）提到最前——black/ruff/mypy 必须在
 「CI 同款干净 venv」下执行（`/tmp/opencode/b2-venv`，解析 = CI 完全一致）。
@@ -255,8 +255,12 @@ fastmcp>=3.0               → fastmcp-slim[client,server]==X
 - [x] black / ruff / mypy 三门禁本地全绿
 - [x] pytest 全绿：4795 passed / 0 failed（36 → 0，含 17 QuantNodes/polars、
       6 llm marker、6 依赖兼容、7 测试污染/PEP 562 实体化、1 flaky）
-- [ ] e2e 本地 docker 验证（执行中）
-- [ ] PR 后 CI 实际表现（3 版本矩阵 + e2e 容器）
+- [x] e2e：✅ CI e2e workflow 全链通过（PR #6, 1m30s；本地容器因慢网络未跑完，以 CI 为准）
+- [x] PR #6 CI 全绿并合并（`0d71ce1`，2026-10-15）：tests 3.10/3.11/3.12 + lint + type-check + e2e ✅
+- [x] PR 期间 CI 根因修复：e2e.yml 非法 YAML / test_llm_comparison collection 崩 /
+      doctor --json 契约 / `python -m` 退出码 / init 模板断链 / youtube 异常外泄 / 02 日志路径
+- [ ] dependency-review：需仓库开启 Dependency graph（设置项，非代码）
+- [ ] prompt_quality workflow：历史损坏（7 月起，import 已迁走的 `core.*`），待单独立项/禁用
 
 ## 9. 证据（关键命令）
 
