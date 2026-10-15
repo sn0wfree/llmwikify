@@ -15,6 +15,7 @@ because the v0.40+ parser must handle non-trivial wiki.md layouts
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -24,6 +25,21 @@ import pytest
 from llmwikify.kernel import Wiki
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+
+
+def _home_with_min_config(tmp_path: Path) -> Path:
+    """创建一个带最小可解析配置的 HOME（供 doctor 子进程使用）。
+
+    开发机/CI 上未必存在 ~/.llmwikify/llmwikify.json；无配置时 doctor
+    以 rc=2 早退（只输出 config 检查），依赖 wiki 检查的断言会失效。
+    """
+    home = tmp_path / "fake-home"
+    (home / ".llmwikify").mkdir(parents=True, exist_ok=True)
+    (home / ".llmwikify" / "llmwikify.json").write_text(
+        '{"llm": {"enabled": false}}', encoding="utf-8"
+    )
+    return home
+
 
 # ─────────────────────────────────────────────────────────────────
 # Fixtures
@@ -270,6 +286,7 @@ class TestDoctorWikiRootFlag:
             capture_output=True,
             text=True,
             cwd=str(REPO_ROOT),
+            env={**os.environ, "HOME": str(_home_with_min_config(tmp_path))},
         )
         data = json.loads(result.stdout)
         wiki_check = next(c for c in data["checks"] if c["category"] == "wiki")
@@ -282,7 +299,7 @@ class TestDoctorWikiRootFlag:
             wiki_check["status"] == "ok"
         ), f"initialized wiki should pass wiki check, got {wiki_check}"
 
-    def test_5_fixture_wikis_all_pass_wiki_check(self):
+    def test_5_fixture_wikis_all_pass_wiki_check(self, tmp_path):
         """Every fixture wiki has the 4 functional paths, so doctor
         should never report wiki as a hard fail for any of them.
         This is the regression test for the old ``index.md at root''
@@ -305,6 +322,7 @@ class TestDoctorWikiRootFlag:
                 capture_output=True,
                 text=True,
                 cwd=str(REPO_ROOT),
+                env={**os.environ, "HOME": str(_home_with_min_config(tmp_path))},
             )
             data = json.loads(result.stdout)
             wiki_check = next(c for c in data["checks"] if c["category"] == "wiki")
@@ -322,7 +340,7 @@ class TestFixDictPresent:
     """D5=A: every fail and every actionable warn must carry a fix
     dict with {commands, docs, cost, risk, auto}."""
 
-    def test_wiki_fail_has_fix(self):
+    def test_wiki_fail_has_fix(self, tmp_path):
         """A wiki with no functional paths → wiki check fails → must
         have a fix that says ``llmwikify init``."""
         import tempfile
@@ -343,6 +361,7 @@ class TestFixDictPresent:
                 capture_output=True,
                 text=True,
                 cwd=str(REPO_ROOT),
+                env={**os.environ, "HOME": str(_home_with_min_config(tmp_path))},
             )
             data = json.loads(result.stdout)
             wiki_check = next(c for c in data["checks"] if c["category"] == "wiki")
@@ -360,8 +379,6 @@ class TestFixDictPresent:
         JSON emission entirely → scripts (e2e 00_install_check) got
         empty stdout and failed to parse.
         """
-        import os
-
         # Force a missing config by pointing HOME to an empty dir.
         # monkeypatch only works in-process; subprocess needs env dict.
         env = {**os.environ, "HOME": str(tmp_path)}

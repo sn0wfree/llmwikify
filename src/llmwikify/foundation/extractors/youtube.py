@@ -110,7 +110,12 @@ def _extract_youtube(
             title=url,
             metadata={"error": f"YouTube transcript fetch timed out after {timeout}s"},
         )
-    except (ConnectionError, TimeoutError, ValueError, OSError) as e:
+    except Exception as e:
+        # youtube-transcript-api 的错误族 (VideoUnavailable / RequestBlocked /
+        # TranscriptsDisabled 等) 不继承内置网络异常; 按本函数契约统一
+        # 归一为 error 结果 (2026-10-15 修复: CI 数据中心 IP 被 YouTube
+        # 拒绝时异常外泄, 路由测试挂)。
+        logger.warning("YouTube transcript fetch failed for %s: %s", url, e)
         return ExtractedContent(
             text="",
             source_type="error",

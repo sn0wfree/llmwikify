@@ -348,8 +348,13 @@ class TestSteps:
 
 
 class TestCodegenPipeline:
-    def test_codegen_reasoner_init(self):
-        # Just instantiate (no LLM call)
+    def test_codegen_reasoner_init(self, monkeypatch):
+        # Just instantiate (no LLM call); stub 默认 client 构建,
+        # 使测试不依赖本机 ~/.llmwikify 配置 (CI 无 config)
+        monkeypatch.setattr(
+            "llmwikify.foundation.llm.client.build_llm_client",
+            lambda *a, **k: object(),
+        )
         reasoner = CodegenReasoner(llm_client=None)
         assert isinstance(reasoner, Pipeline)
 
@@ -358,6 +363,7 @@ class TestCodegenPipeline:
         assert hasattr(actor, "_executor")
         assert hasattr(actor, "_feedback")
 
+    @pytest.mark.llm
     def test_generate_factor_code_sync(self):
         import polars as pl
 
@@ -370,6 +376,7 @@ class TestCodegenPipeline:
         # Without LLM, it should fail gracefully
         assert result.stop_reason in ("error", "completed", "success")
 
+    @pytest.mark.llm
     def test_generate_factor_code_async(self):
         import polars as pl
 

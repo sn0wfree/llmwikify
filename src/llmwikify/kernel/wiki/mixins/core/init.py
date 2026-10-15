@@ -293,7 +293,7 @@ class WikiInitMixin(WikiProtocol):
             "## Current State\n\n"
             "*(Summary of current understanding based on ingested sources)*\n\n"
             "## Key Themes\n\n"
-            "*(List key themes with [[wikilinks]] to relevant pages)*\n\n"
+            "*(List key themes with wikilinks to relevant pages)*\n\n"
             "## Working Theses\n\n"
             "*(Working hypotheses or arguments the wiki is building)*\n\n"
             "## Open Questions\n\n"

@@ -40,8 +40,13 @@ def test_register_and_list():
     assert len(modes_after) == len(modes_before) + 1
 
 
-def test_create_agent_loop_codegen():
+def test_create_agent_loop_codegen(monkeypatch):
     """create_agent_loop('codegen') 正确构造。"""
+    # 2026-10-15: stub 默认 client 构建 — 不依赖本机 LLM 配置 (CI 无 config)
+    monkeypatch.setattr(
+        "llmwikify.foundation.llm.client.build_llm_client",
+        lambda *a, **k: object(),
+    )
     loop = create_agent_loop("codegen")
     assert loop is not None
     assert loop._reasoner is not None
