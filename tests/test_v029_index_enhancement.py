@@ -106,6 +106,46 @@ class TestExtractPageSummary:
         result = wiki._extract_page_summary(page)
         assert result == "Blank"
 
+    def test_truncation_does_not_cut_wikilink(self, test_wiki):
+        """截断点落在 [[wikilink]] 内部时回退, 结果括号平衡.
+
+        回归 (2026-10): 未闭合 [[ 会吞掉 index.md 后续跨行文本,
+        并产生无法解析的 link target。
+        """
+        wiki, tmp = test_wiki
+        page = wiki.wiki_dir / "sectors" / "Board.md"
+        page.parent.mkdir(parents=True, exist_ok=True)
+        # 第 117 个字符 (max_len-3) 落在 [[symbols/纯碱]] 内部 (占位 110..123)
+        para = "x" * 110 + "[[symbols/纯碱]]" + " 尾部内容" * 5
+        page.write_text(f"# Board\n\n{para}\n")
+        result = wiki._extract_page_summary(page, max_len=120)
+        assert result.count("[[") == result.count("]]")
+        assert result.endswith("...")
+        assert result.startswith("x" * 110)
+
+    def test_truncation_with_closed_link_before_cut(self, test_wiki):
+        """完整 [[..]] 落在截断点之前时, 正常截断且括号平衡 (不回退)."""
+        wiki, tmp = test_wiki
+        page = wiki.wiki_dir / "sectors" / "Board2.md"
+        page.parent.mkdir(parents=True, exist_ok=True)
+        para = "x" * 60 + "[[symbols/纯碱]]" + "y" * 60
+        page.write_text(f"# Board2\n\n{para}\n")
+        result = wiki._extract_page_summary(page, max_len=120)
+        assert result.count("[[") == result.count("]]")
+        assert result.endswith("...")
+        assert len(result) == 120
+
+    def test_truncation_rolls_back_to_last_unclosed_link(self, test_wiki):
+        """多个链接时回退到最后一个未闭合 [[ 之前."""
+        wiki, tmp = test_wiki
+        page = wiki.wiki_dir / "sectors" / "Board Links.md"
+        page.parent.mkdir(parents=True, exist_ok=True)
+        para = "z" * 40 + "[[a1]]" + "w" * 60 + "[[symbols/纯碱]]" + " 尾" * 10
+        page.write_text(f"# Board Links\n\n{para}\n")
+        result = wiki._extract_page_summary(page, max_len=120)
+        assert result.count("[[") == result.count("]]")
+        assert result.endswith("...")
+
 
 class TestGetSourceAnalysisSummary:
     """Test _get_source_analysis_summary method."""

@@ -225,6 +225,21 @@ class WikiPageIOMixin(WikiProtocol):
         """Export reference index to JSON."""
         return self.index.export_json(output_path)
 
+    @staticmethod
+    def _truncate_summary(text: str, max_len: int) -> str:
+        """Truncate a summary without cutting a ``[[wikilink]]`` in half.
+
+        若截断点落在未闭合的 ``[[...]]`` 内, 回退到该 ``[[`` 之前,
+        保证 index.md 中 wikilink 括号平衡 (2026-10 修复: 未闭合 [[
+        会吞跨行文本并产生无法解析的 link target)。
+        """
+        if len(text) <= max_len:
+            return text
+        cut = text[: max_len - 3]
+        if cut.count("[[") > cut.count("]]"):
+            cut = cut[: cut.rfind("[[")].rstrip()
+        return cut + "..."
+
     def _extract_page_summary(self, page_path: Path, max_len: int = 120) -> str:
         # TODO(refactor): C901=17 — too complex, consider splitting
         """Extract a one-line summary from a wiki page.
@@ -247,9 +262,7 @@ class WikiPageIOMixin(WikiProtocol):
                 if line.startswith("summary:"):
                     val = line.split(":", 1)[1].strip().strip('"').strip("'")
                     if val:
-                        return (
-                            val if len(val) <= max_len else val[: max_len - 3] + "..."
-                        )
+                        return self._truncate_summary(val, max_len)
 
         summary_match = re.search(
             r"^## Summary\s*\n(.*?)(?:\n## |\Z)", content, re.MULTILINE | re.DOTALL
@@ -259,7 +272,7 @@ class WikiPageIOMixin(WikiProtocol):
             for line in section_text.split("\n"):
                 line = line.strip()
                 if line and not line.startswith("<!--"):
-                    return line if len(line) <= max_len else line[: max_len - 3] + "..."
+                    return self._truncate_summary(line, max_len)
 
         body = content
         if fm_match:
@@ -279,7 +292,7 @@ class WikiPageIOMixin(WikiProtocol):
                 continue
             clean = re.sub(r"\*\*|\*|`", "", stripped).strip()
             if clean:
-                return clean if len(clean) <= max_len else clean[: max_len - 3] + "..."
+                return self._truncate_summary(clean, max_len)
 
         title_match = re.match(r"^#\s*(.+)", content)
         if title_match:
