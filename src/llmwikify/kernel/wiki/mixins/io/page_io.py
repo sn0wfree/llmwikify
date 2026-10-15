@@ -24,6 +24,8 @@ class WikiPageIOMixin(WikiProtocol):
             content: Page content markdown.
             page_type: Page type from wiki.md Page Types table.
                 Dynamically resolved to directory via _load_page_type_mapping().
+                含 '/' 的 page_name 视为完整路径, page_type 不参与拼接
+                (与 read_page 对称); 不含 '/' 时解析到对应目录。
                 If None and page_name has no '/', writes to wiki/ root.
 
         Examples:
@@ -45,7 +47,7 @@ class WikiPageIOMixin(WikiProtocol):
                 f"The 'wiki/' directory is added automatically."
             )
 
-        if page_type:
+        if page_type and "/" not in page_name:
             type_to_dir = self._load_page_type_mapping()
 
             directory = type_to_dir.get(page_type)
@@ -57,8 +59,6 @@ class WikiPageIOMixin(WikiProtocol):
                 directory = page_type.lower()
 
             full_path = f"{directory}/{page_name}"
-        elif "/" in page_name:
-            full_path = page_name
         else:
             full_path = page_name
 
