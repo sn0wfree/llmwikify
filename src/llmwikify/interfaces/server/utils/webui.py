@@ -83,6 +83,10 @@ class SPAFallbackMiddleware(BaseHTTPMiddleware):
         # Skip API routes — let them 404 properly
         if path.startswith("/api/"):
             return response
+        # MCP JSON-RPC must never be swallowed by SPA fallback
+        # (POST /mcp/ 404 used to become index.html 200).
+        if path == "/mcp" or path.startswith("/mcp/"):
+            return response
         # Skip FastAPI internal routes
         if path in ("/docs", "/redoc", "/openapi.json", "/openapi.yaml"):
             return response

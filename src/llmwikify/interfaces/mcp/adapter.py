@@ -57,8 +57,12 @@ class MCPAdapter:
 
     @property
     def asgi_app(self) -> Any:
-        """Get MCP ASGI app for mounting in FastAPI/Starlette."""
-        return self._mcp.http_app()
+        """Get MCP ASGI app for mounting in FastAPI/Starlette.
+
+        Uses ``path="/"`` because the unified server mounts this app at
+        ``/mcp``. FastMCP's default ``/mcp`` would become ``/mcp/mcp``.
+        """
+        return self._mcp.http_app(path="/")
 
     async def run_stdio(self) -> None:
         """Run MCP server in stdio mode (for desktop integration)."""
