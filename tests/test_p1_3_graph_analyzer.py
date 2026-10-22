@@ -110,6 +110,22 @@ class TestGraphAnalyzerCache:
         after = GraphAnalyzer(wiki).analyze()
         assert after.get("cached") is False
 
+    def test_viz_cache_hit_and_invalidate(self, graph_wiki):
+        from llmwikify.kernel.graph.visualizer import build_visualization_data
+
+        wiki, _ = graph_wiki
+        v1 = build_visualization_data(wiki.index, wiki)
+        v2 = build_visualization_data(wiki.index, wiki)
+        assert v1.get("cached") is False
+        assert v2.get("cached") is True
+        wiki.index.conn.execute(
+            "INSERT INTO page_links (source_page, target_page) VALUES (?, ?)",
+            ("concepts/Machine Learning", "concepts/Neural Networks"),
+        )
+        wiki.index.conn.commit()
+        v3 = build_visualization_data(wiki.index, wiki)
+        assert v3.get("cached") is False
+
 
 class TestGraphAnalyzer:
     """Test graph analyzer functionality."""

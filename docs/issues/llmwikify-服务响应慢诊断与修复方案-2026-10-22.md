@@ -229,4 +229,5 @@ print("O(E):", round(time.time()-t0, 3), "edges:", len(edges))
 | 2026-10-22 | **WSL Docker 本地复现通过**（CKbase-test 1439 页 / 16869 链接 / 14233 唯一边）：算法层 O(E²) **2.86s → 0.007s（~423×）**；HTTP `/api/wiki/graph` **旧 3.05s → 新 0.20s**。本地 CPU 快于线上，故旧码为秒级而非 25s，量级关系一致 |
 | 2026-10-22 | 注意：`/api/wiki/graph_analyze` 在安装 networkx 后为 **~145s**（PageRank/社区全量分析），与 O(E²) 无关，需另案限流/缓存/异步 |
 | 2026-10-22 | **graph_analyze 指纹缓存**（P1）：`GraphAnalyzer.analyze` 按 pages/page_links/relations 指纹缓存，数据变更即失效；`force=1` 可强制重算。容器实测 **冷 ~135s → 热 ~0.008s**（约 1.7 万倍） |
+| 2026-10-22 | **启动预热 + viz 缓存**：lifespan 后台线程预热 `graph_analyze`（实测预热后首击 **0.05s cached**）；`/api/wiki/graph` 与 analyze 共用指纹缓存，viz TTL **60s**（冷 0.68s → 热 0.008s） |
 | — | 服务器热修 / 镜像重建 |

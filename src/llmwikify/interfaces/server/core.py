@@ -319,6 +319,43 @@ class WikiServer:
                         "WikiServer: maintenance start failed "
                         "during lifespan startup",
                     )
+            # Graph analyze warmup: precompute PageRank/communities so the
+            # first UI hit after boot does not pay ~2 min cold cost.
+            # Runs in a daemon thread; cache is shared fingerprint-based.
+            try:
+                import threading as _threading
+
+                def _warm_graph_analyze() -> None:
+                    try:
+                        target = self.wiki
+                        if target is None and self.registry is not None:
+                            try:
+                                target = self.registry.get_default_wiki()
+                            except Exception:
+                                target = None
+                        if target is None:
+                            return
+                        result = target.graph_analyze()
+                        logger.info(
+                            "WikiServer: graph_analyze warmup done "
+                            "(status=%s cached=%s)",
+                            result.get("status"),
+                            result.get("cached"),
+                        )
+                    except Exception:
+                        logger.warning(
+                            "WikiServer: graph_analyze warmup failed",
+                            exc_info=True,
+                        )
+
+                _threading.Thread(
+                    target=_warm_graph_analyze,
+                    name="graph-analyze-warmup",
+                    daemon=True,
+                ).start()
+            except Exception:
+                logger.exception("WikiServer: failed to start graph_analyze warmup")
+
             try:
                 yield
             finally:

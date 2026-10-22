@@ -8,6 +8,13 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from llmwikify.kernel.graph.cache import (
+    TTL_VIZ_S,
+    cache_get,
+    cache_put,
+    graph_fingerprint,
+    wiki_cache_key,
+)
 from llmwikify.kernel.graph.export import build_graph
 
 logger = logging.getLogger(__name__)
@@ -21,22 +28,31 @@ def build_visualization_data(
 ) -> dict[str, Any]:
     """Build knowledge graph data optimized for visualization.
 
-    This is the single source of truth for graph visualization logic.
-    Used by both MCP tools and REST API handlers.
-
-    Args:
-        index: Wiki index object
-        wiki: Wiki instance (for page type mapping)
-        current_page: Optional page name to center visualization around
-        mode: Display mode - 'auto', 'full', 'focused', or 'minimal'
-
-    Returns:
-        Dict with:
-            nodes: List of node dicts (id, label, page_type)
-            edges: List of edge dicts (source, target)
-            stats: Display statistics (total/displayed nodes, mode)
-            all_types: List of page type names for coloring
+    Single source of truth for graph visualization (MCP + REST).
+    Result is fingerprint-cached (60s TTL) keyed by (wiki, current_page, mode).
     """
+    wkey = wiki_cache_key(wiki)
+    fp = graph_fingerprint(getattr(index, "conn", None))
+    extra = f"{current_page or ''}|{mode}"
+    cached = cache_get("viz", wkey, fp, extra=extra, ttl_s=TTL_VIZ_S)
+    if cached is not None:
+        out = dict(cached)
+        out["cached"] = True
+        return out
+
+    result = _build_visualization_data_uncached(index, wiki, current_page, mode)
+    cache_put("viz", wkey, fp, result, extra=extra)
+    out = dict(result)
+    out["cached"] = False
+    return out
+
+
+def _build_visualization_data_uncached(
+    index,
+    wiki,
+    current_page: str | None = None,
+    mode: str = "auto",
+) -> dict[str, Any]:
     try:
         graph_data = build_graph(index, include_wikilinks=True, include_relations=False)
     except Exception:
