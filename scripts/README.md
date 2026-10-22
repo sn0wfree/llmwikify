@@ -17,6 +17,7 @@ Standalone scripts for the llmwikify project.
 | `unified_tutorial_generator.py` | Parse test files (AST) → generate TUTORIAL.md | No |
 | `sync_to_server.sh` | 零停机 wiki 同步到生产服务器（rsync + 容器内 build-index） | No |
 | `sync_relations.sh` | 同步知识图谱 relations/entity_aliases 到服务器（build-index 不重建） | No |
+| `sync_all.sh` | 一键完整同步（文件+索引 → 图谱），cron 应调用本脚本 | No |
 | `downgrade_to_v11513.sh` | Downgrade opencode to v1.15.13 (fix SPA 500 bug) | No |
 | `install_opencode_fast.sh` | OpenCode 安装（加速 + mirror + SHA256 校验） | No |
 | `install_opencode_manual.sh` | OpenCode 安装（本地 binary） | No |

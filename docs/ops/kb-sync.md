@@ -23,14 +23,20 @@
 ## 2. 正常流程（日常）
 
 ```bash
-# ① + ②（脚本自带服务器 build-index 与 API 验证）
-~/llmwikify/scripts/sync_to_server.sh
+# 推荐：一键跑完 ①文件+索引 ②图谱
+~/llmwikify/scripts/sync_all.sh
 
-# ③ 图谱（build-index 不覆盖 relations，必须单独跑）
-~/llmwikify/scripts/sync_relations.sh
+# 或分步：
+~/llmwikify/scripts/sync_to_server.sh   # ① rsync + 服务器 build-index + API 验证
+~/llmwikify/scripts/sync_relations.sh   # ② 图谱（build-index 不覆盖 relations，必须单独跑）
 ```
 
-- 预演：`sync_to_server.sh --dry-run` / `sync_relations.sh --dry-run`
+- cron 入口应配置为 `sync_all.sh`（本仓库部署机为每日 03:00）：
+  ```
+  0 3 * * * /home/ll/llmwikify/scripts/sync_all.sh >> /home/ll/.llmwikify/sync-cron.log 2>&1
+  ```
+  **不要**在 crontab 外层再包 `flock`（脚本内部已加锁，双重锁会永久跳过）。
+- 预演：`sync_all.sh --dry-run`
 - `--prune` 仅在服务器为纯发布镜像时使用（默认不删除服务器文件）
 - 预计耗时：文件同步秒级 + build-index ~20-50s（零停机）+ 图谱事务 <1s
 
