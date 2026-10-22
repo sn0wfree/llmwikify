@@ -140,9 +140,11 @@ def register_wiki_routes(app, registry: WikiRegistry) -> None:
     # (FastAPI runs sync endpoints in the threadpool). See
     # docs/issues/llmwikify-服务响应慢诊断与修复方案-2026-10-22.md
     @wiki_router.get("/graph_analyze")
-    def wiki_graph_analyze(wiki: Wiki = Depends(get_wiki)):  # noqa -> Any: B008
-        """Analyze knowledge graph structure."""
-        return wiki.graph_analyze()
+    def wiki_graph_analyze(
+        force: bool = False, wiki: Wiki = Depends(get_wiki)
+    ):  # noqa -> Any: B008
+        """Analyze knowledge graph structure (cached; force=1 to recompute)."""
+        return wiki.graph_analyze(force=force)
 
     @wiki_router.get("/graph")
     def wiki_graph(

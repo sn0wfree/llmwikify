@@ -8,6 +8,8 @@ Design principle: "LLM does grunt work, human makes decisions"
 
 import logging
 import sqlite3
+import threading
+import time
 from typing import Any
 
 from llmwikify.kernel.storage.backend import is_path_excluded
@@ -15,6 +17,15 @@ from llmwikify.kernel.storage.backend import is_path_excluded
 from .export import build_graph, detect_communities
 
 logger = logging.getLogger(__name__)
+
+# In-process analyze cache. Keyed by wiki root; value is
+# (fingerprint, result). Fingerprint of pages/page_links/relations
+# (count+max rowid) invalidates on any content change. TTL is a
+# safety net only — the fingerprint is the real invalidation signal.
+_ANALYZE_CACHE: dict[str, tuple[str, dict]] = {}
+_ANALYZE_LOCK = threading.Lock()
+_ANALYZE_TTL_S = 3600.0
+_ANALYZE_CACHED_AT: dict[str, float] = {}
 
 
 class GraphAnalyzer:
@@ -29,8 +40,11 @@ class GraphAnalyzer:
     def __init__(self, wiki) -> None:
         self.wiki = wiki
 
-    def analyze(self) -> dict:
+    def analyze(self, force: bool = False) -> dict:
         """Run full graph analysis.
+
+        Args:
+            force: Skip cache and recompute.
 
         Returns:
             Dict with:
@@ -38,6 +52,7 @@ class GraphAnalyzer:
             - communities: Community detection with labels
             - suggestions: Suggested pages to create
             - stats: Graph statistics
+            - cached: True when served from cache
         """
         # Distinguish "no data" from "missing dependency" (networkx is in
         # the [graph] extra which the slim image omits). Without this,
@@ -53,11 +68,19 @@ class GraphAnalyzer:
                 "message": "wiki_graph_analyze requires the [graph] extra (networkx). The wiki_graph visualization works; only the analysis (PageRank / community detection) needs networkx.",
             }
 
+        cache_key = self._cache_key()
+        if not force:
+            cached = self._cache_get(cache_key)
+            if cached is not None:
+                result = dict(cached)
+                result["cached"] = True
+                return result
+
         graph_data = self._get_graph_data()
         G = self._build_graph(graph_data)
 
         if G is None or G.number_of_nodes() == 0:
-            return {
+            result = {
                 "status": "empty",
                 "message": "Wiki has no pages or relations yet. Add sources and create pages first.",
                 "centrality": {},
@@ -65,14 +88,66 @@ class GraphAnalyzer:
                 "suggestions": [],
                 "stats": {"nodes": 0, "edges": 0},
             }
+        else:
+            result = {
+                "status": "success",
+                "centrality": self._compute_centrality(G),
+                "communities": self._analyze_communities(G),
+                "suggestions": self._generate_suggestions(G, graph_data),
+                "stats": self._compute_stats(G),
+            }
 
-        return {
-            "status": "success",
-            "centrality": self._compute_centrality(G),
-            "communities": self._analyze_communities(G),
-            "suggestions": self._generate_suggestions(G, graph_data),
-            "stats": self._compute_stats(G),
-        }
+        self._cache_put(cache_key, result)
+        out = dict(result)
+        out["cached"] = False
+        return out
+
+    def _cache_key(self) -> str:
+        return str(getattr(self.wiki, "root", "") or id(self.wiki))
+
+    def _fingerprint(self) -> str:
+        """Cheap content fingerprint: any page/link/relation change bumps it."""
+        conn = getattr(getattr(self.wiki, "index", None), "conn", None)
+        if conn is None:
+            return "no-index"
+
+        def _count_max(table: str) -> tuple[int, int]:
+            try:
+                row = conn.execute(
+                    f"SELECT COUNT(*), COALESCE(MAX(rowid), 0) FROM {table}"
+                ).fetchone()
+                return int(row[0]), int(row[1])
+            except sqlite3.Error:
+                return 0, 0
+
+        pages = _count_max("pages")
+        links = _count_max("page_links")
+        rels = _count_max("relations")
+        return f"{pages[0]}:{pages[1]}|{links[0]}:{links[1]}|{rels[0]}:{rels[1]}"
+
+    def _cache_get(self, key: str) -> dict | None:
+        fp = self._fingerprint()
+        with _ANALYZE_LOCK:
+            hit = _ANALYZE_CACHE.get(key)
+            if hit is None:
+                return None
+            stored_fp, value = hit
+            if stored_fp != fp:
+                _ANALYZE_CACHE.pop(key, None)
+                _ANALYZE_CACHED_AT.pop(key, None)
+                return None
+            ts = _ANALYZE_CACHED_AT.get(key, 0.0)
+            if time.monotonic() - ts > _ANALYZE_TTL_S:
+                _ANALYZE_CACHE.pop(key, None)
+                _ANALYZE_CACHED_AT.pop(key, None)
+                return None
+            return value
+
+    def _cache_put(self, key: str, result: dict) -> None:
+        fp = self._fingerprint()
+        with _ANALYZE_LOCK:
+            _ANALYZE_CACHE[key] = (fp, result)
+            _ANALYZE_CACHED_AT[key] = time.monotonic()
 
     def _get_graph_data(self) -> dict:
         """Build graph data from wiki index."""

@@ -82,6 +82,35 @@ DL uses neural networks.
     shutil.rmtree(tmp)
 
 
+class TestGraphAnalyzerCache:
+    """Analyze result cache: hit, force, and fingerprint invalidation."""
+
+    def test_second_call_is_cached(self, graph_wiki):
+        wiki, _ = graph_wiki
+        a1 = GraphAnalyzer(wiki).analyze()
+        a2 = GraphAnalyzer(wiki).analyze()
+        assert a1.get("cached") is False
+        assert a2.get("cached") is True
+        assert a2.get("status") == a1.get("status")
+
+    def test_force_recomputes(self, graph_wiki):
+        wiki, _ = graph_wiki
+        GraphAnalyzer(wiki).analyze()
+        forced = GraphAnalyzer(wiki).analyze(force=True)
+        assert forced.get("cached") is False
+
+    def test_data_change_invalidates(self, graph_wiki):
+        wiki, _ = graph_wiki
+        GraphAnalyzer(wiki).analyze()
+        wiki.index.conn.execute(
+            "INSERT INTO page_links (source_page, target_page) VALUES (?, ?)",
+            ("concepts/Artificial Intelligence", "concepts/Deep Learning"),
+        )
+        wiki.index.conn.commit()
+        after = GraphAnalyzer(wiki).analyze()
+        assert after.get("cached") is False
+
+
 class TestGraphAnalyzer:
     """Test graph analyzer functionality."""
 

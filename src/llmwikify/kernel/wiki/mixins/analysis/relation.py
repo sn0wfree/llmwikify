@@ -60,11 +60,14 @@ class WikiRelationMixin(WikiProtocol):
 
         return RelationEngine(self.index, wiki_root=self.root)
 
-    def graph_analyze(self) -> dict:
+    def graph_analyze(self, force: bool = False) -> dict:
         """Run full knowledge graph analysis.
 
         Returns suggestions only — never auto-creates pages.
         Respects "stay involved" principle.
+
+        Args:
+            force: Skip result cache and recompute.
 
         Returns:
             Dict with:
@@ -72,11 +75,12 @@ class WikiRelationMixin(WikiProtocol):
             - communities: Community detection with labels
             - suggestions: Pages to create, links to add
             - stats: Graph statistics
+            - cached: True when served from cache
         """
         from ....graph.analyzer import GraphAnalyzer
 
         analyzer = GraphAnalyzer(self)
-        return analyzer.analyze()
+        return analyzer.analyze(force=force)
 
     def graph_suggested_pages_report(self) -> str:
         """Generate human-readable report of suggested pages."""
