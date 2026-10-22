@@ -132,7 +132,7 @@ HEALTHCHECK --interval=5s --timeout=3s --start-period=30s --retries=20 \
     CMD ["python3", "-c", "import sys,urllib.request; r=urllib.request.urlopen('http://127.0.0.1:8765/api/health', timeout=3); sys.exit(0 if r.status == 200 else 1)"]
 
 COPY --chown=llmuser:llmuser docker-tests/server-entrypoint.sh /app/server-entrypoint.sh
-RUN chmod +x /app/server-entrypoint.sh
+RUN chmod +x /app/server-entrypoint.sh && sed -i 's/\r$//' /app/server-entrypoint.sh
 
 ENTRYPOINT ["/usr/bin/tini", "--", "/app/server-entrypoint.sh"]
 CMD ["serve", "--web", "--host", "0.0.0.0", "--port", "8765"]

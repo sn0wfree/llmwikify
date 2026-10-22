@@ -1,7 +1,7 @@
 # llmwikify Architecture
 
 > Technical architecture for developers.
-> **Version:** 0.40.2 | **Last updated:** 2026-10-13 | **Tests:** 4940 Python collected
+> **Version:** 0.40.3 | **Last updated:** 2026-10-22 | **Tests:** 4940 Python collected
 >
 > Diagrams & flow charts live in [docs/architecture/overview.md](docs/architecture/overview.md).
 

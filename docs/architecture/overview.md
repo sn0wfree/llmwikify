@@ -1,7 +1,7 @@
 # llmwikify 架构与流程总览（图解版）
 
 > 面向开发者的图示文档。文字版见 [ARCHITECTURE.md](../../ARCHITECTURE.md)。
-> **版本:** 0.40.2 · **更新:** 2026-10-13 · **测试:** 4940 collected
+> **版本:** 0.40.3 · **更新:** 2026-10-22 · **测试:** 4940 collected
 > **验证:** `python scripts/check_architecture.py` → 0 violations
 
 ## 目录

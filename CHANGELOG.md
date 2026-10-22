@@ -31,6 +31,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Note: the effective endpoint is `/mcp/mcp` (mount prefix `/mcp` + http_app
   internal path `/mcp`); older docs referencing `/mcp` need updating.
 
+## [0.40.3] - 2026-10-22 — Graph Performance + Analyze Cache
+
+### Fixed
+- `build_graph` edge dedup O(E²) → O(E) (dict index); relations deduped by `(src, tgt, relation)`
+- `page_exists` per-node `rglob` → single page-name set (analyze suggestions 65s → <0.2s)
+- UTF-8 forced for prompt template / storage file IO (Windows locale breakage)
+- Graph HTTP endpoints use sync `def` so CPU work runs in the threadpool
+
+### Performance
+- `/api/wiki/graph` local A/B: 3.05s → 0.20s (16,869 links)
+- `graph_analyze` cold 135s → ~2s; fingerprint cache (hit ~0.008s); `force=1` recompute
+- Startup warmup of `graph_analyze` (first UI hit ~0.05s cached)
+- `/api/wiki/graph` shares fingerprint cache, TTL 60s
+
+### Tests
+- `tests/test_graph_cache.py`, `tests/test_graph_perf_regression.py`
+
 ## [0.40.2] - 2026-07-21 — Wiki HTTP Confirmation + WebUI Modal Unification
 
 > Wiki write-path confirmation flow lands. Every `POST /page` to an existing
