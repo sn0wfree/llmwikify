@@ -1,0 +1,45 @@
+# Lean repro image for graph latency investigation (no extractors).
+# Build: docker build -f docker-tests/Dockerfile.repro -t llmwikify-server:repro .
+ARG PYTHON_VERSION=3.11
+FROM python:${PYTHON_VERSION}-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    TZ=Asia/Shanghai
+
+RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources 2>/dev/null \
+    || sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list 2>/dev/null
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl tini \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY pyproject.toml README.md ./
+COPY src/ ./src/
+# Skip extractors (markitdown stack) — not needed for graph repro
+RUN pip install --no-cache-dir -i https://mirrors.aliyun.com/pypi/simple/ \
+    ".[mcp,config,watch,graph,web]"
+
+RUN useradd -m -u 1000 llmuser && \
+    mkdir -p /app/data && \
+    chown -R llmuser:llmuser /app
+USER llmuser
+
+ENV WIKI_ROOT=/app/data/wiki \
+    HOST=0.0.0.0 \
+    PORT=8765 \
+    LOG_LEVEL=INFO
+
+EXPOSE 8765
+
+HEALTHCHECK --interval=5s --timeout=3s --start-period=30s --retries=20 \
+    CMD curl -f http://localhost:8765/api/health || exit 1
+
+COPY --chown=llmuser:llmuser docker-tests/server-entrypoint.sh /app/server-entrypoint.sh
+RUN chmod +x /app/server-entrypoint.sh && sed -i 's/\r$//' /app/server-entrypoint.sh
+
+ENTRYPOINT ["/usr/bin/tini", "--", "/app/server-entrypoint.sh"]

@@ -226,4 +226,6 @@ print("O(E):", round(time.time()-t0, 3), "edges:", len(edges))
 | 日期 | 内容 |
 |---|---|
 | 2026-10-22 | P0-1 + P0-2 本地实施；`tests/test_v023_graph.py` 增补去重回归，15 全绿；`scripts/check_architecture.py` 0 violation |
+| 2026-10-22 | **WSL Docker 本地复现通过**（CKbase-test 1439 页 / 16869 链接 / 14233 唯一边）：算法层 O(E²) **2.86s → 0.007s（~423×）**；HTTP `/api/wiki/graph` **旧 3.05s → 新 0.20s**。本地 CPU 快于线上，故旧码为秒级而非 25s，量级关系一致 |
+| 2026-10-22 | 注意：`/api/wiki/graph_analyze` 在安装 networkx 后为 **~145s**（PageRank/社区全量分析），与 O(E²) 无关，需另案限流/缓存/异步 |
 | — | 服务器热修 / 镜像重建 / P1 待定 |

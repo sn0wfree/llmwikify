@@ -1,0 +1,44 @@
+# Local repro stack for graph O(E²) latency issue (2026-10-22).
+# Mounts a CKbase test copy read-write so build-index can run; content is not mutated by bench.
+# Usage:
+#   CKBASE_HOST=/mnt/c/Users/1/Documents/CKbase-test-2026-10-22/CKbase \
+#     docker compose -f docker-tests/docker-compose.repro.yml up -d --build
+services:
+  server:
+    build:
+      context: ..
+      dockerfile: docker-tests/Dockerfile.repro
+    image: llmwikify-server:repro
+    container_name: llmwikify-repro
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        python -m llmwikify auth init --email repro@local.test || true
+        # Publish PAT for bench scripts (auth enforced on 0.0.0.0)
+        if [ -f /app/.llmwikify/local_token ]; then
+          tr -d '\n' < /app/.llmwikify/local_token > /app/.llmwikify/pat
+          chmod 600 /app/.llmwikify/pat
+          cp /app/.llmwikify/pat /app/wiki/.repro-pat 2>/dev/null || true
+        fi
+        exec python -m llmwikify serve --web --host 0.0.0.0 --port 8765
+    environment:
+      WIKI_ROOT: /app/wiki
+      LLMWIKIFY_HOME: /app
+      HOME: /app
+      # Open read for local bench (no PAT); production uses false
+      LLMWIKIFY_PUBLIC_READ: "true"
+      TZ: Asia/Shanghai
+    ports:
+      - "127.0.0.1:8765:8765"
+    volumes:
+      - ${CKBASE_HOST:-/mnt/c/Users/1/Documents/CKbase-test-2026-10-22/CKbase}:/app/wiki:rw
+      - repro-home:/app/.llmwikify
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf -H \"Authorization: Bearer $$(cat /app/.llmwikify/pat 2>/dev/null)\" http://localhost:8765/api/health || curl -sf http://localhost:8765/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+volumes:
+  repro-home:
