@@ -136,13 +136,16 @@ def register_wiki_routes(app, registry: WikiRegistry) -> None:
         """Get cross-source synthesis suggestions."""
         return wiki.suggest_synthesis(source_name=source_name)
 
+    # Sync def: CPU-bound graph work must not block the event loop
+    # (FastAPI runs sync endpoints in the threadpool). See
+    # docs/issues/llmwikify-服务响应慢诊断与修复方案-2026-10-22.md
     @wiki_router.get("/graph_analyze")
-    async def wiki_graph_analyze(wiki: Wiki = Depends(get_wiki)):  # noqa -> Any: B008
+    def wiki_graph_analyze(wiki: Wiki = Depends(get_wiki)):  # noqa -> Any: B008
         """Analyze knowledge graph structure."""
         return wiki.graph_analyze()
 
     @wiki_router.get("/graph")
-    async def wiki_graph(
+    def wiki_graph(
         current_page: str | None = None,
         mode: str = "auto",
         wiki: Wiki = Depends(get_wiki),  # noqa: B008
@@ -244,7 +247,7 @@ def register_wiki_routes(app, registry: WikiRegistry) -> None:
             return wiki.recommend()
 
     @wiki_id_router.get("/{wiki_id}/graph")
-    async def wiki_graph_by_id(
+    def wiki_graph_by_id(
         wiki_id: str,
         current_page: str | None = None,
         mode: str = "auto",

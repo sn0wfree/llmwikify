@@ -20,6 +20,8 @@ def build_graph(
     """
     nodes = {}
     edges = []
+    # O(E) edge index: (source, target, type) -> edge dict
+    edge_index: dict[tuple[str, str, str], dict] = {}
 
     # Wikilinks
     if include_wikilinks:
@@ -28,23 +30,14 @@ def build_graph(
             src, tgt = row["source_page"], row["target_page"]
             nodes[src] = {"id": src, "label": src, "source_type": "wiki_page"}
             nodes[tgt] = {"id": tgt, "label": tgt, "source_type": "wiki_page"}
-
-            existing = next(
-                (
-                    e
-                    for e in edges
-                    if e["source"] == src
-                    and e["target"] == tgt
-                    and e["type"] == "wikilink"
-                ),
-                None,
-            )
-            if existing:
-                existing["weight"] += 1
+            key = (src, tgt, "wikilink")
+            edge = edge_index.get(key)
+            if edge is not None:
+                edge["weight"] += 1
             else:
-                edges.append(
-                    {"source": src, "target": tgt, "type": "wikilink", "weight": 1}
-                )
+                edge = {"source": src, "target": tgt, "type": "wikilink", "weight": 1}
+                edge_index[key] = edge
+                edges.append(edge)
 
     # Relations
     if include_relations:
@@ -53,20 +46,33 @@ def build_graph(
                 "SELECT source, target, relation, confidence FROM relations"
             )
             for row in cursor.fetchall():
-                src, tgt = row["source"], row["target"]
+                src, tgt, rel = row["source"], row["target"], row["relation"]
                 nodes[src] = {"id": src, "label": src, "source_type": "concept"}
                 nodes[tgt] = {"id": tgt, "label": tgt, "source_type": "concept"}
-                edges.append(
-                    {
+                key = (src, tgt, rel)
+                edge = edge_index.get(key)
+                if edge is not None:
+                    # Exact duplicate relation: keep one edge (avoid
+                    # PageRank double-counting). Raise weight only if a
+                    # stronger confidence shows up.
+                    conf_w = {"EXTRACTED": 3, "INFERRED": 2, "AMBIGUOUS": 1}.get(
+                        row["confidence"], 1
+                    )
+                    if conf_w > edge["weight"]:
+                        edge["weight"] = conf_w
+                        edge["confidence"] = row["confidence"]
+                else:
+                    edge = {
                         "source": src,
                         "target": tgt,
-                        "type": row["relation"],
+                        "type": rel,
                         "confidence": row["confidence"],
                         "weight": {"EXTRACTED": 3, "INFERRED": 2, "AMBIGUOUS": 1}.get(
                             row["confidence"], 1
                         ),
                     }
-                )
+                    edge_index[key] = edge
+                    edges.append(edge)
         except Exception as e:
             logger.warning("Relations table query failed: %s", e)
 

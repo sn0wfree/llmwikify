@@ -85,6 +85,56 @@ class TestBuildGraph:
         assert len(graph["nodes"]) == 2
         assert len(graph["edges"]) == 1
 
+    def test_duplicate_wikilinks_merge_weight(self, temp_db):
+        """Duplicate (src, tgt, type) links collapse into one edge with weight."""
+        temp_db.conn.execute(
+            "INSERT INTO page_links (source_page, target_page) VALUES (?, ?)",
+            ("A", "B"),
+        )
+        temp_db.conn.execute(
+            "INSERT INTO page_links (source_page, target_page) VALUES (?, ?)",
+            ("A", "B"),
+        )
+        temp_db.conn.execute(
+            "INSERT INTO page_links (source_page, target_page) VALUES (?, ?)",
+            ("B", "A"),
+        )
+        temp_db.conn.commit()
+
+        graph = build_graph(
+            temp_db, include_wikilinks=True, include_relations=False
+        )
+        assert len(graph["nodes"]) == 2
+        assert len(graph["edges"]) == 2
+        weights = {e["source"] + "->" + e["target"]: e["weight"] for e in graph["edges"]}
+        assert weights["A->B"] == 2
+        assert weights["B->A"] == 1
+
+    def test_duplicate_relations_merge_weight(self, temp_db):
+        temp_db.conn.executescript("""
+            CREATE TABLE IF NOT EXISTS relations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                source TEXT, target TEXT, relation TEXT, confidence TEXT
+            );
+        """)
+        for _ in range(3):
+            temp_db.conn.execute(
+                "INSERT INTO relations (source, target, relation, confidence) VALUES (?, ?, ?, ?)",
+                ("A", "B", "uses", "EXTRACTED"),
+            )
+        temp_db.conn.execute(
+            "INSERT INTO relations (source, target, relation, confidence) VALUES (?, ?, ?, ?)",
+            ("A", "B", "causes", "INFERRED"),
+        )
+        temp_db.conn.commit()
+
+        graph = build_graph(temp_db, include_wikilinks=False, include_relations=True)
+        assert len(graph["edges"]) == 2
+        by_type = {e["type"]: e for e in graph["edges"]}
+        # 3 identical EXTRACTED rows collapse to one edge (confidence weight)
+        assert by_type["uses"]["weight"] == 3
+        assert by_type["causes"]["weight"] == 2
+
 
 class TestCommunityDetection:
     def test_empty_graph(self, temp_db):
