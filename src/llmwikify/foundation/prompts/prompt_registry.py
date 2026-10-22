@@ -130,7 +130,7 @@ class PromptRegistry:
                 f"{self._defaults_dir} or {self.custom_dir}"
             )
 
-        data = yaml.safe_load(yaml_path.read_text())
+        data = yaml.safe_load(yaml_path.read_text(encoding="utf-8"))
 
         template = PromptTemplate(
             name=data.get("name", prompt_name),

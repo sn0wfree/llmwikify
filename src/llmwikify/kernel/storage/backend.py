@@ -148,7 +148,7 @@ class LocalFileBackend:
         path = self._page_path(name)
         if not path.exists():
             return None
-        return path.read_text()
+        return path.read_text(encoding="utf-8")
 
     def put_page(self, name: str, content: str) -> None:
         path = self._page_path(name)
@@ -157,7 +157,7 @@ class LocalFileBackend:
         except ValueError:
             raise ValueError(f"Page path escapes wiki/ directory: {name!r}") from None
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(content)
+        path.write_text(content, encoding="utf-8")
 
     def delete_page(self, name: str) -> bool:
         path = self._page_path(name)
@@ -176,23 +176,23 @@ class LocalFileBackend:
         path = self.wiki_dir / "index.md"
         if not path.exists():
             return ""
-        return path.read_text()
+        return path.read_text(encoding="utf-8")
 
     def put_index(self, content: str) -> None:
         path = self.wiki_dir / "index.md"
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(content)
+        path.write_text(content, encoding="utf-8")
 
     # === wiki.md (3 methods) ===
     def get_wiki_md(self) -> str | None:
         path = self.root / "wiki.md"
         if not path.exists():
             return None
-        return path.read_text()
+        return path.read_text(encoding="utf-8")
 
     def put_wiki_md(self, content: str) -> None:
         path = self.root / "wiki.md"
-        path.write_text(content)
+        path.write_text(content, encoding="utf-8")
 
     def merge_wiki_md(self, existing: str, new: str) -> str:
         """Merge new schema sections into existing wiki.md.
@@ -271,7 +271,7 @@ class LocalFileBackend:
         if not path.exists():
             return None
         try:
-            content = path.read_text()
+            content = path.read_text(encoding="utf-8")
             match = re.search(r"<!-- llmwikify:analysis (.*?) -->", content, re.DOTALL)
             if match:
                 return json.loads(match.group(1))
@@ -285,7 +285,7 @@ class LocalFileBackend:
             logger.debug("Cannot cache analysis; page missing: %s", key)
             return
         try:
-            content = path.read_text()
+            content = path.read_text(encoding="utf-8")
             analysis_json = json.dumps(data, ensure_ascii=False)
             comment = (
                 f"<!-- llmwikify:analysis "
@@ -299,7 +299,7 @@ class LocalFileBackend:
                 )
             else:
                 content += f"\n{comment}"
-            path.write_text(content)
+            path.write_text(content, encoding="utf-8")
         except OSError as e:
             logger.warning("Failed to cache source analysis for %s: %s", key, e)
 
@@ -318,7 +318,7 @@ class LocalFileBackend:
         path = self.root / "wiki.md"
         if not path.exists():
             return {}
-        content = path.read_text()
+        content = path.read_text(encoding="utf-8")
         type_to_dir: dict[str, str] = {}
         in_page_types = False
         in_table = False
