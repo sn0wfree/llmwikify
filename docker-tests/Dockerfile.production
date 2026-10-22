@@ -99,7 +99,10 @@ RUN set -eux; \
 # strip: drop symbol tables from native .so files (~111MB total → ~-12MB).
 # binutils is installed and purged within this same layer, so it never
 # ships in the final image.
-ARG LLMWIKIFY_EXTRAS=all
+# Default drops extractors: pymupdf/onnxruntime/speech/pandas (~250MB+).
+# Server role is read/serve wiki; PDF/Office ingest is a local pipeline.
+# Pass LLMWIKIFY_EXTRAS=all if the server must ingest binaries.
+ARG LLMWIKIFY_EXTRAS=mcp,config,watch,graph,web,agent
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --no-compile \
         -i ${PIP_INDEX} \
@@ -111,7 +114,10 @@ RUN --mount=type=cache,target=/root/.cache/pip \
         -exec strip --strip-unneeded {} + \
  && apt-get purge -y -qq binutils \
  && apt-get autoremove -y -qq \
- && rm -rf /var/lib/apt/lists/* /usr/share/doc/* /usr/share/man/*
+ && pip uninstall -y pip setuptools wheel \
+ && find /usr/local/lib/python3.11/site-packages -type d -name '__pycache__' -prune -exec rm -rf {} + \
+ && find /usr/local/lib/python3.11/site-packages -type d -name 'tests' -prune -exec rm -rf {} + \
+ && rm -rf /var/lib/apt/lists/* /usr/share/doc/* /usr/share/man/* /tmp/*
 
 # Non-root runtime user (uid 1000; host-side setgid group pairs with this)
 RUN useradd -m -u 1000 llmuser \
