@@ -203,15 +203,13 @@ class TestGraphAnalyzer:
         assert isinstance(suggestions, list)
 
     def test_page_exists_check(self, graph_wiki):
-        """Test page existence checking."""
+        """Test page name set (used for existence checks)."""
         wiki, tmp = graph_wiki
         analyzer = GraphAnalyzer(wiki)
+        names = analyzer._page_name_set()
 
-        # Should find existing pages
-        assert analyzer._page_exists("concepts/Artificial Intelligence")
-
-        # Should not find non-existent pages
-        assert not analyzer._page_exists("nonexistent/page")
+        assert "concepts/Artificial Intelligence" in names
+        assert "nonexistent/page" not in names
 
     def test_label_community(self, graph_wiki):
         """Test community labeling."""

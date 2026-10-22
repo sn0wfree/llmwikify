@@ -230,4 +230,5 @@ print("O(E):", round(time.time()-t0, 3), "edges:", len(edges))
 | 2026-10-22 | 注意：`/api/wiki/graph_analyze` 在安装 networkx 后为 **~145s**（PageRank/社区全量分析），与 O(E²) 无关，需另案限流/缓存/异步 |
 | 2026-10-22 | **graph_analyze 指纹缓存**（P1）：`GraphAnalyzer.analyze` 按 pages/page_links/relations 指纹缓存，数据变更即失效；`force=1` 可强制重算。容器实测 **冷 ~135s → 热 ~0.008s**（约 1.7 万倍） |
 | 2026-10-22 | **启动预热 + viz 缓存**：lifespan 后台线程预热 `graph_analyze`（实测预热后首击 **0.05s cached**）；`/api/wiki/graph` 与 analyze 共用指纹缓存，viz TTL **60s**（冷 0.68s → 热 0.008s） |
+| 2026-10-22 | **建议多进程预热** → 剖析发现真瓶颈是 `_page_exists` 对每个节点 `rglob` 全库（O(n×files)，65s）。改为一次建 page-name set：`analyze` **135s → 2.1s**，预热无需多进程 |
 | — | 服务器热修 / 镜像重建 |

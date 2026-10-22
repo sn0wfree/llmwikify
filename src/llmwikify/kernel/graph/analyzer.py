@@ -311,6 +311,18 @@ class GraphAnalyzer:
 
         return suggestions
 
+    def _page_name_set(self) -> set[str]:
+        """Load all wiki page names once (relative path without .md)."""
+        names: set[str] = set()
+        wiki_dir = getattr(self.wiki, "wiki_dir", None)
+        if wiki_dir is None or not wiki_dir.exists():
+            return names
+        for md_file in wiki_dir.rglob("*.md"):
+            if is_path_excluded(md_file):
+                continue
+            names.add(md_file.relative_to(wiki_dir).as_posix()[:-3])
+        return names
+
     def _suggest_pages_for_concepts(self, G) -> list[dict]:
         """Suggest creating pages for high-degree concepts that lack wiki pages."""
         suggestions = []
@@ -320,13 +332,17 @@ class GraphAnalyzer:
         except ImportError:
             return suggestions
 
+        # One directory scan; per-node rglob made this O(n × files) ~65s
+        # on 1439-page wikis. See docs/issues/*响应慢*2026-10-22.md.
+        existing = self._page_name_set()
+
         for node, degree in G.degree():
             if degree < 2:
                 continue
 
             # Check if wiki page exists
             node_type = G.nodes[node].get("source_type", "unknown")
-            if node_type == "concept" and not self._page_exists(node):
+            if node_type == "concept" and node not in existing:
                 suggestions.append(
                     {
                         "type": "create_page",
@@ -384,20 +400,6 @@ class GraphAnalyzer:
                     )
 
         return suggestions[:5]
-
-    def _page_exists(self, node: str) -> bool:
-        """Check if a wiki page exists for the given node name."""
-        # Check if page exists in any subdirectory
-        if not self.wiki.wiki_dir.exists():
-            return False
-
-        for md_file in self.wiki.wiki_dir.rglob("*.md"):
-            if is_path_excluded(md_file):
-                continue
-            page_name = str(md_file.relative_to(self.wiki.wiki_dir))[:-3]
-            if page_name == node:
-                return True
-        return False
 
     def _compute_stats(self, G) -> dict:
         """Compute graph statistics."""
