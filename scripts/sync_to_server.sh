@@ -32,6 +32,9 @@
 #   · wiki/log.md 各端独立维护, 不同步
 #   · wiki/.sink/ 是查询产物, 不同步
 #   · wiki/reference_index.json 由服务器 build-index 自行生成, 不同步
+#   · *.db 一律不同步 (本地 wiki/ 下的 0 字节占位文件不得覆盖服务器)
+#   · 知识图谱 relations / entity_aliases 只存在于内容库, build-index 不会重建 —
+#     本脚本跑完后必须追加 sync_relations.sh, 否则服务器"页面新、图谱旧"
 #   · 本地 wiki 根目录只读, 本脚本不写入其中任何文件
 # ════════════════════════════════════════════════════════════════════════
 set -euo pipefail
@@ -105,6 +108,7 @@ rsync -a --info=stats2 ${DRY} ${PRUNE} \
   --chmod=D2775,F664 --group=admin \
   --exclude='log.md' --exclude='.sink/' --exclude='*.bak*' \
   --exclude='reference_index.json' \
+  --exclude='*.db' --exclude='*.db-wal' --exclude='*.db-shm' \
   "$LOCAL_ROOT/wiki/" "$SYNC_HOST:$REMOTE_ROOT/wiki/"
 
 # ── [2/3] 同步 wiki.md (schema) ─────────────────────────────────────
