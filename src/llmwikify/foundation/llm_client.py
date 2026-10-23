@@ -1,8 +1,10 @@
 """Lightweight LLM client for OpenAI-compatible APIs."""
 
+import hashlib
 import json
 import os
 import re
+import threading
 from typing import Any
 
 from .llm.budget_decorator import check_token_budget
@@ -10,6 +12,38 @@ from .llm.errors import LLMNotConfiguredError
 from .llm.resolver import resolve_chat_llm, resolver_enabled
 from .llm.spec import LLMSpec
 from .llm.token_budget import TokenBudgetChecker, TokenBudgetConfig
+
+# Process-level client memo: from_config is called on every LLM-layer
+# request (lint/gaps). Rebuilding clients is pure overhead once config
+# is unchanged. Key is a hash of LLM config + relevant env — never
+# stores raw secrets in the key string.
+_CLIENT_MEMO: dict[str, "LLMClient"] = {}
+_CLIENT_MEMO_LOCK = threading.Lock()
+
+
+def _client_memo_key(llm_cfg: dict[str, Any]) -> str:
+    payload = {
+        "enabled": llm_cfg.get("enabled"),
+        "provider": os.environ.get("LLM_PROVIDER") or llm_cfg.get("provider"),
+        "model": os.environ.get("LLM_MODEL") or llm_cfg.get("model"),
+        "base_url": os.environ.get("LLM_BASE_URL") or llm_cfg.get("base_url"),
+        "context_window": llm_cfg.get("context_window"),
+        "budget_on_exceed": llm_cfg.get("budget_on_exceed"),
+        "api_key_fingerprint": hashlib.sha256(
+            (
+                os.environ.get("LLM_API_KEY")
+                or str(llm_cfg.get("api_key") or "")
+            ).encode()
+        ).hexdigest()[:16],
+        "legacy_fallback": os.environ.get("LLM_LEGACY_FALLBACK"),
+    }
+    return json.dumps(payload, sort_keys=True)
+
+
+def clear_llm_client_memo() -> None:
+    """Drop cached clients (e.g. after config reload)."""
+    with _CLIENT_MEMO_LOCK:
+        _CLIENT_MEMO.clear()
 
 
 def _legacy_fallback_enabled() -> bool:
@@ -98,8 +132,17 @@ class LLMClient:
         entry point) when ``LLM_USE_RESOLVER`` is not set to
         ``"false"``. The original validation rules (``enabled``
         check, ``api_key`` presence) are preserved unchanged.
+
+        Clients are memoized per config/env fingerprint so repeated
+        calls do not rebuild the HTTP client. Use
+        :func:`clear_llm_client_memo` after config reload.
         """
         llm_cfg = config.get("llm", {})
+        memo_key = _client_memo_key(llm_cfg)
+        with _CLIENT_MEMO_LOCK:
+            hit = _CLIENT_MEMO.get(memo_key)
+            if hit is not None:
+                return hit
 
         # Check if LLM is enabled
         if not llm_cfg.get("enabled", False):
@@ -111,7 +154,10 @@ class LLMClient:
                 raise ValueError(
                     "LLM API key not configured. Set api_key or LLM_API_KEY env var."
                 )
-            return cls.from_spec(spec)
+            client = cls.from_spec(spec)
+            with _CLIENT_MEMO_LOCK:
+                _CLIENT_MEMO[memo_key] = client
+            return client
 
         # Resolve API key: env:VAR_NAME syntax or literal value
         api_key = llm_cfg.get("api_key", "")
@@ -130,7 +176,7 @@ class LLMClient:
                 "LLM API key not configured. Set api_key or LLM_API_KEY env var."
             )
 
-        return cls(
+        client = cls(
             provider=provider,
             base_url=base_url,
             api_key=api_key,
@@ -138,6 +184,9 @@ class LLMClient:
             context_window=llm_cfg.get("context_window"),
             budget_on_exceed=llm_cfg.get("budget_on_exceed", "warn"),
         )
+        with _CLIENT_MEMO_LOCK:
+            _CLIENT_MEMO[memo_key] = client
+        return client
 
     @classmethod
     def from_spec(cls, spec: "LLMSpec") -> "LLMClient":
