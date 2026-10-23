@@ -22,7 +22,7 @@ from ..lint.rules import RULES
 logger = logging.getLogger(__name__)
 
 # lint/gaps share the graph fingerprint cache (see docs/designs/lint-performance-2026-10-23.md)
-_LINT_TTL_S = 3600.0
+_LINT_TTL_S = 600.0
 
 
 class WikiAnalyzer:

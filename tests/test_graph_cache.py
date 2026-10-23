@@ -62,9 +62,14 @@ class TestCache:
         mem_conn.commit()
         assert cache_get("analyze", "w1", graph_fingerprint(mem_conn), ttl_s=60) is None
 
-    def test_ttl_expiry(self):
+    def test_ttl_expiry_revalidates_same_fp(self):
+        """Expired + same fingerprint → renew and serve (no recompute)."""
         cache_put("viz", "w2", "fp", {"v": 1})
-        assert cache_get("viz", "w2", "fp", ttl_s=-1) is None
+        assert cache_get("viz", "w2", "fp", ttl_s=-1) == {"v": 1}
+
+    def test_ttl_expiry_different_fp_misses(self):
+        cache_put("viz", "w2b", "fp1", {"v": 1})
+        assert cache_get("viz", "w2b", "fp2", ttl_s=-1) is None
 
     def test_kind_and_extra_isolation(self):
         cache_put("analyze", "w3", "fp", {"a": 1})

@@ -24,6 +24,8 @@ _STORE: dict[tuple[str, str, str], tuple[str, Any, float]] = {}
 # full rebuild on UI refresh. User asked for 60s on the shared graph path.
 TTL_VIZ_S = 60.0
 TTL_ANALYZE_S = 3600.0
+# lint/gaps: 10 min revalidation window (fingerprint renew if unchanged).
+TTL_LINT_S = 600.0
 
 
 def graph_fingerprint(conn: Any) -> str:
@@ -46,10 +48,9 @@ def graph_fingerprint(conn: Any) -> str:
     return f"{pages[0]}:{pages[1]}|{links[0]}:{links[1]}|{rels[0]}:{rels[1]}"
 
 
-# Fingerprint memo: repeated warm cache hits were paying full 1.4k-stat
-# walks every call (~2s on slow bind mounts). Short TTL trades a tiny
-# invalidation window for interactive latency. See lint-performance doc.
-_FP_MEMO_TTL_S = 2.0
+# Fingerprint memo window — aligned with TTL_LINT_S (10 min). Repeated
+# warm hits must not re-walk the tree; invalidate() clears this early.
+_FP_MEMO_TTL_S = 600.0
 _FP_MEMO: dict[str, tuple[float, str]] = {}
 _FP_MEMO_LOCK = threading.Lock()
 
@@ -128,6 +129,12 @@ def cache_get(
     extra: str = "",
     ttl_s: float,
 ) -> Any | None:
+    """Return cached value if fingerprint matches.
+
+    When ``ttl_s`` elapses, the entry is *revalidated* against
+    ``fingerprint``: same fingerprint renews the timestamp and returns
+    the old value (no recompute); different fingerprint is a miss.
+    """
     key = (kind, wiki_key, extra)
     now = time.monotonic()
     with _LOCK:
@@ -135,9 +142,12 @@ def cache_get(
         if hit is None:
             return None
         stored_fp, value, ts = hit
-        if stored_fp != fingerprint or now - ts > ttl_s:
+        if stored_fp != fingerprint:
             _STORE.pop(key, None)
             return None
+        if now - ts > ttl_s:
+            # Expired but content unchanged → renew, serve cached.
+            _STORE[key] = (stored_fp, value, now)
         return value
 
 
