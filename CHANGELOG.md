@@ -31,6 +31,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Note: the effective endpoint is `/mcp/mcp` (mount prefix `/mcp` + http_app
   internal path `/mcp`); older docs referencing `/mcp` need updating.
 
+## [0.40.4] - 2026-10-23 — Lint/Gaps Performance + Cache Policy
+
+### Performance
+- `lint()` first call ~472s → **~27s** (P0 dedupe + P1 `missing_cross_ref` rewrite)
+- Warm `lint` / `knowledge_gaps` **~2–4ms** (fingerprint cache)
+- Cache: TTL 600s **revalidate-by-fingerprint** (renew if unchanged)
+- Write path + wiki file watcher invalidate immediately
+- File fingerprint: scandir + 600s memo
+
+### Fixed
+- Windows page names / index paths use `as_posix()` (wikilinks, fix_wikilinks)
+
 ## [0.40.3] - 2026-10-22 — Graph Performance + Analyze Cache
 
 ### Fixed
