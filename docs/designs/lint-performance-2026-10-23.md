@@ -122,11 +122,20 @@ age ≥ 600s  → 算指纹 → 同则续期 / 异则重算
 写或 watch  → 立即失效
 ```
 
+### 实测（S1–S3）
+
+| 场景 | 结果 |
+|---|---|
+| lint 连打（缓存） | **~2–4ms** |
+| 到期验指纹 | 指纹同 → 续期，不重算 |
+| put_page / fix / build-index | 立即 `cache_invalidate` |
+| watcher | `recursive=True` + debounce 2s → invalidate |
+
 ### 实施
 
-| 步 | 内容 |
-|---|---|
-| S1 | `cache_get` 到期验指纹续期；TTL=600s |
-| S2 | 写路径 invalidate |
-| S3 | wiki 目录 watcher → invalidate |
-| S4 | 测试 + 实测 |
+| 步 | 内容 | 状态 |
+|---|---|---|
+| S1 | `cache_get` 到期验指纹续期；TTL=600s | ✅ |
+| S2 | 写路径 invalidate | ✅ |
+| S3 | wiki 目录 watcher → invalidate | ✅ |
+| S4 | 测试 + 实测 | ✅ |
