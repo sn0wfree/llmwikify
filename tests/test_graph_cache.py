@@ -98,3 +98,20 @@ class TestWikiCacheKey:
     def test_falls_back_to_id(self):
         w = object()
         assert wiki_cache_key(w) == str(id(w))
+
+
+class TestFileFingerprint:
+    def test_changes_on_edit(self, tmp_path):
+        from llmwikify.kernel.graph.cache import file_fingerprint
+
+        p = tmp_path / "a.md"
+        p.write_text("one", encoding="utf-8")
+        fp1 = file_fingerprint(tmp_path)
+        p.write_text("two-two", encoding="utf-8")
+        fp2 = file_fingerprint(tmp_path)
+        assert fp1 != fp2
+
+    def test_missing_dir(self):
+        from llmwikify.kernel.graph.cache import file_fingerprint
+
+        assert file_fingerprint(None) == "no-dir"

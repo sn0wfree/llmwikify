@@ -21,6 +21,9 @@ from ..lint.rules import RULES
 
 logger = logging.getLogger(__name__)
 
+# lint/gaps share the graph fingerprint cache (see docs/designs/lint-performance-2026-10-23.md)
+_LINT_TTL_S = 3600.0
+
 
 class WikiAnalyzer:
     """Health check, lint detection, and recommendation engine for Wiki.
@@ -123,7 +126,24 @@ class WikiAnalyzer:
 
     def _detect_knowledge_gaps(self) -> list[dict]:
         """Run the lint rule ``knowledge_gap`` (Phase 1 #3: delegated to LintEngine)."""
-        return self._run_rule("knowledge_gap")
+        from llmwikify.kernel.graph.cache import (
+            cache_get,
+            cache_put,
+            combined_fingerprint,
+            wiki_cache_key,
+        )
+
+        wkey = wiki_cache_key(self.wiki)
+        fp = combined_fingerprint(
+            getattr(getattr(self.wiki, "index", None), "conn", None),
+            getattr(self.wiki, "wiki_dir", None),
+        )
+        cached = cache_get("gaps", wkey, fp, ttl_s=_LINT_TTL_S)
+        if cached is not None:
+            return cached
+        result = self._run_rule("knowledge_gap")
+        cache_put("gaps", wkey, fp, result)
+        return result
 
     def _detect_redundancy(self) -> list[dict]:
         """Run the lint rule ``redundancy`` (Phase 1 #3: delegated to LintEngine)."""
@@ -322,14 +342,35 @@ class WikiAnalyzer:
         """Health check the wiki with schema-aware gap detection.
 
         Args:
-            mode: "check" (detect only) or "fix" (reserved for future auto-repair).
+            mode: "check" (detect only) or "fix" (auto-repair wikilinks).
             limit: Max LLM-detected issues to return.
-            force: Force re-detection (reserved for future cache bypass).
+            force: Skip result cache and recompute.
             generate_investigations: If True, use LLM to suggest investigations.
 
-        Note:
-            mode="fix" and force=True are reserved for future implementation.
+        Results are fingerprint-cached (DB + md mtime). ``mode=fix``
+        always recomputes and is never served from cache.
         """
+        from llmwikify.kernel.graph.cache import (
+            cache_get,
+            cache_put,
+            combined_fingerprint,
+            wiki_cache_key,
+        )
+
+        cacheable = mode == "check" and not generate_investigations
+        wkey = wiki_cache_key(self.wiki)
+        fp = combined_fingerprint(
+            getattr(getattr(self.wiki, "index", None), "conn", None),
+            getattr(self.wiki, "wiki_dir", None),
+        )
+        extra = f"{mode}|{limit}|{int(generate_investigations)}"
+        if cacheable and not force:
+            cached = cache_get("lint", wkey, fp, extra=extra, ttl_s=_LINT_TTL_S)
+            if cached is not None:
+                out = dict(cached)
+                out["cached"] = True
+                return out
+
         issues = []
 
         # One filesystem pass → links, orphans, broken links (was 3 passes).
@@ -444,8 +485,12 @@ class WikiAnalyzer:
                 "wikilink_changes": fix_result["changes"][:20],
                 "index_updated": True,
             }
+        elif cacheable:
+            cache_put("lint", wkey, fp, result, extra=extra)
 
-        return result
+        out = dict(result)
+        out["cached"] = False
+        return out
 
     def recommend(self) -> dict:
         """Generate smart recommendations."""

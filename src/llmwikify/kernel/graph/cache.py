@@ -46,6 +46,44 @@ def graph_fingerprint(conn: Any) -> str:
     return f"{pages[0]}:{pages[1]}|{links[0]}:{links[1]}|{rels[0]}:{rels[1]}"
 
 
+def file_fingerprint(wiki_dir: Any) -> str:
+    """mtime+size fingerprint for on-disk pages (catches in-place edits).
+
+    Combined with :func:`graph_fingerprint` so rowid-stable DB updates
+    and direct md edits both invalidate.
+    """
+    if wiki_dir is None:
+        return "no-dir"
+    try:
+        from pathlib import Path
+
+        root = Path(wiki_dir)
+        if not root.exists():
+            return "missing"
+    except Exception:
+        return "no-dir"
+
+    n = 0
+    mt_sum = 0
+    sz_sum = 0
+    try:
+        for p in root.rglob("*.md"):
+            try:
+                st = p.stat()
+            except OSError:
+                continue
+            n += 1
+            mt_sum += int(st.st_mtime)
+            sz_sum += st.st_size
+    except OSError:
+        return "stat-err"
+    return f"md:{n}:{mt_sum}:{sz_sum}"
+
+
+def combined_fingerprint(conn: Any, wiki_dir: Any) -> str:
+    return f"{graph_fingerprint(conn)}|{file_fingerprint(wiki_dir)}"
+
+
 def wiki_cache_key(wiki: Any) -> str:
     return str(getattr(wiki, "root", "") or id(wiki))
 
