@@ -3,7 +3,7 @@
 | 项 | 内容 |
 |---|---|
 | 日期 | 2026-10-23 |
-| 状态 | 设计已定 · P0 待实施 |
+| 状态 | P0 已实施（lint 472s→147s）· P1 进行中 |
 | 依据 | `scripts/profile_lint_paths.py` / `profile_lint_deep.py`（CKbase-test 1437 页） |
 | 关联 | `docs/issues/llmwikify-服务响应慢诊断与修复方案-2026-10-22.md` |
 
