@@ -31,6 +31,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Note: the effective endpoint is `/mcp/mcp` (mount prefix `/mcp` + http_app
   internal path `/mcp`); older docs referencing `/mcp` need updating.
 
+## [0.40.6] - 2026-10-23 — Foundation P0 + Lint Cache Key
+
+### Performance
+- Cache `PromptRegistry` instance (no repeated YAML/Jinja load per LLM call)
+- Memoize `LLMClient.from_config` (config/env fingerprint)
+- lint core cache key is `limit`-independent (`wiki_knowledge_gaps` reuses lint core)
+
+### Fixed
+- Text/HTML extractors force UTF-8 reads
+
 ## [0.40.5] - 2026-10-23 — LLM Suggestion Cache
 
 ### Performance

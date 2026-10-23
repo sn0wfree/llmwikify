@@ -6,7 +6,7 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Tests](https://img.shields.io/badge/tests-4300%2B%20passed-brightgreen.svg)](https://github.com/sn0wfree/llmwikify)
-[![Version](https://img.shields.io/badge/version-0.40.5-blue.svg)](pyproject.toml)
+[![Version](https://img.shields.io/badge/version-0.40.6-blue.svg)](pyproject.toml)
 [![CI Tests](https://github.com/sn0wfree/llmwikify/actions/workflows/tests.yml/badge.svg)](https://github.com/sn0wfree/llmwikify/actions/workflows/tests.yml)
 [![Lint](https://github.com/sn0wfree/llmwikify/actions/workflows/lint.yml/badge.svg)](https://github.com/sn0wfree/llmwikify/actions/workflows/lint.yml)
 [![codecov](https://codecov.io/gh/sn0wfree/llmwikify/branch/main/graph/badge.svg)](https://codecov.io/gh/sn0wfree/llmwikify/branch/main/graph/badge.svg)
