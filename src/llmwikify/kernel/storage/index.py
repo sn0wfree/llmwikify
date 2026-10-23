@@ -560,6 +560,8 @@ class WikiIndex:
         """Build index from all wiki markdown files."""
         import time
 
+        from llmwikify.kernel.graph.cache import cache_invalidate
+
         start_time = time.time()
 
         # Clear existing index
@@ -591,6 +593,7 @@ class WikiIndex:
 
         elapsed = time.time() - start_time
         speed = total / elapsed if elapsed > 0 else 0
+        cache_invalidate(str(wiki_dir))
 
         return {
             "total_pages": total,

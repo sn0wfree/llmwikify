@@ -93,6 +93,18 @@ class TestCache:
         assert cache_get("analyze", "wa", "fp", ttl_s=60) is None
 
 
+class TestWriteInvalidates:
+    def test_put_page_clears_lint_cache(self, tmp_path):
+        from llmwikify.kernel.graph.cache import cache_get, cache_put
+        from llmwikify.kernel.storage.backend import LocalFileBackend
+
+        backend = LocalFileBackend(tmp_path)
+        key = str(backend.wiki_dir)
+        cache_put("lint", key, "fp-old", {"issues": []})
+        backend.put_page("concepts/Alpha", "# Alpha\n")
+        assert cache_get("lint", key, "fp-old", ttl_s=600) is None
+
+
 class TestWikiCacheKey:
     def test_prefers_root(self):
         class W:

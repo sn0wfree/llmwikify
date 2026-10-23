@@ -121,6 +121,11 @@ class WikiLinkMixin(WikiProtocol):
                 rel_path = page.relative_to(self.wiki_dir).as_posix()
                 self.index.upsert_page(rel_path[:-3], new_content, rel_path)
 
+        if not dry_run and stats.get("fixed"):
+            from llmwikify.kernel.graph.cache import cache_invalidate
+
+            cache_invalidate(str(self.wiki_dir))
+
         return {**stats, "changes": changes}
 
     def get_inbound_links(self, page_name: str, include_context: bool = False) -> list:

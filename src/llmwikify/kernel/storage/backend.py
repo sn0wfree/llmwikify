@@ -158,11 +158,17 @@ class LocalFileBackend:
             raise ValueError(f"Page path escapes wiki/ directory: {name!r}") from None
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
+        from llmwikify.kernel.graph.cache import cache_invalidate
+
+        cache_invalidate(str(self.wiki_dir))
 
     def delete_page(self, name: str) -> bool:
         path = self._page_path(name)
         if path.exists():
             path.unlink()
+            from llmwikify.kernel.graph.cache import cache_invalidate
+
+            cache_invalidate(str(self.wiki_dir))
             return True
         return False
 
