@@ -358,8 +358,9 @@ class WikiAnalyzer:
             force: Skip result cache and recompute.
             generate_investigations: If True, use LLM to suggest investigations.
 
-        Results are fingerprint-cached (DB + md mtime). ``mode=fix``
-        always recomputes and is never served from cache.
+        Deterministic work (scan + rules + sink) is fingerprint-cached.
+        LLM layers (``_llm_detect_gaps`` / ``_llm_generate_investigations``)
+        always run fresh and are never stored in cache.
         """
         from llmwikify.kernel.graph.cache import (
             cache_get,
@@ -368,121 +369,142 @@ class WikiAnalyzer:
             wiki_cache_key,
         )
 
-        cacheable = mode == "check" and not generate_investigations
+        # Core is cacheable even when LLM investigations are requested.
+        cacheable = mode == "check"
         wkey = wiki_cache_key(self.wiki)
         fp = combined_fingerprint(
             getattr(getattr(self.wiki, "index", None), "conn", None),
             getattr(self.wiki, "wiki_dir", None),
         )
-        extra = f"{mode}|{limit}|{int(generate_investigations)}"
+        extra = f"{mode}|{limit}"
+
+        core: dict | None = None
+        from_cache = False
         if cacheable and not force:
-            cached = cache_get("lint", wkey, fp, extra=extra, ttl_s=_LINT_TTL_S)
-            if cached is not None:
-                out = dict(cached)
-                out["cached"] = True
-                return out
+            core = cache_get("lint", wkey, fp, extra=extra, ttl_s=_LINT_TTL_S)
+            from_cache = core is not None
 
-        issues = []
+        if core is None:
+            issues = []
 
-        # One filesystem pass → links, orphans, broken links (was 3 passes).
-        link_counts, orphan_candidates, broken_links = self._scan_all_pages()
-        issues.extend(broken_links)
+            # One filesystem pass → links, orphans, broken links (was 3 passes).
+            link_counts, orphan_candidates, broken_links = self._scan_all_pages()
+            issues.extend(broken_links)
 
-        for page_name in orphan_candidates:
-            issues.append(
-                {
-                    "type": "orphan_page",
-                    "page": page_name,
-                    "file": str(self.wiki.wiki_dir / f"{page_name}.md"),
-                }
-            )
+            for page_name in orphan_candidates:
+                issues.append(
+                    {
+                        "type": "orphan_page",
+                        "page": page_name,
+                        "file": str(self.wiki.wiki_dir / f"{page_name}.md"),
+                    }
+                )
 
-        sink_status = self.wiki.query_sink.status()
-        sink_warnings = []
+            sink_status = self.wiki.query_sink.status()
+            sink_warnings = []
 
-        if isinstance(sink_status, dict) and "sinks" in sink_status:
-            for sink in sink_status["sinks"]:
-                if sink.get("urgency") in ("stale", "aging"):
-                    sink_warnings.append(
-                        {
-                            "type": "stale_sink",
-                            "page_name": sink["page_name"],
-                            "entry_count": sink["entry_count"],
-                            "days_old": sink.get("days_since_last_entry", 0),
-                            "urgency": sink["urgency"],
-                            "suggestion": f"Review and merge {sink['entry_count']} pending entries",
-                        }
-                    )
+            if isinstance(sink_status, dict) and "sinks" in sink_status:
+                for sink in sink_status["sinks"]:
+                    if sink.get("urgency") in ("stale", "aging"):
+                        sink_warnings.append(
+                            {
+                                "type": "stale_sink",
+                                "page_name": sink["page_name"],
+                                "entry_count": sink["entry_count"],
+                                "days_old": sink.get("days_since_last_entry", 0),
+                                "urgency": sink["urgency"],
+                                "suggestion": f"Review and merge {sink['entry_count']} pending entries",
+                            }
+                        )
 
-        # Rules once; reuse for hints + fallback gaps (was 3× missing_cross_ref).
-        all_rule_results = self._run_all_rules()
-        by_type: dict[str, list[dict]] = {}
-        for r in all_rule_results:
-            by_type.setdefault(r.get("type") or "", []).append(r)
+            # Rules once; reuse for hints + fallback gaps (was 3× missing_cross_ref).
+            all_rule_results = self._run_all_rules()
+            by_type: dict[str, list[dict]] = {}
+            for r in all_rule_results:
+                by_type.setdefault(r.get("type") or "", []).append(r)
 
+            critical_hints = list(by_type.get("dated_claim", []))[:3]
+            informational_hints = (
+                list(by_type.get("topic_overlap", []))
+                + list(by_type.get("missing_cross_ref", []))
+            )[:5]
+
+            contradictions = [
+                r
+                for r in all_rule_results
+                if r.get("type")
+                in ("value_conflict", "year_conflict", "negation_pattern")
+            ]
+            data_gaps = [
+                r
+                for r in all_rule_results
+                if r.get("type") in ("unsourced_claims", "vague_temporal")
+            ]
+            outdated_pages = [
+                r for r in all_rule_results if r.get("type") == "potentially_outdated"
+            ]
+            knowledge_gaps = [
+                r
+                for r in all_rule_results
+                if r.get("type") in ("unreferenced_entity", "isolated_source")
+            ]
+            redundancy_alerts = [
+                r for r in all_rule_results if r.get("type") == "similar_page_names"
+            ]
+
+            core = {
+                "issues": issues,
+                "sink_status": sink_status,
+                "sink_warnings": sink_warnings,
+                "hints": {
+                    "critical": critical_hints,
+                    "informational": informational_hints,
+                },
+                "investigations": {
+                    "contradictions": contradictions,
+                    "data_gaps": data_gaps,
+                    "outdated_pages": outdated_pages,
+                    "knowledge_gaps": knowledge_gaps,
+                    "redundancy_alerts": redundancy_alerts,
+                },
+                "total_pages": (
+                    len(self.wiki._wiki_pages()) if self.wiki.wiki_dir.exists() else 0
+                ),
+                "missing_cross_refs": by_type.get("missing_cross_ref", []),
+                "contradictions": contradictions,
+                "data_gaps": data_gaps,
+            }
+            if cacheable:
+                cache_put("lint", wkey, fp, core, extra=extra)
+
+        cached_hit = from_cache
+        contradictions = core.get("contradictions", [])
+        data_gaps = core.get("data_gaps", [])
+
+        # LLM layers — always fresh, never cached.
         context = self._build_lint_context()
         llm_gaps = self._llm_detect_gaps(
-            context, missing_cross_refs=by_type.get("missing_cross_ref", [])
-        )
-        llm_gaps = llm_gaps[:limit]
+            context, missing_cross_refs=core.get("missing_cross_refs", [])
+        )[:limit]
 
-        all_issues = issues + llm_gaps
-
-        critical_hints = list(by_type.get("dated_claim", []))[:3]
-        informational_hints = (
-            list(by_type.get("topic_overlap", []))
-            + list(by_type.get("missing_cross_ref", []))
-        )[:5]
-
-        contradictions = [
-            r
-            for r in all_rule_results
-            if r.get("type") in ("value_conflict", "year_conflict", "negation_pattern")
-        ]
-        data_gaps = [
-            r
-            for r in all_rule_results
-            if r.get("type") in ("unsourced_claims", "vague_temporal")
-        ]
-        outdated_pages = [
-            r for r in all_rule_results if r.get("type") == "potentially_outdated"
-        ]
-        knowledge_gaps = [
-            r
-            for r in all_rule_results
-            if r.get("type") in ("unreferenced_entity", "isolated_source")
-        ]
-        redundancy_alerts = [
-            r for r in all_rule_results if r.get("type") == "similar_page_names"
-        ]
-
-        investigations = {
-            "contradictions": contradictions,
-            "data_gaps": data_gaps,
-            "outdated_pages": outdated_pages,
-            "knowledge_gaps": knowledge_gaps,
-            "redundancy_alerts": redundancy_alerts,
-        }
-
+        investigations = dict(core.get("investigations") or {})
         if generate_investigations:
-            llm_suggestions = self._llm_generate_investigations(
-                contradictions, data_gaps
+            investigations.update(
+                self._llm_generate_investigations(contradictions, data_gaps)
             )
-            investigations.update(llm_suggestions)
+
+        all_issues = list(core.get("issues") or []) + llm_gaps
 
         result = {
-            "total_pages": len(self.wiki._wiki_pages()),
+            "total_pages": core.get("total_pages", 0),
             "issue_count": len(all_issues),
             "issues": all_issues,
             "mode": mode,
             "schema_source": "wiki.md (direct)",
-            "hints": {
-                "critical": critical_hints,
-                "informational": informational_hints,
-            },
+            "hints": core.get("hints") or {},
             "investigations": investigations,
-            "sink_status": sink_status,
-            "sink_warnings": sink_warnings,
+            "sink_status": core.get("sink_status"),
+            "sink_warnings": core.get("sink_warnings") or [],
         }
 
         if mode == "fix":
@@ -496,11 +518,9 @@ class WikiAnalyzer:
                 "wikilink_changes": fix_result["changes"][:20],
                 "index_updated": True,
             }
-        elif cacheable:
-            cache_put("lint", wkey, fp, result, extra=extra)
 
         out = dict(result)
-        out["cached"] = False
+        out["cached"] = cached_hit
         return out
 
     def recommend(self) -> dict:
