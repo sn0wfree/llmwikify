@@ -82,3 +82,14 @@
 | P0 去重 | 147s | 150s（仍慢） | 规则只跑 1 次 |
 | P0+P1 | **27s** | **5.8s** | 子串预筛 + 预编译 |
 | **P0+P1+P2 二次** | **~2s** | — | 缓存命中（含 mtime 指纹） |
+
+## 7. 第二轮瓶颈与计划（B1–B4）
+
+| ID | 现状 | 目标 | 手段 |
+|---|---|---|---|
+| **B1** | 热路径 `file_fingerprint` 2.1s | **&lt;0.2s** | `os.walk` 单遍 stat；可选与 inventory 共用 |
+| **B2** | `_scan_all_pages` 11.8s | **~5s** | page-name set 判存在；减少 `_resolve_wikilink_target` |
+| **B3** | `missing_cross_ref` 6.0s | **~2s** | 候选预过滤（长度/路径） |
+| **B4** | `outdated`+`contradiction` 8.5s | **~3s** | 复用已读正文，避免二次 IO |
+
+顺序：B1 → B2 → B3/B4；每步实测后 `git` + 回填。
