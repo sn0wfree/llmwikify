@@ -93,3 +93,15 @@
 | **B4** | `outdated`+`contradiction` 8.5s | **~3s** | 复用已读正文，避免二次 IO |
 
 顺序：B1 → B2 → B3/B4；每步实测后 `git` + 回填。
+
+### 实测（B1–B4）
+
+| ID | 结果 |
+|---|---|
+| B1 | 指纹：热 **0s**（2s memo）/ 冷 1.1s（scandir） |
+| B2 | `_scan_all_pages` 11.8s → **9.4s** |
+| B3 | `missing_cross_ref` 6.0s → **5.2s** |
+| B4 | `run_all` 16.5s → **13.8s**（CrossPage 共用正文） |
+| 合计 | lint 冷 **25.8s**，热 **0–1.2s** |
+
+附带修复：Windows 下 `as_posix()` 页名/索引路径（破链与 fix_wikilinks 测试）。
