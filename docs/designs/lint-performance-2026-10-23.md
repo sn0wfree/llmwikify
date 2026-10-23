@@ -3,7 +3,7 @@
 | 项 | 内容 |
 |---|---|
 | 日期 | 2026-10-23 |
-| 状态 | P0 已实施（lint 472s→147s）· P1 进行中 |
+| 状态 | P0+P1 已实施（lint **472s→27s**）· P2 缓存待做 |
 | 依据 | `scripts/profile_lint_paths.py` / `profile_lint_deep.py`（CKbase-test 1437 页） |
 | 关联 | `docs/issues/llmwikify-服务响应慢诊断与修复方案-2026-10-22.md` |
 
@@ -69,7 +69,15 @@
 ## 5. 实施顺序（git 阶段提交）
 
 1. **docs**：本文档  
-2. **P0**：lint 去重 + 共用扫描 → `perf(lint):`  
-3. **P1**：missing_cross_ref 重写 + 单测 → `perf(lint):`  
+2. **P0**：lint 去重 + 共用扫描 → `perf(lint):` **472s→147s**  
+3. **P1**：missing_cross_ref 重写 + 单测 → `perf(lint):` **150s→5.8s / lint 27s**  
 4. **P2**：缓存 + 指纹 mtime → `perf(lint):`  
 5. **验收**：profile 对比数据写回本文档
+
+## 6. 实测（CKbase-test 1437 页）
+
+| 阶段 | lint | missing_cross_ref | 备注 |
+|---|---|---|---|
+| 基线 | 472s | 150s | 规则×3 + 重复读盘 |
+| P0 去重 | 147s | 150s（仍慢） | 规则只跑 1 次 |
+| **P0+P1** | **27s** | **5.8s** | 子串预筛 + 预编译 |
