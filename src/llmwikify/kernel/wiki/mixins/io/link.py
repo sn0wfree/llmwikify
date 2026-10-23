@@ -88,7 +88,7 @@ class WikiLinkMixin(WikiProtocol):
                     )
                     continue
 
-                rel_path = str(matches[0].relative_to(self.wiki_dir))[:-3]
+                rel_path = matches[0].relative_to(self.wiki_dir).as_posix()[:-3]
 
                 if "#" in link:
                     section = link.split("#", 1)[1]
@@ -117,8 +117,8 @@ class WikiLinkMixin(WikiProtocol):
                 )
 
             if page_modified and not dry_run:
-                page.write_text(new_content)
-                rel_path = str(page.relative_to(self.wiki_dir))
+                page.write_text(new_content, encoding="utf-8")
+                rel_path = page.relative_to(self.wiki_dir).as_posix()
                 self.index.upsert_page(rel_path[:-3], new_content, rel_path)
 
         return {**stats, "changes": changes}

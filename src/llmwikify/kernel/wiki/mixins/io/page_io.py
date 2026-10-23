@@ -79,7 +79,7 @@ class WikiPageIOMixin(WikiProtocol):
         action = "Updated" if page_path.exists() else "Created"
         self._backend.put_page(full_path, content)
 
-        rel_path = str(page_path.relative_to(self.wiki_dir))
+        rel_path = page_path.relative_to(self.wiki_dir).as_posix()
         self.index.upsert_page(rel_path[:-3], content, rel_path)
 
         self._update_index_file()

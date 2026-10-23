@@ -52,8 +52,7 @@ class WikiAnalyzer:
         """
         link_counts: dict[str, int] = {}
         page_names: list[str] = []
-        broken_links: list[dict] = []
-        resolve_cache: dict[str, Any] = {}
+        contents: list[tuple[str, str]] = []
         skip_names = {self.wiki._index_page_name, self.wiki._log_page_name}
 
         for page in self.wiki._wiki_pages():
@@ -65,22 +64,30 @@ class WikiAnalyzer:
                 content = page.read_text(encoding="utf-8")
             except TypeError:
                 content = page.read_text()
+            contents.append((name, content))
+
+        # Fast existence set — full display names only (stems can false-match).
+        name_set = set(page_names)
+        broken_links: list[dict] = []
+        resolve_cache: dict[str, Any] = {}
+
+        for name, content in contents:
             for link in re.findall(r"\[\[(.*?)\]\]", content):
                 target = self.wiki._parse_wikilink_target(link)
                 if target in skip_names:
                     continue
                 link_counts[target] = link_counts.get(target, 0) + 1
-                resolved = resolve_cache.get(target)
-                if resolved is None and target not in resolve_cache:
-                    resolved = self.wiki._resolve_wikilink_target(target)
-                    resolve_cache[target] = resolved
-                if resolved is None:
+                if target in name_set:
+                    continue
+                if target not in resolve_cache:
+                    resolve_cache[target] = self.wiki._resolve_wikilink_target(target)
+                if resolve_cache[target] is None:
                     broken_links.append(
                         {
                             "type": "broken_link",
                             "page": name,
                             "link": target,
-                            "file": str(page),
+                            "file": str(self.wiki.wiki_dir / f"{name}.md"),
                         }
                     )
 
@@ -126,6 +133,10 @@ class WikiAnalyzer:
 
     def _detect_knowledge_gaps(self) -> list[dict]:
         """Run the lint rule ``knowledge_gap`` (Phase 1 #3: delegated to LintEngine)."""
+        return self._run_rule("knowledge_gap")
+
+    def _detect_knowledge_gaps_cached(self) -> list[dict]:
+        """Cached wrapper around ``knowledge_gap`` (fingerprint + TTL)."""
         from llmwikify.kernel.graph.cache import (
             cache_get,
             cache_put,

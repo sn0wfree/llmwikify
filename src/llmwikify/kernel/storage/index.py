@@ -582,7 +582,7 @@ class WikiIndex:
                 )
 
             content = md_file.read_text()
-            rel_path = str(md_file.relative_to(wiki_dir))
+            rel_path = md_file.relative_to(wiki_dir).as_posix()
             page_name = rel_path[:-3]  # e.g., "concepts/Factor Investing"
 
             self.upsert_page(page_name, content, rel_path)

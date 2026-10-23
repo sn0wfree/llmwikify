@@ -156,7 +156,8 @@ class WikiUtilityMixin(WikiProtocol):
 
     def _page_display_name(self, page: Path) -> str:
         """Return display name for a page (relative path without .md)."""
-        return str(page.relative_to(self.wiki_dir))[:-3]  # strip .md
+        # as_posix(): wikilinks and tests expect forward slashes on Windows
+        return page.relative_to(self.wiki_dir).as_posix()[:-3]  # strip .md
 
     @staticmethod
     def _parse_sections(content: str) -> list:

@@ -40,8 +40,8 @@ class WikiLintMixin(WikiProtocol):
         return self._analyzer._detect_outdated_pages()
 
     def _detect_knowledge_gaps(self) -> list[dict]:
-        """Detect knowledge gaps across the wiki."""
-        return self._analyzer._detect_knowledge_gaps()
+        """Detect knowledge gaps across the wiki (fingerprint-cached)."""
+        return self._analyzer._detect_knowledge_gaps_cached()
 
     def _detect_redundancy(self) -> list[dict]:
         """Detect potentially redundant or overlapping content."""

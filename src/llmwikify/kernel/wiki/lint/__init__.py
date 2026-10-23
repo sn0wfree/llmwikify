@@ -110,12 +110,15 @@ class CrossPageRule(Rule):
         return results[: self.max_results]
 
     def _load_pages(self, wiki: Wiki) -> dict[str, str]:
-        """Load all non-Query pages into a dict."""
+        """Load all non-Query pages into a dict (utf-8)."""
         pages: dict[str, str] = {}
         for page in wiki._wiki_pages():
             name = wiki._page_display_name(page)
             if not name.startswith("Query:"):
-                pages[name] = page.read_text()
+                try:
+                    pages[name] = page.read_text(encoding="utf-8")
+                except TypeError:
+                    pages[name] = page.read_text()
         return pages
 
     def detect_all(
@@ -162,18 +165,26 @@ class LintEngine:
         """Run every registered rule, return aggregated issues.
 
         Rules run in name-sorted order (deterministic for tests).
-        Each rule's returned list is concatenated. If a rule
-        raises, the error is logged and the rule is skipped
-        (so one buggy rule doesn't crash the entire lint).
+        Cross-page rules share one ``{name: content}`` load so each
+        does not re-read the whole wiki.
         """
         import logging
 
         logger = logging.getLogger(__name__)
 
         all_issues: list[dict[str, Any]] = []
+        shared_pages: dict[str, str] | None = None
         for name in self.rule_names:
+            rule = self._rules[name]
             try:
-                all_issues.extend(self._rules[name].run(self.wiki))
+                if isinstance(rule, CrossPageRule):
+                    if shared_pages is None:
+                        shared_pages = rule._load_pages(self.wiki)
+                    results: list[dict[str, Any]] = []
+                    rule.detect_all(shared_pages, self.wiki, results)
+                    all_issues.extend(results[: rule.max_results])
+                else:
+                    all_issues.extend(rule.run(self.wiki))
             except Exception as e:
                 logger.warning("lint rule %r failed: %s", name, e)
         return all_issues
