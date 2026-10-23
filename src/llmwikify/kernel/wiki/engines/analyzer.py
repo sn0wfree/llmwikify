@@ -39,31 +39,53 @@ class WikiAnalyzer:
         # LLM-based investigations, sink warnings, etc.
         self._lint_engine = LintEngine(wiki, rules=RULES)
 
-    def _scan_all_pages(self) -> tuple[dict[str, int], set[str]]:
-        """Single filesystem pass: extract link targets + detect orphan candidates.
+    def _scan_all_pages(self) -> tuple[dict[str, int], set[str], list[dict]]:
+        """Single filesystem pass: links, orphans, broken links.
 
         Returns:
-            link_counts: target page name → reference count across all pages
-            orphan_candidates: set of page names with zero inbound links
+            link_counts: target page name → reference count
+            orphan_candidates: page names with zero inbound links
+            broken_links: issue dicts for unresolved wikilinks
         """
         link_counts: dict[str, int] = {}
         page_names: list[str] = []
+        broken_links: list[dict] = []
+        resolve_cache: dict[str, Any] = {}
+        skip_names = {self.wiki._index_page_name, self.wiki._log_page_name}
+
         for page in self.wiki._wiki_pages():
             name = self.wiki._page_display_name(page)
             if self.wiki._should_exclude_orphan(name, page):
                 continue
             page_names.append(name)
-            content = page.read_text()
+            try:
+                content = page.read_text(encoding="utf-8")
+            except TypeError:
+                content = page.read_text()
             for link in re.findall(r"\[\[(.*?)\]\]", content):
                 target = self.wiki._parse_wikilink_target(link)
-                if target not in (self.wiki._index_page_name, self.wiki._log_page_name):
-                    link_counts[target] = link_counts.get(target, 0) + 1
+                if target in skip_names:
+                    continue
+                link_counts[target] = link_counts.get(target, 0) + 1
+                resolved = resolve_cache.get(target)
+                if resolved is None and target not in resolve_cache:
+                    resolved = self.wiki._resolve_wikilink_target(target)
+                    resolve_cache[target] = resolved
+                if resolved is None:
+                    broken_links.append(
+                        {
+                            "type": "broken_link",
+                            "page": name,
+                            "link": target,
+                            "file": str(page),
+                        }
+                    )
 
         inbound_counts = self.wiki.index.count_inbound_for_pages(page_names)
         orphan_candidates = {
             name for name in page_names if not inbound_counts.get(name)
         }
-        return link_counts, orphan_candidates
+        return link_counts, orphan_candidates, broken_links
 
     # ── Rule-based detectors ──────────────────────────────────────────
 
@@ -233,14 +255,18 @@ class WikiAnalyzer:
 
         return "\n\n".join(parts)
 
-    def _llm_detect_gaps(self, context: str) -> list[dict]:
+    def _llm_detect_gaps(
+        self,
+        context: str,
+        missing_cross_refs: list[dict] | None = None,
+    ) -> list[dict]:
         """Call LLM to detect gaps between wiki schema and current state."""
         try:
             from ....foundation.llm import LLMClient
 
             client = LLMClient.from_config(self.wiki.config)
         except (ImportError, ValueError, OSError):
-            return self._fallback_detect_gaps()
+            return self._fallback_detect_gaps(missing_cross_refs=missing_cross_refs)
 
         registry = self.wiki._get_prompt_registry()
 
@@ -256,9 +282,11 @@ class WikiAnalyzer:
         except (ConnectionError, TimeoutError, ValueError, OSError):
             pass
 
-        return self._fallback_detect_gaps()
+        return self._fallback_detect_gaps(missing_cross_refs=missing_cross_refs)
 
-    def _fallback_detect_gaps(self) -> list[dict]:
+    def _fallback_detect_gaps(
+        self, missing_cross_refs: list[dict] | None = None
+    ) -> list[dict]:
         """Basic gap detection without LLM."""
         gaps = []
 
@@ -275,7 +303,10 @@ class WikiAnalyzer:
         except Exception as e:
             logger.warning("Fallback gap detection failed: %s", e)
 
-        gaps.extend(self._detect_missing_cross_refs())
+        if missing_cross_refs is None:
+            gaps.extend(self._detect_missing_cross_refs())
+        else:
+            gaps.extend(missing_cross_refs)
 
         return gaps
 
@@ -301,37 +332,18 @@ class WikiAnalyzer:
         """
         issues = []
 
-        link_counts, orphan_candidates = self._scan_all_pages()
+        # One filesystem pass → links, orphans, broken links (was 3 passes).
+        link_counts, orphan_candidates, broken_links = self._scan_all_pages()
+        issues.extend(broken_links)
 
-        # Broken links: need page content to extract wikilinks
-        for page in self.wiki._wiki_pages():
-            content = page.read_text()
-            links = re.findall(r"\[\[(.*?)\]\]", content)
-            for link in links:
-                target = self.wiki._parse_wikilink_target(link)
-                if target in (self.wiki._index_page_name, self.wiki._log_page_name):
-                    continue
-                if self.wiki._resolve_wikilink_target(target) is None:
-                    issues.append(
-                        {
-                            "type": "broken_link",
-                            "page": self.wiki._page_display_name(page),
-                            "link": target,
-                            "file": str(page),
-                        }
-                    )
-
-        # Orphans: use batch result from _scan_all_pages
-        for page in self.wiki._wiki_pages():
-            page_name = self.wiki._page_display_name(page)
-            if page_name in orphan_candidates:
-                issues.append(
-                    {
-                        "type": "orphan_page",
-                        "page": page_name,
-                        "file": str(page),
-                    }
-                )
+        for page_name in orphan_candidates:
+            issues.append(
+                {
+                    "type": "orphan_page",
+                    "page": page_name,
+                    "file": str(self.wiki.wiki_dir / f"{page_name}.md"),
+                }
+            )
 
         sink_status = self.wiki.query_sink.status()
         sink_warnings = []
@@ -350,25 +362,26 @@ class WikiAnalyzer:
                         }
                     )
 
+        # Rules once; reuse for hints + fallback gaps (was 3× missing_cross_ref).
+        all_rule_results = self._run_all_rules()
+        by_type: dict[str, list[dict]] = {}
+        for r in all_rule_results:
+            by_type.setdefault(r.get("type") or "", []).append(r)
+
         context = self._build_lint_context()
-        llm_gaps = self._llm_detect_gaps(context)
+        llm_gaps = self._llm_detect_gaps(
+            context, missing_cross_refs=by_type.get("missing_cross_ref", [])
+        )
         llm_gaps = llm_gaps[:limit]
 
         all_issues = issues + llm_gaps
 
-        critical_hints = self._detect_dated_claims()
-        informational_hints = []
-        informational_hints.extend(self._detect_query_page_overlap())
-        informational_hints.extend(self._detect_missing_cross_refs())
+        critical_hints = list(by_type.get("dated_claim", []))[:3]
+        informational_hints = (
+            list(by_type.get("topic_overlap", []))
+            + list(by_type.get("missing_cross_ref", []))
+        )[:5]
 
-        critical_hints = critical_hints[:3]
-        informational_hints = informational_hints[:5]
-
-        # Phase 1 #3: lint() no longer calls each _detect_X in turn.
-        # It uses _run_all_rules() to get all rule results in one
-        # call, then partitions them by type into the investigation
-        # categories that downstream consumers expect.
-        all_rule_results = self._run_all_rules()
         contradictions = [
             r
             for r in all_rule_results
@@ -436,7 +449,7 @@ class WikiAnalyzer:
 
     def recommend(self) -> dict:
         """Generate smart recommendations."""
-        link_counts, orphan_candidates = self._scan_all_pages()
+        link_counts, orphan_candidates, _broken = self._scan_all_pages()
 
         missing_pages = []
         for target, count in link_counts.items():
@@ -476,7 +489,7 @@ class WikiAnalyzer:
         """Internal: generate smart suggestions for wiki improvement."""
         hints = []
 
-        link_counts, orphan_candidates = self._scan_all_pages()
+        link_counts, orphan_candidates, broken_links = self._scan_all_pages()
 
         if orphan_candidates:
             hints.append(
@@ -520,18 +533,7 @@ class WikiAnalyzer:
                 }
             )
 
-        # Broken links: need page content to extract wikilinks
-        broken_count = 0
-        for page in self.wiki._wiki_pages():
-            content = page.read_text()
-            links = re.findall(r"\[\[(.*?)\]\]", content)
-            for link in links:
-                target = self.wiki._parse_wikilink_target(link)
-                if target in (self.wiki._index_page_name, self.wiki._log_page_name):
-                    continue
-                if self.wiki._resolve_wikilink_target(target) is None:
-                    broken_count += 1
-
+        broken_count = len(broken_links)
         if broken_count > 0:
             hints.append(
                 {
