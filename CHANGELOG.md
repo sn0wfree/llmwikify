@@ -31,6 +31,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Note: the effective endpoint is `/mcp/mcp` (mount prefix `/mcp` + http_app
   internal path `/mcp`); older docs referencing `/mcp` need updating.
 
+## [0.40.5] - 2026-10-23 — LLM Suggestion Cache
+
+### Performance
+- `lint(generate_investigations=True)` / `wiki_knowledge_gaps`: deterministic core cached; LLM suggestions cached by fingerprint + model/prompt key
+- Repeat calls (content unchanged) drop from ~50s to **~0.1s** even with LLM layers
+
 ## [0.40.4] - 2026-10-23 — Lint/Gaps Performance + Cache Policy
 
 ### Performance

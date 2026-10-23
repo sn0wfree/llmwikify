@@ -391,7 +391,7 @@ class WikiAnalyzer:
             getattr(getattr(self.wiki, "index", None), "conn", None),
             getattr(self.wiki, "wiki_dir", None),
         )
-        extra = f"{mode}|{limit}"
+        extra = f"{mode}"  # core is limit-independent; limit only trims LLM gaps
 
         core: dict | None = None
         from_cache = False
