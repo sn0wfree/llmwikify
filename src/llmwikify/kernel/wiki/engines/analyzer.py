@@ -162,6 +162,21 @@ class WikiAnalyzer:
 
     # ── LLM-enhanced detection ────────────────────────────────────────
 
+    def _llm_cache_extra(self, prompt_name: str, limit: int) -> str:
+        """Cache key suffix for LLM layers: prompt + limit + model id.
+
+        Same wiki fingerprint + same model/prompt → safe to reuse
+        suggestions; changing model or prompt invalidates via key.
+        """
+        model = ""
+        try:
+            cfg = getattr(self.wiki, "config", None) or {}
+            if isinstance(cfg, dict):
+                model = str((cfg.get("llm") or {}).get("model") or "")
+        except Exception:
+            model = ""
+        return f"{prompt_name}|{limit}|{model}"
+
     def _llm_generate_investigations(
         self,
         contradictions: list[dict],
@@ -481,17 +496,41 @@ class WikiAnalyzer:
         contradictions = core.get("contradictions", [])
         data_gaps = core.get("data_gaps", [])
 
-        # LLM layers — always fresh, never cached.
+        # LLM layers — fingerprint + model/prompt keyed cache (same
+        # content + same model → reuse suggestions; force recomputes).
         context = self._build_lint_context()
-        llm_gaps = self._llm_detect_gaps(
-            context, missing_cross_refs=core.get("missing_cross_refs", [])
-        )[:limit]
+        llm_extra = self._llm_cache_extra("direct_lint", limit)
+        llm_gaps = None
+        if not force:
+            llm_gaps = cache_get(
+                "lint_llm_gaps", wkey, fp, extra=llm_extra, ttl_s=_LINT_TTL_S
+            )
+        if llm_gaps is None:
+            llm_gaps = self._llm_detect_gaps(
+                context, missing_cross_refs=core.get("missing_cross_refs", [])
+            )[:limit]
+            cache_put("lint_llm_gaps", wkey, fp, llm_gaps, extra=llm_extra)
 
         investigations = dict(core.get("investigations") or {})
         if generate_investigations:
-            investigations.update(
-                self._llm_generate_investigations(contradictions, data_gaps)
-            )
+            inv_extra = self._llm_cache_extra("investigate_lint", limit)
+            llm_suggestions = None
+            if not force:
+                llm_suggestions = cache_get(
+                    "lint_llm_invest",
+                    wkey,
+                    fp,
+                    extra=inv_extra,
+                    ttl_s=_LINT_TTL_S,
+                )
+            if llm_suggestions is None:
+                llm_suggestions = self._llm_generate_investigations(
+                    contradictions, data_gaps
+                )
+                cache_put(
+                    "lint_llm_invest", wkey, fp, llm_suggestions, extra=inv_extra
+                )
+            investigations.update(llm_suggestions)
 
         all_issues = list(core.get("issues") or []) + llm_gaps
 
