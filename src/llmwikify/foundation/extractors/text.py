@@ -8,7 +8,7 @@ from .base import ExtractedContent
 
 def _extract_text_file(path: Path) -> ExtractedContent:
     """Extract content from a plain text or markdown file."""
-    content = path.read_text()
+    content = path.read_text(encoding="utf-8")
 
     # Try to get title from first heading
     heading_match = re.search(r"^#\s+(.+)$", content, re.MULTILINE)
@@ -24,7 +24,7 @@ def _extract_text_file(path: Path) -> ExtractedContent:
 
 def _extract_html_file(path: Path) -> ExtractedContent:
     """Extract content from a local HTML file."""
-    content = path.read_text()
+    content = path.read_text(encoding="utf-8")
 
     # Simple HTML to text conversion
     text = re.sub(
