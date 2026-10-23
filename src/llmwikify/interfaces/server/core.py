@@ -356,9 +356,56 @@ class WikiServer:
             except Exception:
                 logger.exception("WikiServer: failed to start graph_analyze warmup")
 
+            # Wiki cache watcher: md create/change/delete → cache_invalidate
+            # so lint/gaps fingerprints stay fresh without waiting for TTL.
+            self._wiki_cache_watcher = None
+            try:
+                from pathlib import Path
+
+                from llmwikify.kernel.graph.cache import cache_invalidate
+                from llmwikify.kernel.storage.watcher import FileSystemWatcher
+
+                _watch_root = None
+                if self.wiki is not None:
+                    _watch_root = getattr(self.wiki, "wiki_dir", None) or getattr(
+                        self.wiki, "root", None
+                    )
+                if _watch_root is not None and Path(_watch_root).exists():
+                    def _on_wiki_fs_event(event_type: str, path: str) -> None:
+                        try:
+                            cache_invalidate()
+                        except Exception:
+                            logger.debug("cache_invalidate failed", exc_info=True)
+
+                    self._wiki_cache_watcher = FileSystemWatcher(
+                        watch_dir=Path(_watch_root),
+                        auto_ingest=False,
+                        self_create=False,
+                        debounce=2.0,
+                        recursive=True,
+                    )
+                    self._wiki_cache_watcher.start(on_event=_on_wiki_fs_event)
+                    logger.info(
+                        "WikiServer: wiki cache watcher started on %s", _watch_root
+                    )
+            except ImportError:
+                logger.info("WikiServer: watchdog not installed; cache watcher skipped")
+            except Exception:
+                logger.warning(
+                    "WikiServer: wiki cache watcher failed to start", exc_info=True
+                )
+
             try:
                 yield
             finally:
+                if getattr(self, "_wiki_cache_watcher", None) is not None:
+                    try:
+                        self._wiki_cache_watcher.stop()
+                    except Exception:
+                        logger.warning(
+                            "WikiServer: wiki cache watcher stop failed",
+                            exc_info=True,
+                        )
                 # Stop maintenance first: file watchers must stop
                 # accepting new events before anything else tears down.
                 if self._maintenance_manager is not None:

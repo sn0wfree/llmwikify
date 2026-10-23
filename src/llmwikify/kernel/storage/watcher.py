@@ -62,11 +62,13 @@ class FileSystemWatcher:
         auto_ingest: bool = False,
         self_create: bool = False,
         debounce: float = 2.0,
+        recursive: bool = False,
     ):
         self.watch_dir = watch_dir.resolve()
         self.auto_ingest = auto_ingest
         self.self_create = self_create
         self.debounce = debounce
+        self.recursive = recursive
 
         self._running = False
         self._observer: Any = None
@@ -126,7 +128,7 @@ class FileSystemWatcher:
 
         handler = _Handler(self)
         self._observer = Observer()
-        self._observer.schedule(handler, str(self.watch_dir), recursive=False)
+        self._observer.schedule(handler, str(self.watch_dir), recursive=self.recursive)
         self._observer.start()
 
     def stop(self) -> None:
