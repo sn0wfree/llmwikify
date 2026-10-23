@@ -51,9 +51,12 @@ class MissingCrossRefsRule(CrossPageRule):
             stripped[page_name] = re.sub(r"\[\[.*?\]\]", "", content).lower()
 
         # Compile patterns once; skip names too short for meaningful matching.
-        candidates = sorted(c for c in existing_pages if len(c) >= 2)
+        candidates = sorted(
+            c for c in existing_pages if len(c) >= 3 and not c.startswith("Query:")
+        )
         patterns = {
-            c: re.compile(r"\b" + re.escape(c) + r"\b", re.IGNORECASE) for c in candidates
+            c: re.compile(r"\b" + re.escape(c) + r"\b", re.IGNORECASE)
+            for c in candidates
         }
 
         for page_name, content_text_l in stripped.items():
