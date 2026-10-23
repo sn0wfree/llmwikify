@@ -46,38 +46,70 @@ def graph_fingerprint(conn: Any) -> str:
     return f"{pages[0]}:{pages[1]}|{links[0]}:{links[1]}|{rels[0]}:{rels[1]}"
 
 
+# Fingerprint memo: repeated warm cache hits were paying full 1.4k-stat
+# walks every call (~2s on slow bind mounts). Short TTL trades a tiny
+# invalidation window for interactive latency. See lint-performance doc.
+_FP_MEMO_TTL_S = 2.0
+_FP_MEMO: dict[str, tuple[float, str]] = {}
+_FP_MEMO_LOCK = threading.Lock()
+
+
 def file_fingerprint(wiki_dir: Any) -> str:
     """mtime+size fingerprint for on-disk pages (catches in-place edits).
 
-    Combined with :func:`graph_fingerprint` so rowid-stable DB updates
-    and direct md edits both invalidate.
+    Memoized for ``_FP_MEMO_TTL_S`` so consecutive cache lookups do not
+    re-walk the tree. Uses ``os.scandir`` for one stat pass.
     """
     if wiki_dir is None:
         return "no-dir"
     try:
-        from pathlib import Path
+        import os
 
-        root = Path(wiki_dir)
-        if not root.exists():
+        root = os.fspath(wiki_dir)
+        if not os.path.isdir(root):
             return "missing"
-    except Exception:
+    except (TypeError, ValueError, OSError):
         return "no-dir"
+
+    now = time.monotonic()
+    with _FP_MEMO_LOCK:
+        hit = _FP_MEMO.get(root)
+        if hit is not None and now - hit[0] <= _FP_MEMO_TTL_S:
+            return hit[1]
 
     n = 0
     mt_sum = 0
     sz_sum = 0
+    skip = {".git", ".sink", "__pycache__"}
     try:
-        for p in root.rglob("*.md"):
+        stack = [root]
+        while stack:
+            current = stack.pop()
             try:
-                st = p.stat()
+                with os.scandir(current) as it:
+                    for entry in it:
+                        if entry.is_dir(follow_symlinks=False):
+                            if entry.name not in skip:
+                                stack.append(entry.path)
+                            continue
+                        if not entry.name.endswith(".md"):
+                            continue
+                        try:
+                            st = entry.stat(follow_symlinks=False)
+                        except OSError:
+                            continue
+                        n += 1
+                        mt_sum += int(st.st_mtime)
+                        sz_sum += st.st_size
             except OSError:
                 continue
-            n += 1
-            mt_sum += int(st.st_mtime)
-            sz_sum += st.st_size
     except OSError:
         return "stat-err"
-    return f"md:{n}:{mt_sum}:{sz_sum}"
+
+    fp = f"md:{n}:{mt_sum}:{sz_sum}"
+    with _FP_MEMO_LOCK:
+        _FP_MEMO[root] = (now, fp)
+    return fp
 
 
 def combined_fingerprint(conn: Any, wiki_dir: Any) -> str:
@@ -123,7 +155,15 @@ def cache_put(
 
 
 def cache_invalidate(wiki_key: str | None = None) -> None:
-    """Drop all entries, or only those for one wiki."""
+    """Drop all entries, or only those for one wiki.
+
+    Also clears the file-fingerprint memo so the next lookup re-stats.
+    """
+    with _FP_MEMO_LOCK:
+        if wiki_key is None:
+            _FP_MEMO.clear()
+        else:
+            _FP_MEMO.pop(wiki_key, None)
     with _LOCK:
         if wiki_key is None:
             _STORE.clear()

@@ -102,12 +102,13 @@ class TestWikiCacheKey:
 
 class TestFileFingerprint:
     def test_changes_on_edit(self, tmp_path):
-        from llmwikify.kernel.graph.cache import file_fingerprint
+        from llmwikify.kernel.graph.cache import cache_invalidate, file_fingerprint
 
         p = tmp_path / "a.md"
         p.write_text("one", encoding="utf-8")
         fp1 = file_fingerprint(tmp_path)
         p.write_text("two-two", encoding="utf-8")
+        cache_invalidate()  # drop fingerprint memo
         fp2 = file_fingerprint(tmp_path)
         assert fp1 != fp2
 
