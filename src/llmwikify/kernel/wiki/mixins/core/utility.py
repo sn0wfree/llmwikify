@@ -94,11 +94,21 @@ class WikiUtilityMixin(WikiProtocol):
         return env.from_string(content).render(**variables)
 
     def _get_prompt_registry(self) -> PromptRegistry:
-        """Create a PromptRegistry instance with current provider and custom dir."""
+        """Return a cached PromptRegistry (YAML/Jinja load is expensive)."""
         from ...prompt_registry import PromptRegistry
 
         provider = self.config.get("llm", {}).get("provider", "openai")
-        return PromptRegistry(provider=provider, custom_dir=self._prompt_custom_dir)
+        custom_dir = self._prompt_custom_dir
+        cache = getattr(self, "_prompt_registry_cache", None)
+        if (
+            cache is not None
+            and cache[0] == provider
+            and cache[1] == custom_dir
+        ):
+            return cache[2]
+        registry = PromptRegistry(provider=provider, custom_dir=custom_dir)
+        self._prompt_registry_cache = (provider, custom_dir, registry)
+        return registry
 
     def _get_index_summary(self) -> str:
         """Return a condensed wiki index (max 500 chars)."""
