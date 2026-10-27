@@ -40,7 +40,7 @@ _stop_path = Path(__file__).parent / "jieba_stopwords.txt"
 if _stop_path.exists():
     _STOP_WORDS = {
         line.strip()
-        for line in _stop_path.read_text().splitlines()
+        for line in _stop_path.read_text(encoding="utf-8").splitlines()
         if line.strip() and not line.startswith("#")
     }
 
@@ -126,7 +126,7 @@ def _write_meta(path: Path, fast_count: int, slow_count: int, page_count: int) -
         "slow_terms": slow_count,
         "page_count": page_count,
     }
-    path.write_text(json.dumps(meta, indent=2))
+    path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
 
 
 def _should_run_slow(meta_path: Path, days: int = 7) -> bool:
@@ -134,7 +134,7 @@ def _should_run_slow(meta_path: Path, days: int = 7) -> bool:
     if not meta_path.exists():
         return True
     try:
-        meta = json.loads(meta_path.read_text())
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
         gen_at = datetime.fromisoformat(meta.get("generated_at", ""))
         delta = datetime.now(timezone.utc) - gen_at
         return delta.days >= days
