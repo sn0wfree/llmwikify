@@ -23,11 +23,64 @@ Usage::
 from __future__ import annotations
 
 import atexit
+import dataclasses
 import sqlite3
 import threading
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
+
+# ─── 连接策略 (显式数据，不靠构造顺序) ──────────────────────────
+
+
+@dataclasses.dataclass(frozen=True)
+class ConnectionProfile:
+    """SQLite 连接 PRAGMA 策略。
+
+    ``PRAGMA foreign_keys`` 是**连接级**属性，不是文件级 —— 同一个
+    ``.llmwiki_agent.db`` 上，chat 需要 FK 开启、research 需要 FK 关闭，
+    只能靠**两条连接**实现。因此连接单例的 key 必须是
+    ``(db_path, profile)``，而不是只按 path。
+
+    早期版本 ``get_connection(path, **kwargs)`` 只用 path 做 key，
+    kwargs 仅在**首次创建**时生效 → 谁的 facade 先构造谁决定整进程策略。
+    ``AutoResearchDatabase`` 先构造 Chat（默认 FK=ON），
+    导致 research 显式请求的 ``foreign_keys=False`` 被静默丢弃，
+    与 ``apps/research/db.py`` 的 docstring 相反。
+
+    字段默认值与 ``ManagedConnection.__init__`` 保持一致，
+    以便 ``PROFILE_DEFAULT`` 与改动前行为完全相同。
+    """
+
+    row_factory: bool = True
+    foreign_keys: bool = True
+    wal: bool = True
+    busy_timeout: int = 5000
+    synchronous: str = "NORMAL"
+
+    def as_kwargs(self) -> dict[str, Any]:
+        """展开为 ``ManagedConnection`` 构造参数。"""
+        return dataclasses.asdict(self)
+
+    @classmethod
+    def from_kwargs(cls, kwargs: dict[str, Any]) -> ConnectionProfile:
+        """由遗留的 ``**kwargs`` 构造 profile（向后兼容旧调用点）。"""
+        known = {f.name for f in dataclasses.fields(cls)}
+        unknown = set(kwargs) - known
+        if unknown:
+            raise TypeError(
+                f"unknown connection option(s): {sorted(unknown)}; "
+                f"expected any of {sorted(known)}"
+            )
+        return cls(**kwargs)
+
+
+#: 默认策略 —— 与改动前 ``get_connection(path)`` 的行为完全一致。
+PROFILE_DEFAULT = ConnectionProfile()
+
+#: research 表策略 —— FK 关闭（schema 有 FK 约束，但测试夹具会违反它们）。
+PROFILE_RESEARCH = ConnectionProfile(foreign_keys=False)
+
 
 # ─── 工厂函数 (保持向后兼容) ─────────────────────────────────
 
@@ -267,6 +320,7 @@ class ManagedConnection:
             self._local.conn = None
 
 
+
 # ─── 模块级单例注册表 ────────────────────────────────────────
 
 _connections: dict[str, ManagedConnection] = {}
@@ -275,30 +329,48 @@ _connections_lock = threading.Lock()
 
 def get_connection(
     db_path: Path | str,
+    profile: ConnectionProfile | None = None,
     **kwargs: Any,
 ) -> ManagedConnection:
-    """Get or create per-path singleton ManagedConnection.
+    """Get or create a per-(path, profile) singleton ManagedConnection.
 
-    Same db_path always returns the same instance.
+    Same ``(db_path, profile)`` always returns the same instance.
+    **Different profiles on the same file yield different connections** —
+    that is required because ``PRAGMA foreign_keys`` is per-connection.
 
     Args:
         db_path: Path to SQLite database file.
-        **kwargs: Passed to ManagedConnection constructor.
+        profile: Explicit PRAGMA policy. Prefer this over ``**kwargs``.
+        **kwargs: Legacy PRAGMA overrides, folded into a profile.
+            Cannot be combined with ``profile``.
 
     Returns:
-        ManagedConnection singleton for the given path.
+        ManagedConnection singleton for the given (path, profile).
+
+    Raises:
+        TypeError: If both ``profile`` and ``**kwargs`` are given.
     """
-    key = str(db_path)
+    if profile is not None and kwargs:
+        raise TypeError(
+            "get_connection() accepts either 'profile' or legacy **kwargs, not both"
+        )
+    if profile is None:
+        profile = (
+            ConnectionProfile.from_kwargs(kwargs) if kwargs else PROFILE_DEFAULT
+        )
+    key = (str(db_path), profile)
     if key not in _connections:
         with _connections_lock:
             if key not in _connections:
-                _connections[key] = ManagedConnection(key, **kwargs)
+                _connections[key] = ManagedConnection(
+                    str(db_path), **profile.as_kwargs()
+                )
     return _connections[key]
 
 
 def close_all() -> None:
-    """Close all singleton connections (for atexit cleanup)."""
-    for mc in _connections.values():
+    """Close all singleton connections (for atexit / test teardown)."""
+    for mc in list(_connections.values()):
         mc.close()
     _connections.clear()
 
@@ -311,6 +383,9 @@ __all__ = [
     "rows_to_dicts",
     "row_to_dict",
     "ManagedConnection",
+    "ConnectionProfile",
+    "PROFILE_DEFAULT",
+    "PROFILE_RESEARCH",
     "get_connection",
     "close_all",
 ]

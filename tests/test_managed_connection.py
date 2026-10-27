@@ -663,13 +663,32 @@ class TestGetConnectionEdgeCases:
         mc = get_connection(db)
         assert mc.db_path == str(db)
 
-    def test_singleton_same_path_different_kwargs(self, tmp_path: Path) -> None:
+    def test_different_profiles_same_path_get_distinct_connections(
+        self, tmp_path: Path
+    ) -> None:
+        """Different PRAGMA policy => different connection on the same file.
+
+        ``PRAGMA foreign_keys`` is per-connection, so a single connection
+        cannot honour two conflicting policies at once. The registry is
+        therefore keyed by ``(path, profile)``.
+
+        This used to assert the opposite ("same instance, kwargs ignored
+        for existing singleton") — that behaviour silently dropped the
+        research facade's ``foreign_keys=False``.
+        """
         db = tmp_path / "test.db"
         mc1 = get_connection(db, wal=True)
         mc2 = get_connection(db, wal=False)
-        # Same instance, kwargs ignored for existing singleton
-        assert mc1 is mc2
+        assert mc1 is not mc2
         assert mc1._pragmas["wal"] is True
+        assert mc2._pragmas["wal"] is False
+        assert mc1.db_path == mc2.db_path
+
+    def test_same_profile_same_path_is_a_singleton(self, tmp_path: Path) -> None:
+        db = tmp_path / "test.db"
+        mc1 = get_connection(db, wal=True)
+        mc2 = get_connection(db, wal=True)
+        assert mc1 is mc2
 
 
 # ─── Integration tests ───────────────────────────────────────

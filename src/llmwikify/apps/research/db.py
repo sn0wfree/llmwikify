@@ -48,18 +48,19 @@ class ResearchDatabase(BaseDatabase):
         may violate them, so we disable FK enforcement at the
         connection level.
         """
-        from llmwikify.foundation.db import get_connection
+        from llmwikify.foundation.db import PROFILE_RESEARCH, get_connection
 
         self.data_dir = Path(data_dir)
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.db_path = get_app_db_path(self.data_dir)
-        # Research tables need foreign_keys=False
+        # Research tables need foreign_keys=False.
+        # PRAGMA foreign_keys is per-CONNECTION, so this must be a distinct
+        # connection from the chat/wiki one (same physical file). Using an
+        # explicit profile guarantees that instead of relying on which
+        # facade happened to be constructed first.
         self._mgr = get_connection(
             self.db_path,
-            foreign_keys=False,
-            wal=True,
-            busy_timeout=5000,
-            synchronous="NORMAL",
+            profile=PROFILE_RESEARCH,
         )
         self._init_db()
         self._check_db_size()
