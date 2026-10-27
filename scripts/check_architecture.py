@@ -71,6 +71,23 @@ def _is_under(path: Path, layer: str) -> bool:
 
 
 def main() -> int:
+    # The report uses emoji (✅/❌). On a Windows console with a legacy
+    # code page (GBK) — or any time stdout is a pipe rather than a real
+    # console handle — the default stream encoding cannot represent them,
+    # and the script dies with UnicodeEncodeError *after* the check has
+    # already passed. The guard then exits 1 on a clean tree, which makes
+    # CI report a false architecture violation.
+    #
+    # Force UTF-8 on stdout/stderr, with errors="replace" so an exotic
+    # codepoint can never take the guard down.
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, OSError, ValueError):
+            # Stream has no reconfigure (e.g. replaced by a test capture)
+            # or is already closed — nothing to do.
+            pass
+
     violations: list[tuple[Path, int, str, str]] = []
     # violation = (file, lineno, from_layer, forbidden_target_layer)
 
