@@ -53,7 +53,7 @@ class WikiLinkMixin(WikiProtocol):
         stats: dict[str, int] = {"fixed": 0, "skipped": 0, "ambiguous": 0}
 
         for page in self._wiki_pages():
-            content = page.read_text()
+            content = page.read_text(encoding="utf-8")
             links = re.findall(r"\[\[(.*?)\]\]", content)
             new_content = content
             page_modified = False
@@ -185,7 +185,7 @@ class WikiLinkMixin(WikiProtocol):
             return ""
 
         try:
-            content = source_path.read_text()
+            content = source_path.read_text(encoding="utf-8")
         except OSError:
             return ""
 

@@ -87,7 +87,7 @@ class SourceAnalyzer:
         raw_dir.mkdir(parents=True, exist_ok=True)
         raw_path = raw_dir / f"{content_hash}.txt"
         raw_path.write_text(
-            content[: self.config.get("max_source_content_length", 500000)]
+            content[: self.config.get("max_source_content_length", 500000, encoding="utf-8")]
         )
 
         rel_path = f"raw/research/{content_hash}.txt"

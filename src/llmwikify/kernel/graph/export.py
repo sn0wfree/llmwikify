@@ -212,7 +212,7 @@ def _add_entity_click_handlers(html_path: Path, entity_nodes: set) -> None:
     if not html_path.exists():
         return
 
-    html_content = html_path.read_text()
+    html_content = html_path.read_text(encoding="utf-8")
 
     # Build a map of node labels to their hrefs
     entity_map = {}
@@ -253,7 +253,7 @@ def _add_entity_click_handlers(html_path: Path, entity_nodes: set) -> None:
 
     if "</body>" in html_content:
         html_content = html_content.replace("</body>", js_code + "\n</body>")
-        html_path.write_text(html_content)
+        html_path.write_text(html_content, encoding="utf-8")
 
 
 def export_graphml(graph: dict, output_path: Path) -> dict:

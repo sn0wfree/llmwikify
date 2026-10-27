@@ -12,7 +12,7 @@ The current logic:
     if config_file.exists():
         try:
             import yaml
-            config = yaml.safe_load(config_file.read_text()) or {}
+            config = yaml.safe_load(config_file.read_text(encoding="utf-8")) or {}
         except Exception as e:
             logger.warning("Failed to load config from %s: %s", config_file, e)
     cli = WikiCLI(wiki_root, config=config)
@@ -61,7 +61,7 @@ def load_cli_config(wiki_root: Path | None = None) -> tuple[Path, dict[str, Any]
         try:
             import yaml  # optional dep — only required if config file exists
 
-            config = yaml.safe_load(config_file.read_text()) or {}
+            config = yaml.safe_load(config_file.read_text(encoding="utf-8")) or {}
         except Exception as e:
             logger.warning("Failed to load config from %s: %s", config_file, e)
             config = {}

@@ -74,7 +74,7 @@ class WikiQueryMixin(WikiProtocol):
                     answer, query, source_pages, raw_sources
                 )
 
-            page_path.write_text(answer)
+            page_path.write_text(answer, encoding="utf-8")
 
             rel_path = str(page_path.relative_to(self.wiki_dir))
             self.index.upsert_page(rel_path[:-3], answer, rel_path)
@@ -221,7 +221,7 @@ class WikiQueryMixin(WikiProtocol):
             score = overlap / union if union > 0 else 0
 
             try:
-                content = page.read_text()
+                content = page.read_text(encoding="utf-8")
                 content_keywords = {
                     w.lower()
                     for w in re.findall(r"\b\w{4,}\b", content)
@@ -286,7 +286,7 @@ class WikiQueryMixin(WikiProtocol):
                 content, query, source_pages, raw_sources
             )
 
-        page_path.write_text(content)
+        page_path.write_text(content, encoding="utf-8")
 
         rel_path = str(page_path.relative_to(self.wiki_dir))
         self.index.upsert_page(rel_path[:-3], content, rel_path)

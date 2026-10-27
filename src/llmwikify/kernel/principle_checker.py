@@ -137,7 +137,7 @@ class PrincipleChecker:
                 continue
 
             prompt_name = yaml_file.stem
-            data = yaml.safe_load(yaml_file.read_text())
+            data = yaml.safe_load(yaml_file.read_text(encoding="utf-8"))
             result = self._check_single_template(prompt_name, data)
             results[prompt_name] = result
 
@@ -307,7 +307,7 @@ class PrincipleChecker:
             if yaml_file.name.startswith("_"):
                 continue
 
-            data = yaml.safe_load(yaml_file.read_text())
+            data = yaml.safe_load(yaml_file.read_text(encoding="utf-8"))
             ctx = data.get("context_injection", {})
             if not ctx:
                 continue
@@ -341,7 +341,7 @@ class PrincipleChecker:
             if yaml_file.name.startswith("_"):
                 continue
 
-            data = yaml.safe_load(yaml_file.read_text())
+            data = yaml.safe_load(yaml_file.read_text(encoding="utf-8"))
             pp = data.get("post_process", {})
             schema = pp.get("validate_schema")
 

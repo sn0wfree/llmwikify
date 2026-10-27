@@ -160,7 +160,7 @@ class Dream:
         """Read the dream cursor timestamp. Returns 0.0 if no cursor."""
         try:
             if self._cursor_path.exists():
-                return float(self._cursor_path.read_text().strip())
+                return float(self._cursor_path.read_text(encoding="utf-8").strip())
         except (ValueError, OSError):
             logger.warning("Dream: failed to read cursor", exc_info=True)
         return 0.0
@@ -170,7 +170,7 @@ class Dream:
         try:
             self._memory_dir.mkdir(parents=True, exist_ok=True)
             tmp_path = self._cursor_path.with_suffix(".tmp")
-            tmp_path.write_text(str(value), encoding="utf-8")
+            tmp_path.write_text(str(value, encoding="utf-8"), encoding="utf-8")
             tmp_path.replace(self._cursor_path)
         except OSError:
             logger.warning("Dream: failed to write cursor", exc_info=True)

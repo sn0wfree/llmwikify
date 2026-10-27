@@ -258,7 +258,7 @@ def load_config(wiki_root: Path, config_file: str | None = None) -> dict[str, An
         try:
             import yaml
 
-            user_config = yaml.safe_load(config_path.read_text())
+            user_config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
             if user_config:
                 # Deep merge user config into defaults
                 from llmwikify.foundation.utils import deep_merge

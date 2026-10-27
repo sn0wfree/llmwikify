@@ -63,7 +63,7 @@ class WikiAnalyzer:
             try:
                 content = page.read_text(encoding="utf-8")
             except TypeError:
-                content = page.read_text()
+                content = page.read_text(encoding="utf-8")
             contents.append((name, content))
 
         # Fast existence set — full display names only (stems can false-match).
@@ -229,7 +229,7 @@ class WikiAnalyzer:
 
         if self.wiki.wiki_md_file.exists():
             parts.append(
-                f"=== WIKI SCHEMA (wiki.md) ===\n{self.wiki.wiki_md_file.read_text()}"
+                f"=== WIKI SCHEMA (wiki.md) ===\n{self.wiki.wiki_md_file.read_text(encoding="utf-8")}"
             )
 
         pages = self.wiki._get_existing_page_names()

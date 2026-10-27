@@ -60,7 +60,7 @@ class KnowledgeGapsRule(Rule):
                 if is_path_excluded(source_page):
                     continue
                 page_name = wiki._page_display_name(source_page)
-                content = source_page.read_text()
+                content = source_page.read_text(encoding="utf-8")
                 wikilinks = re.findall(r"\[\[(.*?)\]\]", content)
                 if not wikilinks:
                     gaps.append(

@@ -319,16 +319,18 @@ class UserPreferenceStore:
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self._prefs_file = self.data_dir / "user_preferences.json"
         if not self._prefs_file.exists():
-            self._prefs_file.write_text("{}")
+            self._prefs_file.write_text("{}", encoding="utf-8")
 
     def _load(self) -> dict:
         try:
-            return json.loads(self._prefs_file.read_text())
+            return json.loads(self._prefs_file.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, FileNotFoundError):
             return {}
 
     def _save(self, prefs: dict) -> None:
-        self._prefs_file.write_text(json.dumps(prefs, indent=2))
+        self._prefs_file.write_text(
+        json.dumps(prefs, indent=2), encoding="utf-8"
+    )
 
     def get(self, user_id: str, key: str, default: Any = None) -> Any:
         prefs = self._load()

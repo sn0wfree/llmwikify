@@ -303,7 +303,7 @@ class WikiIngestMixin(WikiProtocol):
                 source_name = safe_name
                 hint = f"Source already exists in raw/{safe_name}"
             else:
-                saved_path.write_text(result.text)
+                saved_path.write_text(result.text, encoding="utf-8")
                 saved_to_raw = True
                 source_name = safe_name
                 hint = f"Extracted text saved to raw/{safe_name}"

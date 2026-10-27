@@ -303,7 +303,7 @@ def _resolve_minimax_key_from_llm_config() -> str | None:
     if not config_file.exists():
         return None
     try:
-        data = _json.loads(config_file.read_text())
+        data = _json.loads(config_file.read_text(encoding="utf-8"))
         llm_cfg = data.get("llm", {})
         if llm_cfg.get("provider") == "minimax":
             return llm_cfg.get("api_key")

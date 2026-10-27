@@ -135,7 +135,7 @@ def create_llm_config(
 
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     CONFIG_PATH.write_text(
-        json.dumps(config, indent=2, ensure_ascii=False), encoding="utf-8"
+        json.dumps(config, indent=2, ensure_ascii=False, encoding="utf-8"), encoding="utf-8"
     )
 
     if not quiet:

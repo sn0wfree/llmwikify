@@ -322,7 +322,7 @@ class WikiLLMMixin(WikiProtocol):
                 source_page_data.append(
                     {
                         "name": page_name,
-                        "content": page_path.read_text(),
+                        "content": page_path.read_text(encoding="utf-8"),
                     }
                 )
 
@@ -333,7 +333,7 @@ class WikiLLMMixin(WikiProtocol):
                 raw_source_data.append(
                     {
                         "name": raw_path,
-                        "content": full_path.read_text(),
+                        "content": full_path.read_text(encoding="utf-8"),
                     }
                 )
 

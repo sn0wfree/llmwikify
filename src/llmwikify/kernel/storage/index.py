@@ -226,7 +226,7 @@ class WikiIndex:
         if _STOP_WORDS_PATH.exists():
             self._stop_words = {
                 line.strip()
-                for line in _STOP_WORDS_PATH.read_text().splitlines()
+                for line in _STOP_WORDS_PATH.read_text(encoding="utf-8").splitlines()
                 if line.strip() and not line.startswith("#")
             }
         wiki_root = self.db_path.parent
@@ -583,7 +583,7 @@ class WikiIndex:
                     flush=True,
                 )
 
-            content = md_file.read_text()
+            content = md_file.read_text(encoding="utf-8")
             rel_path = md_file.relative_to(wiki_dir).as_posix()
             page_name = rel_path[:-3]  # e.g., "concepts/Factor Investing"
 
@@ -636,7 +636,9 @@ class WikiIndex:
             data["inbound_links"][page] = self.get_inbound_links(page)
 
         # Write JSON
-        output_path.write_text(json.dumps(data, indent=2))
+        output_path.write_text(
+        json.dumps(data, indent=2), encoding="utf-8"
+    )
 
         data["json_export"] = str(output_path)
         return data

@@ -28,7 +28,7 @@ class WikiStatusMixin(WikiProtocol):
                 return True
 
         if page_path.exists():
-            content = page_path.read_text()
+            content = page_path.read_text(encoding="utf-8")
             for key in self._exclude_frontmatter_keys:
                 if f"{key}:" in content:
                     return True

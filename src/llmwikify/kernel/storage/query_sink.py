@@ -109,7 +109,7 @@ class QuerySink:
         if not sink_file.exists():
             return {"has_sink": False, "sink_entries": 0}
         try:
-            content = sink_file.read_text()
+            content = sink_file.read_text(encoding="utf-8")
             count = self._count_entries(content)
             return {"has_sink": True, "sink_entries": count}
         except OSError:
@@ -136,7 +136,7 @@ class QuerySink:
                 f"## Entry Log\n\n"
                 f"*(No entries yet)*\n"
             )
-            sink_file.write_text(content)
+            sink_file.write_text(content, encoding="utf-8")
             formal_path = self.wiki_dir / f"{page_name}.md"
             if formal_path.exists():
                 self._update_page_sink_meta(formal_path, sink_file)
@@ -148,7 +148,7 @@ class QuerySink:
     def _update_page_sink_meta(self, page_path: Path, sink_file: Path) -> None:
         """Update formal page frontmatter with sink_path."""
         try:
-            content = page_path.read_text()
+            content = page_path.read_text(encoding="utf-8")
             if content.startswith("---"):
                 fm_end = content.find("---", 3)
                 if fm_end > 0:
@@ -175,7 +175,7 @@ class QuerySink:
                             f"sink_path: {str(sink_file.relative_to(self.root))}"
                         )
                     new_frontmatter = "\n".join(new_lines)
-                    page_path.write_text(f"---\n{new_frontmatter}\n---{body}")
+                    page_path.write_text(f"---\n{new_frontmatter}\n---{body}", encoding="utf-8")
             else:
                 sink_path = str(sink_file.relative_to(self.root))
                 new_content = (
@@ -185,13 +185,13 @@ class QuerySink:
                     f"---\n\n"
                     f"{content}"
                 )
-                page_path.write_text(new_content)
+                page_path.write_text(new_content, encoding="utf-8")
         except OSError:
             pass
 
     def _migrate_legacy_sink(self, sink_file: Path) -> None:
         """Migrate old format sink file to new Content Store + Entry Log format."""
-        content = sink_file.read_text()
+        content = sink_file.read_text(encoding="utf-8")
         if "## Content Store" in content:
             return  # Already in new format
 
@@ -228,7 +228,7 @@ class QuerySink:
                     f"## Entry Log\n\n"
                     f"*(No entries yet)*\n"
                 )
-                sink_file.write_text(new_content)
+                sink_file.write_text(new_content, encoding="utf-8")
             return
 
         content_store = {}
@@ -306,7 +306,7 @@ class QuerySink:
                 )
 
             lines.append("")
-            sink_file.write_text("\n".join(lines))
+            sink_file.write_text("\n".join(lines, encoding="utf-8"))
 
     @staticmethod
     def _extract_topics(text: str) -> set:
@@ -351,7 +351,7 @@ class QuerySink:
         formal_path = self.wiki_dir / f"{page_name}.md"
         if not formal_path.exists():
             return suggestions
-        formal_content = formal_path.read_text()
+        formal_content = formal_path.read_text(encoding="utf-8")
         formal_topics = self._extract_topics(formal_content)
         answer_topics = self._extract_topics(answer)
         missing = formal_topics - answer_topics
@@ -379,7 +379,7 @@ class QuerySink:
         formal_sources_wiki: set = set()
         formal_sources_raw: set = set()
         if formal_path.exists():
-            content = formal_path.read_text()
+            content = formal_path.read_text(encoding="utf-8")
             formal_sources_wiki = set(re.findall(r"\[\[(.*?)\]\]", content))
             formal_sources_raw = set(
                 re.findall(r"\[Source:[^\]]*\]\((raw/[^\)]+)\)", content)
@@ -432,7 +432,7 @@ class QuerySink:
         sink_file = self.sink_dir / f"{page_name}.sink.md"
         if not sink_file.exists():
             return suggestions
-        content = sink_file.read_text()
+        content = sink_file.read_text(encoding="utf-8")
         entry_log = self._parse_entry_log(content)
         entries = [e["query"] for e in entry_log]
         similar_count = 0
@@ -457,7 +457,7 @@ class QuerySink:
         suggestions: list[str] = []
         formal_path = self.wiki_dir / f"{page_name}.md"
         if formal_path.exists():
-            formal_content = formal_path.read_text()
+            formal_content = formal_path.read_text(encoding="utf-8")
             formal_words = {
                 w.lower() for w in re.findall(r"\b[A-Z][a-z]{3,}\b", formal_content)
             }
@@ -523,7 +523,7 @@ class QuerySink:
     ) -> str:
         """Append a query answer to the sink file with content-addressable dedup."""
         sink_file = self._find_or_create_sink_file(page_name)
-        content = sink_file.read_text()
+        content = sink_file.read_text(encoding="utf-8")
 
         content_store = self._parse_content_store(content)
         entry_log = self._parse_entry_log(content)
@@ -562,7 +562,7 @@ class QuerySink:
         new_content = self._rebuild_sink_file(
             content, content_store, entry_log, page_name
         )
-        sink_file.write_text(new_content)
+        sink_file.write_text(new_content, encoding="utf-8")
 
         formal_path = self.wiki_dir / f"{page_name}.md"
         if formal_path.exists():
@@ -693,12 +693,12 @@ class QuerySink:
                 "message": "No sink file found",
             }
 
-        content = sink_file.read_text()
+        content = sink_file.read_text(encoding="utf-8")
 
         # Migrate legacy format if needed
         if "## Content Store" not in content:
             self._migrate_legacy_sink(sink_file)
-            content = sink_file.read_text()
+            content = sink_file.read_text(encoding="utf-8")
 
         content_store = self._parse_content_store(content)
         entry_log = self._parse_entry_log(content)
@@ -740,7 +740,7 @@ class QuerySink:
         now = datetime.now(timezone.utc)
         for sink_file in sorted(self.sink_dir.glob("*.sink.md")):
             page_name = sink_file.stem.replace(".sink", "")
-            content = sink_file.read_text()
+            content = sink_file.read_text(encoding="utf-8")
 
             # Handle both old and new format
             if "## Entry Log" in content:

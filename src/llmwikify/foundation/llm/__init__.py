@@ -13,7 +13,6 @@ merge). ``StreamableLLMClient`` is re-exported lazily via PEP 562 to keep
     from llmwikify.foundation.llm import resolve_chat_llm       # LAL resolver
 """
 
-from .base import LLMClient
 from .budget_decorator import check_token_budget
 from .context_windows import (
     CONTEXT_WINDOWS,
@@ -38,11 +37,18 @@ from .token_estimator import count_messages, count_tokens
 
 
 def __getattr__(name: str):
-    """Lazy re-export of StreamableLLMClient (PEP 562).
+    """Lazy re-export of LLMClient / StreamableLLMClient (PEP 562).
 
-    Keeps the heavy streamable module (retry/SSE machinery) out of the
-    import path when callers only need ``LLMClient`` / LAL helpers.
+    ``LLMClient`` resolves via the ``llm_client`` shim so tests that
+    ``patch("llmwikify.foundation.llm_client.LLMClient")`` keep working
+    (production imports ``from ...llm import LLMClient`` at call time).
+    ``StreamableLLMClient`` stays lazy to keep the heavy streamable
+    module off the package import path.
     """
+    if name == "LLMClient":
+        from ..llm_client import LLMClient
+
+        return LLMClient
     if name == "StreamableLLMClient":
         from .streamable import StreamableLLMClient
 

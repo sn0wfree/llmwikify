@@ -167,12 +167,14 @@ class WikiScheduler:
                 "tasks": {name: task.to_dict() for name, task in self._tasks.items()}
             }
             self._state_file.parent.mkdir(parents=True, exist_ok=True)
-            self._state_file.write_text(json.dumps(state, indent=2))
+            self._state_file.write_text(
+        json.dumps(state, indent=2), encoding="utf-8"
+    )
 
     def load_state(self) -> None:
         if self._state_file and self._state_file.exists():
             try:
-                state = json.loads(self._state_file.read_text())
+                state = json.loads(self._state_file.read_text(encoding="utf-8"))
                 for name, task_data in state.get("tasks", {}).items():
                     if name in self._tasks:
                         task = self._tasks[name]

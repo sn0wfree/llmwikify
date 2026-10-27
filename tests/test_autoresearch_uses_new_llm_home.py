@@ -23,7 +23,7 @@ DEPRECATED_PATH = "llmwikify.agent.backend.adapters"
 
 def _imports_from(path: Path, module: str) -> list[str]:
     """Return line numbers (1-indexed) in ``path`` that import ``module``."""
-    tree = ast.parse(path.read_text())
+    tree = ast.parse(path.read_text(encoding="utf-8"))
     hits: list[str] = []
     for node in ast.walk(tree):
         if isinstance(node, ast.ImportFrom) and node.module == module:
@@ -62,7 +62,7 @@ def test_autoresearch_engine_imports_streamable_from_new_home():
         / "research"
         / "engine.py"
     )
-    src = engine_path.read_text()
+    src = engine_path.read_text(encoding="utf-8")
     assert "from llmwikify.foundation.llm.streamable import StreamableLLMClient" in src
     assert "from llmwikify._legacy.adapters import" not in src
 
@@ -82,7 +82,7 @@ def test_autoresearch_actions_imports_streamable_from_new_home():
         / "research"
         / "actions.py"
     )
-    src = actions_path.read_text()
+    src = actions_path.read_text(encoding="utf-8")
     assert "from llmwikify.foundation.llm.streamable import StreamableLLMClient" in src
     assert "from llmwikify._legacy.adapters import" not in src
 
@@ -91,6 +91,6 @@ def test_autoresearch_engine_helpers_docstring_updated():
     """engine_helpers.py no longer references the deprecated path in its docs."""
     from llmwikify.apps.chat import engine_helpers
 
-    src = Path(engine_helpers.__file__).read_text()
+    src = Path(engine_helpers.__file__).read_text(encoding="utf-8")
     assert "agent.backend.adapters" not in src
     assert "llmwikify.foundation.llm.streamable" in src

@@ -216,7 +216,7 @@ class Wiki(
         log_path = self.wiki_dir / "log.md"
         if not log_path.exists():
             return ""
-        return log_path.read_text()
+        return log_path.read_text(encoding="utf-8")
 
     def _ensure_raw_dir(self) -> None:
         """Create raw/ directory if missing."""

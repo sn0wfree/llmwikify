@@ -58,7 +58,7 @@ def _show_broken_references(wiki: Any, args: Any) -> int:
     broken = []
 
     for page in wiki._wiki_pages():
-        content = page.read_text()
+        content = page.read_text(encoding="utf-8")
         links = re.findall(r"\[\[(.*?)\]\]", content)
         for link in links:
             target = wiki._parse_wikilink_target(link)

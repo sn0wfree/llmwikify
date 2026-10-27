@@ -19,7 +19,7 @@ def run_dict(wiki: Any, args: Any) -> int:
     if action == "status":
         meta_path = wiki.root / ".wiki" / "jieba.meta.json"
         if meta_path.exists():
-            print(json.dumps(json.loads(meta_path.read_text()), indent=2))
+            print(json.dumps(json.loads(meta_path.read_text(encoding="utf-8")), indent=2))
         else:
             print("No jieba dict generated yet. Run `llmwikify dict update`.")
         return 0

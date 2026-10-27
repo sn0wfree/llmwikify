@@ -113,7 +113,7 @@ class WikiPageIOMixin(WikiProtocol):
 
             return {
                 "page_name": page_name_from_file,
-                "content": sink_file.read_text(),
+                "content": sink_file.read_text(encoding="utf-8"),
                 "file": str(sink_file),
                 "is_sink": True,
             }
@@ -251,7 +251,7 @@ class WikiPageIOMixin(WikiProtocol):
         4. Fallback: page title
         """
         try:
-            content = page_path.read_text()
+            content = page_path.read_text(encoding="utf-8")
         except OSError:
             return ""
 
@@ -354,7 +354,7 @@ class WikiPageIOMixin(WikiProtocol):
 
             if page_path.parts[0] == ".sink":
                 try:
-                    sink_content = page.read_text()
+                    sink_content = page.read_text(encoding="utf-8")
                     entries = len(
                         re.findall(
                             r"^## \[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]",
