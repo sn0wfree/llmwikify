@@ -31,7 +31,7 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any
 
-from ..llm_client import LLMClient, _legacy_fallback_enabled
+from .base import LLMClient, _legacy_fallback_enabled
 from .budget_decorator import check_token_budget
 from .errors import LLMNotConfiguredError
 from .resolver import resolve_chat_llm, resolver_enabled

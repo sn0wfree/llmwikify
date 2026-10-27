@@ -312,13 +312,13 @@ class TestNoSilentGPT4OInBusinessCode:
     )
 
     INIT_SCAN_PATHS = (
-        "src/llmwikify/foundation/llm_client.py",
+        "src/llmwikify/foundation/llm/base.py",
         "src/llmwikify/foundation/llm/streamable.py",
     )
 
     def test_no_gpt4o_default_in_llm_client_init(self):
         repo = Path(__file__).resolve().parent.parent
-        full = repo / "src/llmwikify/foundation/llm_client.py"
+        full = repo / "src/llmwikify/foundation/llm/base.py"
         content = full.read_text(encoding="utf-8")
         # The __init__ default-arg list must not include "gpt-4o".
         # We isolate the signature between ( and ) using DOTALL to

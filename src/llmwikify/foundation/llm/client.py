@@ -8,6 +8,11 @@ v0.41: Provider 元数据 (base_url, auth_scheme) 改从 providers.yaml 读取�
 删除硬编码的 _PROVIDER_INFO。build_llm_client 改为薄包装，调用 resolver
 解析配置。
 
+Dual-stack merge (2026-10-23): construction shares the process-level
+client memo in ``llm/base.py`` so repeated ``build_llm_client()`` calls
+do not rebuild the HTTP client (same semantics as
+``LLMClient.from_config``).
+
 依赖: foundation/llm/streamable.py (StreamableLLMClient)
 foundation/llm/resolver.py (resolve_chat_llm)
 
@@ -20,6 +25,7 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -59,6 +65,25 @@ def load_llm_config(config_path: Path | None = None) -> dict[str, Any]:
 
 # ─── Client construction ─────────────────────────────────────────────
 
+# Separate memo namespace from LLMClient.from_config: identical config
+# keys may still map to different classes (LLMClient vs
+# StreamableLLMClient). The lock is shared to keep teardown ordering
+# simple.
+_BUILD_MEMO: dict[str, Any] = {}
+_BUILD_MEMO_LOCK = threading.Lock()
+
+
+def _build_memo_key(llm_cfg: dict[str, Any]) -> str:
+    from .base import _client_memo_key
+
+    return "build:" + _client_memo_key(llm_cfg)
+
+
+def clear_build_llm_client_memo() -> None:
+    """Drop cached build_llm_client results (config reload)."""
+    with _BUILD_MEMO_LOCK:
+        _BUILD_MEMO.clear()
+
 
 def build_llm_client(
     config: dict[str, Any] | None = None,
@@ -70,6 +95,11 @@ def build_llm_client(
     v0.41: This is now a thin wrapper around ``resolve_chat_llm()``.
     All provider metadata (base_url, auth_scheme, default_model) is
     loaded from ``providers.yaml``; no hardcoded defaults remain.
+
+    Results are memoized per config/env fingerprint
+    (``_client_memo_key``) so repeated calls return the same client.
+    Call :func:`clear_build_llm_client_memo` (or
+    ``clear_llm_client_memo`` + this one) after config reload.
 
     Args:
         config: Pre-loaded config dict. If None, loads from
@@ -101,6 +131,12 @@ def build_llm_client(
     if model is not None:
         wrapped_config["llm"]["model"] = model
 
+    memo_key = _build_memo_key(wrapped_config["llm"])
+    with _BUILD_MEMO_LOCK:
+        hit = _BUILD_MEMO.get(memo_key)
+        if hit is not None:
+            return hit
+
     spec = resolve_chat_llm(wrapped_config)
 
     if not spec.api_key:
@@ -115,7 +151,15 @@ def build_llm_client(
         spec.base_url,
         spec.timeout,
     )
-    return StreamableLLMClient.from_spec(spec)
+    client = StreamableLLMClient.from_spec(spec)
+    with _BUILD_MEMO_LOCK:
+        _BUILD_MEMO[memo_key] = client
+    return client
 
 
-__all__ = ["CONFIG_PATH", "load_llm_config", "build_llm_client"]
+__all__ = [
+    "CONFIG_PATH",
+    "load_llm_config",
+    "build_llm_client",
+    "clear_build_llm_client_memo",
+]
