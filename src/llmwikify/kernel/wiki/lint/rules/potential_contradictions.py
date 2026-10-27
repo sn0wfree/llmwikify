@@ -11,6 +11,22 @@ from .. import CrossPageRule
 if TYPE_CHECKING:
     from ...wiki import Wiki
 
+# B1: compile once at module level — not inside the page×line loops
+# (re._compile was called O(pages×lines) and dominated lint hot path).
+_YEAR_RE = re.compile(
+    r"([^\n]{3,30}?)\s+(?:launched|founded|started|established|created|born|died|closed|shutdown|ended)\s+(?:in\s+)?(20\d{2}|19\d{2})",
+    re.IGNORECASE,
+)
+_ASSERTION_RE = re.compile(
+    r"([\w\s]{3,25}?)\s+(?:is|are|was|were)\s+(?:not\s+|no\s+longer\s+)?([\w\s]{3,30}?)(?:\.|,|;|$)",
+    re.IGNORECASE,
+)
+_NEGATION_RE = re.compile(r"(?:is|are|was|were)\s+(?:not|no longer)")
+# Cheap copula prefilter: assertion lines must contain one of these.
+# Long lines with lazy quantifiers are the backoff risk; this skips the
+# vast majority of prose before any regex runs.
+_COPIES = (" is ", " are ", " was ", " were ")
+
 
 class PotentialContradictionsRule(CrossPageRule):
     """Scan wiki pages for potential contradictions.
@@ -111,13 +127,9 @@ class PotentialContradictionsRule(CrossPageRule):
         results: list[dict[str, Any]],
     ) -> None:
         year_claims: dict[str, list[dict]] = {}
-        year_pattern = re.compile(
-            r"([^\n]{3,30}?)\s+(?:launched|founded|started|established|created|born|died|closed|shutdown|ended)\s+(?:in\s+)?(20\d{2}|19\d{2})",
-            re.IGNORECASE,
-        )
         for page_name, content in pages.items():
             for line in content.split("\n"):
-                for match in year_pattern.finditer(line):
+                for match in _YEAR_RE.finditer(line):
                     entity = match.group(1).strip()
                     year = match.group(2)
                     if entity and len(entity) <= 30:
@@ -152,19 +164,14 @@ class PotentialContradictionsRule(CrossPageRule):
                 line = line.strip()
                 if not line or line.startswith("#"):
                     continue
-                assertion_pattern = re.compile(
-                    r"([\w\s]{3,25}?)\s+(?:is|are|was|were)\s+(?:not\s+|no\s+longer\s+)?([\w\s]{3,30}?)(?:\.|,|;|$)",
-                    re.IGNORECASE,
-                )
-                for match in assertion_pattern.finditer(line):
+                # B1 prefilter: assertion regex needs a copula; skip everything else
+                lowered = line.lower()
+                if not any(c in lowered for c in _COPIES):
+                    continue
+                for match in _ASSERTION_RE.finditer(line):
                     subject = match.group(1).strip()
                     predicate = match.group(2).strip()
-                    full_match = match.group(0).lower()
-                    is_negated = bool(
-                        re.search(
-                            r"\b(?:is|are|was|were)\s+(?:not|no longer)", full_match
-                        )
-                    )
+                    is_negated = bool(_NEGATION_RE.search(match.group(0).lower()))
 
                     key = subject.lower()
                     if key not in negation_claims:
