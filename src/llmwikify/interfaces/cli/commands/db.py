@@ -357,7 +357,7 @@ def _db_export(wiki: Any, args: Any) -> int:
     app_db = _open_app_db(wiki)
     data = _export_wiki_data(app_db, wiki_id)
 
-    with open(output, "w") as f:
+    with open(output, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, default=str)
 
     print(f"✅ Exported data for wiki '{wiki_id}' to {output}")

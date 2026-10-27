@@ -28,7 +28,7 @@ class TestSynthesizeQueryBasic:
         page_path = temp_wiki / "wiki" / f"{result['page_name']}.md"
         assert page_path.exists()
 
-        content = page_path.read_text()
+        content = page_path.read_text(encoding="utf-8")
         assert "# Gold Mining" in content
         assert "Gold mining is the process" in content
 
@@ -62,7 +62,7 @@ class TestSynthesizeQueryBasic:
         )
 
         assert "page_path" in result
-        assert result["page_path"].startswith("wiki/")
+        assert result["page_path"].replace("\\", "/").startswith("wiki/")
         assert result["page_path"].endswith(".md")
 
         wiki.close()
@@ -84,7 +84,7 @@ class TestSynthesizeWithSources:
             source_pages=["Gold Mining", "Economics"],
         )
 
-        content = (temp_wiki / "wiki" / f"{result['page_name']}.md").read_text()
+        content = (temp_wiki / "wiki" / f"{result['page_name']}.md").read_text(encoding="utf-8")
 
         assert "## Sources" in content
         assert "[[Gold Mining]]" in content
@@ -102,7 +102,7 @@ class TestSynthesizeWithSources:
 
         # Create a raw source file
         raw_file = temp_wiki / "raw" / "research-article.md"
-        raw_file.write_text("# Research\n\nContent")
+        raw_file.write_text("# Research\n\nContent", encoding="utf-8")
 
         result = wiki.synthesize_query(
             query="Research findings?",
@@ -110,7 +110,7 @@ class TestSynthesizeWithSources:
             raw_sources=["raw/research-article.md"],
         )
 
-        content = (temp_wiki / "wiki" / f"{result['page_name']}.md").read_text()
+        content = (temp_wiki / "wiki" / f"{result['page_name']}.md").read_text(encoding="utf-8")
 
         assert "## Sources" in content
         assert "### Raw Sources" in content
@@ -131,7 +131,7 @@ class TestSynthesizeWithSources:
             raw_sources=["raw/data.csv", "raw/report.pdf"],
         )
 
-        content = (temp_wiki / "wiki" / f"{result['page_name']}.md").read_text()
+        content = (temp_wiki / "wiki" / f"{result['page_name']}.md").read_text(encoding="utf-8")
 
         assert "[[Topic A]]" in content
         assert "[Source: data.csv](raw/data.csv)" in content
@@ -154,7 +154,7 @@ class TestSynthesizeWithSources:
             auto_link=False,
         )
 
-        content = (temp_wiki / "wiki" / f"{result['page_name']}.md").read_text()
+        content = (temp_wiki / "wiki" / f"{result['page_name']}.md").read_text(encoding="utf-8")
         assert "[[Source]]" not in content
         assert "## Sources" not in content
 
@@ -170,7 +170,7 @@ class TestSynthesizeWithSources:
             answer="# Simple Answer\n\nJust the answer.",
         )
 
-        content = (temp_wiki / "wiki" / f"{result['page_name']}.md").read_text()
+        content = (temp_wiki / "wiki" / f"{result['page_name']}.md").read_text(encoding="utf-8")
         assert "## Sources" not in content
 
         wiki.close()
@@ -190,7 +190,7 @@ class TestSynthesizeLogging:
             auto_log=True,
         )
 
-        log = (temp_wiki / "wiki" / "log.md").read_text()
+        log = (temp_wiki / "wiki" / "log.md").read_text(encoding="utf-8")
         assert "query" in log
         assert "Test question about mining" in log
 
@@ -201,7 +201,7 @@ class TestSynthesizeLogging:
         wiki = Wiki(temp_wiki)
         wiki.init()
 
-        original_log = (temp_wiki / "wiki" / "log.md").read_text()
+        original_log = (temp_wiki / "wiki" / "log.md").read_text(encoding="utf-8")
 
         wiki.synthesize_query(
             query="Question",
@@ -209,7 +209,7 @@ class TestSynthesizeLogging:
             auto_log=False,
         )
 
-        new_log = (temp_wiki / "wiki" / "log.md").read_text()
+        new_log = (temp_wiki / "wiki" / "log.md").read_text(encoding="utf-8")
         assert original_log == new_log
 
         wiki.close()
@@ -225,7 +225,7 @@ class TestSynthesizeLogging:
             page_name="Query: A vs B",
         )
 
-        log = (temp_wiki / "wiki" / "log.md").read_text()
+        log = (temp_wiki / "wiki" / "log.md").read_text(encoding="utf-8")
         assert "query | Compare A and B" in log
         assert "[[Query: A vs B]]" in log
 
@@ -255,7 +255,7 @@ class TestSynthesizeDuplicateDetection:
 
         sink_file = temp_wiki / "wiki" / ".sink" / f"{result1['page_name']}.sink.md"
         assert sink_file.exists()
-        assert "# Answer 2" in sink_file.read_text()
+        assert "# Answer 2" in sink_file.read_text(encoding="utf-8")
 
         wiki.close()
 
@@ -305,7 +305,7 @@ class TestSynthesizeDuplicateDetection:
 
         # Page should have updated content
         page = temp_wiki / "wiki" / f"{result2['page_name']}.md"
-        content = page.read_text()
+        content = page.read_text(encoding="utf-8")
         assert "New, improved content" in content
         assert "Old content" not in content
 
@@ -344,7 +344,7 @@ class TestSynthesizeDuplicateDetection:
         subdir.mkdir(parents=True)
         (subdir / "Query: Gold Mining Methods.md").write_text(
             "# Gold Mining Methods\n\nOverview of mining methods.\n\n- Keywords: gold, mining, methods"
-        )
+        , encoding="utf-8")
 
         result = wiki._find_similar_query_page("Open pit gold mining techniques")
 
@@ -489,14 +489,14 @@ class TestFullQueryFlow:
         assert page.exists()
 
         # 5. Verify sources section
-        content = page.read_text()
+        content = page.read_text(encoding="utf-8")
         assert "## Sources" in content
         assert "### Wiki Pages Referenced" in content
         assert "[[Gold Mining]]" in content
         assert "[[Copper Mining]]" in content
 
         # 6. Verify log
-        log = (temp_wiki / "wiki" / "log.md").read_text()
+        log = (temp_wiki / "wiki" / "log.md").read_text(encoding="utf-8")
         assert "query | Compare gold and copper mining" in log
         assert f"[[{result['page_name']}]]" in log
 
@@ -509,8 +509,8 @@ class TestFullQueryFlow:
         wiki.write_page("Market Analysis", "# Market Analysis\n\nData from reports.")
 
         # Create raw sources
-        (temp_wiki / "raw" / "report-2024.md").write_text("# 2024 Report\n\nData")
-        (temp_wiki / "raw" / "article.md").write_text("# Article\n\nAnalysis")
+        (temp_wiki / "raw" / "report-2024.md").write_text("# 2024 Report\n\nData", encoding="utf-8")
+        (temp_wiki / "raw" / "article.md").write_text("# Article\n\nAnalysis", encoding="utf-8")
 
         answer = "# Market Trends\n\nBased on 2024 data."
 
@@ -521,7 +521,7 @@ class TestFullQueryFlow:
             raw_sources=["raw/report-2024.md", "raw/article.md"],
         )
 
-        content = (temp_wiki / "wiki" / f"{result['page_name']}.md").read_text()
+        content = (temp_wiki / "wiki" / f"{result['page_name']}.md").read_text(encoding="utf-8")
 
         assert "[[Market Analysis]]" in content
         assert "[Source: report-2024.md](raw/report-2024.md)" in content
@@ -631,7 +631,7 @@ More content with `code` and **bold** text.
             answer=answer,
         )
 
-        content = (temp_wiki / "wiki" / f"{result['page_name']}.md").read_text()
+        content = (temp_wiki / "wiki" / f"{result['page_name']}.md").read_text(encoding="utf-8")
         assert "## Section 1" in content
         assert "### Subsection" in content
         assert "`code`" in content

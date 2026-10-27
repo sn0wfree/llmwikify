@@ -306,7 +306,7 @@ class QuerySink:
                 )
 
             lines.append("")
-            sink_file.write_text("\n".join(lines, encoding="utf-8"))
+            sink_file.write_text("\n".join(lines), encoding="utf-8")
 
     @staticmethod
     def _extract_topics(text: str) -> set:

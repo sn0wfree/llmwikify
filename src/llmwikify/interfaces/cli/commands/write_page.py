@@ -42,7 +42,7 @@ def _get_content(args: Any) -> str | None:
     """
     if getattr(args, "file", None):
         try:
-            with open(args.file) as f:
+            with open(args.file, encoding="utf-8") as f:
                 return f.read()
         except OSError as e:
             print_error(f"Error reading file: {e}")
