@@ -784,7 +784,7 @@ def _handle_read(
             return {"error": f"file not found: {path}"}
         if not target.is_file():
             return {"error": f"not a regular file: {path}"}
-        content = target.read_text(errors="replace")[:_READ_MAX_CHARS]
+        content = target.read_text(errors="replace", encoding="utf-8")[:_READ_MAX_CHARS]
         return {
             "content": content,
             "length": min(len(content), _READ_MAX_CHARS),

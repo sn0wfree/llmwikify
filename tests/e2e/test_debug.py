@@ -47,7 +47,7 @@ def test_debug_insights_dom(page, wiki_server):
 
     # Get full HTML for debugging
     html = page.content()
-    with open("tests/e2e/screenshots/insights-debug.html", "w") as f:
+    with open("tests/e2e/screenshots/insights-debug.html", "w", encoding="utf-8") as f:
         f.write(html)
     print("\n  Full HTML saved to tests/e2e/screenshots/insights-debug.html")
 

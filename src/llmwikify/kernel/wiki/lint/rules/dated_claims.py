@@ -37,7 +37,7 @@ class DatedClaimsRule(Rule):
             for src in wiki.raw_dir.rglob("*"):
                 if not src.is_file():
                     continue
-                content = src.read_text(errors="ignore")
+                content = src.read_text(errors="ignore", encoding="utf-8")
                 years = re.findall(r"\b(20\d{2})\b", content)
                 if years:
                     latest_source_year = max(

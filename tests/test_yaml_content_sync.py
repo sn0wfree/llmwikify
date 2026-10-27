@@ -284,7 +284,7 @@ class TestNoInlinePromptResidue:
     def test_clarifier_no_chinese_inline_prompt(self):
         from llmwikify.apps.chat import clarifier
 
-        source = open(clarifier.__file__).read()
+        source = open(clarifier.__file__, encoding="utf-8").read()
         # The legacy Chinese prompt text should not be in the source
         assert "你是一个研究澄清助手" not in source
         # And the message builder should not exist
@@ -293,14 +293,14 @@ class TestNoInlinePromptResidue:
     def test_actions_no_english_replan_prompt(self):
         from llmwikify.apps.chat import actions
 
-        source = open(actions.__file__).read()
+        source = open(actions.__file__, encoding="utf-8").read()
         # Legacy English replan system prompt
         assert "You are a research planner. Generate focused sub-queries" not in source
 
     def test_engine_no_reason_prompt(self):
         from llmwikify.apps.chat import engine
 
-        source = open(engine.__file__).read()
+        source = open(engine.__file__, encoding="utf-8").read()
         # Legacy English reason prompt
         assert "You are a research orchestrator using ReAct reasoning" not in source
 

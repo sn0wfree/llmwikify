@@ -44,7 +44,7 @@ class TestVersionConsistency:
             import tomli as tomllib
 
         pyproject_path = Path(__file__).parent.parent / "pyproject.toml"
-        with open(pyproject_path, "rb") as f:
+        with open(pyproject_path, "rb", encoding="utf-8") as f:
             pyproject = tomllib.load(f)
 
         pyproject_version = pyproject["project"]["version"]

@@ -291,7 +291,7 @@ class TestPromptRegistrySingleSourceOfTruth:
         or message-building code; it should rely on run_prompt."""
         from llmwikify.apps.chat import clarifier
 
-        source = open(clarifier.__file__).read()
+        source = open(clarifier.__file__, encoding="utf-8").read()
         # The inline Chinese system prompt is no longer in clarifier.py
         assert "你是一个研究澄清助手" not in source
         # _build_messages is deleted
@@ -302,7 +302,7 @@ class TestPromptRegistrySingleSourceOfTruth:
         English prompt; it should use run_prompt."""
         from llmwikify.apps.chat import actions
 
-        source = open(actions.__file__).read()
+        source = open(actions.__file__, encoding="utf-8").read()
         assert "You are a research planner" not in source
 
     def test_engine_does_not_have_inline_reason_messages(self):
@@ -310,7 +310,7 @@ class TestPromptRegistrySingleSourceOfTruth:
         ReAct prompt; it should use run_prompt."""
         from llmwikify.apps.chat import engine
 
-        source = open(engine.__file__).read()
+        source = open(engine.__file__, encoding="utf-8").read()
         assert "You are a research orchestrator" not in source
 
     def test_report_does_not_have_its_own_framework_block_renderer(self):
@@ -318,7 +318,7 @@ class TestPromptRegistrySingleSourceOfTruth:
         it should use prompts.render_framework_block."""
         from llmwikify.apps.chat import report
 
-        source = open(report.__file__).read()
+        source = open(report.__file__, encoding="utf-8").read()
         assert "def _render_framework_block" not in source
 
     def test_review_does_not_have_its_own_framework_block_renderer(self):
@@ -326,7 +326,7 @@ class TestPromptRegistrySingleSourceOfTruth:
         it should use prompts.render_framework_block (via run_prompt)."""
         from llmwikify.apps.chat.harness import review
 
-        source = open(review.__file__).read()
+        source = open(review.__file__, encoding="utf-8").read()
         assert "def _render_framework_review_block" not in source
 
     def test_no_inline_md5_in_report_or_review(self):
@@ -336,7 +336,7 @@ class TestPromptRegistrySingleSourceOfTruth:
         from llmwikify.apps.chat.harness import review
 
         for module in (report, review):
-            source = open(module.__file__).read()
+            source = open(module.__file__, encoding="utf-8").read()
             assert (
                 "hashlib.md5" not in source
             ), f"{module.__name__} still has inline hashlib.md5 — should use prompts.source_hash"

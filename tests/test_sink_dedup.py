@@ -6,6 +6,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from llmwikify.kernel import Wiki
+from llmwikify.kernel.path_codec import to_fs_name
 
 
 class TestContentHash:
@@ -133,7 +134,7 @@ class TestContentStoreFormat:
         wiki = Wiki(temp_wiki)
         wiki.init()
 
-        sink_file = temp_wiki / "wiki" / ".sink" / "Query: Test.sink.md"
+        sink_file = temp_wiki / "wiki" / ".sink" / f"{to_fs_name('Query: Test')}.sink.md"
         sink_file.write_text(
             '---\nformal_page: "Query: Test"\n---\n\n'
             "# Query Sink: Test\n\n"
@@ -158,7 +159,7 @@ class TestContentStoreFormat:
         wiki = Wiki(temp_wiki)
         wiki.init()
 
-        sink_file = temp_wiki / "wiki" / ".sink" / "Query: Test.sink.md"
+        sink_file = temp_wiki / "wiki" / ".sink" / f"{to_fs_name('Query: Test')}.sink.md"
         sink_file.write_text(
             '---\nformal_page: "Query: Test"\n---\n\n'
             "# Query Sink: Test\n\n"
@@ -183,7 +184,7 @@ class TestContentStoreFormat:
         wiki = Wiki(temp_wiki)
         wiki.init()
 
-        sink_file = temp_wiki / "wiki" / ".sink" / "Query: Test.sink.md"
+        sink_file = temp_wiki / "wiki" / ".sink" / f"{to_fs_name('Query: Test')}.sink.md"
         sink_file.write_text(
             '---\nformal_page: "Query: Test"\n---\n\n'
             "# Query Sink: Test\n\n"
@@ -212,7 +213,7 @@ class TestLegacyMigration:
         wiki = Wiki(temp_wiki)
         wiki.init()
 
-        sink_file = temp_wiki / "wiki" / ".sink" / "Query: Test.sink.md"
+        sink_file = temp_wiki / "wiki" / ".sink" / f"{to_fs_name('Query: Test')}.sink.md"
         sink_file.write_text(
             '---\nformal_page: "Query: Test"\n---\n\n'
             "# Query Sink: Test\n\n"
@@ -233,7 +234,7 @@ class TestLegacyMigration:
         wiki = Wiki(temp_wiki)
         wiki.init()
 
-        sink_file = temp_wiki / "wiki" / ".sink" / "Query: Test.sink.md"
+        sink_file = temp_wiki / "wiki" / ".sink" / f"{to_fs_name('Query: Test')}.sink.md"
         original = (
             '---\nformal_page: "Query: Test"\n---\n\n'
             "# Query Sink: Test\n\n"

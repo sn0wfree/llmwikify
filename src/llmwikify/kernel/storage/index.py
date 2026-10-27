@@ -178,7 +178,7 @@ class WikiIndex:
                 if md_file is None:
                     skipped += 1
                     continue
-                content = md_file.read_text(errors="replace")
+                content = md_file.read_text(errors="replace", encoding="utf-8")
                 fts_content = (
                     self._segment(content) if self._should_segment(content) else content
                 )

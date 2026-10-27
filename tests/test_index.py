@@ -136,7 +136,7 @@ class TestWikiIndex:
         assert output_path.exists()
 
         # Verify structure
-        with open(output_path) as f:
+        with open(output_path, encoding="utf-8") as f:
             loaded = json.load(f)
 
         assert loaded["total_pages"] == 2
