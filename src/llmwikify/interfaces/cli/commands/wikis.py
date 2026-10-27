@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from .._base import Command
+from .._base import CommandBase
 from .._output import print_error
 
 
@@ -165,18 +165,14 @@ def run_wikis(wiki: Any, config: dict, args: Any) -> int:
         return 1
 
 
-class WikisCommand(Command):
+class WikisCommand(CommandBase):
     """``wikis`` command — multi-wiki management."""
 
     name = "wikis"
     help = "Multi-wiki management commands"
 
     def setup_parser(self, subparsers: Any) -> None:
-        from argparse import _SubParsersAction
-
-        if not isinstance(subparsers, _SubParsersAction):
-            raise TypeError("setup_parser requires an argparse subparsers action")
-        wikis_parsers = subparsers.add_parser(self.name, help=self.help)
+        wikis_parsers = self._sub(subparsers)
         wikis_sub = wikis_parsers.add_subparsers(
             dest="wikis_subcommand",
             help="Wikis subcommands: list, add, remove, scan",

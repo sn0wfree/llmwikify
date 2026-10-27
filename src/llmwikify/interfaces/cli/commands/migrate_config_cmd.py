@@ -26,7 +26,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from .._base import Command
+from .._base import CommandBase
 
 logger = logging.getLogger(__name__)
 
@@ -114,18 +114,14 @@ def run_migrate_config(wiki: Any, wiki_root: Path, args: Any) -> int:
     return 1
 
 
-class MigrateConfigCommand(Command):
+class MigrateConfigCommand(CommandBase):
     """Migrate old .wiki-config.yaml to v0.41+ layout."""
 
     name = "migrate-config"
     help = "Migrate old .wiki-config.yaml to v0.41+ layout"
 
     def setup_parser(self, subparsers: Any) -> None:
-        from argparse import _SubParsersAction
-
-        if not isinstance(subparsers, _SubParsersAction):
-            raise TypeError("setup_parser requires an argparse subparsers action")
-        p = subparsers.add_parser(self.name, help=self.help)
+        p = self._sub(subparsers)
         p.add_argument(
             "--wiki-root",
             dest="wiki_root",

@@ -18,7 +18,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from .._base import Command
+from .._base import CommandBase
 from .._output import ICON_SUCCESS
 
 CONFIG_DIR = Path.home() / ".llmwikify"
@@ -724,18 +724,14 @@ def _print_recommended_actions(results: list[dict]) -> None:
         print()
 
 
-class DoctorCommand(Command):
+class DoctorCommand(CommandBase):
     """Check llmwikify installation health."""
 
     name = "doctor"
     help = "Check config, dependencies, LLM connectivity, wiki structure, and server health"
 
     def setup_parser(self, subparsers: Any) -> None:
-        from argparse import _SubParsersAction
-
-        if not isinstance(subparsers, _SubParsersAction):
-            raise TypeError("setup_parser requires an argparse subparsers action")
-        p = subparsers.add_parser(self.name, help=self.help)
+        p = self._sub(subparsers)
         p.add_argument(
             "--wiki-root",
             dest="wiki_root",

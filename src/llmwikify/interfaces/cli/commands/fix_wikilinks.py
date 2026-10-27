@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .._base import Command
+from .._base import CommandBase
 from .._output import ICON_SUCCESS, print_warning
 
 
@@ -47,18 +47,14 @@ def run_fix_wikilinks(wiki: Any, args: Any) -> int:
     return 0
 
 
-class FixWikilinksCommand(Command):
+class FixWikilinksCommand(CommandBase):
     """``fix_wikilinks`` command — fix broken wikilinks."""
 
     name = "fix-wikilinks"
     help = "Fix broken wikilinks by adding directory prefix"
 
     def setup_parser(self, subparsers: Any) -> None:
-        from argparse import _SubParsersAction
-
-        if not isinstance(subparsers, _SubParsersAction):
-            raise TypeError("setup_parser requires an argparse subparsers action")
-        p = subparsers.add_parser(self.name, help=self.help)
+        p = self._sub(subparsers)
         p.add_argument(
             "--dry-run",
             "-n",

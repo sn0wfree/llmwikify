@@ -6,7 +6,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from .._base import Command
+from .._base import CommandBase
 from .._output import ICON_PENDING, print_warning
 
 logger = logging.getLogger(__name__)
@@ -85,18 +85,14 @@ def _detect_old_index_format(wiki: Any) -> bool:
     return False
 
 
-class BuildIndexCommand(Command):
+class BuildIndexCommand(CommandBase):
     """``build_index`` command — build or export the reference index."""
 
     name = "build-index"
     help = "Build or export reference index"
 
     def setup_parser(self, subparsers: Any) -> None:
-        from argparse import _SubParsersAction
-
-        if not isinstance(subparsers, _SubParsersAction):
-            raise TypeError("setup_parser requires an argparse subparsers action")
-        p = subparsers.add_parser(self.name, help=self.help)
+        p = self._sub(subparsers)
         p.add_argument(
             "--no-export",
             action="store_true",

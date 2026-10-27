@@ -12,7 +12,7 @@ a fast way to see the full picture::
 
 from __future__ import annotations
 
-from .._base import COMMAND_REGISTRY, Command
+from .._base import COMMAND_REGISTRY, CommandBase
 
 # Subcommand aliases — populated by main() at startup.
 # (Phase 3 #6: aliases registered on argparse subparsers
@@ -21,18 +21,14 @@ from .._base import COMMAND_REGISTRY, Command
 SUBCOMMAND_ALIASES: dict[str, str] = {}
 
 
-class HelpCommand(Command):
+class HelpCommand(CommandBase):
     """``help`` command — list all commands and aliases."""
 
     name = "help"
     help = "List all available commands and aliases"
 
     def setup_parser(self, subparsers) -> None:
-        from argparse import _SubParsersAction
-
-        if not isinstance(subparsers, _SubParsersAction):
-            raise TypeError("setup_parser requires an argparse subparsers action")
-        p = subparsers.add_parser(self.name, help=self.help)
+        p = self._sub(subparsers)
         p.add_argument(
             "--aliases",
             "-a",

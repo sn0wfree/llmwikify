@@ -33,7 +33,7 @@ from llmwikify.foundation.auth import (
     local_token_path,
 )
 
-from .._base import Command
+from .._base import CommandBase, add_subparser
 
 logger = logging.getLogger(__name__)
 
@@ -390,12 +390,7 @@ def run_auth_logout(wiki: Any, config: dict, args: Any) -> int:
 
 
 def setup_auth_parser(subparsers: Any) -> None:
-    from argparse import _SubParsersAction
-
-    if not isinstance(subparsers, _SubParsersAction):
-        raise TypeError("setup_parser requires an argparse subparsers action")
-
-    p = subparsers.add_parser("auth", help="Auth bootstrap + inspection")
+    p = add_subparser(subparsers, "auth", "Auth bootstrap + inspection")
     auth_sub = p.add_subparsers(dest="auth_command", help="Auth subcommand")
 
     # init
@@ -426,7 +421,7 @@ def setup_auth_parser(subparsers: Any) -> None:
 # ─── Command class ──────────────────────────────────────────────
 
 
-class AuthCommand(Command):
+class AuthCommand(CommandBase):
     """``auth`` command — bootstrap and inspect the local auth state."""
 
     name = "auth"

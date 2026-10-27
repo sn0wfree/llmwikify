@@ -5,7 +5,7 @@ from __future__ import annotations
 import sys
 from typing import Any
 
-from .._base import Command
+from .._base import CommandBase
 from .._output import print_error, print_success
 
 
@@ -48,18 +48,14 @@ def run_synthesize(wiki: Any, args: Any) -> int:
     return 0
 
 
-class SynthesizeCommand(Command):
+class SynthesizeCommand(CommandBase):
     """``synthesize`` command — save query answer as wiki page."""
 
     name = "synthesize"
     help = "Save query answer as wiki page"
 
     def setup_parser(self, subparsers: Any) -> None:
-        from argparse import _SubParsersAction
-
-        if not isinstance(subparsers, _SubParsersAction):
-            raise TypeError("setup_parser requires an argparse subparsers action")
-        p = subparsers.add_parser(self.name, help=self.help)
+        p = self._sub(subparsers)
         p.add_argument("query", help="Original question")
         p.add_argument("--answer", "-a", help="Answer content (or read from stdin)")
         p.add_argument("--page-name", "-n", help="Custom page name")

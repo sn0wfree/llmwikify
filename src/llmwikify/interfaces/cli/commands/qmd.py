@@ -5,7 +5,7 @@ from __future__ import annotations
 import subprocess
 from typing import Any
 
-from .._base import Command
+from .._base import CommandBase
 from .._output import print_error
 
 
@@ -125,18 +125,14 @@ def run_qmd(wiki: Any, args: Any) -> int:
         return 1
 
 
-class QmdCommand(Command):
+class QmdCommand(CommandBase):
     """``qmd`` command — QMD hybrid search engine."""
 
     name = "qmd"
     help = "QMD hybrid search engine commands"
 
     def setup_parser(self, subparsers: Any) -> None:
-        from argparse import _SubParsersAction
-
-        if not isinstance(subparsers, _SubParsersAction):
-            raise TypeError("setup_parser requires an argparse subparsers action")
-        qmd_parsers = subparsers.add_parser(self.name, help=self.help)
+        qmd_parsers = self._sub(subparsers)
         qmd_sub = qmd_parsers.add_subparsers(
             dest="qmd_subcommand",
             help="QMD subcommands: status, search, install, embed, mcp",

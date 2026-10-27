@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from .._base import Command
+from .._base import CommandBase
 from .._output import print_error
 
 logger = logging.getLogger(__name__)
@@ -32,18 +32,14 @@ def run_read_page(wiki: Any, args: Any) -> int:
     return 0
 
 
-class ReadPageCommand(Command):
+class ReadPageCommand(CommandBase):
     """``read_page`` command — read a wiki page."""
 
     name = "read_page"
     help = "Read page"
 
     def setup_parser(self, subparsers: Any) -> None:
-        from argparse import _SubParsersAction
-
-        if not isinstance(subparsers, _SubParsersAction):
-            raise TypeError("setup_parser requires an argparse subparsers action")
-        p = subparsers.add_parser(self.name, help=self.help)
+        p = self._sub(subparsers)
         p.add_argument("name", help="Page name")
         p.add_argument("--type", "-t", help="Page type from wiki.md Page Types table")
 

@@ -6,7 +6,7 @@ import os
 import sys
 from typing import Any
 
-from .._base import Command
+from .._base import CommandBase
 from .._output import print_success, print_warning
 
 
@@ -208,18 +208,14 @@ def run_init(wiki: Any, wiki_root: Any, args: Any) -> int:
     return 0
 
 
-class InitCommand(Command):
+class InitCommand(CommandBase):
     """``init`` command — initialize a wiki."""
 
     name = "init"
     help = "Initialize wiki"
 
     def setup_parser(self, subparsers: Any) -> None:
-        from argparse import _SubParsersAction
-
-        if not isinstance(subparsers, _SubParsersAction):
-            raise TypeError("setup_parser requires an argparse subparsers action")
-        p = subparsers.add_parser(self.name, help=self.help)
+        p = self._sub(subparsers)
         p.add_argument(
             "--overwrite",
             action="store_true",

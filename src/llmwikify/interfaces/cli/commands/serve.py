@@ -24,7 +24,7 @@ from typing import Any
 
 from llmwikify.interfaces.mcp.adapter import MCPAdapter  # Phase 3 #6
 
-from .._base import Command
+from .._base import CommandBase, add_subparser
 
 logger = logging.getLogger(__name__)
 
@@ -400,14 +400,11 @@ def setup_serve_parser(subparsers: Any) -> None:
     backward compat for ``llmwikify mcp ...`` invocations).
     The ``mcp`` alias will be removed in v0.34.0.
     """
-    from argparse import _SubParsersAction
 
-    if not isinstance(subparsers, _SubParsersAction):
-        raise TypeError("setup_parser requires an argparse subparsers action")
-
-    p = subparsers.add_parser(
+    p = add_subparser(
+        subparsers,
         "serve",
-        help="Start MCP server with optional Web UI (alias: mcp)",
+        "Start MCP server with optional Web UI (alias: mcp)",
         aliases=["mcp"],
     )
     p.add_argument(
@@ -456,7 +453,7 @@ def setup_serve_parser(subparsers: Any) -> None:
     )
 
 
-class ServeCommand(Command):
+class ServeCommand(CommandBase):
     """``serve`` command — start MCP server and optional Web UI.
 
     ``mcp`` is an argparse alias of ``serve`` (Phase 3 #6).

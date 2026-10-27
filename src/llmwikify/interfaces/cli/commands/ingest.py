@@ -18,7 +18,7 @@ import json
 import warnings
 from typing import Any
 
-from .._base import Command
+from .._base import CommandBase
 from .._output import (
     print_error,
     stderr_print,
@@ -157,18 +157,14 @@ def _ingest_smart_inline(wiki: Any, result: dict) -> int:
     return 0
 
 
-class IngestCommand(Command):
+class IngestCommand(CommandBase):
     """``ingest`` command — ingest a source file."""
 
     name = "ingest"
     help = "Ingest a source file"
 
     def setup_parser(self, subparsers: Any) -> None:
-        from argparse import _SubParsersAction
-
-        if not isinstance(subparsers, _SubParsersAction):
-            raise TypeError("setup_parser requires an argparse subparsers action")
-        p = subparsers.add_parser(self.name, help=self.help)
+        p = self._sub(subparsers)
         p.add_argument("file", type=str, help="File path or URL")
         p.add_argument(
             "--self-create",

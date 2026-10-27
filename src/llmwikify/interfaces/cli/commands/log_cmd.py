@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .._base import Command
+from .._base import CommandBase
 from .._output import print_error, print_success
 
 
@@ -33,18 +33,14 @@ def run_log(wiki: Any, args: Any) -> int:
     return 0
 
 
-class LogCommand(Command):
+class LogCommand(CommandBase):
     """``log`` command — record a log entry."""
 
     name = "log"
     help = "Record log"
 
     def setup_parser(self, subparsers: Any) -> None:
-        from argparse import _SubParsersAction
-
-        if not isinstance(subparsers, _SubParsersAction):
-            raise TypeError("setup_parser requires an argparse subparsers action")
-        p = subparsers.add_parser(self.name, help=self.help)
+        p = self._sub(subparsers)
         p.add_argument("operation", nargs="?", help="Operation name (positional)")
         p.add_argument("description", nargs="?", help="Description (positional)")
         p.add_argument(

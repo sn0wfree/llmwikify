@@ -10,7 +10,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-from .._base import Command
+from .._base import CommandBase
 from .._output import print_success, print_warning
 
 # Provider detection from env vars
@@ -161,19 +161,15 @@ def run_init_llm(wiki: Any, wiki_root: Any, args: Any) -> int:
     )
 
 
-class InitLlmCommand(Command):
+class InitLlmCommand(CommandBase):
     """Scaffold ~/.llmwikify/llmwikify.json from env vars or flags."""
 
     name = "init-llm"
     help = "Create global LLM config (~/.llmwikify/llmwikify.json)"
 
     def setup_parser(self, subparsers: Any) -> None:
-        from argparse import _SubParsersAction
 
-        if not isinstance(subparsers, _SubParsersAction):
-            raise TypeError("setup_parser requires an argparse subparsers action")
-
-        p = subparsers.add_parser(self.name, help=self.help)
+        p = self._sub(subparsers)
         p.add_argument(
             "--provider",
             choices=["openai", "anthropic", "minimax", "xiaomi"],

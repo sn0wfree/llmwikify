@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .._base import Command
+from .._base import CommandBase
 from .._output import print_error
 
 
@@ -31,18 +31,14 @@ def run_status(wiki: Any, args: Any) -> int:
     return 0
 
 
-class StatusCommand(Command):
+class StatusCommand(CommandBase):
     """``status`` command — show wiki status."""
 
     name = "status"
     help = "Show status"
 
     def setup_parser(self, subparsers: Any) -> None:
-        from argparse import _SubParsersAction
-
-        if not isinstance(subparsers, _SubParsersAction):
-            raise TypeError("setup_parser requires an argparse subparsers action")
-        subparsers.add_parser(self.name, help=self.help)
+        self._sub(subparsers)
 
     def run(self, args: Any, wiki: Any, config: dict) -> int:
         return run_status(wiki, args)

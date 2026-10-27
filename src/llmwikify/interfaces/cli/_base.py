@@ -33,9 +33,26 @@ matches the current pattern in ``commands.py``.
 
 from __future__ import annotations
 
+import argparse
 from argparse import _SubParsersAction
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
+
+
+def add_subparser(
+    subparsers: _SubParsersAction[Any],
+    name: str,
+    help: str,
+    **kwargs: Any,
+) -> argparse.ArgumentParser:
+    """Validate ``subparsers`` and register a parser for one command.
+
+    Single implementation of the guard every CLI command used to repeat:
+    reject a non-subparsers object, then add the parser.
+    """
+    if not isinstance(subparsers, _SubParsersAction):
+        raise TypeError("setup_parser requires an argparse subparsers action")
+    return subparsers.add_parser(name, help=help, **kwargs)
 
 
 @runtime_checkable
@@ -67,6 +84,24 @@ class Command(Protocol):
         defaults).
         """
         ...
+
+
+class CommandBase(Command):
+    """Base class for CLI command implementations.
+
+    Explicitly inherits the ``Command`` protocol, so
+    ``isinstance(cmd, Command)`` still holds, and adds the concrete
+    ``_sub`` helper so commands do not repeat the subparsers type check
+    and ``add_parser`` call.
+
+    ``Command`` stays a plain structural protocol on purpose: a
+    duck-typed command (not inheriting anything) must remain a valid
+    ``Command`` at runtime.
+    """
+
+    def _sub(self, subparsers: _SubParsersAction[Any]) -> argparse.ArgumentParser:
+        """Register this command's parser on ``subparsers`` and return it."""
+        return add_subparser(subparsers, self.name, self.help)
 
 
 # Registry holds all registered commands. Commands are added via

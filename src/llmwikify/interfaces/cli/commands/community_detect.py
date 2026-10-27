@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from .._base import Command
+from .._base import CommandBase
 
 
 def run_community_detect(wiki: Any, args: Any) -> int:
@@ -74,18 +74,14 @@ def run_community_detect(wiki: Any, args: Any) -> int:
     return 0
 
 
-class CommunityDetectCommand(Command):
+class CommunityDetectCommand(CommandBase):
     """``community_detect`` command — detect knowledge communities."""
 
     name = "community-detect"
     help = "Detect knowledge communities"
 
     def setup_parser(self, subparsers: Any) -> None:
-        from argparse import _SubParsersAction
-
-        if not isinstance(subparsers, _SubParsersAction):
-            raise TypeError("setup_parser requires an argparse subparsers action")
-        p = subparsers.add_parser(self.name, help=self.help)
+        p = self._sub(subparsers)
         p.add_argument(
             "--algorithm",
             choices=["leiden", "louvain"],

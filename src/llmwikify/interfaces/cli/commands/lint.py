@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from .._base import Command
+from .._base import CommandBase
 
 
 def _lint_full(result: dict) -> int:
@@ -214,18 +214,14 @@ def run_lint(wiki: Any, args: Any) -> int:
         return _lint_full(result)
 
 
-class LintCommand(Command):
+class LintCommand(CommandBase):
     """``lint`` command — health check."""
 
     name = "lint"
     help = "Health check"
 
     def setup_parser(self, subparsers: Any) -> None:
-        from argparse import _SubParsersAction
-
-        if not isinstance(subparsers, _SubParsersAction):
-            raise TypeError("setup_parser requires an argparse subparsers action")
-        p = subparsers.add_parser(self.name, help=self.help)
+        p = self._sub(subparsers)
         p.add_argument(
             "--format",
             "-f",

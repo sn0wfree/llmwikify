@@ -7,7 +7,7 @@ import logging
 import sqlite3
 from typing import Any
 
-from .._base import Command
+from .._base import CommandBase
 from .._output import print_error, print_warning
 
 logger = logging.getLogger(__name__)
@@ -392,18 +392,14 @@ def run_db(wiki: Any, args: Any) -> int:
         return 1
 
 
-class DbCommand(Command):
+class DbCommand(CommandBase):
     """``db`` command — database management."""
 
     name = "db"
     help = "Database management commands"
 
     def setup_parser(self, subparsers: Any) -> None:
-        from argparse import _SubParsersAction
-
-        if not isinstance(subparsers, _SubParsersAction):
-            raise TypeError("setup_parser requires an argparse subparsers action")
-        db_parsers = subparsers.add_parser(self.name, help=self.help)
+        db_parsers = self._sub(subparsers)
         db_sub = db_parsers.add_subparsers(dest="db_subcommand", help="DB subcommands")
 
         # db stats

@@ -103,24 +103,33 @@ llmwikify/__init__.py:30                   from .kernel import Wiki, WikiIndex
 
 > ⚠️ 不要「抽公共函数」——那是**再加一层**。正确解法是**删中间层**。
 
-### 🟠 R2 — CLI `setup_parser` 抽 4 行 helper（不是生成器）
+### 🟠 R2 — CLI `setup_parser` 抽 4 行 helper（不是生成器） ✅ 已完成
 
 ```python
-# interfaces/cli/_base.py —— Command 基类新增
-def _sub(self, subparsers):
-    from argparse import _SubParsersAction
+# interfaces/cli/_base.py
+def add_subparser(subparsers, name, help, **kwargs) -> argparse.ArgumentParser:
+    """Validate ``subparsers`` and register a parser for one command."""
     if not isinstance(subparsers, _SubParsersAction):
         raise TypeError("setup_parser requires an argparse subparsers action")
-    return subparsers.add_parser(self.name, help=self.help)
+    return subparsers.add_parser(name, help=help, **kwargs)
+
+
+class CommandBase(Command):
+    """Base class for CLI command implementations."""
+
+    def _sub(self, subparsers) -> argparse.ArgumentParser:
+        return add_subparser(subparsers, self.name, self.help)
 ```
 
-33 个命令各改 1~2 行。
+33 个命令的 `setup_parser` 从 6 行样板改为 1 行 `p = self._sub(subparsers)`。
 
 | 项 | 内容 |
 |----|------|
-| **收益** | **119 行样板 → 约 33 行**（净减 ~86 行）；错误文案唯一化 |
-| **不做** | T4「脚手架生成器」——YAGNI，33 命令不构成模板化前提，且会掩盖各命令参数差异 |
-| **风险** | 低。`test_cli_registry_dispatch.py` / `test_cli_framework.py` 兜底 |
+| **收益** | **净减 97 行**（136 增 / 233 删）；错误文案唯一化 |
+| **不做** | T4「脚手架生成器」——YAGNI，33 命令不构成模板化前提 |
+| **设计要点** | `Command` **保持为纯结构化 Protocol**（不加 `_sub`）——否则鸭子类型命令 `isinstance(cmd, Command)` 会失效（`test_cli_framework.py::test_command_protocol_is_runtime_checkable`）。helper 放在 `CommandBase` mixin 上 |
+| **风险** | 低。`test_cli_framework.py` / `test_cli_registry_dispatch.py` / `test_cli_comprehensive.py` / `test_cli_integration.py` 兜底 |
+| **实测** | CLI 套件 107 passed，0 新增失败；全量 4754 passed / 66 failed（failed −2） |
 
 ### 🟠 R3 — `foundation/auth/db.py` 两个 `_init_schema` 合并
 

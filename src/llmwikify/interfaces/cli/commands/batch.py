@@ -7,7 +7,7 @@ import warnings
 from pathlib import Path
 from typing import Any
 
-from .._base import Command
+from .._base import CommandBase
 from .._output import (
     print_error,
     print_error_stderr,
@@ -198,18 +198,14 @@ def run_batch(wiki: Any, args: Any) -> int:
     return 0 if failed == 0 else 1
 
 
-class BatchCommand(Command):
+class BatchCommand(CommandBase):
     """``batch`` command — batch ingest sources."""
 
     name = "batch"
     help = "Batch ingest sources"
 
     def setup_parser(self, subparsers: Any) -> None:
-        from argparse import _SubParsersAction
-
-        if not isinstance(subparsers, _SubParsersAction):
-            raise TypeError("setup_parser requires an argparse subparsers action")
-        p = subparsers.add_parser(self.name, help=self.help)
+        p = self._sub(subparsers)
         p.add_argument("source", help="Directory or glob pattern")
         p.add_argument(
             "--limit", "-l", type=int, default=0, help="Limit number of sources"

@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from .._base import Command
+from .._base import CommandBase
 
 
 def run_knowledge_gaps(wiki: Any, args: Any) -> int:
@@ -79,18 +79,14 @@ def run_knowledge_gaps(wiki: Any, args: Any) -> int:
     return 0
 
 
-class KnowledgeGapsCommand(Command):
+class KnowledgeGapsCommand(CommandBase):
     """``knowledge_gaps`` command — detect knowledge gaps."""
 
     name = "knowledge-gaps"
     help = "Detect knowledge gaps, outdated pages, and redundancy"
 
     def setup_parser(self, subparsers: Any) -> None:
-        from argparse import _SubParsersAction
-
-        if not isinstance(subparsers, _SubParsersAction):
-            raise TypeError("setup_parser requires an argparse subparsers action")
-        p = subparsers.add_parser(self.name, help=self.help)
+        p = self._sub(subparsers)
         p.add_argument("--json", action="store_true", help="Output as JSON")
         p.add_argument(
             "--include-suggestions",

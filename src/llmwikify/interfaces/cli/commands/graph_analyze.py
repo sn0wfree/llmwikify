@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from .._base import Command
+from .._base import CommandBase
 
 
 def run_graph_analyze(wiki: Any, args: Any) -> int:
@@ -94,18 +94,14 @@ def run_graph_analyze(wiki: Any, args: Any) -> int:
     return 0
 
 
-class GraphAnalyzeCommand(Command):
+class GraphAnalyzeCommand(CommandBase):
     """``graph_analyze`` command — analyze knowledge graph structure."""
 
     name = "graph-analyze"
     help = "Analyze knowledge graph structure (PageRank, communities, suggestions)"
 
     def setup_parser(self, subparsers: Any) -> None:
-        from argparse import _SubParsersAction
-
-        if not isinstance(subparsers, _SubParsersAction):
-            raise TypeError("setup_parser requires an argparse subparsers action")
-        p = subparsers.add_parser(self.name, help=self.help)
+        p = self._sub(subparsers)
         p.add_argument("--json", action="store_true", help="Output as JSON")
         p.add_argument(
             "--report",

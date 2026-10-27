@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .._base import Command, CommandError
+from .._base import CommandBase, CommandError
 
 
 def run_graph_query(wiki: Any, args: Any) -> int:
@@ -87,18 +87,14 @@ def run_graph_query(wiki: Any, args: Any) -> int:
     return 0
 
 
-class GraphQueryCommand(Command):
+class GraphQueryCommand(CommandBase):
     """``graph_query`` command — query the knowledge graph."""
 
     name = "graph-query"
     help = "Query the knowledge graph"
 
     def setup_parser(self, subparsers: Any) -> None:
-        from argparse import _SubParsersAction
-
-        if not isinstance(subparsers, _SubParsersAction):
-            raise TypeError("setup_parser requires an argparse subparsers action")
-        p = subparsers.add_parser(self.name, help=self.help)
+        p = self._sub(subparsers)
         p.add_argument(
             "subcommand",
             choices=["neighbors", "path", "stats", "context"],

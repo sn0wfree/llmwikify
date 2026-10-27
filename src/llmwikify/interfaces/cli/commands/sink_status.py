@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .._base import Command
+from .._base import CommandBase
 
 
 def run_sink_status(wiki: Any, args: Any) -> int:
@@ -19,18 +19,14 @@ def run_sink_status(wiki: Any, args: Any) -> int:
     return 0
 
 
-class SinkStatusCommand(Command):
+class SinkStatusCommand(CommandBase):
     """``sink_status`` command — show query sink buffer status."""
 
     name = "sink-status"
     help = "Show query sink buffer status"
 
     def setup_parser(self, subparsers: Any) -> None:
-        from argparse import _SubParsersAction
-
-        if not isinstance(subparsers, _SubParsersAction):
-            raise TypeError("setup_parser requires an argparse subparsers action")
-        subparsers.add_parser(self.name, help=self.help)
+        self._sub(subparsers)
 
     def run(self, args: Any, wiki: Any, config: dict) -> int:
         return run_sink_status(wiki, args)

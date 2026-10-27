@@ -5,7 +5,7 @@ from __future__ import annotations
 import sys
 from typing import Any
 
-from .._base import Command
+from .._base import CommandBase
 from .._output import print_error, print_success
 
 
@@ -53,18 +53,14 @@ def _get_content(args: Any) -> str | None:
         return sys.stdin.read()
 
 
-class WritePageCommand(Command):
+class WritePageCommand(CommandBase):
     """``write_page`` command — write a wiki page."""
 
     name = "write_page"
     help = "Write page"
 
     def setup_parser(self, subparsers: Any) -> None:
-        from argparse import _SubParsersAction
-
-        if not isinstance(subparsers, _SubParsersAction):
-            raise TypeError("setup_parser requires an argparse subparsers action")
-        p = subparsers.add_parser(self.name, help=self.help)
+        p = self._sub(subparsers)
         p.add_argument("name", help="Page name")
         p.add_argument(
             "--type",

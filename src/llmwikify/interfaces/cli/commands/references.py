@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from .._base import Command
+from .._base import CommandBase
 
 
 def _show_reference_stats(wiki: Any, args: Any) -> int:
@@ -167,18 +167,14 @@ def run_references(wiki: Any, args: Any) -> int:
     return 0
 
 
-class ReferencesCommand(Command):
+class ReferencesCommand(CommandBase):
     """``references`` command — show page references."""
 
     name = "references"
     help = "Show page references"
 
     def setup_parser(self, subparsers: Any) -> None:
-        from argparse import _SubParsersAction
-
-        if not isinstance(subparsers, _SubParsersAction):
-            raise TypeError("setup_parser requires an argparse subparsers action")
-        p = subparsers.add_parser(self.name, help=self.help)
+        p = self._sub(subparsers)
         p.add_argument("page", help="Page name")
         p.add_argument("--detail", "-d", action="store_true", help="Show full context")
         p.add_argument("--inbound", "-i", action="store_true", help="Show only inbound")

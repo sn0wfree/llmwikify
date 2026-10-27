@@ -7,7 +7,7 @@ import warnings
 from pathlib import Path
 from typing import Any
 
-from .._base import Command
+from .._base import CommandBase
 from .._output import print_error
 
 
@@ -100,18 +100,14 @@ def run_watch(wiki: Any, wiki_root: Path, args: Any) -> int:
     return 0
 
 
-class WatchCommand(Command):
+class WatchCommand(CommandBase):
     """``watch`` command — watch raw/ directory for new files."""
 
     name = "watch"
     help = "Watch raw/ directory for new files"
 
     def setup_parser(self, subparsers: Any) -> None:
-        from argparse import _SubParsersAction
-
-        if not isinstance(subparsers, _SubParsersAction):
-            raise TypeError("setup_parser requires an argparse subparsers action")
-        p = subparsers.add_parser(self.name, help=self.help)
+        p = self._sub(subparsers)
         p.add_argument(
             "dir", nargs="?", default=None, help="Directory to watch (default: raw/)"
         )
