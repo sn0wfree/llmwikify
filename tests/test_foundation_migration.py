@@ -35,8 +35,13 @@ def _read_yaml(path: Path) -> dict:
 
 
 def _patch_home(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
-    """Redirect HOME to tmp_path so llmwikify.json is created there."""
+    """Redirect HOME to tmp_path so llmwikify.json is created there.
+
+    ``Path.home()`` reads ``HOME`` on POSIX but ``USERPROFILE`` on
+    Windows — set both so the test is platform-independent.
+    """
     monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
     return tmp_path
 
 

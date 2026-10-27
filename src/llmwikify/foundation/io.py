@@ -43,7 +43,7 @@ def write_json(path: Path, data: Any, indent: int = 2) -> None:
     """
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
-        json.dumps(data, indent=indent, ensure_ascii=False, encoding="utf-8"), encoding="utf-8"
+        json.dumps(data, indent=indent, ensure_ascii=False), encoding="utf-8"
     )
 
 

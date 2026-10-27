@@ -185,7 +185,7 @@ def _save_global_config(config: dict[str, Any]) -> None:
     global_path = Path.home() / ".llmwikify" / "llmwikify.json"
     global_path.parent.mkdir(parents=True, exist_ok=True)
     global_path.write_text(
-        json.dumps(config, indent=2, ensure_ascii=False, encoding="utf-8"),
+        json.dumps(config, indent=2, ensure_ascii=False),
         encoding="utf-8",
     )
 
@@ -361,7 +361,7 @@ def _write_migrated_config(
     new_config["version"] = CURRENT_VERSION
 
     config_path.write_text(
-        yaml.safe_dump(new_config, default_flow_style=False, allow_unicode=True, encoding="utf-8"),
+        yaml.safe_dump(new_config, default_flow_style=False, allow_unicode=True),
         encoding="utf-8",
     )
 
@@ -421,7 +421,7 @@ def auto_migrate_wiki_config(
             config_path.write_text(
                 yaml.safe_dump(
                     new_config, default_flow_style=False, allow_unicode=True
-                , encoding="utf-8"),
+                ),
                 encoding="utf-8",
             )
         result.migrated = True

@@ -170,7 +170,7 @@ class Dream:
         try:
             self._memory_dir.mkdir(parents=True, exist_ok=True)
             tmp_path = self._cursor_path.with_suffix(".tmp")
-            tmp_path.write_text(str(value, encoding="utf-8"), encoding="utf-8")
+            tmp_path.write_text(str(value), encoding="utf-8")
             tmp_path.replace(self._cursor_path)
         except OSError:
             logger.warning("Dream: failed to write cursor", exc_info=True)

@@ -131,7 +131,7 @@ def write_default_memory_config(data_dir: Path | str) -> Path:
     cfg = MemoryConfig()
     config_path.parent.mkdir(parents=True, exist_ok=True)
     config_path.write_text(
-        json.dumps(asdict(cfg, encoding="utf-8"), indent=2),
+        json.dumps(asdict(cfg), indent=2),
         encoding="utf-8",
     )
     logger.info("memory_config: wrote default to %s", config_path)

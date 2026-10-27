@@ -58,6 +58,8 @@ def _run_script(*args: str, env: dict | None = None) -> subprocess.CompletedProc
         [sys.executable, str(SCRIPT), *args],
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         timeout=10,
         env=env,
     )
