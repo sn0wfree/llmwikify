@@ -167,14 +167,14 @@ class WikiInitMixin(WikiProtocol):
             ),
         ]:
             if not file_path.exists() or overwrite:
-                file_path.write_text(generator())
+                file_path.write_text(generator(), encoding="utf-8")
                 created.append(name)
             else:
                 skipped.append(name)
 
         config_example = self.root / ".wiki-config.yaml.example"
         if not config_example.exists():
-            config_example.write_text(self._generate_config_example())
+            config_example.write_text(self._generate_config_example(), encoding="utf-8")
             created.append(".wiki-config.yaml.example")
         else:
             skipped.append(".wiki-config.yaml.example")
@@ -236,7 +236,7 @@ class WikiInitMixin(WikiProtocol):
         if not mcp_path.exists() or force or merge:
             content = self._generate_mcp_config(agent)
             if content:
-                mcp_path.write_text(content)
+                mcp_path.write_text(content, encoding="utf-8")
                 created.append(mcp_filename)
             else:
                 skipped.append(mcp_filename)
@@ -252,7 +252,7 @@ class WikiInitMixin(WikiProtocol):
         if not gitignore_path.exists():
             content = self._generate_gitignore()
             if content:
-                gitignore_path.write_text(content)
+                gitignore_path.write_text(content, encoding="utf-8")
                 created.append(".gitignore")
 
     def _generate_skill_files_if_needed(self, created: list) -> None:
@@ -404,7 +404,7 @@ class WikiInitMixin(WikiProtocol):
             content = self._render_template(template_name)
             if content:
                 dest.parent.mkdir(parents=True, exist_ok=True)
-                dest.write_text(content)
+                dest.write_text(content, encoding="utf-8")
                 created.append(rel_path)
 
         return created

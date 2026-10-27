@@ -89,7 +89,7 @@ class WikiUtilityMixin(WikiProtocol):
         template_path = TEMPLATES_DIR / name
         if not template_path.exists():
             return ""
-        content = template_path.read_text()
+        content = template_path.read_text(encoding="utf-8")
         env = Environment(loader=BaseLoader(), trim_blocks=True, lstrip_blocks=True)
         return env.from_string(content).render(**variables)
 
@@ -123,7 +123,7 @@ class WikiUtilityMixin(WikiProtocol):
         """Return recent log entries."""
         if not self.log_file.exists():
             return "(no log)"
-        lines = self.log_file.read_text().strip().split("\n")
+        lines = self.log_file.read_text(encoding="utf-8").strip().split("\n")
         return "\n".join(lines[-limit:])
 
     def _get_page_count(self) -> int:
