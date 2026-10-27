@@ -20,6 +20,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from llmwikify.apps.chat.agent.context_store import ContextStore
+from llmwikify.foundation.llm.response import as_text
 from llmwikify.foundation.llm.token_estimator import count_messages
 
 logger = logging.getLogger(__name__)
@@ -305,7 +306,7 @@ class ContextManager:
                 temperature=0.1,
                 max_tokens=1024,
             )
-            summary_content = response.get("content", "")
+            summary_content = as_text(response)
             if not summary_content:
                 return messages
 

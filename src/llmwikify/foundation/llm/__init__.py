@@ -26,6 +26,7 @@ from .resolver import (
     resolve_chat_llm,
     resolver_enabled,
 )
+from .response import as_text
 from .spec import LLMSpec
 from .token_budget import (
     TokenBudgetChecker,
@@ -76,6 +77,8 @@ __all__ = [
     # Token estimation
     "count_tokens",
     "count_messages",
+    # Response normalization
+    "as_text",
     # Budget checking
     "TokenBudgetChecker",
     "TokenBudgetConfig",

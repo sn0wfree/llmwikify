@@ -37,6 +37,7 @@ from llmwikify.apps.chat.memory.consolidation_store import (
     ConsolidationRecord,
     MemoryConsolidationStore,
 )
+from llmwikify.foundation.llm.response import as_text
 from llmwikify.foundation.llm.token_estimator import count_messages
 
 logger = logging.getLogger(__name__)
@@ -252,10 +253,9 @@ class Consolidator:
             temperature=0.1,
             max_tokens=self.config.summary_max_tokens,
         )
-        # response is dict-like {"content": "..."}
-        content = (
-            response.get("content", "") if isinstance(response, dict) else str(response)
-        )
+        # The client contract is `-> str`; as_text() also tolerates the
+        # dict-shaped `{"content": ...}` variant some providers return.
+        content = as_text(response)
         if not content:
             raise ValueError("LLM returned empty summary")
         return content.strip()

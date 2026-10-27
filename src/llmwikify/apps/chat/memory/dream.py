@@ -49,6 +49,7 @@ from llmwikify.apps.chat.memory.consolidation_store import (
 from llmwikify.apps.chat.memory.facts_store import (
     MemoryFactsStore,
 )
+from llmwikify.foundation.llm.response import as_text
 
 logger = logging.getLogger(__name__)
 
@@ -298,11 +299,7 @@ class Dream:
                 temperature=0.1,
                 max_tokens=2048,
             )
-            content = (
-                response.get("content", "")
-                if isinstance(response, dict)
-                else str(response)
-            )
+            content = as_text(response)
         except Exception:
             logger.warning("Dream: LLM extraction failed", exc_info=True)
             return []
