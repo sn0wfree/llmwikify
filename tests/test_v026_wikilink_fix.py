@@ -51,7 +51,7 @@ class TestWikilinkResolution:
 
         page = wiki.wiki_dir / "concepts" / "Factor Investing.md"
         page.parent.mkdir(parents=True, exist_ok=True)
-        page.write_text("# Factor Investing")
+        page.write_text("# Factor Investing", encoding="utf-8")
 
         result = wiki._resolve_wikilink_target("concepts/Factor Investing")
         assert result == page
@@ -66,10 +66,10 @@ class TestWikilinkResolution:
         page.parent.mkdir(parents=True, exist_ok=True)
         page.write_text(
             "# Risk Parity\n\nContent about [[concepts/Portfolio Construction]]."
-        )
+        , encoding="utf-8")
 
         wiki.index.upsert_page(
-            "concepts/Risk Parity", page.read_text(), "concepts/Risk Parity.md"
+            "concepts/Risk Parity", page.read_text(encoding="utf-8"), "concepts/Risk Parity.md"
         )
         wiki.index.upsert_page(
             "concepts/Portfolio Construction",
@@ -101,10 +101,10 @@ class TestResolveWikilinkRawPath:
 
         raw_file = wiki.raw_dir / "src-abc123def456.md"
         raw_file.parent.mkdir(parents=True, exist_ok=True)
-        raw_file.write_text("# Raw Source\n\nContent")
+        raw_file.write_text("# Raw Source\n\nContent", encoding="utf-8")
 
         wiki.index.upsert_page(
-            "src-abc123def456", raw_file.read_text(), "raw/src-abc123def456.md"
+            "src-abc123def456", raw_file.read_text(encoding="utf-8"), "raw/src-abc123def456.md"
         )
 
         result = wiki._resolve_wikilink_target("src-abc123def456")
@@ -119,10 +119,10 @@ class TestResolveWikilinkRawPath:
 
         page = wiki.wiki_dir / "concepts" / "Risk Parity.md"
         page.parent.mkdir(parents=True, exist_ok=True)
-        page.write_text("# Risk Parity")
+        page.write_text("# Risk Parity", encoding="utf-8")
 
         wiki.index.upsert_page(
-            "concepts/Risk Parity", page.read_text(), "concepts/Risk Parity.md"
+            "concepts/Risk Parity", page.read_text(encoding="utf-8"), "concepts/Risk Parity.md"
         )
 
         result = wiki._resolve_wikilink_target("concepts/Risk Parity")
@@ -141,8 +141,8 @@ class TestFixWikilinks:
         # Create concept pages (but DON'T index them yet)
         concepts = wiki.wiki_dir / "concepts"
         concepts.mkdir(parents=True, exist_ok=True)
-        (concepts / "Risk Parity.md").write_text("# Risk Parity")
-        (concepts / "Factor Investing.md").write_text("# Factor Investing")
+        (concepts / "Risk Parity.md").write_text("# Risk Parity", encoding="utf-8")
+        (concepts / "Factor Investing.md").write_text("# Factor Investing", encoding="utf-8")
 
         # Create a page with broken links (no directory prefix)
         broken_page = wiki.wiki_dir / "overview.md"
@@ -150,10 +150,10 @@ class TestFixWikilinks:
             "# Overview\n\n"
             "Related to [[Risk Parity]] and [[Factor Investing]].\n"
             "Also see [[NonExistent]] which is truly missing.\n"
-        )
+        , encoding="utf-8")
 
         # Initialize the index tables by touching a page
-        wiki.index.upsert_page("overview", broken_page.read_text(), "overview.md")
+        wiki.index.upsert_page("overview", broken_page.read_text(encoding="utf-8"), "overview.md")
 
         return wiki
 
@@ -168,7 +168,7 @@ class TestFixWikilinks:
         assert result["ambiguous"] == 0
 
         # Verify file not modified
-        content = (wiki.wiki_dir / "overview.md").read_text()
+        content = (wiki.wiki_dir / "overview.md").read_text(encoding="utf-8")
         assert "[[Risk Parity]]" in content
         assert "[[Factor Investing]]" in content
         wiki.close()
@@ -181,7 +181,7 @@ class TestFixWikilinks:
 
         assert result["fixed"] == 2
 
-        content = (wiki.wiki_dir / "overview.md").read_text()
+        content = (wiki.wiki_dir / "overview.md").read_text(encoding="utf-8")
         assert "[[concepts/Risk Parity]]" in content
         assert "[[concepts/Factor Investing]]" in content
         assert "[[NonExistent]]" in content  # Unchanged
@@ -194,18 +194,18 @@ class TestFixWikilinks:
 
         concepts = wiki.wiki_dir / "concepts"
         concepts.mkdir(parents=True, exist_ok=True)
-        (concepts / "Risk Parity.md").write_text("# Risk Parity\n\n## Types")
+        (concepts / "Risk Parity.md").write_text("# Risk Parity\n\n## Types", encoding="utf-8")
 
         broken_page = wiki.wiki_dir / "overview.md"
-        broken_page.write_text("# Overview\n\nSee [[Risk Parity#Types]].")
+        broken_page.write_text("# Overview\n\nSee [[Risk Parity#Types]].", encoding="utf-8")
 
         # Only index the overview, NOT the concept page
-        wiki.index.upsert_page("overview", broken_page.read_text(), "overview.md")
+        wiki.index.upsert_page("overview", broken_page.read_text(encoding="utf-8"), "overview.md")
 
         result = wiki.fix_wikilinks(dry_run=False)
 
         assert result["fixed"] == 1
-        content = broken_page.read_text()
+        content = broken_page.read_text(encoding="utf-8")
         assert "[[concepts/Risk Parity#Types]]" in content
         wiki.close()
 
@@ -216,18 +216,18 @@ class TestFixWikilinks:
 
         concepts = wiki.wiki_dir / "concepts"
         concepts.mkdir(parents=True, exist_ok=True)
-        (concepts / "Risk Parity.md").write_text("# Risk Parity")
+        (concepts / "Risk Parity.md").write_text("# Risk Parity", encoding="utf-8")
 
         broken_page = wiki.wiki_dir / "overview.md"
-        broken_page.write_text("# Overview\n\nSee [[Risk Parity|RP]].")
+        broken_page.write_text("# Overview\n\nSee [[Risk Parity|RP]].", encoding="utf-8")
 
         # Only index the overview, NOT the concept page
-        wiki.index.upsert_page("overview", broken_page.read_text(), "overview.md")
+        wiki.index.upsert_page("overview", broken_page.read_text(encoding="utf-8"), "overview.md")
 
         result = wiki.fix_wikilinks(dry_run=False)
 
         assert result["fixed"] == 1
-        content = broken_page.read_text()
+        content = broken_page.read_text(encoding="utf-8")
         assert "[[concepts/Risk Parity|RP]]" in content
         wiki.close()
 
@@ -241,14 +241,14 @@ class TestFixWikilinks:
         entities = wiki.wiki_dir / "entities"
         concepts.mkdir(parents=True, exist_ok=True)
         entities.mkdir(parents=True, exist_ok=True)
-        (concepts / "Gold.md").write_text("# Gold")
-        (entities / "Gold.md").write_text("# Gold")
+        (concepts / "Gold.md").write_text("# Gold", encoding="utf-8")
+        (entities / "Gold.md").write_text("# Gold", encoding="utf-8")
 
         broken_page = wiki.wiki_dir / "overview.md"
-        broken_page.write_text("# Overview\n\n[[Gold]]")
+        broken_page.write_text("# Overview\n\n[[Gold]]", encoding="utf-8")
 
         # Only index the overview
-        wiki.index.upsert_page("overview", broken_page.read_text(), "overview.md")
+        wiki.index.upsert_page("overview", broken_page.read_text(encoding="utf-8"), "overview.md")
 
         result = wiki.fix_wikilinks(dry_run=False)
 
@@ -268,13 +268,13 @@ class TestLintModeFix:
 
         concepts = wiki.wiki_dir / "concepts"
         concepts.mkdir(parents=True, exist_ok=True)
-        (concepts / "Risk Parity.md").write_text("# Risk Parity")
+        (concepts / "Risk Parity.md").write_text("# Risk Parity", encoding="utf-8")
 
         broken_page = wiki.wiki_dir / "overview.md"
-        broken_page.write_text("# Overview\n\n[[Risk Parity]]")
+        broken_page.write_text("# Overview\n\n[[Risk Parity]]", encoding="utf-8")
 
         # Only index the overview
-        wiki.index.upsert_page("overview", broken_page.read_text(), "overview.md")
+        wiki.index.upsert_page("overview", broken_page.read_text(encoding="utf-8"), "overview.md")
 
         result = wiki.lint(mode="fix")
 
@@ -283,7 +283,7 @@ class TestLintModeFix:
         assert result["auto_fix"]["index_updated"] is True
 
         # Verify file was modified
-        content = broken_page.read_text()
+        content = broken_page.read_text(encoding="utf-8")
         assert "[[concepts/Risk Parity]]" in content
         wiki.close()
 
@@ -301,8 +301,8 @@ class TestFixWikilinksReindex:
 
         # Source page with OLD format wikilink (no directory prefix)
         source = concepts / "Factor Investing.md"
-        source.write_text("# Factor Investing\n\nRelated to [[Risk Parity]].")
-        (concepts / "Risk Parity.md").write_text("# Risk Parity")
+        source.write_text("# Factor Investing\n\nRelated to [[Risk Parity]].", encoding="utf-8")
+        (concepts / "Risk Parity.md").write_text("# Risk Parity", encoding="utf-8")
 
         # Build index — page_links.target_page will store bare name "Risk Parity"
         wiki.index.build_index_from_files(wiki.wiki_dir)
@@ -324,7 +324,7 @@ class TestFixWikilinksReindex:
         assert result["fixed"] == 1
 
         # Verify file was updated
-        content = source.read_text()
+        content = source.read_text(encoding="utf-8")
         assert "[[concepts/Risk Parity]]" in content
 
         # Verify page_links.target_page was updated via re-index
@@ -348,15 +348,15 @@ class TestFixWikilinksReindex:
 
         concepts = wiki.wiki_dir / "concepts"
         concepts.mkdir(parents=True, exist_ok=True)
-        (concepts / "Risk Parity.md").write_text("# Risk Parity")
-        (concepts / "Factor Investing.md").write_text("# Factor Investing")
+        (concepts / "Risk Parity.md").write_text("# Risk Parity", encoding="utf-8")
+        (concepts / "Factor Investing.md").write_text("# Factor Investing", encoding="utf-8")
 
         broken_page = wiki.wiki_dir / "overview.md"
         broken_page.write_text(
             "# Overview\n\n"
             "See [[Risk Parity]] and [[Factor Investing]].\n"
             "Also [[Risk Parity]] again."
-        )
+        , encoding="utf-8")
 
         wiki.index.build_index_from_files(wiki.wiki_dir)
 
@@ -403,7 +403,7 @@ class TestIndexPageNameConsistency:
 
         concepts = wiki.wiki_dir / "concepts"
         concepts.mkdir(parents=True, exist_ok=True)
-        (concepts / "Factor Investing.md").write_text("# Factor Investing\n\nContent")
+        (concepts / "Factor Investing.md").write_text("# Factor Investing\n\nContent", encoding="utf-8")
 
         wiki.index.build_index_from_files(wiki.wiki_dir)
 
@@ -442,14 +442,14 @@ class TestMissingCrossRefDetection:
 
         concepts = wiki.wiki_dir / "concepts"
         concepts.mkdir(parents=True, exist_ok=True)
-        (concepts / "Volatility.md").write_text("# Volatility\n\nContent.")
+        (concepts / "Volatility.md").write_text("# Volatility\n\nContent.", encoding="utf-8")
         (concepts / "Volatility Surface.md").write_text(
             "# Volatility Surface\n\nRelated: [[concepts/Volatility]]."
-        )
+        , encoding="utf-8")
         # Trend Following mentions Volatility Surface via wikilink only
         (concepts / "Trend Following.md").write_text(
             "# Trend Following\n\nUses [[concepts/Volatility Surface]]."
-        )
+        , encoding="utf-8")
 
         hints = wiki._detect_missing_cross_refs()
 
@@ -467,14 +467,14 @@ class TestMissingCrossRefDetection:
 
         concepts = wiki.wiki_dir / "concepts"
         concepts.mkdir(parents=True, exist_ok=True)
-        (concepts / "Risk Parity.md").write_text("# Risk Parity\n\nContent.")
+        (concepts / "Risk Parity.md").write_text("# Risk Parity\n\nContent.", encoding="utf-8")
         # Two pages mention "concepts/Risk Parity" in plain text without linking
         (concepts / "Portfolio A.md").write_text(
             "# Portfolio A\n\nSee concepts/Risk Parity for details."
-        )
+        , encoding="utf-8")
         (concepts / "Portfolio B.md").write_text(
             "# Portfolio B\n\nAlso check concepts/Risk Parity."
-        )
+        , encoding="utf-8")
 
         hints = wiki._detect_missing_cross_refs()
 
@@ -491,11 +491,11 @@ class TestMissingCrossRefDetection:
 
         concepts = wiki.wiki_dir / "concepts"
         concepts.mkdir(parents=True, exist_ok=True)
-        (concepts / "Gold.md").write_text("# Gold\n\nContent.")
+        (concepts / "Gold.md").write_text("# Gold\n\nContent.", encoding="utf-8")
         (concepts / "Silver.md").write_text(
             "# Silver\n\nSee [[concepts/Gold]] for details."
-        )
-        (concepts / "Copper.md").write_text("# Copper\n\nAlso see [[concepts/Gold]].")
+        , encoding="utf-8")
+        (concepts / "Copper.md").write_text("# Copper\n\nAlso see [[concepts/Gold]].", encoding="utf-8")
 
         hints = wiki._detect_missing_cross_refs()
 

@@ -47,7 +47,7 @@ def _write_global_config(tmp_path: Path, maintenance: dict | None) -> Path:
     data = {"llm": {"provider": "none"}}
     if maintenance is not None:
         data["maintenance"] = maintenance
-    cfg_path.write_text(json.dumps(data))
+    cfg_path.write_text(json.dumps(data), encoding="utf-8")
     return cfg_path
 
 

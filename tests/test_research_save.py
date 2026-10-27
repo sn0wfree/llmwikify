@@ -198,7 +198,7 @@ class TestHandlerSlugCollisionIntegration:
         raw_files = list(wiki.raw_dir.glob("src-*.md"))
         assert len(raw_files) == 2, f"Expected 2 distinct raw files, got {raw_files}"
 
-        contents = {f.read_text() for f in raw_files}
+        contents = {f.read_text(encoding="utf-8") for f in raw_files}
         assert contents == {"Content A", "Content B"}
 
 
@@ -570,7 +570,7 @@ class TestHandlerEndToEndLinkifyAndSlug:
 
         # Report page has linkified citations
         report_path = wiki.wiki_dir / "research" / "linkify-test.md"
-        report_text = report_path.read_text()
+        report_text = report_path.read_text(encoding="utf-8")
         assert f"[[src-{h_a}|Article A]]" in report_text
         assert f"[[src-{h_b}|Paper B]]" in report_text
         assert "[[Source:ffffffffffff]]" in report_text  # unknown preserved
@@ -578,8 +578,8 @@ class TestHandlerEndToEndLinkifyAndSlug:
         # Raw files use hash-based slugs
         raw_a = wiki.raw_dir / f"src-{h_a}.md"
         raw_b = wiki.raw_dir / f"src-{h_b}.md"
-        assert raw_a.exists() and raw_a.read_text() == "A body"
-        assert raw_b.exists() and raw_b.read_text() == "B body"
+        assert raw_a.exists() and raw_a.read_text(encoding="utf-8") == "A body"
+        assert raw_b.exists() and raw_b.read_text(encoding="utf-8") == "B body"
 
         # Index entries use 'raw/...' file_path
         with sqlite3.connect(wiki.db_path) as conn:
@@ -629,6 +629,6 @@ class TestHandlerEndToEndLinkifyAndSlug:
         assert list(wiki.raw_dir.glob("src-*.md")) == []
         # Report kept [[Source:HASH]] as text — linkify was skipped
         report_path = wiki.wiki_dir / "research" / "nosourcesave.md"
-        report_text = report_path.read_text()
+        report_text = report_path.read_text(encoding="utf-8")
         assert f"[[Source:{h}]]" in report_text
         assert "[[src-" not in report_text

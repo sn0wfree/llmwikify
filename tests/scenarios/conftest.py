@@ -17,7 +17,7 @@ def _is_llm_available() -> bool:
     config_path = Path.home() / ".llmwikify" / "llmwikify.json"
     if config_path.exists():
         try:
-            data = json.loads(config_path.read_text())
+            data = json.loads(config_path.read_text(encoding="utf-8"))
             return bool(data.get("llm", {}).get("api_key"))
         except (json.JSONDecodeError, OSError):
             return False
@@ -93,7 +93,7 @@ def llm_config():
         }
     config_path = Path.home() / ".llmwikify" / "llmwikify.json"
     if config_path.exists():
-        data = json.loads(config_path.read_text())
+        data = json.loads(config_path.read_text(encoding="utf-8"))
         return data.get("llm", {})
     return {
         "provider": "minimax",

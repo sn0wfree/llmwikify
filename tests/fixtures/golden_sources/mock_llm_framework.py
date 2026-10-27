@@ -434,7 +434,7 @@ def load_golden_sources(golden_dir: str) -> list[dict[str, Any]]:
     for yaml_file in sorted(golden_path.glob("*.yaml")):
         if yaml_file.name.startswith("_"):
             continue
-        data = yaml.safe_load(yaml_file.read_text())
+        data = yaml.safe_load(yaml_file.read_text(encoding="utf-8"))
         if data and "id" in data:
             sources.append(data)
 

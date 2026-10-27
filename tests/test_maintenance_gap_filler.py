@@ -278,6 +278,7 @@ def test_search_config_reads_research_section(isolated_llmwikify_home):
                 },
             }
         ),
+        encoding="utf-8",
     )
 
     filler = GapFiller(

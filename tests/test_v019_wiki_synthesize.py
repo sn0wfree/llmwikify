@@ -231,7 +231,7 @@ class TestLLMGenerateSynthesizeAnswer:
     def test_includes_source_page_content(self, temp_wiki):
         (temp_wiki.wiki_dir / "Machine Learning.md").write_text(
             "# Machine Learning\n\nML is a subset of AI."
-        )
+        , encoding="utf-8")
 
         def mock_chat_json(msgs, **kwargs):
             user_content = msgs[1]["content"]
@@ -251,7 +251,7 @@ class TestLLMGenerateSynthesizeAnswer:
 
     def test_includes_raw_source_content(self, temp_wiki):
         article = temp_wiki.raw_dir / "test_article.md"
-        article.write_text("# Test Article\n\nSome content about AI.")
+        article.write_text("# Test Article\n\nSome content about AI.", encoding="utf-8")
 
         def mock_chat_json(msgs, **kwargs):
             user_content = msgs[1]["content"]
@@ -269,8 +269,8 @@ class TestLLMGenerateSynthesizeAnswer:
             )
 
     def test_injects_wiki_context(self, temp_wiki):
-        (temp_wiki.wiki_dir / "Page1.md").write_text("# Page 1")
-        (temp_wiki.wiki_dir / "Page2.md").write_text("# Page 2")
+        (temp_wiki.wiki_dir / "Page1.md").write_text("# Page 1", encoding="utf-8")
+        (temp_wiki.wiki_dir / "Page2.md").write_text("# Page 2", encoding="utf-8")
 
         def mock_chat_json(msgs, **kwargs):
             user_content = msgs[1]["content"]

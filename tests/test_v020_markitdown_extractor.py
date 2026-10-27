@@ -130,7 +130,7 @@ class TestMarkItDownExtractor:
     def test_extractor_with_markitdown_mocked(self, tmp_path, mock_markitdown):
         """Test successful conversion when MarkItDown is available."""
         test_file = tmp_path / "test.docx"
-        test_file.write_text("Mock docx content")
+        test_file.write_text("Mock docx content", encoding="utf-8")
 
         mock_result = MagicMock()
         mock_result.text_content = "# Test Document\n\nThis is a test."
@@ -152,7 +152,7 @@ class TestMarkItDownExtractor:
     def test_extractor_falls_back_on_conversion_error(self, tmp_path, mock_markitdown):
         """Test that conversion errors return None (not exception)."""
         test_file = tmp_path / "test.docx"
-        test_file.write_text("Mock content")
+        test_file.write_text("Mock content", encoding="utf-8")
 
         mock_instance = MagicMock()
         mock_instance.convert.side_effect = RuntimeError("Conversion failed")
@@ -165,7 +165,7 @@ class TestMarkItDownExtractor:
     def test_extractor_returns_none_for_empty_content(self, tmp_path, mock_markitdown):
         """Test that empty conversion results return None."""
         test_file = tmp_path / "test.docx"
-        test_file.write_text("content")
+        test_file.write_text("content", encoding="utf-8")
 
         mock_result = MagicMock()
         mock_result.text_content = ""
@@ -212,7 +212,7 @@ class TestExtractRouting:
     def test_routes_docx_to_markitdown(self, tmp_path):
         """Unknown .docx file should attempt MarkItDown then return error if unavailable."""
         test_file = tmp_path / "test.docx"
-        test_file.write_text("fake docx content")
+        test_file.write_text("fake docx content", encoding="utf-8")
 
         # Without markitdown installed, should return clear error
         result = extract(str(test_file))
@@ -223,7 +223,7 @@ class TestExtractRouting:
     def test_routes_pdf_to_markitdown_first(self, tmp_path):
         """PDF should try MarkItDown first, then fallback to pymupdf."""
         test_file = tmp_path / "test.pdf"
-        test_file.write_text("fake pdf content")
+        test_file.write_text("fake pdf content", encoding="utf-8")
 
         result = extract(str(test_file))
         # Should either get markitdown result or fallback to pymupdf or text
@@ -232,7 +232,7 @@ class TestExtractRouting:
     def test_preserves_text_file_routing(self, tmp_path):
         """Markdown files should still use direct text extraction."""
         test_file = tmp_path / "test.md"
-        test_file.write_text("# Title\n\nContent")
+        test_file.write_text("# Title\n\nContent", encoding="utf-8")
 
         result = extract(str(test_file))
         assert result.source_type == "markdown"
@@ -259,7 +259,7 @@ class TestExtractRouting:
     def test_markitdown_extraction_success_mock(self, tmp_path, mock_markitdown):
         """Test full extraction pipeline with mocked MarkItDown."""
         test_file = tmp_path / "report.docx"
-        test_file.write_text("mock content")
+        test_file.write_text("mock content", encoding="utf-8")
 
         mock_result = MagicMock()
         mock_result.text_content = "# Report\n\nThis is the report content."
@@ -277,7 +277,7 @@ class TestExtractRouting:
     def test_markitdown_fallback_to_text(self, tmp_path):
         """When MarkItDown is unavailable, should return clear error for binary formats."""
         test_file = tmp_path / "data.xlsx"
-        test_file.write_text("col1,col2\na,b")
+        test_file.write_text("col1,col2\na,b", encoding="utf-8")
 
         # With markitdown available, xlsx is extracted as markdown table
         # Without markitdown, returns error (no legacy extractor for xlsx)
@@ -300,7 +300,7 @@ class TestExtractImageFormats:
     def test_image_routing(self, tmp_path):
         """Image files should attempt MarkItDown first."""
         test_file = tmp_path / "test.jpg"
-        test_file.write_text("fake image binary")
+        test_file.write_text("fake image binary", encoding="utf-8")
 
         result = extract(str(test_file))
         # Without markitdown, returns error (no legacy extractor for images)
@@ -316,7 +316,7 @@ class TestBackwardCompatibility:
     def test_existing_pdf_extraction_with_pymupdf(self, tmp_path):
         """PDF extraction should still work via pymupdf fallback."""
         test_file = tmp_path / "test.pdf"
-        test_file.write_text("fake pdf")
+        test_file.write_text("fake pdf", encoding="utf-8")
 
         result = extract(str(test_file))
         assert result is not None
@@ -326,7 +326,7 @@ class TestBackwardCompatibility:
         test_file = tmp_path / "test.html"
         test_file.write_text(
             "<html><head><title>Test</title></head><body><p>Hello</p></body></html>"
-        )
+        , encoding="utf-8")
 
         result = extract(str(test_file))
         assert result.source_type == "html"
@@ -336,7 +336,7 @@ class TestBackwardCompatibility:
     def test_markdown_extraction_preserved(self, tmp_path):
         """Markdown files should still use direct extraction."""
         test_file = tmp_path / "test.md"
-        test_file.write_text("# My Page\n\nSome content.")
+        test_file.write_text("# My Page\n\nSome content.", encoding="utf-8")
 
         result = extract(str(test_file))
         assert result.source_type == "markdown"

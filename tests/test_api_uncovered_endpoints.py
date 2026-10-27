@@ -25,7 +25,7 @@ def wiki_root(tmp_path: Path) -> Path:
     """Create a single initialized wiki directory."""
     root = tmp_path / "wiki-a"
     root.mkdir()
-    (root / ".wiki-config.yaml").write_text("")
+    (root / ".wiki-config.yaml").write_text("", encoding="utf-8")
     Wiki(root).init()
     return root
 
@@ -163,7 +163,7 @@ class TestScanWikis:
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
         scan_root = tmp_path / "scan-target"
         scan_root.mkdir()
-        (scan_root / ".wiki-config.yaml").write_text("")
+        (scan_root / ".wiki-config.yaml").write_text("", encoding="utf-8")
 
         response = client.post(
             "/api/wikis/scan",

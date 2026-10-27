@@ -31,7 +31,7 @@ class TestInitAgentOpenCode:
         config_path = temp_wiki / "opencode.json"
         assert config_path.exists()
 
-        config = json.loads(config_path.read_text())
+        config = json.loads(config_path.read_text(encoding="utf-8"))
         assert config["mcp"]["llmwikify"]["type"] == "local"
         assert config["mcp"]["llmwikify"]["command"] == ["llmwikify", "mcp"]
         wiki.close()
@@ -42,7 +42,7 @@ class TestInitAgentOpenCode:
         wiki.init(agent="opencode")
 
         assert (temp_wiki / ".gitignore").exists()
-        content = (temp_wiki / ".gitignore").read_text()
+        content = (temp_wiki / ".gitignore").read_text(encoding="utf-8")
         assert ".llmwikify.db" in content
         assert "wiki/.sink/" in content
         wiki.close()
@@ -51,14 +51,14 @@ class TestInitAgentOpenCode:
         """wiki.md references raw/ directory."""
         (temp_wiki / "raw").mkdir()
         (temp_wiki / "raw" / "gold").mkdir()
-        (temp_wiki / "raw" / "gold" / "article.md").write_text("# Test\nContent")
+        (temp_wiki / "raw" / "gold" / "article.md").write_text("# Test\nContent", encoding="utf-8")
         (temp_wiki / "raw" / "copper").mkdir()
-        (temp_wiki / "raw" / "copper" / "news.md").write_text("# News\nMore")
+        (temp_wiki / "raw" / "copper" / "news.md").write_text("# News\nMore", encoding="utf-8")
 
         wiki = Wiki(temp_wiki)
         wiki.init(agent="opencode")
 
-        content = (temp_wiki / "wiki.md").read_text()
+        content = (temp_wiki / "wiki.md").read_text(encoding="utf-8")
         assert "`raw/` directory" in content or "raw/" in content
         wiki.close()
 
@@ -80,13 +80,13 @@ class TestInitAgentOpenCode:
         assert skill_md.exists()
         assert cli_ref.exists()
 
-        skill_content = skill_md.read_text()
+        skill_content = skill_md.read_text(encoding="utf-8")
         assert "llmwikify" in skill_content
         assert "ingest" in skill_content
         assert "search" in skill_content
         assert "cli-reference.md" in skill_content
 
-        cli_content = cli_ref.read_text()
+        cli_content = cli_ref.read_text(encoding="utf-8")
         assert "init" in cli_content
         assert "ingest" in cli_content
         assert "search" in cli_content
@@ -99,13 +99,13 @@ class TestInitAgentOpenCode:
         wiki.init(agent="opencode")
 
         skill_md = temp_wiki / ".agents" / "skills" / "llmwikify" / "SKILL.md"
-        original = skill_md.read_text()
+        original = skill_md.read_text(encoding="utf-8")
 
         wiki2 = Wiki(temp_wiki)
         result = wiki2.init(agent="opencode")
 
         assert "SKILL.md" not in result.get("created_files", [])
-        assert skill_md.read_text() == original
+        assert skill_md.read_text(encoding="utf-8") == original
         wiki2.close()
 
     def test_opencode_json_has_instructions(self, temp_wiki):
@@ -115,7 +115,7 @@ class TestInitAgentOpenCode:
 
         import json
 
-        config = json.loads((temp_wiki / "opencode.json").read_text())
+        config = json.loads((temp_wiki / "opencode.json").read_text(encoding="utf-8"))
         assert "instructions" in config
         assert ".agents/skills/llmwikify/SKILL.md" in config["instructions"]
         wiki.close()
@@ -125,7 +125,7 @@ class TestInitAgentOpenCode:
         wiki = Wiki(temp_wiki)
         wiki.init(agent="opencode")
 
-        content = (temp_wiki / "wiki.md").read_text()
+        content = (temp_wiki / "wiki.md").read_text(encoding="utf-8")
         assert "## Best Practices" in content
         assert "## Page Types" in content
         wiki.close()
@@ -150,7 +150,7 @@ class TestInitAgentClaude:
         config_path = temp_wiki / ".mcp.json"
         assert config_path.exists()
 
-        config = json.loads(config_path.read_text())
+        config = json.loads(config_path.read_text(encoding="utf-8"))
         assert "mcpServers" in config
         assert config["mcpServers"]["llmwikify"]["command"] == "llmwikify"
         assert config["mcpServers"]["llmwikify"]["args"] == ["mcp"]
@@ -176,7 +176,7 @@ class TestInitAgentCodex:
         config_path = temp_wiki / ".opencode.json"
         assert config_path.exists()
 
-        config = json.loads(config_path.read_text())
+        config = json.loads(config_path.read_text(encoding="utf-8"))
         assert "mcp" in config
         wiki.close()
 
@@ -218,7 +218,7 @@ class TestInitForceAndSkip:
 
     def test_skip_existing_wiki_md(self, temp_wiki):
         """wiki.md skipped when already exists."""
-        (temp_wiki / "wiki.md").write_text("# Existing\nCustom content")
+        (temp_wiki / "wiki.md").write_text("# Existing\nCustom content", encoding="utf-8")
         wiki = Wiki(temp_wiki)
         result = wiki.init(agent="opencode")
 
@@ -228,18 +228,18 @@ class TestInitForceAndSkip:
 
     def test_force_overwrite_wiki_md(self, temp_wiki):
         """wiki.md overwritten with --force."""
-        (temp_wiki / "wiki.md").write_text("# Existing\nCustom content")
+        (temp_wiki / "wiki.md").write_text("# Existing\nCustom content", encoding="utf-8")
         wiki = Wiki(temp_wiki)
         _result = wiki.init(agent="opencode", force=True)
 
-        content = (temp_wiki / "wiki.md").read_text()
+        content = (temp_wiki / "wiki.md").read_text(encoding="utf-8")
         assert "Wiki Schema" in content
         assert "Custom content" not in content
         wiki.close()
 
     def test_skip_existing_mcp_config(self, temp_wiki):
         """MCP config skipped when already exists."""
-        (temp_wiki / "opencode.json").write_text('{"old": true}')
+        (temp_wiki / "opencode.json").write_text('{"old": true}', encoding="utf-8")
         wiki = Wiki(temp_wiki)
         result = wiki.init(agent="opencode")
 
@@ -248,21 +248,21 @@ class TestInitForceAndSkip:
 
     def test_force_overwrite_mcp_config(self, temp_wiki):
         """MCP config overwritten with --force."""
-        (temp_wiki / "opencode.json").write_text('{"old": true}')
+        (temp_wiki / "opencode.json").write_text('{"old": true}', encoding="utf-8")
         wiki = Wiki(temp_wiki)
         _result = wiki.init(agent="opencode", force=True)
 
-        config = json.loads((temp_wiki / "opencode.json").read_text())
+        config = json.loads((temp_wiki / "opencode.json").read_text(encoding="utf-8"))
         assert "mcp" in config
         wiki.close()
 
     def test_merge_regenerates_mcp_config(self, temp_wiki):
         """MCP config regenerated with --merge."""
-        (temp_wiki / "opencode.json").write_text('{"old": true}')
+        (temp_wiki / "opencode.json").write_text('{"old": true}', encoding="utf-8")
         wiki = Wiki(temp_wiki)
         _result = wiki.init(agent="opencode", merge=True)
 
-        config = json.loads((temp_wiki / "opencode.json").read_text())
+        config = json.loads((temp_wiki / "opencode.json").read_text(encoding="utf-8"))
         assert "mcp" in config
         assert "old" not in config
         wiki.close()
@@ -305,13 +305,13 @@ class TestWikiMdMerge:
             "## Best Practices\n\n"
             "1. Be nice\n"
         )
-        (temp_wiki / "wiki.md").write_text(old_schema)
+        (temp_wiki / "wiki.md").write_text(old_schema, encoding="utf-8")
 
         wiki = Wiki(temp_wiki)
         result = wiki.init(merge=True)
 
         assert "wiki.md (merged)" in result["created_files"]
-        updated = (temp_wiki / "wiki.md").read_text()
+        updated = (temp_wiki / "wiki.md").read_text(encoding="utf-8")
         assert "## Knowledge Graph" in updated
         assert "## Directory Structure" in updated
         assert "## Conventions" in updated
@@ -329,12 +329,12 @@ class TestWikiMdMerge:
             "## Best Practices\n\n"
             "1. Be nice\n"
         )
-        (temp_wiki / "wiki.md").write_text(custom_content)
+        (temp_wiki / "wiki.md").write_text(custom_content, encoding="utf-8")
 
         wiki = Wiki(temp_wiki)
         _result = wiki.init(merge=True)
 
-        updated = (temp_wiki / "wiki.md").read_text()
+        updated = (temp_wiki / "wiki.md").read_text(encoding="utf-8")
         assert "My Custom Section" in updated
         assert "This is custom content that must be preserved." in updated
         wiki.close()
@@ -363,12 +363,12 @@ class TestWikiMdMerge:
             "## Best Practices\n\n"
             "1. Be nice\n"
         )
-        (temp_wiki / "wiki.md").write_text(custom_content)
+        (temp_wiki / "wiki.md").write_text(custom_content, encoding="utf-8")
 
         wiki = Wiki(temp_wiki)
         wiki.init(merge=True)
 
-        updated = (temp_wiki / "wiki.md").read_text()
+        updated = (temp_wiki / "wiki.md").read_text(encoding="utf-8")
         bp_pos = updated.find("## Best Practices")
         new_sections_pos = updated.find("## Schema Updates")
         assert new_sections_pos != -1
@@ -383,7 +383,7 @@ class TestWikiMdMerge:
         wiki2 = Wiki(temp_wiki)
         wiki2.init(merge=True)
 
-        updated = (temp_wiki / "wiki.md").read_text()
+        updated = (temp_wiki / "wiki.md").read_text(encoding="utf-8")
         assert "Generated by llmwikify v" in updated
         wiki2.close()
 
@@ -400,12 +400,12 @@ class TestWikiMdMerge:
             "## Best Practices\n\n"
             "1. Cite sources\n"
         )
-        (temp_wiki / "wiki.md").write_text(custom_content)
+        (temp_wiki / "wiki.md").write_text(custom_content, encoding="utf-8")
 
         wiki = Wiki(temp_wiki)
         wiki.init(merge=True)
 
-        updated = (temp_wiki / "wiki.md").read_text()
+        updated = (temp_wiki / "wiki.md").read_text(encoding="utf-8")
         assert "Mining Specific Workflows" in updated
         assert "Daily News Summary" in updated
         assert "Mining daily summary template." in updated
@@ -490,10 +490,10 @@ class TestRawAnalysis:
         raw = temp_wiki / "raw"
         raw.mkdir()
         (raw / "gold").mkdir()
-        (raw / "gold" / "a.md").write_text("# A")
-        (raw / "gold" / "b.md").write_text("# B")
+        (raw / "gold" / "a.md").write_text("# A", encoding="utf-8")
+        (raw / "gold" / "b.md").write_text("# B", encoding="utf-8")
         (raw / "copper").mkdir()
-        (raw / "copper" / "c.md").write_text("# C")
+        (raw / "copper" / "c.md").write_text("# C", encoding="utf-8")
 
         wiki = Wiki(temp_wiki)
         stats = wiki._analyze_raw()
@@ -516,9 +516,9 @@ class TestRawAnalysis:
         """Flat raw/ with files at root level."""
         raw = temp_wiki / "raw"
         raw.mkdir()
-        (raw / "a.md").write_text("# A")
-        (raw / "b.md").write_text("# B")
-        (raw / "c.txt").write_text("C")
+        (raw / "a.md").write_text("# A", encoding="utf-8")
+        (raw / "b.md").write_text("# B", encoding="utf-8")
+        (raw / "c.txt").write_text("C", encoding="utf-8")
 
         wiki = Wiki(temp_wiki)
         stats = wiki._analyze_raw()
@@ -532,13 +532,13 @@ class TestRawAnalysis:
         raw = temp_wiki / "raw"
         raw.mkdir()
         (raw / "gold" / "2024" / "Q1").mkdir(parents=True)
-        (raw / "gold" / "2024" / "Q1" / "jan.md").write_text("# Jan")
+        (raw / "gold" / "2024" / "Q1" / "jan.md").write_text("# Jan", encoding="utf-8")
         (raw / "gold" / "2024" / "Q2").mkdir(parents=True)
-        (raw / "gold" / "2024" / "Q2" / "may.md").write_text("# May")
+        (raw / "gold" / "2024" / "Q2" / "may.md").write_text("# May", encoding="utf-8")
         (raw / "gold" / "2023").mkdir(parents=True)
-        (raw / "gold" / "2023" / "annual.md").write_text("# Annual")
+        (raw / "gold" / "2023" / "annual.md").write_text("# Annual", encoding="utf-8")
         (raw / "copper").mkdir()
-        (raw / "copper" / "news.md").write_text("# News")
+        (raw / "copper" / "news.md").write_text("# News", encoding="utf-8")
 
         wiki = Wiki(temp_wiki)
         stats = wiki._analyze_raw()
@@ -552,10 +552,10 @@ class TestRawAnalysis:
         """Mixed: root-level files + multi-level subdirectories."""
         raw = temp_wiki / "raw"
         raw.mkdir()
-        (raw / "root.md").write_text("# Root")
-        (raw / "root2.txt").write_text("Root2")
+        (raw / "root.md").write_text("# Root", encoding="utf-8")
+        (raw / "root2.txt").write_text("Root2", encoding="utf-8")
         (raw / "gold" / "2024" / "Q1").mkdir(parents=True)
-        (raw / "gold" / "2024" / "Q1" / "a.md").write_text("# A")
+        (raw / "gold" / "2024" / "Q1" / "a.md").write_text("# A", encoding="utf-8")
         (raw / "empty_dir").mkdir()
 
         wiki = Wiki(temp_wiki)

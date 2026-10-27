@@ -25,7 +25,7 @@ def _write_global_config(fake_home: Path, payload: dict) -> Path:
     config_dir = fake_home / ".llmwikify"
     config_dir.mkdir(parents=True, exist_ok=True)
     config_file = config_dir / "llmwikify.json"
-    config_file.write_text(json.dumps(payload))
+    config_file.write_text(json.dumps(payload), encoding="utf-8")
     return config_file
 
 
@@ -73,7 +73,7 @@ class TestLoadResearchConfig:
         fake_home = _patch_home(monkeypatch, tmp_path)
         config_dir = fake_home / ".llmwikify"
         config_dir.mkdir(parents=True, exist_ok=True)
-        (config_dir / "llmwikify.json").write_text("{ invalid json")
+        (config_dir / "llmwikify.json").write_text("{ invalid json", encoding="utf-8")
         from llmwikify.interfaces.server.http.routes import _load_research_config
 
         assert _load_research_config() is None
@@ -269,7 +269,7 @@ class TestBuildResearchConfigOverrides:
         fake_home = _patch_home(monkeypatch, tmp_path)
         config_dir = fake_home / ".llmwikify"
         config_dir.mkdir(parents=True, exist_ok=True)
-        (config_dir / "llmwikify.json").write_text("not json at all")
+        (config_dir / "llmwikify.json").write_text("not json at all", encoding="utf-8")
         from llmwikify.interfaces.server.http.routes import (
             _build_research_config_overrides,
         )

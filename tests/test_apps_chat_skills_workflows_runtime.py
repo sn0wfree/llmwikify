@@ -160,7 +160,7 @@ def _make_minimal_workflow(tmp_path: Path, *, with_gather: bool = True) -> Path:
                   outputs: final
             """)
     p = tmp_path / "tiny.yaml"
-    p.write_text(text)
+    p.write_text(text, encoding="utf-8")
     return p
 
 

@@ -21,7 +21,7 @@ def mock_wiki(tmp_path):
     wiki.raw_dir = tmp_path / "raw"
     wiki.raw_dir.mkdir(exist_ok=True)
     wiki.wiki_md_file = tmp_path / "wiki.md"
-    wiki.wiki_md_file.write_text("# Wiki Schema\n")
+    wiki.wiki_md_file.write_text("# Wiki Schema\n", encoding="utf-8")
     wiki.index = MagicMock()
     wiki.index.get_inbound_links.return_value = []
     wiki.index.count_inbound_for_pages.return_value = {}
@@ -71,11 +71,11 @@ class TestDetectDatedClaims:
     def test_detects_outdated_claim(self, mock_wiki, tmp_path):
         # Create a raw source with recent year
         raw_file = mock_wiki.raw_dir / "recent.txt"
-        raw_file.write_text("Data from 2024")
+        raw_file.write_text("Data from 2024", encoding="utf-8")
 
         # Create a wiki page with old year
         old_page = mock_wiki.wiki_dir / "old_topic.md"
-        old_page.write_text("# Old Topic\nThis was true in 2019.\n")
+        old_page.write_text("# Old Topic\nThis was true in 2019.\n", encoding="utf-8")
 
         mock_wiki._wiki_pages.return_value = [old_page]
 
@@ -98,11 +98,11 @@ class TestDetectMissingCrossRefs:
 
     def test_detects_unlinked_mentions(self, mock_wiki):
         page_a = mock_wiki.wiki_dir / "TopicA.md"
-        page_a.write_text("# Topic A\nThis relates to TopicB heavily.\n")
+        page_a.write_text("# Topic A\nThis relates to TopicB heavily.\n", encoding="utf-8")
         page_b = mock_wiki.wiki_dir / "TopicB.md"
-        page_b.write_text("# Topic B\nAlso related to TopicA.\n")
+        page_b.write_text("# Topic B\nAlso related to TopicA.\n", encoding="utf-8")
         page_c = mock_wiki.wiki_dir / "TopicC.md"
-        page_c.write_text("# Topic C\nTopicA is important here too.\n")
+        page_c.write_text("# Topic C\nTopicA is important here too.\n", encoding="utf-8")
 
         mock_wiki._wiki_pages.return_value = [page_a, page_b, page_c]
 
@@ -123,9 +123,9 @@ class TestDetectRedundancy:
 
     def test_detects_similar_names(self, mock_wiki):
         page_a = mock_wiki.wiki_dir / "Machine Learning.md"
-        page_a.write_text("# Machine Learning\n")
+        page_a.write_text("# Machine Learning\n", encoding="utf-8")
         page_b = mock_wiki.wiki_dir / "Machine Learning Basics.md"
-        page_b.write_text("# ML Basics\n")
+        page_b.write_text("# ML Basics\n", encoding="utf-8")
 
         mock_wiki._wiki_pages.return_value = [page_a, page_b]
 
@@ -147,7 +147,7 @@ class TestRecommend:
 
     def test_finds_missing_pages(self, mock_wiki):
         page_a = mock_wiki.wiki_dir / "Main.md"
-        page_a.write_text("# Main\nSee [[MissingPage]] and [[MissingPage]] again.\n")
+        page_a.write_text("# Main\nSee [[MissingPage]] and [[MissingPage]] again.\n", encoding="utf-8")
 
         mock_wiki._wiki_pages.return_value = [page_a]
         mock_wiki._resolve_wikilink_target.return_value = None
@@ -179,7 +179,7 @@ class TestLint:
 
     def test_detects_broken_links(self, mock_wiki):
         page = mock_wiki.wiki_dir / "Test.md"
-        page.write_text("# Test\nSee [[BrokenLink]].\n")
+        page.write_text("# Test\nSee [[BrokenLink]].\n", encoding="utf-8")
 
         mock_wiki._wiki_pages.return_value = [page]
         mock_wiki._resolve_wikilink_target.return_value = None
@@ -196,7 +196,7 @@ class TestLint:
 
     def test_detects_orphan_pages(self, mock_wiki):
         page = mock_wiki.wiki_dir / "Orphan.md"
-        page.write_text("# Orphan\n")
+        page.write_text("# Orphan\n", encoding="utf-8")
 
         mock_wiki._wiki_pages.return_value = [page]
         mock_wiki.index.get_inbound_links.return_value = []
@@ -228,7 +228,7 @@ class TestGenerateHints:
 
     def test_reports_orphan_pages(self, mock_wiki):
         page = mock_wiki.wiki_dir / "Orphan.md"
-        page.write_text("# Orphan\n")
+        page.write_text("# Orphan\n", encoding="utf-8")
         mock_wiki._wiki_pages.return_value = [page]
         mock_wiki.index.get_inbound_links.return_value = []
 

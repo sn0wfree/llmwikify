@@ -50,7 +50,7 @@ PAPERS = [
 def get_llm_client():
     """Load LLM client from global config."""
     config_path = Path.home() / ".llmwikify" / "llmwikify.json"
-    full_config = json.loads(config_path.read_text())
+    full_config = json.loads(config_path.read_text(encoding="utf-8"))
     llm_cfg = full_config.get("llm", {})
 
     from llmwikify.foundation.llm_client import LLMClient
@@ -638,23 +638,23 @@ def main():
         if cache_a.exists() and cache_b.exists():
             logger.info("Loading cached results for %s", pid)
             results.setdefault(pid, {})["A"] = {
-                "extraction": json.loads(cache_a.read_text()),
+                "extraction": json.loads(cache_a.read_text(encoding="utf-8")),
                 "factor_list": json.loads(
-                    (FIXTURES_DIR / f"{pid}_path_a_raw_factor.json").read_text()
+                    (FIXTURES_DIR / f"{pid}_path_a_raw_factor.json").read_text(encoding="utf-8")
                 ),
                 "duration_s": 0,
                 "tokens_used": 0,
             }
             results[pid]["A"]["yaml_6layer"] = yaml.safe_load(
-                (FIXTURES_DIR / f"{pid}_path_a.yaml").read_text()
+                (FIXTURES_DIR / f"{pid}_path_a.yaml").read_text(encoding="utf-8")
             )
             results[pid]["B"] = {
-                "full_extraction": json.loads(cache_b.read_text()),
+                "full_extraction": json.loads(cache_b.read_text(encoding="utf-8")),
                 "duration_s": 0,
                 "tokens_used": 0,
             }
             results[pid]["B"]["yaml_6layer"] = yaml.safe_load(
-                (FIXTURES_DIR / f"{pid}_path_b.yaml").read_text()
+                (FIXTURES_DIR / f"{pid}_path_b.yaml").read_text(encoding="utf-8")
             )
             scores_a = score_yaml(results[pid]["A"]["yaml_6layer"])
             results[pid]["A"]["scores"] = scores_a
@@ -685,10 +685,10 @@ def main():
         # Save raw responses for debugging
         (FIXTURES_DIR / f"{pid}_path_a_raw_extract.json").write_text(
             json.dumps(result_a.get("extraction", {}), indent=2, ensure_ascii=False)
-        )
+        , encoding="utf-8")
         (FIXTURES_DIR / f"{pid}_path_a_raw_factor.json").write_text(
             json.dumps(result_a.get("factor_list", {}), indent=2, ensure_ascii=False)
-        )
+        , encoding="utf-8")
 
         # Path B
         result_b = run_path_b(llm_client, pid, content)
@@ -712,7 +712,7 @@ def main():
             json.dumps(
                 result_b.get("full_extraction", {}), indent=2, ensure_ascii=False
             )
-        )
+        , encoding="utf-8")
 
     # Print comparison
     print("\n" + "=" * 80)

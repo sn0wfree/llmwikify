@@ -40,7 +40,7 @@ def _make_service(tmp_path: Path, wiki=None, **cfg_overrides) -> AutoIngestServi
 def test_process_file_auto_write_happy_path(tmp_path: Path):
     svc = _make_service(tmp_path)
     path = tmp_path / "raw" / "note.md"
-    path.write_text("# hello")
+    path.write_text("# hello", encoding="utf-8")
 
     asyncio.run(svc._process_file(path))
 
@@ -68,7 +68,7 @@ def test_llm_failure_falls_back_to_proposal(tmp_path: Path):
         llm_semaphore=asyncio.Semaphore(1),
     )
     path = tmp_path / "raw" / "note.md"
-    path.write_text("x")
+    path.write_text("x", encoding="utf-8")
 
     asyncio.run(svc._process_file(path))
 
@@ -101,7 +101,7 @@ def test_write_mode_proposal_skips_llm(tmp_path: Path):
         llm_semaphore=asyncio.Semaphore(1),
     )
     path = tmp_path / "raw" / "note.md"
-    path.write_text("x")
+    path.write_text("x", encoding="utf-8")
 
     asyncio.run(svc._process_file(path))
 
@@ -124,7 +124,7 @@ def test_ingest_error_recorded_not_raised(tmp_path: Path):
         llm_semaphore=asyncio.Semaphore(1),
     )
     path = tmp_path / "raw" / "note.md"
-    path.write_text("x")
+    path.write_text("x", encoding="utf-8")
 
     asyncio.run(svc._process_file(path))  # must not raise
 
@@ -140,18 +140,18 @@ def test_on_watch_event_skips_processed_and_unsupported(tmp_path: Path):
         loop.run_until_complete(_noop_start(svc))
 
         md = tmp_path / "raw" / "a.md"
-        md.write_text("x")
+        md.write_text("x", encoding="utf-8")
         svc._mark_processed(md)  # record mtime+size as processed
         svc._on_watch_event("created", md)
         assert str(md) not in svc._pending  # already processed → dropped
 
         bad = tmp_path / "raw" / "virus.exe"
-        bad.write_text("x")
+        bad.write_text("x", encoding="utf-8")
         svc._on_watch_event("created", bad)
         assert str(bad) not in svc._pending  # unsupported ext → dropped
 
         ok = tmp_path / "raw" / "b.md"
-        ok.write_text("x")
+        ok.write_text("x", encoding="utf-8")
         svc._on_watch_event("created", ok)
         # let call_soon_threadsafe callbacks execute
         loop.run_until_complete(asyncio.sleep(0.02))
@@ -189,9 +189,9 @@ def _backlog_wiki(tmp_path: Path, calls: list):
 def test_backlog_replays_unprocessed_files(tmp_path: Path):
     calls: list = []
     (tmp_path / "raw").mkdir()
-    (tmp_path / "raw" / "a.md").write_text("aaa")
-    (tmp_path / "raw" / "b.md").write_text("bbb")
-    (tmp_path / "raw" / "ignored.exe").write_text("zzz")  # unsupported ext
+    (tmp_path / "raw" / "a.md").write_text("aaa", encoding="utf-8")
+    (tmp_path / "raw" / "b.md").write_text("bbb", encoding="utf-8")
+    (tmp_path / "raw" / "ignored.exe").write_text("zzz", encoding="utf-8")  # unsupported ext
 
     svc = _make_service(tmp_path, wiki=_backlog_wiki(tmp_path, calls))
     asyncio.run(svc._scan_backlog())
@@ -205,7 +205,7 @@ def test_backlog_replays_unprocessed_files(tmp_path: Path):
 def test_backlog_idempotent_across_restart(tmp_path: Path):
     calls: list = []
     (tmp_path / "raw").mkdir()
-    (tmp_path / "raw" / "a.md").write_text("aaa")
+    (tmp_path / "raw" / "a.md").write_text("aaa", encoding="utf-8")
 
     first = _make_service(tmp_path, wiki=_backlog_wiki(tmp_path, calls))
     first._load_processed()
@@ -223,7 +223,7 @@ def test_backlog_requeues_modified_file(tmp_path: Path):
     calls: list = []
     f = tmp_path / "raw" / "a.md"
     (tmp_path / "raw").mkdir()
-    f.write_text("v1")
+    f.write_text("v1", encoding="utf-8")
 
     first = _make_service(tmp_path, wiki=_backlog_wiki(tmp_path, calls))
     first._load_processed()
@@ -233,7 +233,7 @@ def test_backlog_requeues_modified_file(tmp_path: Path):
     # simulate modification after processing (different content + mtime)
     import os
 
-    f.write_text("v2 - changed")
+    f.write_text("v2 - changed", encoding="utf-8")
     os.utime(f, (f.stat().st_atime + 10, f.stat().st_mtime + 10))
 
     second = _make_service(tmp_path, wiki=_backlog_wiki(tmp_path, calls))
@@ -247,7 +247,7 @@ def test_backlog_respects_limit(tmp_path: Path):
     raw = tmp_path / "raw"
     raw.mkdir()
     for i in range(3):
-        (raw / f"f{i}.md").write_text(f"content {i}")
+        (raw / f"f{i}.md").write_text(f"content {i}", encoding="utf-8")
 
     svc = _make_service(
         tmp_path, wiki=_backlog_wiki(tmp_path, calls), max_backlog_per_start=2
@@ -269,7 +269,7 @@ def test_failed_ingest_not_marked_processed(tmp_path: Path):
     wiki = NS(root=tmp_path, raw_dir=tmp_path / "raw", ingest_source=bad_ingest)
     (tmp_path / "raw").mkdir()
     f = tmp_path / "raw" / "bad.md"
-    f.write_text("x")
+    f.write_text("x", encoding="utf-8")
 
     svc = AutoIngestService(
         wiki=wiki,
@@ -326,7 +326,7 @@ def test_fallback_proposal_persists_to_db(tmp_path: Path):
         await mgr.start()
         svc = mgr.auto_ingest_services["w1"]
         f = raw / "note.md"
-        f.write_text("x")
+        f.write_text("x", encoding="utf-8")
         await svc._process_file(f)
 
     asyncio.run(scenario())

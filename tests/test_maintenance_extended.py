@@ -388,7 +388,7 @@ def test_concurrent_same_file_serialized(tmp_path):
     )
     (tmp_path / "raw").mkdir()
     f = tmp_path / "raw" / "same.md"
-    f.write_text("x")
+    f.write_text("x", encoding="utf-8")
 
     svc = _make_svc_for_concurrent(tmp_path, wiki)
 
@@ -426,7 +426,7 @@ def test_concurrent_different_files_parallel(tmp_path):
     )
     (tmp_path / "raw").mkdir()
     for i in range(3):
-        (tmp_path / "raw" / f"f{i}.md").write_text("x")
+        (tmp_path / "raw" / f"f{i}.md").write_text("x", encoding="utf-8")
 
     svc = _make_svc_for_concurrent(tmp_path, wiki)
 
@@ -463,7 +463,7 @@ def test_extraction_cache_hit_skips_ingest(tmp_path):
     )
     (tmp_path / "raw").mkdir()
     f = tmp_path / "raw" / "cached.md"
-    f.write_text("x")
+    f.write_text("x", encoding="utf-8")
 
     svc = _make_svc_for_concurrent(tmp_path, wiki)
 
@@ -511,7 +511,7 @@ def test_extraction_cache_eviction(tmp_path):
 
     # Manually trigger eviction path (in _process_file)
     # Simulate by calling _process_file for new file
-    (tmp_path / "raw" / "trigger.md").write_text("x")
+    (tmp_path / "raw" / "trigger.md").write_text("x", encoding="utf-8")
     asyncio.run(svc._process_file(tmp_path / "raw" / "trigger.md"))
 
     # Cache should have been trimmed to ≤50

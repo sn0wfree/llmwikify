@@ -72,7 +72,7 @@ def mock_wiki(tmp_path):
     wiki.root = tmp_path / "wiki"
     wiki.root.mkdir(parents=True, exist_ok=True)
     wiki.index_file = tmp_path / "wiki" / "index.md"
-    wiki.index_file.write_text("# Test Wiki\n")
+    wiki.index_file.write_text("# Test Wiki\n", encoding="utf-8")
     wiki.search.return_value = []
     wiki.read_page.return_value = None
     return wiki

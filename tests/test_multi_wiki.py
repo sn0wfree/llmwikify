@@ -94,7 +94,7 @@ class TestWikiDiscovery:
         wiki_dir = tmp_path / "my-wiki"
         wiki_dir.mkdir()
         db_file = wiki_dir / ".llmwikify.db"
-        db_file.write_text("")
+        db_file.write_text("", encoding="utf-8")
 
         scanner = WikiDiscovery()
         results = scanner.scan([str(tmp_path)], depth=1)
@@ -107,11 +107,11 @@ class TestWikiDiscovery:
         """Discover wikis at different depths, but not nested within a wiki."""
         wiki_a = tmp_path / "wiki-a"
         wiki_a.mkdir()
-        (wiki_a / ".llmwikify.db").write_text("")
+        (wiki_a / ".llmwikify.db").write_text("", encoding="utf-8")
 
         wiki_b = tmp_path / "subdir" / "wiki-b"
         wiki_b.mkdir(parents=True)
-        (wiki_b / ".llmwikify.db").write_text("")
+        (wiki_b / ".llmwikify.db").write_text("", encoding="utf-8")
 
         scanner = WikiDiscovery()
         results = scanner.scan([str(tmp_path)], depth=2)
@@ -124,11 +124,11 @@ class TestWikiDiscovery:
         """When a wiki is found, its subdirectories are not scanned."""
         outer_wiki = tmp_path / "outer-wiki"
         outer_wiki.mkdir()
-        (outer_wiki / ".llmwikify.db").write_text("")
+        (outer_wiki / ".llmwikify.db").write_text("", encoding="utf-8")
 
         inner_wiki = outer_wiki / "inner-wiki"
         inner_wiki.mkdir()
-        (inner_wiki / ".llmwikify.db").write_text("")
+        (inner_wiki / ".llmwikify.db").write_text("", encoding="utf-8")
 
         scanner = WikiDiscovery()
         results = scanner.scan([str(tmp_path)], depth=5)
@@ -141,11 +141,11 @@ class TestWikiDiscovery:
         """Respect exclude patterns."""
         node_modules = tmp_path / "node_modules" / "my-wiki"
         node_modules.mkdir(parents=True)
-        (node_modules / ".llmwikify.db").write_text("")
+        (node_modules / ".llmwikify.db").write_text("", encoding="utf-8")
 
         normal = tmp_path / "my-wiki"
         normal.mkdir()
-        (normal / ".llmwikify.db").write_text("")
+        (normal / ".llmwikify.db").write_text("", encoding="utf-8")
 
         scanner = WikiDiscovery()
         results = scanner.scan([str(tmp_path)], depth=3)
@@ -317,11 +317,11 @@ class TestWikiRegistry:
         # Create wiki directories
         wiki_a = tmp_path / "wiki-a"
         wiki_a.mkdir()
-        (wiki_a / ".llmwikify.db").write_text("")
+        (wiki_a / ".llmwikify.db").write_text("", encoding="utf-8")
 
         wiki_b = tmp_path / "wiki-b"
         wiki_b.mkdir()
-        (wiki_b / ".llmwikify.db").write_text("")
+        (wiki_b / ".llmwikify.db").write_text("", encoding="utf-8")
 
         config = {"wikis": {}}
         registry = WikiRegistry(config)
@@ -338,7 +338,7 @@ class TestWikiRegistry:
         # Create wiki directory
         wiki_dir = tmp_path / "my-wiki"
         wiki_dir.mkdir()
-        (wiki_dir / ".llmwikify.db").write_text("")
+        (wiki_dir / ".llmwikify.db").write_text("", encoding="utf-8")
 
         config = {"wikis": {}}
         registry = WikiRegistry(config)

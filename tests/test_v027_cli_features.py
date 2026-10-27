@@ -59,12 +59,12 @@ class TestLintJsonFormat:
 
         concepts = cli.wiki.wiki_dir / "concepts"
         concepts.mkdir(parents=True, exist_ok=True)
-        (concepts / "Risk Parity.md").write_text("# Risk Parity")
+        (concepts / "Risk Parity.md").write_text("# Risk Parity", encoding="utf-8")
 
         broken_page = cli.wiki.wiki_dir / "overview.md"
-        broken_page.write_text("# Overview\n\n[[Risk Parity]]")
+        broken_page.write_text("# Overview\n\n[[Risk Parity]]", encoding="utf-8")
 
-        cli.wiki.index.upsert_page("overview", broken_page.read_text(), "overview.md")
+        cli.wiki.index.upsert_page("overview", broken_page.read_text(encoding="utf-8"), "overview.md")
 
         import io
         import sys
@@ -101,12 +101,12 @@ class TestFixWikilinksCLI:
 
         concepts = cli.wiki.wiki_dir / "concepts"
         concepts.mkdir(parents=True, exist_ok=True)
-        (concepts / "Risk Parity.md").write_text("# Risk Parity")
+        (concepts / "Risk Parity.md").write_text("# Risk Parity", encoding="utf-8")
 
         broken_page = cli.wiki.wiki_dir / "overview.md"
-        broken_page.write_text("# Overview\n\n[[Risk Parity]]")
+        broken_page.write_text("# Overview\n\n[[Risk Parity]]", encoding="utf-8")
 
-        cli.wiki.index.upsert_page("overview", broken_page.read_text(), "overview.md")
+        cli.wiki.index.upsert_page("overview", broken_page.read_text(encoding="utf-8"), "overview.md")
 
         import io
         import sys
@@ -125,7 +125,7 @@ class TestFixWikilinksCLI:
         assert "Fixed:     1" in output
 
         # File not modified
-        content = broken_page.read_text()
+        content = broken_page.read_text(encoding="utf-8")
         assert "[[Risk Parity]]" in content
 
     def test_fix_wikilinks_actual_fix(self, temp_wiki):
@@ -134,12 +134,12 @@ class TestFixWikilinksCLI:
 
         concepts = cli.wiki.wiki_dir / "concepts"
         concepts.mkdir(parents=True, exist_ok=True)
-        (concepts / "Risk Parity.md").write_text("# Risk Parity")
+        (concepts / "Risk Parity.md").write_text("# Risk Parity", encoding="utf-8")
 
         broken_page = cli.wiki.wiki_dir / "overview.md"
-        broken_page.write_text("# Overview\n\n[[Risk Parity]]")
+        broken_page.write_text("# Overview\n\n[[Risk Parity]]", encoding="utf-8")
 
-        cli.wiki.index.upsert_page("overview", broken_page.read_text(), "overview.md")
+        cli.wiki.index.upsert_page("overview", broken_page.read_text(encoding="utf-8"), "overview.md")
 
         import io
         import sys
@@ -157,7 +157,7 @@ class TestFixWikilinksCLI:
         assert "FIXED" in output
 
         # File modified
-        content = broken_page.read_text()
+        content = broken_page.read_text(encoding="utf-8")
         assert "[[concepts/Risk Parity]]" in content
 
 

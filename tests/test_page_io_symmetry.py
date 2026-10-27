@@ -33,7 +33,7 @@ def wiki(tmp_path: Path) -> Wiki:
     """初始化临时 wiki, 并写入确定的 Page Types 映射."""
     w = Wiki(tmp_path)
     w.init(agent="generic")
-    w.wiki_md_file.write_text(WIKI_MD)
+    w.wiki_md_file.write_text(WIKI_MD, encoding="utf-8")
     assert w._load_page_type_mapping() == {
         "ResearchReport": "sources",
         "Viewpoint": "viewpoints",

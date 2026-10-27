@@ -23,7 +23,7 @@ def full_template_dir(tmp_path):
             "retry_on_failure": {"max_attempts": 2},
         },
     }
-    (tmp_path / "analyze_source.yaml").write_text(yaml.dump(analyze))
+    (tmp_path / "analyze_source.yaml").write_text(yaml.dump(analyze), encoding="utf-8")
 
     ops = {
         "name": "generate_wiki_ops",
@@ -43,7 +43,7 @@ def full_template_dir(tmp_path):
             "retry_on_failure": {"max_attempts": 2},
         },
     }
-    (tmp_path / "generate_wiki_ops.yaml").write_text(yaml.dump(ops))
+    (tmp_path / "generate_wiki_ops.yaml").write_text(yaml.dump(ops), encoding="utf-8")
 
     ingest = {
         "name": "ingest_source",
@@ -58,7 +58,7 @@ def full_template_dir(tmp_path):
             "retry_on_failure": {"max_attempts": 2},
         },
     }
-    (tmp_path / "ingest_source.yaml").write_text(yaml.dump(ingest))
+    (tmp_path / "ingest_source.yaml").write_text(yaml.dump(ingest), encoding="utf-8")
 
     disabled_prompt = {
         "name": "old_prompt",
@@ -67,7 +67,7 @@ def full_template_dir(tmp_path):
         "system": "Old",
         "user": "Old",
     }
-    (tmp_path / "old_prompt.yaml").write_text(yaml.dump(disabled_prompt))
+    (tmp_path / "old_prompt.yaml").write_text(yaml.dump(disabled_prompt), encoding="utf-8")
 
     auto_prompt = {
         "name": "auto_prompt",
@@ -76,7 +76,7 @@ def full_template_dir(tmp_path):
         "system": "Auto",
         "user": "Auto",
     }
-    (tmp_path / "auto_prompt.yaml").write_text(yaml.dump(auto_prompt))
+    (tmp_path / "auto_prompt.yaml").write_text(yaml.dump(auto_prompt), encoding="utf-8")
 
     return tmp_path
 
@@ -107,7 +107,7 @@ class TestTriggerMetadata:
 
     def test_default_trigger_when_missing(self, tmp_path):
         minimal = {"name": "minimal", "version": "1.0"}
-        (tmp_path / "minimal.yaml").write_text(yaml.dump(minimal))
+        (tmp_path / "minimal.yaml").write_text(yaml.dump(minimal), encoding="utf-8")
 
         registry = PromptRegistry(custom_dir=tmp_path)
         template = registry._load_template("minimal")

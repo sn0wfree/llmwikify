@@ -122,7 +122,7 @@ def test_config_llm_rate_limit_overrides(tmp_path):
                 },
             }
         )
-    )
+    , encoding="utf-8")
     cfg = load_maintenance_config(path)
     assert cfg.llm_rate_limit.max_requests == 2
     assert cfg.llm_rate_limit.window_seconds == 10.0

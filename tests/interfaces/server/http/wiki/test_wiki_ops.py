@@ -361,7 +361,7 @@ class TestLoadWikiConfig:
         config_file.parent.mkdir(parents=True, exist_ok=True)
         config_file.write_text(
             json.dumps({"wiki": {"allowed_remote_hosts": ["*.example.com"]}})
-        )
+        , encoding="utf-8")
         Config._instance = None
         monkeypatch.setenv("LLMWIKIFY_HOME", str(tmp_path))
         result = load_wiki_config()
@@ -375,7 +375,7 @@ class TestLoadWikiConfig:
 
         config_file = tmp_path / ".llmwikify" / "llmwikify.json"
         config_file.parent.mkdir(parents=True, exist_ok=True)
-        config_file.write_text(json.dumps({"llm": {}}))
+        config_file.write_text(json.dumps({"llm": {}}), encoding="utf-8")
         Config._instance = None
         monkeypatch.setenv("LLMWIKIFY_HOME", str(tmp_path))
         result = load_wiki_config()

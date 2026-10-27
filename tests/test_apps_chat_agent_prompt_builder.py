@@ -80,8 +80,8 @@ def _make_builder(
 
 
 def test_full_context_emits_seven_sections(tmp_path: Path) -> None:
-    (tmp_path / "AGENTS.md").write_text("# My Agent\nBe helpful.")
-    (tmp_path / "SOUL.md").write_text("# Soul\nBe kind.")
+    (tmp_path / "AGENTS.md").write_text("# My Agent\nBe helpful.", encoding="utf-8")
+    (tmp_path / "SOUL.md").write_text("# Soul\nBe kind.", encoding="utf-8")
     builder = _make_builder(
         workspace=tmp_path,
         tool_names=["read_file", "write_file"],
@@ -127,7 +127,7 @@ def test_bootstrap_files_absent_does_not_break(tmp_path: Path) -> None:
 
 
 def test_enable_bootstrap_false_skips_section(tmp_path: Path) -> None:
-    (tmp_path / "AGENTS.md").write_text("# Should not appear")
+    (tmp_path / "AGENTS.md").write_text("# Should not appear", encoding="utf-8")
     builder = _make_builder(workspace=tmp_path)
     ctx = BuildContext(workspace=tmp_path, enable_bootstrap=False)
     prompt = _run(builder.build_with_context(ctx))
@@ -206,7 +206,7 @@ def test_build_minimal_only_three_sections() -> None:
 
 
 def test_bootstrap_cache_hits_same_path(tmp_path: Path) -> None:
-    (tmp_path / "AGENTS.md").write_text("# X")
+    (tmp_path / "AGENTS.md").write_text("# X", encoding="utf-8")
     builder = _make_builder(workspace=tmp_path)
     ctx = BuildContext(workspace=tmp_path)
     _run(builder.build_with_context(ctx))
@@ -220,14 +220,14 @@ def test_bootstrap_cache_invalidates_on_mtime_change(tmp_path: Path) -> None:
     import time as time_mod
 
     path = tmp_path / "AGENTS.md"
-    path.write_text("# Original")
+    path.write_text("# Original", encoding="utf-8")
     os.utime(path, (1000.0, 1000.0))
     builder = _make_builder(workspace=tmp_path)
     ctx = BuildContext(workspace=tmp_path)
     prompt1 = _run(builder.build_with_context(ctx))
     assert "Original" in prompt1
     time_mod.sleep(0.05)
-    path.write_text("# Updated")
+    path.write_text("# Updated", encoding="utf-8")
     os.utime(path, (2000.0, 2000.0))
     prompt2 = _run(builder.build_with_context(ctx))
     assert "Updated" in prompt2

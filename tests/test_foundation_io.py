@@ -32,21 +32,21 @@ class TestReadJson:
     def test_valid_json(self, tmp_path: Path) -> None:
         """Reads valid JSON file."""
         path = tmp_path / "test.json"
-        path.write_text(json.dumps({"key": "value"}))
+        path.write_text(json.dumps({"key": "value"}), encoding="utf-8")
         result = read_json(path)
         assert result == {"key": "value"}
 
     def test_invalid_json(self, tmp_path: Path) -> None:
         """Returns default on invalid JSON."""
         path = tmp_path / "test.json"
-        path.write_text("not valid json{{{")
+        path.write_text("not valid json{{{", encoding="utf-8")
         result = read_json(path, default={})
         assert result == {}
 
     def test_empty_file(self, tmp_path: Path) -> None:
         """Returns default on empty file."""
         path = tmp_path / "test.json"
-        path.write_text("")
+        path.write_text("", encoding="utf-8")
         result = read_json(path, default={})
         assert result == {}
 
@@ -59,7 +59,7 @@ class TestWriteJson:
         path = tmp_path / "test.json"
         write_json(path, {"key": "value"})
         assert path.exists()
-        assert json.loads(path.read_text()) == {"key": "value"}
+        assert json.loads(path.read_text(encoding="utf-8")) == {"key": "value"}
 
     def test_creates_parent_dirs(self, tmp_path: Path) -> None:
         """Creates parent directories."""
@@ -71,7 +71,7 @@ class TestWriteJson:
         """Respects indent parameter."""
         path = tmp_path / "test.json"
         write_json(path, {"key": "value"}, indent=4)
-        content = path.read_text()
+        content = path.read_text(encoding="utf-8")
         assert "    " in content
 
 
@@ -91,7 +91,7 @@ class TestReadYaml:
     def test_valid_yaml(self, tmp_path: Path) -> None:
         """Reads valid YAML file."""
         path = tmp_path / "test.yaml"
-        path.write_text("key: value\nlist:\n  - item1\n  - item2\n")
+        path.write_text("key: value\nlist:\n  - item1\n  - item2\n", encoding="utf-8")
         result = read_yaml(path)
         assert result["key"] == "value"
         assert result["list"] == ["item1", "item2"]
@@ -99,14 +99,14 @@ class TestReadYaml:
     def test_empty_yaml(self, tmp_path: Path) -> None:
         """Returns default on empty YAML."""
         path = tmp_path / "test.yaml"
-        path.write_text("")
+        path.write_text("", encoding="utf-8")
         result = read_yaml(path, default={})
         assert result == {}
 
     def test_yaml_with_nested_dict(self, tmp_path: Path) -> None:
         """Reads nested YAML dict."""
         path = tmp_path / "test.yaml"
-        path.write_text("a:\n  b:\n    c: 1\n")
+        path.write_text("a:\n  b:\n    c: 1\n", encoding="utf-8")
         result = read_yaml(path)
         assert result == {"a": {"b": {"c": 1}}}
 
@@ -115,7 +115,7 @@ class TestReadYaml:
     ) -> None:
         """Returns default when yaml module not available."""
         path = tmp_path / "test.yaml"
-        path.write_text("key: value")
+        path.write_text("key: value", encoding="utf-8")
 
         # Mock yaml import to fail
         import builtins
@@ -148,7 +148,7 @@ class TestSafeReadText:
     def test_valid_file(self, tmp_path: Path) -> None:
         """Reads file content."""
         path = tmp_path / "test.txt"
-        path.write_text("hello world")
+        path.write_text("hello world", encoding="utf-8")
         result = safe_read_text(path)
         assert result == "hello world"
 
@@ -161,7 +161,7 @@ class TestSafeWriteText:
         path = tmp_path / "test.txt"
         safe_write_text(path, "hello world")
         assert path.exists()
-        assert path.read_text() == "hello world"
+        assert path.read_text(encoding="utf-8") == "hello world"
 
     def test_creates_parent_dirs(self, tmp_path: Path) -> None:
         """Creates parent directories."""
@@ -172,6 +172,6 @@ class TestSafeWriteText:
     def test_overwrites_existing(self, tmp_path: Path) -> None:
         """Overwrites existing file."""
         path = tmp_path / "test.txt"
-        path.write_text("old content")
+        path.write_text("old content", encoding="utf-8")
         safe_write_text(path, "new content")
-        assert path.read_text() == "new content"
+        assert path.read_text(encoding="utf-8") == "new content"

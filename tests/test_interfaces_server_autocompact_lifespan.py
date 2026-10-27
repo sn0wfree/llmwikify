@@ -72,7 +72,7 @@ def test_memory_config_loads_auto_compact_section(tmp_path: Path) -> None:
                 },
             }
         )
-    )
+    , encoding="utf-8")
     cfg = load_memory_config(tmp_path)
     assert cfg.auto_compact["enabled"] is False
     assert cfg.auto_compact["ttl_minutes"] == 90
@@ -165,7 +165,7 @@ async def test_lifespan_respects_memory_config_disable(tmp_path: Path) -> None:
                 "auto_compact": {"enabled": False},
             }
         )
-    )
+    , encoding="utf-8")
     server._agent_service.start_auto_compact = AsyncMock()
     server._agent_service.stop_auto_compact = AsyncMock()
     server._agent_service.start_dream_scheduler = AsyncMock()

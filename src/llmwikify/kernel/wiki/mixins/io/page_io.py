@@ -390,7 +390,8 @@ class WikiPageIOMixin(WikiProtocol):
             if page.name in ("index.md", "log.md"):
                 continue
 
-            page_name = from_fs_name(str(page_path.with_suffix("")))
+            # Wikilinks use posix separators on every platform
+            page_name = from_fs_name(page_path.with_suffix("").as_posix())
 
             subdir = page_path.parts[0] if len(page_path.parts) > 1 else ""
             if len(page_path.parts) > 1:

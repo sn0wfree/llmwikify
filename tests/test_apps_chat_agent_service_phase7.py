@@ -195,7 +195,7 @@ class TestAgentServiceStartDreamScheduler:
                     "dream": {"enabled": True, "cron_expression": "0 */2 * * *"},
                 }
             )
-        )
+        , encoding="utf-8")
         sched = await svc.start_dream_scheduler()
         assert sched is not None
         assert sched.cron_expression == "0 */2 * * *"
@@ -220,7 +220,7 @@ class TestAgentServiceStartDreamScheduler:
                     "dream": {"enabled": False},
                 }
             )
-        )
+        , encoding="utf-8")
         sched = await svc.start_dream_scheduler()
         assert sched is None  # config disabled
         assert svc.dream_scheduler is None
@@ -260,7 +260,7 @@ class TestAgentServiceStartDreamScheduler:
                     "dream": {"enabled": True, "cron_expression": "0 3 * * *"},
                 }
             )
-        )
+        , encoding="utf-8")
         sched = await svc.start_dream_scheduler(cron_expression="0 5 * * *")
         assert sched.cron_expression == "0 5 * * *"
         await svc.stop_dream_scheduler()

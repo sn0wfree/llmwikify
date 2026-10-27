@@ -454,13 +454,13 @@ class TestFileToolSafety:
     def _setup_worktree(self, tmp_path: Path) -> Path:
         wt = tmp_path / "worktree"
         wt.mkdir()
-        (wt / "in_repo.txt").write_text("inside")
+        (wt / "in_repo.txt").write_text("inside", encoding="utf-8")
         return wt
 
     def test_read_outside_worktree_rejected(self, tmp_path: Path) -> None:
         wt = self._setup_worktree(tmp_path)
         outside = tmp_path / "outside.txt"
-        outside.write_text("secret")
+        outside.write_text("secret", encoding="utf-8")
 
         from llmwikify.apps.chat.skills.workflows.subagent_worker import _handle_read
 
@@ -503,7 +503,7 @@ class TestFileToolSafety:
     def test_glob_inside_worktree_succeeds(self, tmp_path: Path) -> None:
         wt = self._setup_worktree(tmp_path)
         (wt / "sub").mkdir()
-        (wt / "sub" / "x.py").write_text("x")
+        (wt / "sub" / "x.py").write_text("x", encoding="utf-8")
         from llmwikify.apps.chat.skills.workflows.subagent_worker import _handle_glob
 
         result = _handle_glob("**/*.py", worktree_path=str(wt))

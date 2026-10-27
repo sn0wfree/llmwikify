@@ -97,14 +97,14 @@ class TestL4RoutesPy:
         """routes.py should NOT import from apps.agent.routes."""
         from pathlib import Path
 
-        src = Path("src/llmwikify/interfaces/server/http/routes.py").read_text()
+        src = Path("src/llmwikify/interfaces/server/http/routes.py").read_text(encoding="utf-8")
         assert "apps.agent.routes" not in src
 
     def test_routes_py_imports_chat_sse_from_new_home(self) -> None:
         """routes.py should import chat_sse from the new location."""
         from pathlib import Path
 
-        src = Path("src/llmwikify/interfaces/server/http/routes.py").read_text()
+        src = Path("src/llmwikify/interfaces/server/http/routes.py").read_text(encoding="utf-8")
         assert "from llmwikify.interfaces.server.http.agent._common import" in src
 
     def test_routes_py_imports_research_from_new_home(self) -> None:
@@ -116,7 +116,7 @@ class TestL4RoutesPy:
         """
         from pathlib import Path
 
-        src = Path("src/llmwikify/interfaces/server/http/routes.py").read_text()
+        src = Path("src/llmwikify/interfaces/server/http/routes.py").read_text(encoding="utf-8")
         # Research routes are now handled by the SPA; no explicit
         # import is required. Verify agent_router is imported.
         assert "from llmwikify.interfaces.server.http.agent._common import" in src
@@ -141,7 +141,7 @@ class TestL3ChatRoutes:
         # apps/chat/research_engine/routes.py. Verify that new location.
         from pathlib import Path
 
-        src = Path("src/llmwikify/apps/chat/research_engine/routes.py").read_text()
+        src = Path("src/llmwikify/apps/chat/research_engine/routes.py").read_text(encoding="utf-8")
         assert "from llmwikify.interfaces" not in src
 
     def test_chat_routes_stores_deps(self) -> None:
@@ -171,7 +171,7 @@ class TestArchitectureContracts:
         for f in apps_dir.rglob("*.py"):
             if f.name.startswith("__"):
                 continue
-            lines = f.read_text().splitlines()
+            lines = f.read_text(encoding="utf-8").splitlines()
             for i, line in enumerate(lines, 1):
                 stripped = line.strip()
                 if stripped.startswith("#"):
@@ -187,7 +187,7 @@ class TestArchitectureContracts:
         (deleted) apps.agent.providers."""
         from pathlib import Path
 
-        src = Path("src/llmwikify/apps/chat/agent/agent_service.py").read_text()
+        src = Path("src/llmwikify/apps/chat/agent/agent_service.py").read_text(encoding="utf-8")
         # AgentService must import from L3 apps layer, not from itself
         has_chat_import = "from llmwikify.apps.chat" in src
         has_db_import = "from llmwikify.apps.db" in src

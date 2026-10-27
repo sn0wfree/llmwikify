@@ -264,7 +264,7 @@ def test_full_lint_pipeline_uses_lint_engine(tmp_path):
     wiki.init()
     (tmp_path / "wiki").mkdir(parents=True, exist_ok=True)
     (tmp_path / "raw").mkdir(parents=True, exist_ok=True)
-    (tmp_path / "wiki" / "Sample.md").write_text("# Sample\n\nHello world.\n")
+    (tmp_path / "wiki" / "Sample.md").write_text("# Sample\n\nHello world.\n", encoding="utf-8")
 
     result = wiki.lint()
     assert isinstance(result, dict)

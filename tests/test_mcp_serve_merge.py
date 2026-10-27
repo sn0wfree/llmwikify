@@ -207,8 +207,8 @@ def test_init_writes_serve_command_in_mcp_config():
     assert claude_template.exists(), f"Missing template: {claude_template}"
     assert codex_template.exists(), f"Missing template: {codex_template}"
 
-    claude_config = json.loads(claude_template.read_text())
-    codex_config = json.loads(codex_template.read_text())
+    claude_config = json.loads(claude_template.read_text(encoding="utf-8"))
+    codex_config = json.loads(codex_template.read_text(encoding="utf-8"))
 
     # Claude Desktop format
     assert claude_config["mcpServers"]["llmwikify"]["args"] == ["mcp"], (

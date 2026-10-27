@@ -88,7 +88,7 @@ class TestNeedsMigration:
         assert needs_migration(tmp_path) is False
 
     def test_unparseable_yaml(self, tmp_path: Path) -> None:
-        (tmp_path / ".wiki-config.yaml").write_text(": invalid: yaml: :")
+        (tmp_path / ".wiki-config.yaml").write_text(": invalid: yaml: :", encoding="utf-8")
         # Unparseable files are reported as needing migration (to give user
         # a chance to see the error and fix manually).
         assert needs_migration(tmp_path) is True
@@ -150,7 +150,7 @@ class TestAutoMigration:
         assert result.reason == "migrated"
         # Global config has the llm section
         global_cfg = json.loads(
-            (tmp_path / ".llmwikify" / "llmwikify.json").read_text()
+            (tmp_path / ".llmwikify" / "llmwikify.json").read_text(encoding="utf-8")
         )
         assert global_cfg["llm"]["provider"] == "minimax"
         assert global_cfg["llm"]["model"] == "minimax-M3"
@@ -183,7 +183,7 @@ class TestAutoMigration:
         result = auto_migrate_wiki_config(tmp_path, auto_resolve="global")
         assert result.migrated is True
         global_cfg = json.loads(
-            (tmp_path / ".llmwikify" / "llmwikify.json").read_text()
+            (tmp_path / ".llmwikify" / "llmwikify.json").read_text(encoding="utf-8")
         )
         assert global_cfg["llm"]["provider"] == "openai"
         assert global_cfg["research_mutable"]["max_sub_queries"] == 30
@@ -315,7 +315,7 @@ class TestConflictResolution:
         (tmp_path / ".llmwikify").mkdir()
         (tmp_path / ".llmwikify" / "llmwikify.json").write_text(
             json.dumps({"llm": {"provider": "openai", "model": "gpt-4o"}})
-        )
+        , encoding="utf-8")
         _write_yaml(
             tmp_path / ".wiki-config.yaml",
             {
@@ -337,7 +337,7 @@ class TestConflictResolution:
         (tmp_path / ".llmwikify").mkdir()
         (tmp_path / ".llmwikify" / "llmwikify.json").write_text(
             json.dumps({"llm": {"provider": "openai", "model": "gpt-4o"}})
-        )
+        , encoding="utf-8")
         _write_yaml(
             tmp_path / ".wiki-config.yaml",
             {
@@ -346,7 +346,7 @@ class TestConflictResolution:
         )
         auto_migrate_wiki_config(tmp_path, auto_resolve="global")
         global_cfg = json.loads(
-            (tmp_path / ".llmwikify" / "llmwikify.json").read_text()
+            (tmp_path / ".llmwikify" / "llmwikify.json").read_text(encoding="utf-8")
         )
         # Existing global values preserved on conflict
         assert global_cfg["llm"]["provider"] == "openai"
@@ -364,7 +364,7 @@ class TestConflictResolution:
         (tmp_path / ".llmwikify").mkdir()
         (tmp_path / ".llmwikify" / "llmwikify.json").write_text(
             json.dumps({"llm": {"provider": "openai"}})
-        )
+        , encoding="utf-8")
         _write_yaml(
             tmp_path / ".wiki-config.yaml",
             {
@@ -373,7 +373,7 @@ class TestConflictResolution:
         )
         auto_migrate_wiki_config(tmp_path, auto_resolve="wiki")
         global_cfg = json.loads(
-            (tmp_path / ".llmwikify" / "llmwikify.json").read_text()
+            (tmp_path / ".llmwikify" / "llmwikify.json").read_text(encoding="utf-8")
         )
         # Wiki value overrides global
         assert global_cfg["llm"]["provider"] == "minimax"
@@ -387,7 +387,7 @@ class TestConflictResolution:
         (tmp_path / ".llmwikify").mkdir()
         (tmp_path / ".llmwikify" / "llmwikify.json").write_text(
             json.dumps({"llm": {"provider": "openai"}})
-        )
+        , encoding="utf-8")
         _write_yaml(
             tmp_path / ".wiki-config.yaml",
             {
@@ -429,7 +429,7 @@ class TestChangesTracking:
         (tmp_path / ".llmwikify").mkdir()
         (tmp_path / ".llmwikify" / "llmwikify.json").write_text(
             json.dumps({"llm": {"provider": "openai"}})
-        )
+        , encoding="utf-8")
         _write_yaml(
             tmp_path / ".wiki-config.yaml",
             {
@@ -494,7 +494,7 @@ class TestDiscoverWikis:
 
     def test_cwd_with_config(self, tmp_path: Path) -> None:
         """Finds wiki in CWD when .wiki-config.yaml exists."""
-        (tmp_path / ".wiki-config.yaml").write_text("version: '0.41'")
+        (tmp_path / ".wiki-config.yaml").write_text("version: '0.41'", encoding="utf-8")
         result = discover_wikis(root=tmp_path)
         assert tmp_path in result
 
@@ -504,7 +504,7 @@ class TestDiscoverWikis:
         """Finds wiki via WIKI_ROOT env var."""
         wiki_dir = tmp_path / "env_wiki"
         wiki_dir.mkdir()
-        (wiki_dir / ".wiki-config.yaml").write_text("version: '0.41'")
+        (wiki_dir / ".wiki-config.yaml").write_text("version: '0.41'", encoding="utf-8")
         monkeypatch.setenv("WIKI_ROOT", str(wiki_dir))
         result = discover_wikis(root=tmp_path)
         assert wiki_dir in result
@@ -531,7 +531,7 @@ class TestDiscoverWikis:
         """Provider results are merged with CWD and env results."""
         wiki_dir = tmp_path / "provider_wiki"
         wiki_dir.mkdir()
-        (wiki_dir / ".wiki-config.yaml").write_text("version: '0.41'")
+        (wiki_dir / ".wiki-config.yaml").write_text("version: '0.41'", encoding="utf-8")
 
         mock_provider = MagicMock(spec=WikiDiscoveryProvider)
         mock_provider.discover_wiki_roots.return_value = [wiki_dir]
@@ -550,7 +550,7 @@ class TestDiscoverWikis:
 
     def test_no_duplicates(self, tmp_path: Path) -> None:
         """Duplicate paths from provider are not added."""
-        (tmp_path / ".wiki-config.yaml").write_text("version: '0.41'")
+        (tmp_path / ".wiki-config.yaml").write_text("version: '0.41'", encoding="utf-8")
 
         mock_provider = MagicMock(spec=WikiDiscoveryProvider)
         mock_provider.discover_wiki_roots.return_value = [tmp_path]

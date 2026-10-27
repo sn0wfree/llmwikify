@@ -350,7 +350,7 @@ def test_load_cli_config_loads_existing_yaml(tmp_path, monkeypatch):
     """An existing .wiki-config.yaml is parsed and returned."""
     monkeypatch.chdir(tmp_path)
     cfg_file = tmp_path / ".wiki-config.yaml"
-    cfg_file.write_text("llm:\n  enabled: true\n  model: foo\n")
+    cfg_file.write_text("llm:\n  enabled: true\n  model: foo\n", encoding="utf-8")
 
     from llmwikify.interfaces.cli._config import load_cli_config
 
@@ -365,7 +365,7 @@ def test_load_cli_config_handles_invalid_yaml(tmp_path, monkeypatch, caplog):
 
     monkeypatch.chdir(tmp_path)
     cfg_file = tmp_path / ".wiki-config.yaml"
-    cfg_file.write_text("this: is: not: valid: yaml: at: all: :::")
+    cfg_file.write_text("this: is: not: valid: yaml: at: all: :::", encoding="utf-8")
 
     from llmwikify.interfaces.cli._config import load_cli_config
 
@@ -381,7 +381,7 @@ def test_load_cli_config_handles_empty_yaml(tmp_path, monkeypatch):
     """A YAML file that parses to None/empty returns empty dict (not None)."""
     monkeypatch.chdir(tmp_path)
     cfg_file = tmp_path / ".wiki-config.yaml"
-    cfg_file.write_text("")  # Empty file → yaml.safe_load returns None
+    cfg_file.write_text("", encoding="utf-8")  # Empty file → yaml.safe_load returns None
 
     from llmwikify.interfaces.cli._config import load_cli_config
 

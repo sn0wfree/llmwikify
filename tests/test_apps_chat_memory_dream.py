@@ -92,7 +92,7 @@ class TestDreamCursor:
         )
         dream._write_cursor(1234567890.5)
         assert dream._cursor_path.exists()
-        assert float(dream._cursor_path.read_text()) == 1234567890.5
+        assert float(dream._cursor_path.read_text(encoding="utf-8")) == 1234567890.5
 
     def test_read_after_write(self, tmp_path: Path) -> None:
         dream = Dream(
@@ -113,7 +113,7 @@ class TestDreamCursor:
         )
         # Manually write garbage
         dream._memory_dir.mkdir(parents=True, exist_ok=True)
-        dream._cursor_path.write_text("not-a-number")
+        dream._cursor_path.write_text("not-a-number", encoding="utf-8")
         assert dream._read_cursor() == 0.0
 
 
@@ -255,7 +255,7 @@ class TestDreamWriteFacts:
         # Find the fact md (not index)
         fact_mds = [f for f in md_files if f.name != "index.md"]
         assert len(fact_mds) == 1
-        content = fact_mds[0].read_text()
+        content = fact_mds[0].read_text(encoding="utf-8")
         assert "Momentum works in A-share" in content
 
     @pytest.mark.asyncio

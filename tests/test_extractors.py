@@ -45,7 +45,7 @@ class TestExtractTextFile:
     def test_extract_md(self, temp_wiki):
         """Test markdown extraction."""
         test_file = temp_wiki / "test.md"
-        test_file.write_text("# Test Title\n\nContent here")
+        test_file.write_text("# Test Title\n\nContent here", encoding="utf-8")
 
         result = extract_text_file(test_file)
 
@@ -56,7 +56,7 @@ class TestExtractTextFile:
     def test_extract_txt(self, temp_wiki):
         """Test plain text extraction."""
         test_file = temp_wiki / "test.txt"
-        test_file.write_text("Plain text content")
+        test_file.write_text("Plain text content", encoding="utf-8")
 
         result = extract_text_file(test_file)
 
@@ -144,7 +144,7 @@ class TestErrorHandling:
     def test_pdf_missing_dep_returns_error(self, temp_wiki):
         """PDF extractor returns error type when pymupdf not available."""
         test_file = temp_wiki / "test.pdf"
-        test_file.write_text("fake pdf content")
+        test_file.write_text("fake pdf content", encoding="utf-8")
 
         result = extract(str(test_file))
         # If pymupdf not installed, should return error type

@@ -16,7 +16,7 @@ class TestServeWikiFile:
         (tmp_path / "raw").mkdir()
         (tmp_path / "wiki").mkdir()
         (tmp_path / "raw" / "test.pdf").write_bytes(b"%PDF-1.4\n")
-        (tmp_path / "wiki" / "page.md").write_text("---\ntitle: Page\n---\n")
+        (tmp_path / "wiki" / "page.md").write_text("---\ntitle: Page\n---\n", encoding="utf-8")
         return tmp_path
 
     def test_serves_pdf_file(self, wiki_root):
@@ -68,7 +68,7 @@ class TestServeWikiFile:
 
     def test_rejects_symlink_escape(self, wiki_root, tmp_path):
         outside = tmp_path.parent / "outside-secret.txt"
-        outside.write_text("secret")
+        outside.write_text("secret", encoding="utf-8")
         link = wiki_root / "wiki" / "sneaky.txt"
         try:
             link.symlink_to(outside)

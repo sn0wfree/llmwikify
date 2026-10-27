@@ -56,7 +56,7 @@ class TestWiki:
         wiki.init()
 
         # Write custom content to log.md
-        (temp_wiki / "wiki" / "log.md").write_text("# Custom Log\n")
+        (temp_wiki / "wiki" / "log.md").write_text("# Custom Log\n", encoding="utf-8")
 
         result = wiki.init(overwrite=True)
 
@@ -67,7 +67,7 @@ class TestWiki:
         assert ".wiki-config.yaml.example" in result["skipped_files"]
 
         # log.md should be recreated
-        log_content = (temp_wiki / "wiki" / "log.md").read_text()
+        log_content = (temp_wiki / "wiki" / "log.md").read_text(encoding="utf-8")
         assert "# Custom Log" not in log_content
         assert "Initialized:" in log_content
 
@@ -116,7 +116,7 @@ class TestWiki:
         assert "Logged" in result
         assert (temp_wiki / "wiki" / "log.md").exists()
 
-        log_content = (temp_wiki / "wiki" / "log.md").read_text()
+        log_content = (temp_wiki / "wiki" / "log.md").read_text(encoding="utf-8")
         assert "test" in log_content
         assert "Test operation" in log_content
 
@@ -194,7 +194,7 @@ class TestWiki:
 
         # Create test file
         test_file = temp_wiki / "raw" / "test.md"
-        test_file.write_text("# Test Document\n\nContent here")
+        test_file.write_text("# Test Document\n\nContent here", encoding="utf-8")
 
         result = wiki.ingest_source(str(test_file))
 
@@ -237,7 +237,7 @@ class TestWiki:
 
         saved_file = temp_wiki / "raw" / "test-article.md"
         assert saved_file.exists()
-        assert saved_file.read_text() == "Article content here"
+        assert saved_file.read_text(encoding="utf-8") == "Article content here"
 
         wiki.close()
 
@@ -249,7 +249,7 @@ class TestWiki:
         wiki.init()
 
         saved_file = temp_wiki / "raw" / "test-article.md"
-        saved_file.write_text("Existing content")
+        saved_file.write_text("Existing content", encoding="utf-8")
 
         mock_result = ExtractedContent(
             text="New article content",
@@ -269,7 +269,7 @@ class TestWiki:
         assert "error" not in result
         assert result["already_exists"] is True
         assert result["saved_to_raw"] is False
-        assert saved_file.read_text() == "Existing content"
+        assert saved_file.read_text(encoding="utf-8") == "Existing content"
 
         wiki.close()
 
@@ -364,11 +364,11 @@ class TestWiki:
         # Append custom content to wiki.md
         custom_marker = "__CUSTOM_TYPE_MARKER__"
         wiki_md = temp_wiki / "wiki.md"
-        content = wiki_md.read_text()
+        content = wiki_md.read_text(encoding="utf-8")
         wiki_md.write_text(
             content
             + f"\n### Custom Page Types\n| Type | Location | {custom_marker} |\n"
-        )
+        , encoding="utf-8")
 
         captured_messages = []
 
@@ -621,7 +621,7 @@ class TestWiki:
 redirect_to: target.md
 ---
 # Redirect
-""")
+""", encoding="utf-8")
 
         # Without config, redirect_to pages should NOT be excluded
         assert wiki._should_exclude_orphan("redirect", redirect_page) is False
@@ -637,7 +637,7 @@ redirect_to: target.md
 redirect_to: target.md
 ---
 # Redirect
-""")
+""", encoding="utf-8")
 
         # With explicit config, redirect_to pages should be excluded
         assert wiki._should_exclude_orphan("redirect", redirect_page) is True
@@ -648,7 +648,7 @@ redirect_to: target.md
         wiki.init()
 
         normal_page = temp_wiki / "wiki" / "Important Page.md"
-        normal_page.write_text("# Important")
+        normal_page.write_text("# Important", encoding="utf-8")
 
         assert wiki._should_exclude_orphan("important-page", normal_page) is False
 
@@ -659,7 +659,7 @@ redirect_to: target.md
         wiki.init()
 
         draft_page = temp_wiki / "wiki" / "draft-test.md"
-        draft_page.write_text("# Draft")
+        draft_page.write_text("# Draft", encoding="utf-8")
 
         assert wiki._should_exclude_orphan("draft-test", draft_page) is True
 
@@ -671,7 +671,7 @@ redirect_to: target.md
 
         # Create dated page (should be excluded when configured)
         dated = temp_wiki / "wiki" / "2025-07-31.md"
-        dated.write_text("# Daily Summary")
+        dated.write_text("# Daily Summary", encoding="utf-8")
 
         # Create normal page (should be reported)
         wiki.write_page("Orphan Company", "# Company")
@@ -791,7 +791,7 @@ redirect_to: target.md
         outside_dir = temp_wiki / "documents"
         outside_dir.mkdir()
         test_file = outside_dir / "research-report.md"
-        test_file.write_text("# Research Report\n\nKey findings here")
+        test_file.write_text("# Research Report\n\nKey findings here", encoding="utf-8")
 
         result = wiki.ingest_source(str(test_file))
 
@@ -806,7 +806,7 @@ redirect_to: target.md
         # Verify file was copied
         copied_file = temp_wiki / "raw" / "research-report.md"
         assert copied_file.exists()
-        assert copied_file.read_text() == "# Research Report\n\nKey findings here"
+        assert copied_file.read_text(encoding="utf-8") == "# Research Report\n\nKey findings here"
 
         wiki.close()
 
@@ -817,7 +817,7 @@ redirect_to: target.md
 
         # Create a file INSIDE raw/
         test_file = temp_wiki / "raw" / "existing-source.md"
-        test_file.write_text("# Existing Source\n\nAlready here")
+        test_file.write_text("# Existing Source\n\nAlready here", encoding="utf-8")
 
         result = wiki.ingest_source(str(test_file))
 
@@ -840,7 +840,7 @@ redirect_to: target.md
         outside_dir = temp_wiki / "documents"
         outside_dir.mkdir()
         test_file = outside_dir / "report.md"
-        test_file.write_text("# Report Content\n\nSome data")
+        test_file.write_text("# Report Content\n\nSome data", encoding="utf-8")
 
         result1 = wiki.ingest_source(str(test_file))
         assert result1["saved_to_raw"] is True
@@ -853,7 +853,7 @@ redirect_to: target.md
         assert "already exists" in result2["hint"].lower()
 
         # Original file should be unchanged
-        assert test_file.read_text() == "# Report Content\n\nSome data"
+        assert test_file.read_text(encoding="utf-8") == "# Report Content\n\nSome data"
 
         wiki.close()
 
@@ -863,7 +863,7 @@ redirect_to: target.md
         wiki.init()
 
         test_file = temp_wiki / "raw" / "test.md"
-        test_file.write_text("# Test\n\nContent")
+        test_file.write_text("# Test\n\nContent", encoding="utf-8")
 
         result = wiki.ingest_source(str(test_file))
 

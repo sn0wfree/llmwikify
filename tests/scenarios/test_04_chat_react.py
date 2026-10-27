@@ -38,7 +38,7 @@ def _get_real_jwt(server_url: str) -> str:
     """
     pat_path = Path.home() / ".llmwikify" / "pat"
     assert pat_path.exists(), f"No PAT at {pat_path}. Run `llmwikify pat` first."
-    pat = pat_path.read_text().strip()
+    pat = pat_path.read_text(encoding="utf-8").strip()
     resp = httpx.post(
         f"{server_url}/api/auth/verify",
         json={"pat": pat},

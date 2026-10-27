@@ -42,8 +42,8 @@ class TestBuildLintContext:
         wiki = Wiki(temp_wiki)
         wiki.init()
 
-        (temp_wiki / "raw" / "test1.md").write_text("# Source 1\n")
-        (temp_wiki / "raw" / "test2.md").write_text("# Source 2\n")
+        (temp_wiki / "raw" / "test1.md").write_text("# Source 1\n", encoding="utf-8")
+        (temp_wiki / "raw" / "test2.md").write_text("# Source 2\n", encoding="utf-8")
 
         context = wiki._build_lint_context()
 
@@ -58,7 +58,7 @@ class TestBuildLintContext:
         wiki.init()
 
         for i in range(25):
-            (temp_wiki / "raw" / f"source_{i}.md").write_text(f"# Source {i}\n")
+            (temp_wiki / "raw" / f"source_{i}.md").write_text(f"# Source {i}\n", encoding="utf-8")
 
         context = wiki._build_lint_context(limit=20)
 

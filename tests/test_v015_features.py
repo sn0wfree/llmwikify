@@ -17,7 +17,7 @@ class TestIngestMetadata:
         wiki.init()
 
         test_file = temp_wiki / "raw" / "test.md"
-        test_file.write_text("# Test Document\n\nContent here")
+        test_file.write_text("# Test Document\n\nContent here", encoding="utf-8")
 
         result = wiki.ingest_source(str(test_file))
 
@@ -32,7 +32,7 @@ class TestIngestMetadata:
         wiki.init()
 
         test_file = temp_wiki / "raw" / "test.md"
-        test_file.write_text("# Test Document\n\nContent here with some words")
+        test_file.write_text("# Test Document\n\nContent here with some words", encoding="utf-8")
 
         result = wiki.ingest_source(str(test_file))
 
@@ -47,7 +47,7 @@ class TestIngestMetadata:
         wiki.init()
 
         test_file = temp_wiki / "raw" / "test.md"
-        test_file.write_text("one two three four five")
+        test_file.write_text("one two three four five", encoding="utf-8")
 
         result = wiki.ingest_source(str(test_file))
 
@@ -62,7 +62,7 @@ class TestIngestMetadata:
         wiki.init()
 
         test_file = temp_wiki / "raw" / "test.md"
-        test_file.write_text("# No images here")
+        test_file.write_text("# No images here", encoding="utf-8")
 
         result = wiki.ingest_source(str(test_file))
 
@@ -80,7 +80,7 @@ class TestIngestMetadata:
         test_file = temp_wiki / "raw" / "test.md"
         test_file.write_text(
             "# Page\n\n![alt](image.png)\n\nMore text ![alt2](photo.jpg)"
-        )
+        , encoding="utf-8")
 
         result = wiki.ingest_source(str(test_file))
 
@@ -96,7 +96,7 @@ class TestIngestMetadata:
 
         test_file = temp_wiki / "raw" / "test.md"
         long_content = "A" * 300
-        test_file.write_text(long_content)
+        test_file.write_text(long_content, encoding="utf-8")
 
         result = wiki.ingest_source(str(test_file))
 
@@ -112,7 +112,7 @@ class TestIngestMetadata:
         wiki.init()
 
         test_file = temp_wiki / "raw" / "test.md"
-        test_file.write_text("Some text")
+        test_file.write_text("Some text", encoding="utf-8")
 
         result = wiki.ingest_source(str(test_file))
 
@@ -127,7 +127,7 @@ class TestIngestMetadata:
         wiki.init()
 
         test_file = temp_wiki / "raw" / "test.md"
-        test_file.write_text("# Test\n\nImportant content with key takeaways")
+        test_file.write_text("# Test\n\nImportant content with key takeaways", encoding="utf-8")
 
         result = wiki.ingest_source(str(test_file))
 
@@ -143,7 +143,7 @@ class TestIngestMetadata:
         wiki.init()
 
         test_file = temp_wiki / "raw" / "test.md"
-        test_file.write_text("# Test")
+        test_file.write_text("# Test", encoding="utf-8")
 
         result = wiki.ingest_source(str(test_file))
 
@@ -163,7 +163,7 @@ class TestDetectDatedClaims:
 
         # Create a raw source from 2024
         src = temp_wiki / "raw" / "recent.md"
-        src.write_text("Report from 2024. Latest data from 2024.")
+        src.write_text("Report from 2024. Latest data from 2024.", encoding="utf-8")
 
         # Create a wiki page with old year mention
         wiki.write_page(
@@ -188,7 +188,7 @@ class TestDetectDatedClaims:
         wiki.init()
 
         src = temp_wiki / "raw" / "recent.md"
-        src.write_text("Report from 2024.")
+        src.write_text("Report from 2024.", encoding="utf-8")
 
         wiki.write_page(
             "Recent Company", "# Recent Company\n\nIn 2024, the company launched."
@@ -206,7 +206,7 @@ class TestDetectDatedClaims:
         wiki.init()
 
         src = temp_wiki / "raw" / "recent.md"
-        src.write_text("Report from 2024.")
+        src.write_text("Report from 2024.", encoding="utf-8")
 
         # Create 5 pages with old claims
         for i in range(5):
@@ -239,7 +239,7 @@ class TestDetectDatedClaims:
         wiki.init()
 
         src = temp_wiki / "raw" / "recent.md"
-        src.write_text("Report from 2024.")
+        src.write_text("Report from 2024.", encoding="utf-8")
 
         wiki.write_page("Old Page", "# Old Page\n\nFounded in 2019.")
 
@@ -259,10 +259,10 @@ class TestDetectDatedClaims:
         wiki.init()
 
         (temp_wiki / "raw" / "gold").mkdir()
-        (temp_wiki / "raw" / "gold" / "article1.md").write_text("Gold news from 2024")
-        (temp_wiki / "raw" / "gold" / "article2.md").write_text("Gold news from 2023")
+        (temp_wiki / "raw" / "gold" / "article1.md").write_text("Gold news from 2024", encoding="utf-8")
+        (temp_wiki / "raw" / "gold" / "article2.md").write_text("Gold news from 2023", encoding="utf-8")
         (temp_wiki / "raw" / "copper").mkdir()
-        (temp_wiki / "raw" / "copper" / "news.md").write_text("Copper news from 2024")
+        (temp_wiki / "raw" / "copper" / "news.md").write_text("Copper news from 2024", encoding="utf-8")
 
         wiki.write_page("Old Company", "# Old Company\n\nFounded in 2019.")
 
@@ -280,11 +280,11 @@ class TestDetectDatedClaims:
         wiki = Wiki(temp_wiki)
         wiki.init()
 
-        (temp_wiki / "raw" / "root_article.md").write_text("Root article from 2024")
+        (temp_wiki / "raw" / "root_article.md").write_text("Root article from 2024", encoding="utf-8")
         (temp_wiki / "raw" / "category").mkdir()
         (temp_wiki / "raw" / "category" / "sub_article.md").write_text(
             "Sub article from 2023"
-        )
+        , encoding="utf-8")
 
         wiki.write_page("Old Page", "# Old Page\n\nData from 2019.")
 
@@ -301,7 +301,7 @@ class TestDetectDatedClaims:
 
         (temp_wiki / "raw" / "empty_category").mkdir()
         (temp_wiki / "raw" / "gold").mkdir()
-        (temp_wiki / "raw" / "gold" / "article.md").write_text("Article from 2024")
+        (temp_wiki / "raw" / "gold" / "article.md").write_text("Article from 2024", encoding="utf-8")
 
         hints = wiki._detect_dated_claims()
         assert hints == []
@@ -317,9 +317,9 @@ class TestDetectDatedClaims:
         wiki = Wiki(temp_wiki)
         wiki.init()
 
-        (temp_wiki / "raw" / "old.md").write_text("Old news from 2020")
+        (temp_wiki / "raw" / "old.md").write_text("Old news from 2020", encoding="utf-8")
         (temp_wiki / "raw" / "gold").mkdir()
-        (temp_wiki / "raw" / "gold" / "latest.md").write_text("Latest news from 2024")
+        (temp_wiki / "raw" / "gold" / "latest.md").write_text("Latest news from 2024", encoding="utf-8")
 
         wiki.write_page("Company", "# Company\n\nFounded in 2018.")
 
@@ -339,19 +339,19 @@ class TestDetectDatedClaims:
         (temp_wiki / "raw" / "gold" / "2024" / "Q1").mkdir(parents=True)
         (temp_wiki / "raw" / "gold" / "2024" / "Q1" / "jan.md").write_text(
             "Jan 2024 article"
-        )
+        , encoding="utf-8")
         (temp_wiki / "raw" / "gold" / "2024" / "Q2").mkdir(parents=True)
         (temp_wiki / "raw" / "gold" / "2024" / "Q2" / "may.md").write_text(
             "May 2024 article"
-        )
+        , encoding="utf-8")
         (temp_wiki / "raw" / "gold" / "2023").mkdir(parents=True)
         (temp_wiki / "raw" / "gold" / "2023" / "annual.md").write_text(
             "Annual report 2023"
-        )
+        , encoding="utf-8")
         (temp_wiki / "raw" / "copper").mkdir()
-        (temp_wiki / "raw" / "copper" / "news.md").write_text("Copper news 2024")
+        (temp_wiki / "raw" / "copper" / "news.md").write_text("Copper news 2024", encoding="utf-8")
         (temp_wiki / "raw" / "archive" / "old").mkdir(parents=True)
-        (temp_wiki / "raw" / "root.md").write_text("Root article 2022")
+        (temp_wiki / "raw" / "root.md").write_text("Root article 2022", encoding="utf-8")
 
         wiki.write_page("Old Company", "# Old Company\n\nFounded in 2019.")
 
@@ -605,7 +605,7 @@ class TestLintHintsStructure:
         wiki.init()
 
         src = temp_wiki / "raw" / "recent.md"
-        src.write_text("Report from 2024.")
+        src.write_text("Report from 2024.", encoding="utf-8")
 
         # Create 5 pages with old claims (should produce critical hints)
         for i in range(5):

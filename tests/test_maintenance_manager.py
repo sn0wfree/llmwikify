@@ -70,7 +70,7 @@ def test_config_parses_full_section(tmp_path: Path):
                 },
             }
         )
-    )
+    , encoding="utf-8")
     cfg = load_maintenance_config(path)
     assert cfg.enabled is False
     assert cfg.auto_ingest.enabled is False
@@ -84,7 +84,7 @@ def test_config_parses_full_section(tmp_path: Path):
 
 def test_config_survives_garbage_section(tmp_path: Path):
     path = tmp_path / "llmwikify.json"
-    path.write_text(json.dumps({"maintenance": "not-a-dict"}))
+    path.write_text(json.dumps({"maintenance": "not-a-dict"}), encoding="utf-8")
     cfg = load_maintenance_config(path)
     assert cfg.enabled is True
 

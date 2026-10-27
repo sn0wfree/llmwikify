@@ -45,7 +45,7 @@ class TestYAMLTemplates:
         if not template_path.exists():
             pytest.skip("Template file not found")
 
-        template = yaml.safe_load(template_path.read_text())
+        template = yaml.safe_load(template_path.read_text(encoding="utf-8"))
         assert template is not None
         assert "llm" in template or "wiki" in template
 
@@ -66,7 +66,7 @@ class TestYAMLTemplates:
         if not template_path.exists():
             pytest.skip("Template file not found")
 
-        template = yaml.safe_load(template_path.read_text())
+        template = yaml.safe_load(template_path.read_text(encoding="utf-8"))
         assert template is not None
 
     def test_7_3_parse_research_wiki(self):
@@ -86,7 +86,7 @@ class TestYAMLTemplates:
         if not template_path.exists():
             pytest.skip("Template file not found")
 
-        template = yaml.safe_load(template_path.read_text())
+        template = yaml.safe_load(template_path.read_text(encoding="utf-8"))
         assert template is not None
 
     def test_7_4_parse_mining_news(self):
@@ -106,7 +106,7 @@ class TestYAMLTemplates:
         if not template_path.exists():
             pytest.skip("Template file not found")
 
-        template = yaml.safe_load(template_path.read_text())
+        template = yaml.safe_load(template_path.read_text(encoding="utf-8"))
         assert template is not None
 
     def test_7_5_custom_config(self, temp_dir):

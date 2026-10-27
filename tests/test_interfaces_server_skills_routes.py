@@ -45,7 +45,7 @@ class TestPluginLoaderFrontmatterIntegration:
                 ---
                 # body
                 actual instructions for the LLM
-                """))
+                """), encoding="utf-8")
 
         reg = SkillRegistry()
         _load_skill_md(skill_dir, reg)
@@ -74,7 +74,7 @@ class TestPluginLoaderFrontmatterIntegration:
 
         skill_dir = tmp_path / "no_fm_skill"
         skill_dir.mkdir()
-        (skill_dir / "SKILL.md").write_text("# Just markdown\n\nNo frontmatter here.")
+        (skill_dir / "SKILL.md").write_text("# Just markdown\n\nNo frontmatter here.", encoding="utf-8")
 
         reg = SkillRegistry()
         _load_skill_md(skill_dir, reg)
@@ -97,7 +97,7 @@ class TestPluginLoaderFrontmatterIntegration:
 
         skill_dir = tmp_path / "bad"
         skill_dir.mkdir()
-        (skill_dir / "SKILL.md").write_text("---\nname: : bad yaml\n---\nbody\n")
+        (skill_dir / "SKILL.md").write_text("---\nname: : bad yaml\n---\nbody\n", encoding="utf-8")
 
         reg = SkillRegistry()
         with caplog.at_level("WARNING"):

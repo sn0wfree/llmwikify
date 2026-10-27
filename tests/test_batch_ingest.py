@@ -33,7 +33,7 @@ class TestBatchJsonOutput:
         """Without --self-create, stdout should contain valid JSON."""
         (temp_wiki / "raw").mkdir(exist_ok=True)
         test_file = temp_wiki / "raw" / "test.md"
-        test_file.write_text("# Test Document\n\nContent here")
+        test_file.write_text("# Test Document\n\nContent here", encoding="utf-8")
 
         cli = WikiCLI(temp_wiki)
         cli.wiki.init()
@@ -69,7 +69,7 @@ class TestBatchJsonFields:
         """Each result should have required fields for agent processing."""
         (temp_wiki / "raw").mkdir(exist_ok=True)
         test_file = temp_wiki / "raw" / "test.md"
-        test_file.write_text("# Test Document\n\nImportant content")
+        test_file.write_text("# Test Document\n\nImportant content", encoding="utf-8")
 
         cli = WikiCLI(temp_wiki)
         cli.wiki.init()
@@ -113,7 +113,7 @@ class TestStderrStdoutSeparation:
         """Human-readable summary should go to stderr, not stdout."""
         (temp_wiki / "raw").mkdir(exist_ok=True)
         test_file = temp_wiki / "raw" / "test.md"
-        test_file.write_text("# Test Document\n\nContent")
+        test_file.write_text("# Test Document\n\nContent", encoding="utf-8")
 
         cli = WikiCLI(temp_wiki)
         cli.wiki.init()
@@ -149,8 +149,8 @@ class TestBatchMultiLevelDirs:
         """Batch should recursively scan subdirectories."""
         subdir = temp_wiki / "raw" / "subdir"
         subdir.mkdir(parents=True, exist_ok=True)
-        (temp_wiki / "raw" / "root.md").write_text("# Root Document")
-        (subdir / "nested.md").write_text("# Nested Document")
+        (temp_wiki / "raw" / "root.md").write_text("# Root Document", encoding="utf-8")
+        (subdir / "nested.md").write_text("# Nested Document", encoding="utf-8")
 
         cli = WikiCLI(temp_wiki)
         cli.wiki.init()
@@ -179,7 +179,7 @@ class TestBatchDryRun:
         """--dry-run should output JSON preview without calling ingest_source."""
         (temp_wiki / "raw").mkdir(exist_ok=True)
         test_file = temp_wiki / "raw" / "test.md"
-        test_file.write_text("# Test Document")
+        test_file.write_text("# Test Document", encoding="utf-8")
 
         cli = WikiCLI(temp_wiki)
         cli.wiki.init()
@@ -210,7 +210,7 @@ class TestBatchDryRun:
         """--dry-run --self-create should show LLM preview message."""
         (temp_wiki / "raw").mkdir(exist_ok=True)
         test_file = temp_wiki / "raw" / "test.md"
-        test_file.write_text("# Test Document")
+        test_file.write_text("# Test Document", encoding="utf-8")
 
         cli = WikiCLI(temp_wiki)
         cli.wiki.init()
@@ -240,13 +240,13 @@ class TestBatchPartialFailure:
         """Some sources fail, others succeed; JSON reflects per-source status."""
         (temp_wiki / "raw").mkdir(exist_ok=True)
         test_file = temp_wiki / "raw" / "test.md"
-        test_file.write_text("# Test Document")
+        test_file.write_text("# Test Document", encoding="utf-8")
 
         cli = WikiCLI(temp_wiki)
         cli.wiki.init()
 
         failing_file = temp_wiki / "raw" / "fail.txt"
-        failing_file.write_text("binary-like content")
+        failing_file.write_text("binary-like content", encoding="utf-8")
 
         args = Args()
         args.source = str(temp_wiki / "raw")
@@ -301,7 +301,7 @@ class TestBatchSelfCreate:
         """With --self-create, LLM processing should execute."""
         (temp_wiki / "raw").mkdir(exist_ok=True)
         test_file = temp_wiki / "raw" / "test.md"
-        test_file.write_text("# Test Document\n\nContent")
+        test_file.write_text("# Test Document\n\nContent", encoding="utf-8")
 
         cli = WikiCLI(temp_wiki)
         cli.wiki.init()
@@ -373,7 +373,7 @@ class TestBatchSelfCreate:
         """With --self-create, LLM failure should be handled gracefully."""
         (temp_wiki / "raw").mkdir(exist_ok=True)
         test_file = temp_wiki / "raw" / "test.md"
-        test_file.write_text("# Test Document")
+        test_file.write_text("# Test Document", encoding="utf-8")
 
         cli = WikiCLI(temp_wiki)
         cli.wiki.init()
@@ -428,7 +428,7 @@ class TestBatchUserGuidance:
         """stderr should contain batch complete message."""
         (temp_wiki / "raw").mkdir(exist_ok=True)
         test_file = temp_wiki / "raw" / "test.md"
-        test_file.write_text("# Test Document")
+        test_file.write_text("# Test Document", encoding="utf-8")
 
         cli = WikiCLI(temp_wiki)
         cli.wiki.init()
@@ -476,9 +476,9 @@ class TestBatchGlobPattern:
     def test_batch_with_glob_pattern(self, temp_wiki):
         """Batch should support glob patterns as source."""
         (temp_wiki / "raw").mkdir(exist_ok=True)
-        (temp_wiki / "raw" / "doc1.md").write_text("# Doc 1")
-        (temp_wiki / "raw" / "doc2.md").write_text("# Doc 2")
-        (temp_wiki / "raw" / "skip.txt").write_text("skip")
+        (temp_wiki / "raw" / "doc1.md").write_text("# Doc 1", encoding="utf-8")
+        (temp_wiki / "raw" / "doc2.md").write_text("# Doc 2", encoding="utf-8")
+        (temp_wiki / "raw" / "skip.txt").write_text("skip", encoding="utf-8")
 
         cli = WikiCLI(temp_wiki)
         cli.wiki.init()

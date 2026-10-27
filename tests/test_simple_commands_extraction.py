@@ -134,7 +134,7 @@ def test_wiki_cli_methods_not_duplicated_in_app_file():
     This is the structural guard against someone re-inlining
     the extracted code back into _app.py.
     """
-    app_src = Path("src/llmwikify/interfaces/cli/_app.py").read_text()
+    app_src = Path("src/llmwikify/interfaces/cli/_app.py").read_text(encoding="utf-8")
     for _, _, run_fn_name, method_name in MIGRATED_COMMANDS:
         # The function call site is OK — what we forbid is a second
         # full method body (e.g., `def method_name(self, args):` with
@@ -186,7 +186,7 @@ def test_old_commands_py_file_is_gone():
 
 def test_app_file_imports_run_functions_from_commands_subpackage():
     """_app.py imports the 10 run_<name> functions from the new subpackage."""
-    src = Path("src/llmwikify/interfaces/cli/_app.py").read_text()
+    src = Path("src/llmwikify/interfaces/cli/_app.py").read_text(encoding="utf-8")
     for _, _, run_fn_name, _ in MIGRATED_COMMANDS:
         # There should be an import like:
         # from .commands.X import run_Y
@@ -197,7 +197,7 @@ def test_app_file_imports_run_functions_from_commands_subpackage():
 
 def test_cli_init_does_not_import_from_old_path():
     """cli/__init__.py imports from _app, not from commands (the subpackage)."""
-    src = Path("src/llmwikify/interfaces/cli/__init__.py").read_text()
+    src = Path("src/llmwikify/interfaces/cli/__init__.py").read_text(encoding="utf-8")
     assert "from ._app import" in src, "cli/__init__.py should import from ._app"
     assert (
         "from .commands import WikiCLI" not in src

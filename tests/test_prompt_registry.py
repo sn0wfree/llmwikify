@@ -25,7 +25,7 @@ def temp_prompts_dir(tmp_path):
         "system": "You are a wiki agent.\n{% if provider == 'ollama' %}Output only JSON.{% endif %}",
         "user": "Process: {{ title }}\nContent: {{ content }}\nMax chars: {{ max_content_chars }}",
     }
-    (defaults_dir / "analyze_source.yaml").write_text(yaml.dump(analyze_template))
+    (defaults_dir / "analyze_source.yaml").write_text(yaml.dump(analyze_template), encoding="utf-8")
 
     investigate_template = {
         "name": "investigate_lint",
@@ -38,7 +38,7 @@ def temp_prompts_dir(tmp_path):
         "system": "You are an analyst.",
         "user": "Contradictions: {{ contradictions_json }}\nGaps: {{ data_gaps_json }}\nPages: {{ total_pages }}",
     }
-    (defaults_dir / "investigate_lint.yaml").write_text(yaml.dump(investigate_template))
+    (defaults_dir / "investigate_lint.yaml").write_text(yaml.dump(investigate_template), encoding="utf-8")
 
     return defaults_dir
 
@@ -57,7 +57,7 @@ def custom_prompts_dir(tmp_path):
         "system": "Custom agent for {{ provider }}.",
         "user": "Custom: {{ title }}",
     }
-    (tmp_path / "analyze_source.yaml").write_text(yaml.dump(custom_override))
+    (tmp_path / "analyze_source.yaml").write_text(yaml.dump(custom_override), encoding="utf-8")
     return tmp_path
 
 
@@ -181,7 +181,7 @@ class TestPromptRegistryRendering:
             "system": "",
             "user": "Just user: {{ name }}",
         }
-        (tmp_path / "empty.yaml").write_text(yaml.dump(empty_template))
+        (tmp_path / "empty.yaml").write_text(yaml.dump(empty_template), encoding="utf-8")
 
         registry = PromptRegistry(custom_dir=tmp_path)
         messages = registry.get_messages("empty", name="Test")
@@ -248,7 +248,7 @@ class TestPromptRegistryProviderOverrides:
                 },
             },
         }
-        (tmp_path / "test.yaml").write_text(yaml.dump(template_with_override))
+        (tmp_path / "test.yaml").write_text(yaml.dump(template_with_override), encoding="utf-8")
 
         registry_openai = PromptRegistry(provider="openai", custom_dir=tmp_path)
         registry_anthropic = PromptRegistry(provider="anthropic", custom_dir=tmp_path)
@@ -284,7 +284,7 @@ class TestRenderDocument:
             "document": "# Document\n\nVersion: {{ version }}\nProvider: {{ provider }}",
             "text": "",
         }
-        (tmp_path / "doc_template.yaml").write_text(yaml.dump(doc_template))
+        (tmp_path / "doc_template.yaml").write_text(yaml.dump(doc_template), encoding="utf-8")
 
         registry = PromptRegistry(provider="openai", custom_dir=tmp_path)
         result = registry.render_document("doc_template", version="2.0")
@@ -300,7 +300,7 @@ class TestRenderDocument:
             "params": {},
             "document": "Hello {% raw %}{{Topic}}{% endraw %} world: {{ name }}",
         }
-        (tmp_path / "raw_doc.yaml").write_text(yaml.dump(doc_template))
+        (tmp_path / "raw_doc.yaml").write_text(yaml.dump(doc_template), encoding="utf-8")
 
         registry = PromptRegistry(custom_dir=tmp_path)
         result = registry.render_document("raw_doc", name="Test")
@@ -315,7 +315,7 @@ class TestRenderDocument:
             "version": "1.0",
             "params": {},
         }
-        (tmp_path / "empty_doc.yaml").write_text(yaml.dump(empty_template))
+        (tmp_path / "empty_doc.yaml").write_text(yaml.dump(empty_template), encoding="utf-8")
 
         registry = PromptRegistry(custom_dir=tmp_path)
         result = registry.render_document("empty_doc")
@@ -331,7 +331,7 @@ class TestRenderText:
             "params": {},
             "text": "Do this: {{ action }}\nProvider: {{ provider }}",
         }
-        (tmp_path / "text_template.yaml").write_text(yaml.dump(text_template))
+        (tmp_path / "text_template.yaml").write_text(yaml.dump(text_template), encoding="utf-8")
 
         registry = PromptRegistry(provider="ollama", custom_dir=tmp_path)
         result = registry.render_text("text_template", action="analyze")
@@ -345,7 +345,7 @@ class TestRenderText:
             "version": "1.0",
             "params": {},
         }
-        (tmp_path / "empty_text.yaml").write_text(yaml.dump(empty_template))
+        (tmp_path / "empty_text.yaml").write_text(yaml.dump(empty_template), encoding="utf-8")
 
         registry = PromptRegistry(custom_dir=tmp_path)
         result = registry.render_text("empty_text")
@@ -365,7 +365,7 @@ class TestGetApiParams:
                 "custom_thing": "value",
             },
         }
-        (tmp_path / "mixed_params.yaml").write_text(yaml.dump(template))
+        (tmp_path / "mixed_params.yaml").write_text(yaml.dump(template), encoding="utf-8")
 
         registry = PromptRegistry(custom_dir=tmp_path)
 
@@ -448,7 +448,7 @@ class TestProviderOverridesExtended:
                 },
             },
         }
-        (tmp_path / "ctx_test.yaml").write_text(yaml.dump(template))
+        (tmp_path / "ctx_test.yaml").write_text(yaml.dump(template), encoding="utf-8")
 
         registry_openai = PromptRegistry(provider="openai", custom_dir=tmp_path)
         registry_ollama = PromptRegistry(provider="ollama", custom_dir=tmp_path)
@@ -476,7 +476,7 @@ class TestProviderOverridesExtended:
                 },
             },
         }
-        (tmp_path / "pp_test.yaml").write_text(yaml.dump(template))
+        (tmp_path / "pp_test.yaml").write_text(yaml.dump(template), encoding="utf-8")
 
         registry_default = PromptRegistry(provider="openai", custom_dir=tmp_path)
         registry_anthropic = PromptRegistry(provider="anthropic", custom_dir=tmp_path)
@@ -508,7 +508,7 @@ class TestProviderOverridesExtended:
                 },
             },
         }
-        (tmp_path / "trigger_test.yaml").write_text(yaml.dump(template))
+        (tmp_path / "trigger_test.yaml").write_text(yaml.dump(template), encoding="utf-8")
 
         registry_openai = PromptRegistry(provider="openai", custom_dir=tmp_path)
         registry_ollama = PromptRegistry(provider="ollama", custom_dir=tmp_path)

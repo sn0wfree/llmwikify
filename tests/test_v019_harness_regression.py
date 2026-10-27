@@ -358,7 +358,7 @@ class TestGoldenSourceIntegration:
     def test_golden_entity_extraction(self, temp_wiki):
         """Golden test 01: Entity extraction from technical article."""
         golden_spec = yaml.safe_load(
-            (GOLDEN_DIR / "01_entity_extraction.yaml").read_text()
+            (GOLDEN_DIR / "01_entity_extraction.yaml").read_text(encoding="utf-8")
         )
         runner = GoldenTestRunner()
         result = runner.run_golden_test(golden_spec, temp_wiki)
@@ -367,7 +367,7 @@ class TestGoldenSourceIntegration:
     def test_golden_contradiction_detection(self, temp_wiki):
         """Golden test 02: Contradiction detection."""
         golden_spec = yaml.safe_load(
-            (GOLDEN_DIR / "02_contradiction_detection.yaml").read_text()
+            (GOLDEN_DIR / "02_contradiction_detection.yaml").read_text(encoding="utf-8")
         )
         runner = GoldenTestRunner()
         result = runner.run_golden_test(golden_spec, temp_wiki)
@@ -376,7 +376,7 @@ class TestGoldenSourceIntegration:
     def test_golden_data_gap_detection(self, temp_wiki):
         """Golden test 03: Data gap detection."""
         golden_spec = yaml.safe_load(
-            (GOLDEN_DIR / "03_data_gap_detection.yaml").read_text()
+            (GOLDEN_DIR / "03_data_gap_detection.yaml").read_text(encoding="utf-8")
         )
         runner = GoldenTestRunner()
         result = runner.run_golden_test(golden_spec, temp_wiki)
@@ -385,7 +385,7 @@ class TestGoldenSourceIntegration:
     def test_golden_wiki_ops_generation(self, temp_wiki):
         """Golden test 04: Wiki operations generation."""
         golden_spec = yaml.safe_load(
-            (GOLDEN_DIR / "04_wiki_ops_generation.yaml").read_text()
+            (GOLDEN_DIR / "04_wiki_ops_generation.yaml").read_text(encoding="utf-8")
         )
         runner = GoldenTestRunner()
         result = runner.run_golden_test(golden_spec, temp_wiki)
@@ -394,7 +394,7 @@ class TestGoldenSourceIntegration:
     def test_golden_synthesize_answer(self, temp_wiki):
         """Golden test 05: Synthesize structured answer."""
         golden_spec = yaml.safe_load(
-            (GOLDEN_DIR / "05_synthesize_answer.yaml").read_text()
+            (GOLDEN_DIR / "05_synthesize_answer.yaml").read_text(encoding="utf-8")
         )
         runner = GoldenTestRunner()
         result = runner.run_golden_test(golden_spec, temp_wiki)
@@ -458,7 +458,7 @@ class TestContextInjectionMethodsExist:
         for yaml_file in sorted(defaults_dir.glob("*.yaml")):
             if yaml_file.name.startswith("_"):
                 continue
-            data = yaml.safe_load(yaml_file.read_text())
+            data = yaml.safe_load(yaml_file.read_text(encoding="utf-8"))
             ctx = data.get("context_injection", {})
             for key, spec in ctx.items():
                 method_name = spec if isinstance(spec, str) else spec.get("method", "")

@@ -67,7 +67,7 @@ class TestDeadCodeRemoval:
     def test_no_unreachable_code_after_raise(self):
         """_call_llm_with_retry should not have unreachable code after raise."""
         wiki_path = Path(__file__).parent.parent / "src/llmwikify/kernel/wiki/wiki.py"
-        content = wiki_path.read_text()
+        content = wiki_path.read_text(encoding="utf-8")
 
         # Find the raise statement in _call_llm_with_retry
         # After the raise, there should be no code until the next method definition
@@ -99,7 +99,7 @@ class TestOrphanHtmlFile:
 
         if html_path.exists():
             # If it exists, it should be importable without errors
-            content = html_path.read_text()
+            content = html_path.read_text(encoding="utf-8")
             # Should have proper imports
             assert "import" in content, "html.py should have import statements"
             # Should not call non-existent functions
@@ -113,7 +113,7 @@ class TestOrphanHtmlFile:
             Path(__file__).parent.parent
             / "src/llmwikify/foundation/extractors/__init__.py"
         )
-        content = init_path.read_text()
+        content = init_path.read_text(encoding="utf-8")
 
         # Should not import from .html
         assert "from .html import" not in content
@@ -136,7 +136,7 @@ class TestCLIDefaultWikiRoot:
             Path(__file__).parent.parent
             / "src/llmwikify/interfaces/cli/commands/init_cmd.py"
         )
-        content = commands_path.read_text()
+        content = commands_path.read_text(encoding="utf-8")
 
         # Should not have hardcoded developer path as default
         assert (
@@ -224,7 +224,7 @@ class TestFallbackBehavior:
         """Unknown formats should fall back to text extraction, not fail silently."""
         # Create a test file with unknown extension
         test_file = temp_wiki / "test.unknown"
-        test_file.write_text("Some text content")
+        test_file.write_text("Some text content", encoding="utf-8")
 
         from llmwikify.foundation.extractors.base import extract
 
@@ -255,12 +255,12 @@ class TestMCPToolCount:
         tools_path = (
             Path(__file__).parent.parent / "src/llmwikify/interfaces/mcp/tools.py"
         )
-        content = tools_path.read_text()
+        content = tools_path.read_text(encoding="utf-8")
         actual_count = content.count("@mcp.tool")
 
         # Count tools in README
         readme_path = Path(__file__).parent.parent / "README.md"
-        readme_content = readme_path.read_text()
+        readme_content = readme_path.read_text(encoding="utf-8")
 
         # Find the MCP tools table
         # Count rows in the table (excluding header and separator)
@@ -301,7 +301,7 @@ class TestSinkCLI:
             Path(__file__).parent.parent
             / "src/llmwikify/interfaces/cli/commands/sink_status.py"
         )
-        content = commands_path.read_text()
+        content = commands_path.read_text(encoding="utf-8")
 
         # Check for sink command in argparse setup
         has_sink_cmd = (
@@ -342,7 +342,7 @@ class TestSynthesizeCLI:
             Path(__file__).parent.parent
             / "src/llmwikify/interfaces/cli/commands/synthesize.py"
         )
-        content = commands_path.read_text()
+        content = commands_path.read_text(encoding="utf-8")
 
         has_synthesize = (
             "'synthesize'" in content
@@ -368,7 +368,7 @@ class TestLintInvestigations:
             Path(__file__).parent.parent
             / "src/llmwikify/interfaces/cli/commands/lint.py"
         )
-        content = commands_path.read_text()
+        content = commands_path.read_text(encoding="utf-8")
 
         # Check for --generate-investigations in argparse setup
         has_inv_flag = (
@@ -396,7 +396,7 @@ class TestBatchSmart:
             Path(__file__).parent.parent
             / "src/llmwikify/interfaces/cli/commands/batch.py"
         )
-        content = commands_path.read_text()
+        content = commands_path.read_text(encoding="utf-8")
 
         # Verify the batch command exists (via class name,
         # argparse name, or setup_parser call).
@@ -424,7 +424,7 @@ class TestReadTheDocs:
     def test_readthedocs_yaml_exists(self):
         """.readthedocs.yaml should exist if documentation URL is configured."""
         pyproject_path = Path(__file__).parent.parent / "pyproject.toml"
-        content = pyproject_path.read_text()
+        content = pyproject_path.read_text(encoding="utf-8")
 
         if "readthedocs" in content or "Documentation" in content:
             rtd_path = Path(__file__).parent.parent / ".readthedocs.yaml"
@@ -455,7 +455,7 @@ class TestPromptsInit:
             Path(__file__).parent.parent
             / "src/llmwikify/foundation/prompts/_defaults/__init__.py"
         )
-        content = defaults_path.read_text()
+        content = defaults_path.read_text(encoding="utf-8")
 
         # Should have more than just a docstring
         lines = [line.strip() for line in content.split("\n") if line.strip()]
@@ -477,7 +477,7 @@ class TestPytestAsyncio:
     def test_async_tests_exist_if_dep_declared(self):
         """If pytest-asyncio is a dependency, there should be async tests."""
         pyproject_path = Path(__file__).parent.parent / "pyproject.toml"
-        content = pyproject_path.read_text()
+        content = pyproject_path.read_text(encoding="utf-8")
 
         has_asyncio_dep = "pytest-asyncio" in content
 
@@ -486,7 +486,7 @@ class TestPytestAsyncio:
             tests_dir = Path(__file__).parent
             async_test_count = 0
             for test_file in tests_dir.glob("test_*.py"):
-                file_content = test_file.read_text()
+                file_content = test_file.read_text(encoding="utf-8")
                 async_test_count += len(re.findall(r"async def test_", file_content))
 
             # Either have async tests or remove the dep

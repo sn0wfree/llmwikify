@@ -124,7 +124,7 @@ def test_local_backend_append_log(backend):
     result = backend.append_log(entry)
     log_path = backend.wiki_dir / "log.md"
     assert log_path.exists()
-    log_content = log_path.read_text()
+    log_content = log_path.read_text(encoding="utf-8")
     assert "2026-06-06T12:00:00Z" in log_content
     assert "init" in log_content
     assert "Wiki created" in log_content

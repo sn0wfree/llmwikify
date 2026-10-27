@@ -28,7 +28,7 @@ class TestExtractPageSummary:
         page.parent.mkdir(parents=True, exist_ok=True)
         page.write_text(
             "---\ntitle: Test Concept\nsummary: This is a frontmatter summary.\n---\n\n# Test Concept\n\nSome content here."
-        )
+        , encoding="utf-8")
         result = wiki._extract_page_summary(page)
         assert result == "This is a frontmatter summary."
 
@@ -39,7 +39,7 @@ class TestExtractPageSummary:
         page.parent.mkdir(parents=True, exist_ok=True)
         page.write_text(
             "# Test Source\n\n## Summary\nThis is the summary section first paragraph.\n\nSome more text.\n\n## Key Entities\n..."
-        )
+        , encoding="utf-8")
         result = wiki._extract_page_summary(page)
         assert result == "This is the summary section first paragraph."
 
@@ -50,7 +50,7 @@ class TestExtractPageSummary:
         page.parent.mkdir(parents=True, exist_ok=True)
         page.write_text(
             "# Test Entity\n\nThis is the first paragraph after the title.\n\nMore content."
-        )
+        , encoding="utf-8")
         result = wiki._extract_page_summary(page)
         assert result == "This is the first paragraph after the title."
 
@@ -59,7 +59,7 @@ class TestExtractPageSummary:
         wiki, tmp = test_wiki
         page = wiki.wiki_dir / "concepts" / "Empty Page.md"
         page.parent.mkdir(parents=True, exist_ok=True)
-        page.write_text("# Empty Page")
+        page.write_text("# Empty Page", encoding="utf-8")
         result = wiki._extract_page_summary(page)
         assert result == "Empty Page"
 
@@ -69,7 +69,7 @@ class TestExtractPageSummary:
         page = wiki.wiki_dir / "concepts" / "Long Page.md"
         page.parent.mkdir(parents=True, exist_ok=True)
         long_text = "A" * 150
-        page.write_text(f"# Long Page\n\n{long_text}")
+        page.write_text(f"# Long Page\n\n{long_text}", encoding="utf-8")
         result = wiki._extract_page_summary(page, max_len=120)
         assert len(result) <= 120
         assert result.endswith("...")
@@ -79,7 +79,7 @@ class TestExtractPageSummary:
         wiki, tmp = test_wiki
         page = wiki.wiki_dir / "concepts" / "Markdown Page.md"
         page.parent.mkdir(parents=True, exist_ok=True)
-        page.write_text("# Markdown Page\n\nThis is **bold** and `code` text.")
+        page.write_text("# Markdown Page\n\nThis is **bold** and `code` text.", encoding="utf-8")
         result = wiki._extract_page_summary(page)
         assert "**" not in result
         assert "`" not in result
@@ -93,7 +93,7 @@ class TestExtractPageSummary:
         page.parent.mkdir(parents=True, exist_ok=True)
         page.write_text(
             "# Comment Page\n\n<!-- some comment -->\n\nActual content here."
-        )
+        , encoding="utf-8")
         result = wiki._extract_page_summary(page)
         assert result == "Actual content here."
 
@@ -102,7 +102,7 @@ class TestExtractPageSummary:
         wiki, tmp = test_wiki
         page = wiki.wiki_dir / "concepts" / "Blank.md"
         page.parent.mkdir(parents=True, exist_ok=True)
-        page.write_text("")
+        page.write_text("", encoding="utf-8")
         result = wiki._extract_page_summary(page)
         assert result == "Blank"
 
@@ -117,7 +117,7 @@ class TestExtractPageSummary:
         page.parent.mkdir(parents=True, exist_ok=True)
         # 第 117 个字符 (max_len-3) 落在 [[symbols/纯碱]] 内部 (占位 110..123)
         para = "x" * 110 + "[[symbols/纯碱]]" + " 尾部内容" * 5
-        page.write_text(f"# Board\n\n{para}\n")
+        page.write_text(f"# Board\n\n{para}\n", encoding="utf-8")
         result = wiki._extract_page_summary(page, max_len=120)
         assert result.count("[[") == result.count("]]")
         assert result.endswith("...")
@@ -129,7 +129,7 @@ class TestExtractPageSummary:
         page = wiki.wiki_dir / "sectors" / "Board2.md"
         page.parent.mkdir(parents=True, exist_ok=True)
         para = "x" * 60 + "[[symbols/纯碱]]" + "y" * 60
-        page.write_text(f"# Board2\n\n{para}\n")
+        page.write_text(f"# Board2\n\n{para}\n", encoding="utf-8")
         result = wiki._extract_page_summary(page, max_len=120)
         assert result.count("[[") == result.count("]]")
         assert result.endswith("...")
@@ -141,7 +141,7 @@ class TestExtractPageSummary:
         page = wiki.wiki_dir / "sectors" / "Board Links.md"
         page.parent.mkdir(parents=True, exist_ok=True)
         para = "z" * 40 + "[[a1]]" + "w" * 60 + "[[symbols/纯碱]]" + " 尾" * 10
-        page.write_text(f"# Board Links\n\n{para}\n")
+        page.write_text(f"# Board Links\n\n{para}\n", encoding="utf-8")
         result = wiki._extract_page_summary(page, max_len=120)
         assert result.count("[[") == result.count("]]")
         assert result.endswith("...")
@@ -155,7 +155,7 @@ class TestGetSourceAnalysisSummary:
         wiki, tmp = test_wiki
         page = wiki.wiki_dir / "sources" / "Uncached.md"
         page.parent.mkdir(parents=True, exist_ok=True)
-        page.write_text("# Uncached Source\n\n## Summary\nNo analysis here.")
+        page.write_text("# Uncached Source\n\n## Summary\nNo analysis here.", encoding="utf-8")
         result = wiki._get_source_analysis_summary(page)
         assert result is None
 
@@ -171,7 +171,7 @@ class TestGetSourceAnalysisSummary:
             }
         )
         comment = f'<!-- llmwikify:analysis {{"version":1,"hash":"abc","analyzed_at":"2026-01-01","data":{analysis_json}}} -->'
-        page.write_text(f"# Cached Source\n\n## Summary\nTest.\n\n{comment}")
+        page.write_text(f"# Cached Source\n\n## Summary\nTest.\n\n{comment}", encoding="utf-8")
         result = wiki._get_source_analysis_summary(page)
         assert result is not None
         assert result["topics"] == ["AI", "Machine Learning"]
@@ -190,22 +190,22 @@ class TestUpdateIndexFile:
         )
         (wiki.wiki_dir / "sources" / "Source A.md").write_text(
             "# Source A\n\nA summary of source A."
-        )
+        , encoding="utf-8")
         (wiki.wiki_dir / "concepts" / "Concept B.md").parent.mkdir(
             parents=True, exist_ok=True
         )
         (wiki.wiki_dir / "concepts" / "Concept B.md").write_text(
             "# Concept B\n\nA concept about B."
-        )
+        , encoding="utf-8")
         (wiki.wiki_dir / "entities" / "Entity C.md").parent.mkdir(
             parents=True, exist_ok=True
         )
         (wiki.wiki_dir / "entities" / "Entity C.md").write_text(
             "# Entity C\n\nAn entity named C."
-        )
+        , encoding="utf-8")
 
         wiki._update_index_file()
-        content = wiki.index_file.read_text()
+        content = wiki.index_file.read_text(encoding="utf-8")
 
         assert "## Sources (1)" in content
         assert "## Concepts (1)" in content
@@ -222,10 +222,10 @@ class TestUpdateIndexFile:
         )
         (wiki.wiki_dir / "concepts" / "Test.md").write_text(
             "# Test\n\nThis is a test page summary for indexing."
-        )
+        , encoding="utf-8")
 
         wiki._update_index_file()
-        content = wiki.index_file.read_text()
+        content = wiki.index_file.read_text(encoding="utf-8")
 
         assert "This is a test page summary for indexing" in content
 
@@ -233,11 +233,11 @@ class TestUpdateIndexFile:
         """Index header should show total and per-type counts."""
         wiki, tmp = test_wiki
         (wiki.wiki_dir / "concepts" / "A.md").parent.mkdir(parents=True, exist_ok=True)
-        (wiki.wiki_dir / "concepts" / "A.md").write_text("# A\n\nContent A.")
-        (wiki.wiki_dir / "concepts" / "B.md").write_text("# B\n\nContent B.")
+        (wiki.wiki_dir / "concepts" / "A.md").write_text("# A\n\nContent A.", encoding="utf-8")
+        (wiki.wiki_dir / "concepts" / "B.md").write_text("# B\n\nContent B.", encoding="utf-8")
 
         wiki._update_index_file()
-        content = wiki.index_file.read_text()
+        content = wiki.index_file.read_text(encoding="utf-8")
 
         # Includes 2 concepts + overview.md from init
         assert "Concepts: 2" in content
@@ -248,7 +248,7 @@ class TestUpdateIndexFile:
         """Wiki with only overview.md should still show it grouped."""
         wiki, tmp = test_wiki
         wiki._update_index_file()
-        content = wiki.index_file.read_text()
+        content = wiki.index_file.read_text(encoding="utf-8")
         # overview.md is created by init, so it should appear
         assert "## Overview (1)" in content
         assert "[[overview]]" in content
@@ -260,10 +260,10 @@ class TestUpdateIndexFile:
         sink_dir.mkdir(parents=True, exist_ok=True)
         (sink_dir / "test.sink.md").write_text(
             "## [2026-01-01 12:00:00] Test entry\n\nSome pending update."
-        )
+        , encoding="utf-8")
 
         wiki._update_index_file()
-        content = wiki.index_file.read_text()
+        content = wiki.index_file.read_text(encoding="utf-8")
 
         assert "## Pending Sink Buffers" in content
         assert "[[test]]" in content
@@ -282,10 +282,10 @@ class TestUpdateIndexFile:
         comment = f'<!-- llmwikify:analysis {{"version":1,"hash":"abc","analyzed_at":"2026-01-01","data":{analysis_json}}} -->'
         page.write_text(
             f"# Analyzed Source\n\n## Summary\nA detailed analysis.\n\n{comment}"
-        )
+        , encoding="utf-8")
 
         wiki._update_index_file()
-        content = wiki.index_file.read_text()
+        content = wiki.index_file.read_text(encoding="utf-8")
 
         assert "Topics: Risk Parity, Portfolio" in content
         assert "Entities: Ray Dalio" in content
@@ -300,15 +300,15 @@ class TestLintFixIndexUpdate:
         (wiki.wiki_dir / "concepts" / "Test.md").parent.mkdir(
             parents=True, exist_ok=True
         )
-        (wiki.wiki_dir / "concepts" / "Test.md").write_text("# Test\n\nA concept page.")
+        (wiki.wiki_dir / "concepts" / "Test.md").write_text("# Test\n\nA concept page.", encoding="utf-8")
 
         # Reset index to old format
-        wiki.index_file.write_text("# Wiki Index\n\n## Pages\n\n*(No pages yet)*\n")
+        wiki.index_file.write_text("# Wiki Index\n\n## Pages\n\n*(No pages yet)*\n", encoding="utf-8")
 
         result = wiki.lint(mode="fix")
 
         assert result.get("auto_fix", {}).get("index_updated") is True
-        content = wiki.index_file.read_text()
+        content = wiki.index_file.read_text(encoding="utf-8")
         assert "## Concepts (1)" in content
         assert "A concept page" in content
 
@@ -316,9 +316,9 @@ class TestLintFixIndexUpdate:
         """Running lint with mode=check should NOT update index.md."""
         wiki, tmp = test_wiki
         original = "# Wiki Index\n\nOld content."
-        wiki.index_file.write_text(original)
+        wiki.index_file.write_text(original, encoding="utf-8")
 
         wiki.lint(mode="check")
 
-        content = wiki.index_file.read_text()
+        content = wiki.index_file.read_text(encoding="utf-8")
         assert content == original

@@ -161,7 +161,7 @@ class TestExtractSubdirsFromWikiMd:
         """wiki.md exists but has no 'Directory Structure' section."""
         (tmp_path / "wiki.md").write_text(
             "# Wiki Schema\n\n## Page Types\n\nSome text, no tree.\n"
-        )
+        , encoding="utf-8")
         w = Wiki(tmp_path)
         assert w._extract_subdirs_from_wiki_md() == []
 
@@ -172,7 +172,7 @@ class TestExtractSubdirsFromWikiMd:
         (tmp_path / "wiki.md").write_text(
             "# Wiki Schema\n\n## Directory Structure\n\n```\nwiki/\n"
             "├── sources/\n└── .sink/\n```\n"
-        )
+        , encoding="utf-8")
         (tmp_path / "wiki").mkdir()
         (tmp_path / "wiki" / "sources").mkdir()
         (tmp_path / "wiki" / ".sink").mkdir()

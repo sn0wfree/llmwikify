@@ -45,7 +45,7 @@ AI is transforming healthcare diagnostics.
 
 ## Sources
 - [Source: AI in Healthcare Part 1](raw/source1.md)
-""")
+""", encoding="utf-8")
 
     (raw_dir / "source2.md").write_text("""
 # AI in Healthcare Part 2
@@ -78,7 +78,7 @@ New study confirms AI diagnostic accuracy but notes demographic bias.
 
 ## Sources
 - [Source: AI in Healthcare Part 2](raw/source2.md)
-""")
+""", encoding="utf-8")
 
     # Create wiki source pages
     sources_dir = tmp / "wiki" / "sources"
@@ -118,7 +118,7 @@ AI is transforming healthcare diagnostics.
 
 ## Sources
 - [Source: AI in Healthcare Part 1](raw/source1.md)
-""")
+""", encoding="utf-8")
 
     (sources_dir / "ai-healthcare-2.md").write_text("""
 ---
@@ -162,7 +162,7 @@ New study confirms AI diagnostic accuracy but notes demographic bias.
 
 ## Sources
 - [Source: AI in Healthcare Part 2](raw/source2.md)
-""")
+""", encoding="utf-8")
 
     # Create a concept page
     concepts_dir = tmp / "wiki" / "concepts"
@@ -182,7 +182,7 @@ AI is a broad field of computer science focused on creating intelligent machines
 
 ## Sources
 - [Source: AI in Healthcare Part 1](raw/source1.md)
-""")
+""", encoding="utf-8")
 
     yield wiki, tmp
 

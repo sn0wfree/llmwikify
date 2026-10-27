@@ -39,7 +39,7 @@ AI is a broad field.
 
 [[concepts/Machine Learning]]
 [[concepts/Deep Learning]]
-""")
+""", encoding="utf-8")
 
     (concepts_dir / "Machine Learning.md").write_text("""
 ---
@@ -57,7 +57,7 @@ ML is a subset of AI.
 
 [[concepts/Artificial Intelligence]]
 [[concepts/Deep Learning]]
-""")
+""", encoding="utf-8")
 
     (concepts_dir / "Deep Learning.md").write_text("""
 ---
@@ -75,7 +75,7 @@ DL uses neural networks.
 
 [[concepts/Machine Learning]]
 [[concepts/Neural Networks]]
-""")
+""", encoding="utf-8")
 
     yield wiki, tmp
 

@@ -419,7 +419,7 @@ def test_fallback_failure_leaves_unprocessed(tmp_path):
     )
     (tmp_path / "raw").mkdir()
     f = tmp_path / "raw" / "a.md"
-    f.write_text("x")
+    f.write_text("x", encoding="utf-8")
 
     svc = AutoIngestService(
         wiki=wiki,
@@ -459,7 +459,7 @@ def test_llm_write_pages_no_ops_marks_processed(tmp_path):
     )
     (tmp_path / "raw").mkdir()
     f = tmp_path / "raw" / "a.md"
-    f.write_text("x")
+    f.write_text("x", encoding="utf-8")
 
     svc = AutoIngestService(
         wiki=wiki,
@@ -496,7 +496,7 @@ def test_load_processed_corrupt_json(tmp_path):
     (tmp_path / "raw").mkdir()
     state_file = tmp_path / ".llmwikify" / "maintenance" / "processed.json"
     state_file.parent.mkdir(parents=True)
-    state_file.write_text("{corrupt json!!")
+    state_file.write_text("{corrupt json!!", encoding="utf-8")
 
     svc = AutoIngestService(
         wiki=SimpleNamespace(root=tmp_path, raw_dir=tmp_path / "raw"),
@@ -515,7 +515,7 @@ def test_load_processed_wrong_version(tmp_path):
     (tmp_path / "raw").mkdir()
     state_file = tmp_path / ".llmwikify" / "maintenance" / "processed.json"
     state_file.parent.mkdir(parents=True)
-    state_file.write_text(json.dumps({"version": 999, "files": {"a.md": {}}}))
+    state_file.write_text(json.dumps({"version": 999, "files": {"a.md": {}}}), encoding="utf-8")
 
     svc = AutoIngestService(
         wiki=SimpleNamespace(root=tmp_path, raw_dir=tmp_path / "raw"),
@@ -604,7 +604,7 @@ def test_to_dict_roundtrip(tmp_path):
                 },
             }
         )
-    )
+    , encoding="utf-8")
     cfg = load_maintenance_config(path)
     d = to_dict(cfg)
     assert d["enabled"] is False
@@ -631,7 +631,7 @@ def test_config_non_dict_subsections_ignored(tmp_path):
                 },
             }
         )
-    )
+    , encoding="utf-8")
     cfg = load_maintenance_config(path)
     # defaults preserved when sub-sections are non-dict
     assert cfg.auto_ingest.enabled is True
@@ -643,7 +643,7 @@ def test_config_json_parse_error(tmp_path):
     from llmwikify.apps.agent.maintenance.config import load_maintenance_config
 
     path = tmp_path / "llmwikify.json"
-    path.write_text("{not valid json")
+    path.write_text("{not valid json", encoding="utf-8")
     cfg = load_maintenance_config(path)
     assert cfg.enabled is True  # defaults
 
@@ -652,7 +652,7 @@ def test_config_maintenance_not_dict(tmp_path):
     from llmwikify.apps.agent.maintenance.config import load_maintenance_config
 
     path = tmp_path / "llmwikify.json"
-    path.write_text(json.dumps({"maintenance": "string-not-dict"}))
+    path.write_text(json.dumps({"maintenance": "string-not-dict"}), encoding="utf-8")
     cfg = load_maintenance_config(path)
     assert cfg.enabled is True
 
@@ -924,6 +924,6 @@ def test_health_history_survives_restart(tmp_path):
     # verify file exists
     state_file = tmp_path / ".llmwikify" / "maintenance" / "health_history.json"
     assert state_file.exists()
-    data = json.loads(state_file.read_text())
+    data = json.loads(state_file.read_text(encoding="utf-8"))
     assert len(data) >= 1
     assert data[0]["type"] == "lint"

@@ -16,7 +16,7 @@ class TestComputeContentHash:
         wiki = Wiki(temp_wiki)
         wiki.init()
 
-        (temp_wiki / "raw" / "test.md").write_text("Hello world")
+        (temp_wiki / "raw" / "test.md").write_text("Hello world", encoding="utf-8")
 
         hash1 = wiki._compute_content_hash("raw/test.md")
         hash2 = wiki._compute_content_hash("raw/test.md")
@@ -29,10 +29,10 @@ class TestComputeContentHash:
         wiki = Wiki(temp_wiki)
         wiki.init()
 
-        (temp_wiki / "raw" / "test.md").write_text("Hello world")
+        (temp_wiki / "raw" / "test.md").write_text("Hello world", encoding="utf-8")
         hash1 = wiki._compute_content_hash("raw/test.md")
 
-        (temp_wiki / "raw" / "test.md").write_text("Hello universe")
+        (temp_wiki / "raw" / "test.md").write_text("Hello universe", encoding="utf-8")
         hash2 = wiki._compute_content_hash("raw/test.md")
 
         assert hash1 != hash2
@@ -50,7 +50,7 @@ class TestFindSourceSummaryPage:
         (temp_wiki / "wiki" / "sources").mkdir(parents=True, exist_ok=True)
         (temp_wiki / "wiki" / "sources" / "nvidia-article.md").write_text(
             "# NVIDIA Article\n"
-        )
+        , encoding="utf-8")
 
         result = wiki._find_source_summary_page("raw/nvidia-article.md")
 
@@ -89,7 +89,7 @@ class TestCacheSourceAnalysis:
 
         (temp_wiki / "wiki" / "sources").mkdir(parents=True, exist_ok=True)
         page = temp_wiki / "wiki" / "sources" / "test.md"
-        page.write_text("# Test\n")
+        page.write_text("# Test\n", encoding="utf-8")
 
         analysis = {
             "entities": [{"name": "NVIDIA", "type": "organization"}],
@@ -112,7 +112,7 @@ class TestCacheSourceAnalysis:
 
         (temp_wiki / "wiki" / "sources").mkdir(parents=True, exist_ok=True)
         page = temp_wiki / "wiki" / "sources" / "test.md"
-        page.write_text("# Test\n")
+        page.write_text("# Test\n", encoding="utf-8")
 
         analysis1 = {"entities": [{"name": "A"}]}
         analysis2 = {"entities": [{"name": "B"}]}
@@ -131,7 +131,7 @@ class TestCacheSourceAnalysis:
 
         (temp_wiki / "wiki" / "sources").mkdir(parents=True, exist_ok=True)
         page = temp_wiki / "wiki" / "sources" / "test.md"
-        page.write_text("# Test\n")
+        page.write_text("# Test\n", encoding="utf-8")
 
         cached = wiki._get_cached_source_analysis(page)
 
@@ -147,7 +147,7 @@ class TestAnalyzeSource:
         wiki = Wiki(temp_wiki)
         wiki.init()
 
-        (temp_wiki / "raw" / "test.md").write_text("Test content")
+        (temp_wiki / "raw" / "test.md").write_text("Test content", encoding="utf-8")
 
         result = wiki.analyze_source("raw/test.md")
 
@@ -161,8 +161,8 @@ class TestAnalyzeSource:
         wiki.init()
 
         (temp_wiki / "wiki" / "sources").mkdir(parents=True, exist_ok=True)
-        (temp_wiki / "wiki" / "sources" / "test.md").write_text("# Test\n")
-        (temp_wiki / "raw" / "test.md").write_text("Test content about AI and NVIDIA")
+        (temp_wiki / "wiki" / "sources" / "test.md").write_text("# Test\n", encoding="utf-8")
+        (temp_wiki / "raw" / "test.md").write_text("Test content about AI and NVIDIA", encoding="utf-8")
 
         mock_client = MagicMock()
         mock_client.chat_json.return_value = {
@@ -189,8 +189,8 @@ class TestAnalyzeSource:
         wiki.init()
 
         (temp_wiki / "wiki" / "sources").mkdir(parents=True, exist_ok=True)
-        (temp_wiki / "wiki" / "sources" / "test.md").write_text("# Test\n")
-        (temp_wiki / "raw" / "test.md").write_text("Test content")
+        (temp_wiki / "wiki" / "sources" / "test.md").write_text("# Test\n", encoding="utf-8")
+        (temp_wiki / "raw" / "test.md").write_text("Test content", encoding="utf-8")
 
         call_count = 0
 
@@ -227,9 +227,9 @@ class TestBuildLintContext:
 
         (temp_wiki / "wiki" / "sources").mkdir(parents=True, exist_ok=True)
         page = temp_wiki / "wiki" / "sources" / "test.md"
-        page.write_text("# Test\n")
+        page.write_text("# Test\n", encoding="utf-8")
 
-        (temp_wiki / "raw" / "test.md").write_text("Test content")
+        (temp_wiki / "raw" / "test.md").write_text("Test content", encoding="utf-8")
 
         analysis = {
             "entities": [{"name": "NVIDIA", "type": "organization"}],
@@ -250,8 +250,8 @@ class TestBuildLintContext:
         wiki.init()
 
         (temp_wiki / "wiki" / "sources").mkdir(parents=True, exist_ok=True)
-        (temp_wiki / "wiki" / "sources" / "test.md").write_text("# Test\n")
-        (temp_wiki / "raw" / "test.md").write_text("Test content")
+        (temp_wiki / "wiki" / "sources" / "test.md").write_text("# Test\n", encoding="utf-8")
+        (temp_wiki / "raw" / "test.md").write_text("Test content", encoding="utf-8")
 
         context = wiki._build_lint_context()
 
@@ -264,8 +264,8 @@ class TestBuildLintContext:
         wiki.init()
 
         (temp_wiki / "wiki" / "sources").mkdir(parents=True, exist_ok=True)
-        (temp_wiki / "wiki" / "sources" / "test.md").write_text("# Test\n")
-        (temp_wiki / "raw" / "test.md").write_text("Test content")
+        (temp_wiki / "wiki" / "sources" / "test.md").write_text("# Test\n", encoding="utf-8")
+        (temp_wiki / "raw" / "test.md").write_text("Test content", encoding="utf-8")
 
         context = wiki._build_lint_context()
 

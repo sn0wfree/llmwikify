@@ -65,7 +65,7 @@ def _run_script(*args: str, env: dict | None = None) -> subprocess.CompletedProc
 
 def test_script_exists():
     assert SCRIPT.exists(), f"missing {SCRIPT}"
-    src = SCRIPT.read_text()
+    src = SCRIPT.read_text(encoding="utf-8")
     assert "report(" in src
     assert "migrate_research_six_step_columns" in src
 

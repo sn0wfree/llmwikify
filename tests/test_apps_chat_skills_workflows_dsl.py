@@ -405,7 +405,7 @@ def test_load_workflow_yaml(tmp_path: Path):
           phases:
             - id: p
               actor: a
-    """))
+    """), encoding="utf-8")
     spec = load_workflow(p)
     assert spec.name == "from-file"
     assert spec.source_path == p.resolve()

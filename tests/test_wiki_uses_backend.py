@@ -146,7 +146,7 @@ def test_wiki_write_page_uses_backend(wiki_root):
     result = wiki.write_page("hello", "world")
     assert "hello" in result.lower()
     assert (wiki.wiki_dir / "hello.md").exists()
-    assert (wiki.wiki_dir / "hello.md").read_text() == "world"
+    assert (wiki.wiki_dir / "hello.md").read_text(encoding="utf-8") == "world"
     wiki.close()
 
 
@@ -200,7 +200,7 @@ def test_mixin_uses_wiki_helpers_not_direct_fs(tmp_path):
 
     violations: list[str] = []
     for mixin_file in mixin_files:
-        content = mixin_file.read_text()
+        content = mixin_file.read_text(encoding="utf-8")
         for pattern, label in forbidden_patterns:
             if re.search(pattern, content):
                 # Check if it's a comment

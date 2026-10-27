@@ -118,7 +118,7 @@ class TestConfigGet:
         config_dir = tmp_path / ".llmwikify"
         config_dir.mkdir()
         config_file = config_dir / "llmwikify.json"
-        config_file.write_text(json.dumps({"llm": {"provider": "openai"}}))
+        config_file.write_text(json.dumps({"llm": {"provider": "openai"}}), encoding="utf-8")
 
         Config._instance = None
         c = Config()
@@ -133,14 +133,14 @@ class TestConfigGet:
         config_dir = tmp_path / ".llmwikify"
         config_dir.mkdir()
         config_file = config_dir / "llmwikify.json"
-        config_file.write_text(json.dumps({"llm": {"provider": "openai"}}))
+        config_file.write_text(json.dumps({"llm": {"provider": "openai"}}), encoding="utf-8")
 
         Config._instance = None
         c = Config()
         result1 = c.get("llm")
 
         # Modify file
-        config_file.write_text(json.dumps({"llm": {"provider": "minimax"}}))
+        config_file.write_text(json.dumps({"llm": {"provider": "minimax"}}), encoding="utf-8")
 
         # Should still return cached result
         result2 = c.get("llm")
@@ -159,7 +159,7 @@ class TestConfigGetWikiConfig:
     def test_with_config_file(self, tmp_path: Path) -> None:
         """Reads .wiki-config.yaml."""
         config_file = tmp_path / ".wiki-config.yaml"
-        config_file.write_text("version: '0.41'\ndirectories:\n  raw: raw\n")
+        config_file.write_text("version: '0.41'\ndirectories:\n  raw: raw\n", encoding="utf-8")
 
         c = Config()
         result = c.get_wiki_config(tmp_path)
@@ -169,13 +169,13 @@ class TestConfigGetWikiConfig:
     def test_caches_result(self, tmp_path: Path) -> None:
         """Caches wiki config after first read."""
         config_file = tmp_path / ".wiki-config.yaml"
-        config_file.write_text("version: '0.41'\n")
+        config_file.write_text("version: '0.41'\n", encoding="utf-8")
 
         c = Config()
         result1 = c.get_wiki_config(tmp_path)
 
         # Modify file
-        config_file.write_text("version: '0.42'\n")
+        config_file.write_text("version: '0.42'\n", encoding="utf-8")
 
         # Should still return cached result
         result2 = c.get_wiki_config(tmp_path)
@@ -212,7 +212,7 @@ class TestConfigSave:
 
         config_file = tmp_path / ".llmwikify" / "llmwikify.json"
         assert config_file.exists()
-        data = json.loads(config_file.read_text())
+        data = json.loads(config_file.read_text(encoding="utf-8"))
         assert data["llm"] == {"provider": "openai"}
 
     def test_save_merges_with_existing(
@@ -223,13 +223,13 @@ class TestConfigSave:
         config_dir = tmp_path / ".llmwikify"
         config_dir.mkdir()
         config_file = config_dir / "llmwikify.json"
-        config_file.write_text(json.dumps({"research": {"max_sources": 10}}))
+        config_file.write_text(json.dumps({"research": {"max_sources": 10}}), encoding="utf-8")
 
         Config._instance = None
         c = Config()
         c.save({"provider": "openai"}, section="llm")
 
-        data = json.loads(config_file.read_text())
+        data = json.loads(config_file.read_text(encoding="utf-8"))
         assert data["llm"] == {"provider": "openai"}
         assert data["research"] == {"max_sources": 10}
 
@@ -308,7 +308,7 @@ class TestBackwardCompatFunctions:
     def test_load_config_with_file(self, tmp_path: Path) -> None:
         """load_config() merges with user config."""
         config_file = tmp_path / ".wiki-config.yaml"
-        config_file.write_text("llm:\n  provider: openai\n")
+        config_file.write_text("llm:\n  provider: openai\n", encoding="utf-8")
 
         result = load_config(tmp_path)
         assert result["llm"]["provider"] == "openai"

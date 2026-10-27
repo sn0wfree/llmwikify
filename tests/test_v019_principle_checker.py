@@ -260,7 +260,7 @@ class TestPrincipleCheckerCheckAllTemplates:
                     "user": "User content with observational and log.",
                 }
             )
-        )
+        , encoding="utf-8")
 
         checker = PrincipleChecker(defaults_dir=defaults_dir)
         results = checker.check_all_templates()
@@ -268,7 +268,7 @@ class TestPrincipleCheckerCheckAllTemplates:
 
     def test_ignores_underscore_files(self, tmp_path):
         defaults_dir = tmp_path
-        (defaults_dir / "_internal.yaml").write_text(yaml.dump({"data": "test"}))
+        (defaults_dir / "_internal.yaml").write_text(yaml.dump({"data": "test"}), encoding="utf-8")
 
         checker = PrincipleChecker(defaults_dir=defaults_dir)
         results = checker.check_all_templates()
@@ -330,7 +330,7 @@ class TestPrincipleCheckerContextInjection:
                     },
                 }
             )
-        )
+        , encoding="utf-8")
 
         checker = PrincipleChecker(defaults_dir=defaults_dir)
         issues = checker.check_context_injection()
@@ -351,7 +351,7 @@ class TestPrincipleCheckerContextInjection:
                     },
                 }
             )
-        )
+        , encoding="utf-8")
 
         checker = PrincipleChecker(defaults_dir=defaults_dir)
         issues = checker.check_context_injection()
@@ -373,7 +373,7 @@ class TestPrincipleCheckerSchemaCoverage:
                     "post_process": {"validate_schema": "operations_array"},
                 }
             )
-        )
+        , encoding="utf-8")
 
         checker = PrincipleChecker(defaults_dir=defaults_dir)
         issues = checker.check_schema_coverage()
@@ -392,7 +392,7 @@ class TestPrincipleCheckerSchemaCoverage:
                     "post_process": {"validate_schema": "unknown_schema"},
                 }
             )
-        )
+        , encoding="utf-8")
 
         checker = PrincipleChecker(defaults_dir=defaults_dir)
         issues = checker.check_schema_coverage()

@@ -117,19 +117,19 @@ class TestSubdirectoryPages:
         entities_dir.mkdir(parents=True, exist_ok=True)
         (entities_dir / "Company A.md").write_text(
             "# Company A\n\nA mining company.\n\nRelated: [[Company B]] and [[Company C]]."
-        )
+        , encoding="utf-8")
         (entities_dir / "Company B.md").write_text(
             "# Company B\n\nAnother mining company.\n\nSee [[Company A]]."
-        )
+        , encoding="utf-8")
         (entities_dir / "Company C.md").write_text(
             "# Company C\n\nThird company.\n\n[[Company A]] is a competitor."
-        )
+        , encoding="utf-8")
 
         sources_dir = temp_wiki / "wiki" / "sources"
         sources_dir.mkdir(parents=True, exist_ok=True)
         (sources_dir / "2024-report.md").write_text(
             "# 2024 Report\n\nAnnual report.\n\nCompanies: [[Company A]], [[Company B]]."
-        )
+        , encoding="utf-8")
 
         # Root page linking to subdirectory pages
         cli.wiki.write_page(
@@ -231,10 +231,10 @@ class TestBatchWriteIntegration:
         raw.mkdir(exist_ok=True)
         (raw / "source1.md").write_text(
             "# Mining Report 2024\n\nGold production increased 15% in Q4."
-        )
+        , encoding="utf-8")
         (raw / "source2.md").write_text(
             "# Silver Prices\n\nSilver hit $30/oz in December 2024."
-        )
+        , encoding="utf-8")
 
         cli = WikiCLI(temp_wiki)
         cli.init(_init_args())
@@ -296,7 +296,7 @@ class TestCrossReferenceValidation:
         entities_dir.mkdir(parents=True, exist_ok=True)
         (entities_dir / "Valid Page.md").write_text(
             "# Valid Page\n\nLinks to [[entities/NonExistent]]."
-        )
+        , encoding="utf-8")
         cli.wiki.write_page(
             "Root Page", "# Root Page\n\nLinks to [[NonExistent Root]]."
         )
@@ -358,7 +358,7 @@ class TestLogIntegration:
             assert cli.log(args) == 0
 
         # Read log
-        log_content = cli.wiki.log_file.read_text()
+        log_content = cli.wiki.log_file.read_text(encoding="utf-8")
         assert "test_op_0" in log_content
         assert "test_op_1" in log_content
         assert "test_op_2" in log_content

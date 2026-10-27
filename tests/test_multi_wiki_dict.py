@@ -65,12 +65,12 @@ class TestMultiWikiDict:
         # Content of dicts should differ (different domain vocab)
         words_a = {
             line.split("\t")[0]
-            for line in dict_a.read_text().splitlines()
+            for line in dict_a.read_text(encoding="utf-8").splitlines()
             if line.strip()
         }
         words_b = {
             line.split("\t")[0]
-            for line in dict_b.read_text().splitlines()
+            for line in dict_b.read_text(encoding="utf-8").splitlines()
             if line.strip()
         }
         assert words_a != words_b, "Different wikis should generate different dicts"

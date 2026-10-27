@@ -46,15 +46,15 @@ def test_wiki():
         for name, content in pages.items():
             page_path = wiki / f"{name}.md"
             page_path.parent.mkdir(parents=True, exist_ok=True)
-            page_path.write_text(content)
+            page_path.write_text(content, encoding="utf-8")
 
         # Create wiki.md schema
-        (wiki_dir / "wiki.md").write_text("# Wiki Schema\n\nThis is a test wiki.")
+        (wiki_dir / "wiki.md").write_text("# Wiki Schema\n\nThis is a test wiki.", encoding="utf-8")
 
         # Create .llmwikify config
         config_dir = wiki_dir / ".llmwikify"
         config_dir.mkdir(parents=True, exist_ok=True)
-        (config_dir / "config.json").write_text('{"wiki_dir": "wiki"}')
+        (config_dir / "config.json").write_text('{"wiki_dir": "wiki"}', encoding="utf-8")
 
         yield wiki_dir
 

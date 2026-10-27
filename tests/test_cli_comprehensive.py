@@ -88,7 +88,7 @@ class TestIngestCommand:
         """ingest without --self-create should output JSON."""
         (temp_wiki / "raw").mkdir(exist_ok=True)
         test_file = temp_wiki / "raw" / "test.md"
-        test_file.write_text("# Test Document\n\nContent here")
+        test_file.write_text("# Test Document\n\nContent here", encoding="utf-8")
 
         cli = WikiCLI(temp_wiki)
         cli.wiki.init()
@@ -115,7 +115,7 @@ class TestIngestCommand:
         """ingest --dry-run should not create pages."""
         (temp_wiki / "raw").mkdir(exist_ok=True)
         test_file = temp_wiki / "raw" / "test.md"
-        test_file.write_text("# Test Document")
+        test_file.write_text("# Test Document", encoding="utf-8")
 
         cli = WikiCLI(temp_wiki)
         cli.wiki.init()
@@ -436,8 +436,8 @@ class TestBatchIntegration:
         """batch should handle multiple sources."""
         raw = temp_wiki / "raw"
         raw.mkdir(exist_ok=True)
-        (raw / "doc1.md").write_text("# Doc 1\n\nContent 1")
-        (raw / "doc2.md").write_text("# Doc 2\n\nContent 2")
+        (raw / "doc1.md").write_text("# Doc 1\n\nContent 1", encoding="utf-8")
+        (raw / "doc2.md").write_text("# Doc 2\n\nContent 2", encoding="utf-8")
 
         cli = WikiCLI(temp_wiki)
         cli.wiki.init()
@@ -468,7 +468,7 @@ class TestSmartDeprecation:
         """ingest --smart should emit deprecation warning."""
         (temp_wiki / "raw").mkdir(exist_ok=True)
         test_file = temp_wiki / "raw" / "test.md"
-        test_file.write_text("# Test")
+        test_file.write_text("# Test", encoding="utf-8")
 
         cli = WikiCLI(temp_wiki)
         cli.wiki.init()

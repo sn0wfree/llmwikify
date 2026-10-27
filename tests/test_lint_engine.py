@@ -316,9 +316,9 @@ def temp_wiki(tmp_path):
     (tmp_path / "raw").mkdir(parents=True, exist_ok=True)
     (tmp_path / "wiki").mkdir(parents=True, exist_ok=True)
     # Create a page with a 2020 year
-    (tmp_path / "wiki" / "Test.md").write_text("# Test\n\nYear 2020 was important.\n")
+    (tmp_path / "wiki" / "Test.md").write_text("# Test\n\nYear 2020 was important.\n", encoding="utf-8")
     # Create a source with a 2024 year
-    (tmp_path / "raw" / "test.md").write_text("# Source\n\nYear 2024 was the latest.\n")
+    (tmp_path / "raw" / "test.md").write_text("# Source\n\nYear 2024 was the latest.\n", encoding="utf-8")
     return wiki
 
 
@@ -342,7 +342,7 @@ def test_dated_claim_rule_no_sources_returns_empty(tmp_path):
     wiki = Wiki(tmp_path)
     wiki.init()
     (tmp_path / "wiki").mkdir(parents=True, exist_ok=True)
-    (tmp_path / "wiki" / "Test.md").write_text("# Test\n\nYear 2020.\n")
+    (tmp_path / "wiki" / "Test.md").write_text("# Test\n\nYear 2020.\n", encoding="utf-8")
 
     rule = DatedClaimsRule()
     issues = rule.run(wiki)

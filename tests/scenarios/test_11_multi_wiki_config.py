@@ -55,9 +55,9 @@ class TestMultiWikiConfig:
         }
 
         config_path = temp_dir / ".wiki-config.yaml"
-        config_path.write_text(yaml.dump(config))
+        config_path.write_text(yaml.dump(config), encoding="utf-8")
 
-        loaded = yaml.safe_load(config_path.read_text())
+        loaded = yaml.safe_load(config_path.read_text(encoding="utf-8"))
         assert loaded["wikis"]["default"] == "personal"
         assert len(loaded["wikis"]["local"]) == 2
 

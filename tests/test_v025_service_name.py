@@ -377,11 +377,11 @@ class TestConfigFileIntegration:
     def test_config_file_name_is_used(self, temp_wiki):
         """5.1: .wiki-config.yaml mcp.name should be used."""
         config_content = "mcp:\n  name: config-wiki\n  transport: stdio\n"
-        (temp_wiki / ".wiki-config.yaml").write_text(config_content)
+        (temp_wiki / ".wiki-config.yaml").write_text(config_content, encoding="utf-8")
 
         import yaml
 
-        config = yaml.safe_load((temp_wiki / ".wiki-config.yaml").read_text()) or {}
+        config = yaml.safe_load((temp_wiki / ".wiki-config.yaml").read_text(encoding="utf-8")) or {}
         cli = WikiCLI(temp_wiki, config=config)
         cli.wiki.init()
 
@@ -401,11 +401,11 @@ class TestConfigFileIntegration:
         Phase 3 #6 — see test_name_passed_to_serve_mcp.
         """
         config_content = "mcp:\n  name: config-wiki\n"
-        (temp_wiki / ".wiki-config.yaml").write_text(config_content)
+        (temp_wiki / ".wiki-config.yaml").write_text(config_content, encoding="utf-8")
 
         import yaml
 
-        config = yaml.safe_load((temp_wiki / ".wiki-config.yaml").read_text()) or {}
+        config = yaml.safe_load((temp_wiki / ".wiki-config.yaml").read_text(encoding="utf-8")) or {}
         cli = WikiCLI(temp_wiki, config=config)
         cli.wiki.init()
 
@@ -588,7 +588,7 @@ class TestAutoRegisterMcporter:
 
         config_file = fake_home / ".mcporter" / "mcporter.json"
         assert config_file.exists()
-        config = json.loads(config_file.read_text())
+        config = json.loads(config_file.read_text(encoding="utf-8"))
         assert "testwiki" in config["mcpServers"]
         assert config["mcpServers"]["testwiki"]["url"] == "http://127.0.0.1:9999/mcp"
         assert config["mcpServers"]["testwiki"]["type"] == "remote"
@@ -618,7 +618,7 @@ class TestAutoRegisterMcporter:
                     }
                 }
             )
-        )
+        , encoding="utf-8")
 
         stdout = StringIO()
         with patch("sys.stdout", stdout):
@@ -628,7 +628,7 @@ class TestAutoRegisterMcporter:
         assert "already registered" in output.lower() or "skipping" in output.lower()
 
         # Config should be unchanged
-        config = json.loads(config_file.read_text())
+        config = json.loads(config_file.read_text(encoding="utf-8"))
         assert config["mcpServers"]["testwiki"]["url"] == "http://127.0.0.1:8888/mcp"
 
     def test_creates_config_dir_if_missing(self, tmp_path, monkeypatch):

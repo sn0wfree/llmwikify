@@ -12,12 +12,12 @@ def wiki_dirs(tmp_path):
     """Create test wiki directories."""
     wiki_a = tmp_path / "wiki-a"
     wiki_a.mkdir()
-    (wiki_a / ".wiki-config.yaml").write_text("")
+    (wiki_a / ".wiki-config.yaml").write_text("", encoding="utf-8")
     Wiki(wiki_a).init()
 
     wiki_b = tmp_path / "wiki-b"
     wiki_b.mkdir()
-    (wiki_b / ".wiki-config.yaml").write_text("")
+    (wiki_b / ".wiki-config.yaml").write_text("", encoding="utf-8")
     Wiki(wiki_b).init()
 
     return wiki_a, wiki_b
@@ -90,7 +90,7 @@ class TestMultiWikiAPI:
         """POST /api/wikis registers a new wiki."""
         new_wiki = tmp_path / "new-wiki"
         new_wiki.mkdir()
-        (new_wiki / ".wiki-config.yaml").write_text("")
+        (new_wiki / ".wiki-config.yaml").write_text("", encoding="utf-8")
 
         response = multi_wiki_client.post(
             "/api/wikis",

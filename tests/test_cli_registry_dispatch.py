@@ -138,7 +138,7 @@ def test_main_uses_load_cli_config_helper():
 
 
 def test_main_does_not_inline_yaml_loading():
-    """main() no longer inlines ``yaml.safe_load(config_file.read_text())``."""
+    """main() no longer inlines ``yaml.safe_load(config_file.read_text(encoding="utf-8"))``."""
     from llmwikify.interfaces.cli import _app
 
     src = inspect.getsource(_app.main)

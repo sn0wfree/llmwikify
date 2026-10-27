@@ -46,7 +46,7 @@ class TestMCPIntegration:
             src = wiki.raw_dir / "test_article.md"
             src.write_text(
                 "# Gold Price Hits Record High\n\nGold prices surged to $3000/oz."
-            )
+            , encoding="utf-8")
 
             result = await mcp.call_tool("wiki_ingest", {"source": str(src)})
             text = (
@@ -221,7 +221,7 @@ class TestWikiInitSubdirs:
         wiki.init()
         overview = wiki.wiki_dir / "overview.md"
         assert overview.exists()
-        content = overview.read_text()
+        content = overview.read_text(encoding="utf-8")
         assert "title: Overview" in content
         assert "type: overview" in content
         wiki.close()

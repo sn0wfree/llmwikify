@@ -144,9 +144,9 @@ class TestContentStoreFormat:
             "| # | Timestamp | Query | Answer Hash | Note |\n"
             "|---|-----------|-------|-------------|------|\n"
             "| 1 | 2026-04-10 10:00 | Q1 | `a1b2c3d4` | — |\n"
-        )
+        , encoding="utf-8")
 
-        store = wiki.query_sink._parse_content_store(sink_file.read_text())
+        store = wiki.query_sink._parse_content_store(sink_file.read_text(encoding="utf-8"))
         assert "a1b2c3d4" in store
         assert "d4e5f6c7" in store
         assert "extraction" in store["a1b2c3d4"]
@@ -168,9 +168,9 @@ class TestContentStoreFormat:
             "|---|-----------|-------|-------------|------|\n"
             "| 1 | 2026-04-10 10:00 | Q1 | `a1b2c3d4` | — |\n"
             "| 2 | 2026-04-10 11:00 | Q2 | `a1b2c3d4` | near-dup of #1 |\n"
-        )
+        , encoding="utf-8")
 
-        entries = wiki.query_sink._parse_entry_log(sink_file.read_text())
+        entries = wiki.query_sink._parse_entry_log(sink_file.read_text(encoding="utf-8"))
         assert len(entries) == 2
         assert entries[0]["num"] == 1
         assert entries[0]["query"] == "Q1"
@@ -193,7 +193,7 @@ class TestContentStoreFormat:
             "|---|-----------|-------|-------------|------|\n"
             "| 1 | 2026-04-10 10:00 | Q1 | `a1b2c3d4` | — |\n"
             "| 2 | 2026-04-10 11:00 | Q2 | `a1b2c3d4` | near-dup of #1 |\n"
-        )
+        , encoding="utf-8")
 
         result = wiki.query_sink.read("Query: Test")
         assert result["total_entries"] == 2
@@ -218,14 +218,14 @@ class TestLegacyMigration:
             "# Query Sink: Test\n\n"
             "---\n\n## [2026-04-10 10:00] Query: Q1\n\nAnswer one.\n\n"
             "---\n\n## [2026-04-10 11:00] Query: Q2\n\nAnswer two.\n"
-        )
+        , encoding="utf-8")
 
         result = wiki.query_sink.read("Query: Test")
 
         assert result["status"] == "ok"
         assert result["total_entries"] == 2
-        assert "Content Store" in sink_file.read_text()
-        assert "Entry Log" in sink_file.read_text()
+        assert "Content Store" in sink_file.read_text(encoding="utf-8")
+        assert "Entry Log" in sink_file.read_text(encoding="utf-8")
         wiki.close()
 
     def test_new_format_not_re_migrated(self, temp_wiki):
@@ -243,11 +243,11 @@ class TestLegacyMigration:
             "|---|-----------|-------|-------------|------|\n"
             "| 1 | 2026-04-10 10:00 | Q1 | `a1b2c3d4` | — |\n"
         )
-        sink_file.write_text(original)
+        sink_file.write_text(original, encoding="utf-8")
 
         wiki.query_sink.read("Query: Test")
 
-        assert sink_file.read_text() == original
+        assert sink_file.read_text(encoding="utf-8") == original
         wiki.close()
 
 

@@ -29,7 +29,7 @@ class TestMemoryConfigDefaults:
 
     def test_load_corrupted_returns_defaults(self, tmp_path: Path) -> None:
         # Write garbage
-        (tmp_path / DEFAULT_CONFIG_FILENAME).write_text("not-valid-json")
+        (tmp_path / DEFAULT_CONFIG_FILENAME).write_text("not-valid-json", encoding="utf-8")
         cfg = load_memory_config(tmp_path)
         # Still gets defaults
         assert cfg.consolidation["trigger_token_threshold"] == 4000
@@ -51,7 +51,7 @@ class TestMemoryConfigLoad:
                     },
                 }
             )
-        )
+        , encoding="utf-8")
         cfg = load_memory_config(tmp_path)
         assert cfg.consolidation["trigger_token_threshold"] == 8000
         assert cfg.consolidation["keep_recent_messages"] == 4
@@ -67,14 +67,14 @@ class TestMemoryConfigLoad:
                     "consolidation": {"trigger_token_threshold": 9999},
                 }
             )
-        )
+        , encoding="utf-8")
         cfg = load_memory_config(tmp_path)
         assert cfg.consolidation["trigger_token_threshold"] == 9999
         # dream section untouched (uses defaults)
         assert cfg.dream["enabled"] is True
 
     def test_load_empty_dict(self, tmp_path: Path) -> None:
-        (tmp_path / DEFAULT_CONFIG_FILENAME).write_text("{}")
+        (tmp_path / DEFAULT_CONFIG_FILENAME).write_text("{}", encoding="utf-8")
         cfg = load_memory_config(tmp_path)
         assert cfg.consolidation["trigger_token_threshold"] == 4000
 
@@ -86,7 +86,7 @@ class TestMemoryConfigLoad:
                     "dream": 42,
                 }
             )
-        )
+        , encoding="utf-8")
         cfg = load_memory_config(tmp_path)
         # Both sections retain defaults
         assert cfg.consolidation["trigger_token_threshold"] == 4000
@@ -98,16 +98,16 @@ class TestMemoryConfigWrite:
         path = write_default_memory_config(tmp_path)
         assert path.exists()
         # Should be parseable JSON
-        data = json.loads(path.read_text())
+        data = json.loads(path.read_text(encoding="utf-8"))
         assert "consolidation" in data
         assert "dream" in data
 
     def test_write_default_does_not_overwrite(self, tmp_path: Path) -> None:
         config_path = tmp_path / DEFAULT_CONFIG_FILENAME
-        config_path.write_text('{"custom": true}')
+        config_path.write_text('{"custom": true}', encoding="utf-8")
         write_default_memory_config(tmp_path)
         # Existing file is preserved
-        assert json.loads(config_path.read_text()) == {"custom": True}
+        assert json.loads(config_path.read_text(encoding="utf-8")) == {"custom": True}
 
     def test_write_creates_parent_dirs(self, tmp_path: Path) -> None:
         nested = tmp_path / "a" / "b" / "c"

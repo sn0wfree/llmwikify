@@ -66,7 +66,7 @@ class TestEndToEndPipeline:
 
         skill_dir = fake_plugin_dir / "body_only"
         skill_dir.mkdir()
-        (skill_dir / "SKILL.md").write_text("# Body only\n\nNo frontmatter here.\n")
+        (skill_dir / "SKILL.md").write_text("# Body only\n\nNo frontmatter here.\n", encoding="utf-8")
 
         loaded = load_plugins(default_registry())
         assert loaded == 1
@@ -128,7 +128,7 @@ class TestEndToEndPipeline:
                 # Full Meta Plugin
 
                 Instructions for the LLM follow.
-                """))
+                """), encoding="utf-8")
 
         load_plugins(default_registry())
 
@@ -169,7 +169,7 @@ class TestEndToEndPipeline:
             sd.mkdir()
             (sd / "SKILL.md").write_text(
                 f"---\nname: {name}\nversion: {version}\n---\nbody\n"
-            )
+            , encoding="utf-8")
 
         loaded = load_plugins(default_registry())
         assert loaded == 2
@@ -199,11 +199,11 @@ class TestEndToEndPipeline:
         # Good skill
         good = fake_plugin_dir / "good"
         good.mkdir()
-        (good / "SKILL.md").write_text("---\nname: good\nversion: 1.0\n---\nbody\n")
+        (good / "SKILL.md").write_text("---\nname: good\nversion: 1.0\n---\nbody\n", encoding="utf-8")
         # Bad skill with malformed YAML
         bad = fake_plugin_dir / "bad"
         bad.mkdir()
-        (bad / "SKILL.md").write_text("---\nname: : bad yaml\n---\nbody\n")
+        (bad / "SKILL.md").write_text("---\nname: : bad yaml\n---\nbody\n", encoding="utf-8")
 
         with caplog.at_level("WARNING"):
             loaded = load_plugins(default_registry())
@@ -228,7 +228,7 @@ class TestEndToEndPipeline:
         sd.mkdir()
         (sd / "SKILL.md").write_text(
             '---\nname: comma_t\ntriggers: "/a, /b, /c"\n---\nbody\n'
-        )
+        , encoding="utf-8")
 
         with caplog.at_level("WARNING"):
             load_plugins(default_registry())
@@ -265,7 +265,7 @@ class TestEndToEndPipeline:
                         super().__init__()
 
                 skill = CodeSkill()
-                """))
+                """), encoding="utf-8")
 
         loaded = load_plugins(default_registry())
         assert loaded == 1
@@ -311,10 +311,10 @@ class TestLoadPluginsReturn:
         # Visible dir
         ok = fake_plugin_dir / "ok"
         ok.mkdir()
-        (ok / "SKILL.md").write_text("body\n")
+        (ok / "SKILL.md").write_text("body\n", encoding="utf-8")
         # Hidden .py file (skipped)
         hidden_py = fake_plugin_dir / "_hidden.py"
-        hidden_py.write_text("# not a skill\n")
+        hidden_py.write_text("# not a skill\n", encoding="utf-8")
 
         loaded = load_plugins(default_registry())
         assert loaded == 1
@@ -339,7 +339,7 @@ class TestApiSkillsJsonShape:
 
         sd = fake_plugin_dir / "jsonable"
         sd.mkdir()
-        (sd / "SKILL.md").write_text("---\nname: jsonable\nversion: 1.0\n---\nbody\n")
+        (sd / "SKILL.md").write_text("---\nname: jsonable\nversion: 1.0\n---\nbody\n", encoding="utf-8")
         load_plugins(default_registry())
 
         app = FastAPI()

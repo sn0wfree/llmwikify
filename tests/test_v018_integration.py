@@ -29,7 +29,7 @@ class TestWikiContextMethods:
         wiki = initialized_wiki
         wiki.index_file.write_text(
             "# Wiki Index\n\n- Page 1: Summary one\n- Page 2: Summary two\n"
-        )
+        , encoding="utf-8")
 
         result = wiki._get_index_summary()
 
@@ -40,7 +40,7 @@ class TestWikiContextMethods:
     def test_get_index_summary_truncated(self, initialized_wiki):
         wiki = initialized_wiki
         long_content = "# Wiki Index\n\n" + "- X: Item\n" * 100
-        wiki.index_file.write_text(long_content)
+        wiki.index_file.write_text(long_content, encoding="utf-8")
 
         result = wiki._get_index_summary()
 
@@ -57,7 +57,7 @@ class TestWikiContextMethods:
         lines = "\n".join(
             f"## [2026-04-{i:02d}] ingest | Source {i}" for i in range(1, 11)
         )
-        wiki.log_file.write_text(lines)
+        wiki.log_file.write_text(lines, encoding="utf-8")
 
         result = wiki._get_recent_log(limit=3)
 
@@ -71,7 +71,7 @@ class TestWikiContextMethods:
         lines = "\n".join(
             f"## [2026-04-{i:02d}] ingest | Source {i}" for i in range(1, 8)
         )
-        wiki.log_file.write_text(lines)
+        wiki.log_file.write_text(lines, encoding="utf-8")
 
         result = wiki._get_recent_log()
 
@@ -80,9 +80,9 @@ class TestWikiContextMethods:
 
     def test_get_page_count(self, initialized_wiki):
         wiki = initialized_wiki
-        (wiki.wiki_dir / "Page1.md").write_text("# Page1")
-        (wiki.wiki_dir / "Page2.md").write_text("# Page2")
-        (wiki.wiki_dir / "Page3.md").write_text("# Page3")
+        (wiki.wiki_dir / "Page1.md").write_text("# Page1", encoding="utf-8")
+        (wiki.wiki_dir / "Page2.md").write_text("# Page2", encoding="utf-8")
+        (wiki.wiki_dir / "Page3.md").write_text("# Page3", encoding="utf-8")
 
         result = wiki._get_page_count()
         assert result == 4  # 3 pages + overview
@@ -94,8 +94,8 @@ class TestWikiContextMethods:
 
     def test_get_existing_page_names(self, initialized_wiki):
         wiki = initialized_wiki
-        (wiki.wiki_dir / "Alice.md").write_text("# Alice")
-        (wiki.wiki_dir / "Bob.md").write_text("# Bob")
+        (wiki.wiki_dir / "Alice.md").write_text("# Alice", encoding="utf-8")
+        (wiki.wiki_dir / "Bob.md").write_text("# Bob", encoding="utf-8")
 
         result = wiki._get_existing_page_names()
 
@@ -353,7 +353,7 @@ class TestChainingMode:
 
     def test_chained_mode_with_context_injection(self, temp_wiki):
         wiki = temp_wiki
-        (wiki.wiki_dir / "Existing.md").write_text("# Existing")
+        (wiki.wiki_dir / "Existing.md").write_text("# Existing", encoding="utf-8")
         source_data = {
             "content": "Test content",
             "title": "Test",
@@ -573,7 +573,7 @@ class TestFullIngestFlow:
         source_file = wiki.raw_dir / "test_article.md"
         source_file.write_text(
             "# Test Article\n\nThis is a test article about AI.\n\n## Key Points\n- AI is transformative\n- Machine learning is important\n"
-        )
+        , encoding="utf-8")
 
         analysis_result = {
             "topics": ["AI"],
@@ -647,7 +647,7 @@ class TestFullIngestFlow:
     def test_full_ingest_chained_flow(self, temp_wiki):
         wiki = temp_wiki
         source_file = wiki.raw_dir / "test_article.md"
-        source_file.write_text("# Test Article\n\nContent about AI.\n")
+        source_file.write_text("# Test Article\n\nContent about AI.\n", encoding="utf-8")
 
         analysis_result = {
             "topics": ["AI"],
