@@ -6,6 +6,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from llmwikify.kernel.path_codec import from_fs_name, to_fs_name
+
 
 class QuerySink:
     """Manages query sink buffers with content-addressable storage.
@@ -24,6 +26,14 @@ class QuerySink:
         self.root = root.resolve()
         self.wiki_dir = wiki_dir
         self.sink_dir = wiki_dir / ".sink"
+
+    def _sink_path(self, page_name: str) -> Path:
+        """On-disk sink path for a logical page name (Windows-safe)."""
+        return self.sink_dir / f"{to_fs_name(page_name)}.sink.md"
+
+    def _formal_path(self, page_name: str) -> Path:
+        """On-disk formal page path for a logical page name."""
+        return self.wiki_dir / f"{to_fs_name(page_name)}.md"
 
     @staticmethod
     def _now() -> str:
@@ -105,7 +115,7 @@ class QuerySink:
 
     def get_info_for_page(self, page_name: str) -> dict:
         """Get sink status for a wiki page."""
-        sink_file = self.sink_dir / f"{page_name}.sink.md"
+        sink_file = self._sink_path(page_name)
         if not sink_file.exists():
             return {"has_sink": False, "sink_entries": 0}
         try:
@@ -116,7 +126,7 @@ class QuerySink:
             return {"has_sink": False, "sink_entries": 0}
 
     def _find_or_create_sink_file(self, page_name: str) -> Path:
-        sink_file = self.sink_dir / f"{page_name}.sink.md"
+        sink_file = self._sink_path(page_name)
         if not sink_file.exists():
             content = (
                 f"---\n"
@@ -137,7 +147,7 @@ class QuerySink:
                 f"*(No entries yet)*\n"
             )
             sink_file.write_text(content, encoding="utf-8")
-            formal_path = self.wiki_dir / f"{page_name}.md"
+            formal_path = self._formal_path(page_name)
             if formal_path.exists():
                 self._update_page_sink_meta(formal_path, sink_file)
         else:
@@ -161,7 +171,7 @@ class QuerySink:
                     for line in lines:
                         if line.startswith("sink_path:"):
                             new_lines.append(
-                                f"sink_path: {str(sink_file.relative_to(self.root))}"
+                                f"sink_path: {sink_file.relative_to(self.root).as_posix()}"
                             )
                             has_sink_path = True
                         elif line.startswith("sink_entries:") or line.startswith(
@@ -172,12 +182,12 @@ class QuerySink:
                             new_lines.append(line)
                     if not has_sink_path:
                         new_lines.append(
-                            f"sink_path: {str(sink_file.relative_to(self.root))}"
+                            f"sink_path: {sink_file.relative_to(self.root).as_posix()}"
                         )
                     new_frontmatter = "\n".join(new_lines)
                     page_path.write_text(f"---\n{new_frontmatter}\n---{body}", encoding="utf-8")
             else:
-                sink_path = str(sink_file.relative_to(self.root))
+                sink_path = sink_file.relative_to(self.root).as_posix()
                 new_content = (
                     f"---\n"
                     f"sink_path: {sink_path}\n"
@@ -348,7 +358,7 @@ class QuerySink:
 
     def _detect_content_gaps(self, answer: str, page_name: str) -> list[str]:
         suggestions: list[str] = []
-        formal_path = self.wiki_dir / f"{page_name}.md"
+        formal_path = self._formal_path(page_name)
         if not formal_path.exists():
             return suggestions
         formal_content = formal_path.read_text(encoding="utf-8")
@@ -375,7 +385,7 @@ class QuerySink:
         page_name: str,
     ) -> list[str]:
         suggestions: list[str] = []
-        formal_path = self.wiki_dir / f"{page_name}.md"
+        formal_path = self._formal_path(page_name)
         formal_sources_wiki: set = set()
         formal_sources_raw: set = set()
         if formal_path.exists():
@@ -429,7 +439,7 @@ class QuerySink:
 
     def _analyze_query_patterns(self, query: str, page_name: str) -> list[str]:
         suggestions: list[str] = []
-        sink_file = self.sink_dir / f"{page_name}.sink.md"
+        sink_file = self._sink_path(page_name)
         if not sink_file.exists():
             return suggestions
         content = sink_file.read_text(encoding="utf-8")
@@ -455,7 +465,7 @@ class QuerySink:
 
     def _suggest_knowledge_growth(self, answer: str, page_name: str) -> list[str]:
         suggestions: list[str] = []
-        formal_path = self.wiki_dir / f"{page_name}.md"
+        formal_path = self._formal_path(page_name)
         if formal_path.exists():
             formal_content = formal_path.read_text(encoding="utf-8")
             formal_words = {
@@ -482,7 +492,7 @@ class QuerySink:
                     f"New Concepts: Mentions {', '.join(sorted(new_concepts)[:3])} "
                     f"not in formal page. Consider if any deserve their own page."
                 )
-        sink_file = self.sink_dir / f"{page_name}.sink.md"
+        sink_file = self._sink_path(page_name)
         if sink_file.exists():
             negation_words = re.findall(
                 r"\b(not|never|no longer|however|contrary|contradicts?)\b",
@@ -564,11 +574,11 @@ class QuerySink:
         )
         sink_file.write_text(new_content, encoding="utf-8")
 
-        formal_path = self.wiki_dir / f"{page_name}.md"
+        formal_path = self._formal_path(page_name)
         if formal_path.exists():
             self._update_page_sink_meta(formal_path, sink_file)
 
-        return str(sink_file.relative_to(self.root))
+        return sink_file.relative_to(self.root).as_posix()
 
     def _rebuild_sink_file(
         self,
@@ -684,7 +694,7 @@ class QuerySink:
 
     def read(self, page_name: str) -> dict:
         """Read all entries from a query sink file, resolving hash references."""
-        sink_file = self.sink_dir / f"{page_name}.sink.md"
+        sink_file = self._sink_path(page_name)
         if not sink_file.exists():
             return {
                 "status": "empty",
@@ -719,7 +729,7 @@ class QuerySink:
         return {
             "status": "ok",
             "page_name": page_name,
-            "file": str(sink_file.relative_to(self.root)),
+            "file": sink_file.relative_to(self.root).as_posix(),
             "entries": entries,
             "total_entries": len(entries),
             "unique_count": len(content_store),
@@ -739,7 +749,7 @@ class QuerySink:
         total_entries = 0
         now = datetime.now(timezone.utc)
         for sink_file in sorted(self.sink_dir.glob("*.sink.md")):
-            page_name = sink_file.stem.replace(".sink", "")
+            page_name = from_fs_name(sink_file.stem.replace(".sink", ""))
             content = sink_file.read_text(encoding="utf-8")
 
             # Handle both old and new format
@@ -791,7 +801,7 @@ class QuerySink:
             sinks.append(
                 {
                     "page_name": page_name,
-                    "file": str(sink_file.relative_to(self.root)),
+                    "file": sink_file.relative_to(self.root).as_posix(),
                     "entry_count": entry_count,
                     "oldest_entry": oldest,
                     "newest_entry": newest,

@@ -7,6 +7,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from llmwikify.kernel import Wiki
+from llmwikify.kernel.path_codec import from_fs_name, to_fs_name
 
 
 class TestSinkDirectoryCreation:
@@ -67,7 +68,7 @@ class TestGetSinkInfoForPage:
         wiki = Wiki(temp_wiki)
         wiki.init()
 
-        sink_file = temp_wiki / "wiki" / ".sink" / "Query: Gold Mining.sink.md"
+        sink_file = temp_wiki / "wiki" / ".sink" / f"{to_fs_name('Query: Gold Mining')}.sink.md"
         sink_file.write_text(
             '---\nformal_page: "Query: Gold Mining"\n---\n\n'
             "# Query Sink: Gold Mining\n\n"
@@ -92,7 +93,7 @@ class TestGetSinkInfoForPage:
         wiki = Wiki(temp_wiki)
         wiki.init()
 
-        sink_file = temp_wiki / "wiki" / ".sink" / "Query: Test.sink.md"
+        sink_file = temp_wiki / "wiki" / ".sink" / f"{to_fs_name('Query: Test')}.sink.md"
         sink_file.write_text(
             '---\nformal_page: "Query: Test"\n---\n\n'
             "# Query Sink: Test\n\n"
@@ -117,7 +118,7 @@ class TestFindOrCreateSinkFile:
         sink_file = wiki.query_sink._find_or_create_sink_file("Query: Gold Mining")
 
         assert sink_file.exists()
-        assert sink_file.name == "Query: Gold Mining.sink.md"
+        assert sink_file.name == f"{to_fs_name('Query: Gold Mining')}.sink.md"
 
         content = sink_file.read_text(encoding="utf-8")
         assert 'formal_page: "Query: Gold Mining"' in content
@@ -132,7 +133,7 @@ class TestFindOrCreateSinkFile:
         wiki = Wiki(temp_wiki)
         wiki.init()
 
-        sink_file = temp_wiki / "wiki" / ".sink" / "Query: Test.sink.md"
+        sink_file = temp_wiki / "wiki" / ".sink" / f"{to_fs_name('Query: Test')}.sink.md"
         # Write in new format so migration doesn't touch it
         original_content = (
             '---\nformal_page: "Query: Test"\n---\n\n'
@@ -155,7 +156,7 @@ class TestFindOrCreateSinkFile:
         wiki = Wiki(temp_wiki)
         wiki.init()
 
-        formal_path = temp_wiki / "wiki" / "Query: Gold Mining.md"
+        formal_path = temp_wiki / "wiki" / f"{to_fs_name('Query: Gold Mining')}.md"
         formal_path.write_text(
             "---\ntitle: Gold Mining\n---\n\n# Query: Gold Mining\n\nContent\n"
         , encoding="utf-8")
@@ -175,7 +176,7 @@ class TestAppendToSink:
         wiki = Wiki(temp_wiki)
         wiki.init()
 
-        formal_path = temp_wiki / "wiki" / "Query: Gold Mining.md"
+        formal_path = temp_wiki / "wiki" / f"{to_fs_name('Query: Gold Mining')}.md"
         formal_path.write_text("# Query: Gold Mining\n\nContent\n", encoding="utf-8")
 
         sink_path = wiki.query_sink.append_to_sink(
@@ -186,9 +187,9 @@ class TestAppendToSink:
             [],
         )
 
-        assert sink_path.endswith("Query: Gold Mining.sink.md")
+        assert sink_path.endswith(f"{to_fs_name('Query: Gold Mining')}.sink.md")
 
-        sink_file = temp_wiki / "wiki" / ".sink" / "Query: Gold Mining.sink.md"
+        sink_file = temp_wiki / "wiki" / ".sink" / f"{to_fs_name('Query: Gold Mining')}.sink.md"
         content = sink_file.read_text(encoding="utf-8")
         assert "## Content Store" in content
         assert "Gold mining is the process of extracting gold." in content
@@ -200,7 +201,7 @@ class TestAppendToSink:
         wiki = Wiki(temp_wiki)
         wiki.init()
 
-        formal_path = temp_wiki / "wiki" / "Query: Test.md"
+        formal_path = temp_wiki / "wiki" / f"{to_fs_name('Query: Test')}.md"
         formal_path.write_text("# Query: Test\n\nContent\n", encoding="utf-8")
 
         # The new format stores answer content separately
@@ -212,7 +213,7 @@ class TestAppendToSink:
             ["raw/article.md"],
         )
 
-        sink_file = temp_wiki / "wiki" / ".sink" / "Query: Test.sink.md"
+        sink_file = temp_wiki / "wiki" / ".sink" / f"{to_fs_name('Query: Test')}.sink.md"
         content = sink_file.read_text(encoding="utf-8")
         # Answer content is stored in Content Store
         assert "Answer content." in content
@@ -225,13 +226,13 @@ class TestAppendToSink:
         wiki = Wiki(temp_wiki)
         wiki.init()
 
-        formal_path = temp_wiki / "wiki" / "Query: Test.md"
+        formal_path = temp_wiki / "wiki" / f"{to_fs_name('Query: Test')}.md"
         formal_path.write_text("# Query: Test\n\nContent\n", encoding="utf-8")
 
         wiki.query_sink.append_to_sink("Query: Test", "Q1", "A1", [], [])
         wiki.query_sink.append_to_sink("Query: Test", "Q2", "A2", [], [])
 
-        sink_file = temp_wiki / "wiki" / ".sink" / "Query: Test.sink.md"
+        sink_file = temp_wiki / "wiki" / ".sink" / f"{to_fs_name('Query: Test')}.sink.md"
         content = sink_file.read_text(encoding="utf-8")
 
         assert "Q1" in content
@@ -260,7 +261,7 @@ class TestReadSink:
         wiki = Wiki(temp_wiki)
         wiki.init()
 
-        sink_file = temp_wiki / "wiki" / ".sink" / "Query: Gold Mining.sink.md"
+        sink_file = temp_wiki / "wiki" / ".sink" / f"{to_fs_name('Query: Gold Mining')}.sink.md"
         sink_file.write_text(
             '---\nformal_page: "Query: Gold Mining"\n---\n\n'
             "# Query Sink: Gold Mining\n\n"
@@ -289,7 +290,7 @@ class TestReadSink:
         wiki = Wiki(temp_wiki)
         wiki.init()
 
-        sink_file = temp_wiki / "wiki" / ".sink" / "Query: Test.sink.md"
+        sink_file = temp_wiki / "wiki" / ".sink" / f"{to_fs_name('Query: Test')}.sink.md"
         sink_file.write_text(
             '---\nformal_page: "Query: Test"\n---\n\n# Query Sink: Test\n\n'
             "---\n\n## Content Store\n\n### a1b2c3d4 — 2026-04-10\nA1\n\n"
@@ -302,7 +303,7 @@ class TestReadSink:
         result = wiki.read_sink("Query: Test")
 
         assert "file" in result
-        assert result["file"].endswith("Query: Test.sink.md")
+        assert result["file"].endswith(f"{to_fs_name('Query: Test')}.sink.md")
         wiki.close()
 
 
@@ -336,7 +337,7 @@ class TestSinkStatus:
         wiki = Wiki(temp_wiki)
         wiki.init()
 
-        sink_file = temp_wiki / "wiki" / ".sink" / "Query: Gold Mining.sink.md"
+        sink_file = temp_wiki / "wiki" / ".sink" / f"{to_fs_name('Query: Gold Mining')}.sink.md"
         sink_file.write_text(
             '---\nformal_page: "Query: Gold Mining"\n---\n\n'
             "# Query Sink: Gold Mining\n\n"
@@ -365,7 +366,7 @@ class TestSinkStatus:
         wiki = Wiki(temp_wiki)
         wiki.init()
 
-        sink1 = temp_wiki / "wiki" / ".sink" / "Query: A.sink.md"
+        sink1 = temp_wiki / "wiki" / ".sink" / f"{to_fs_name('Query: A')}.sink.md"
         sink1.write_text(
             '---\nformal_page: "Query: A"\n---\n\n# Sink: A\n\n'
             "---\n\n## Content Store\n\n### a1b2c3d4 — 2026-04-10\nA1\n\n"
@@ -375,7 +376,7 @@ class TestSinkStatus:
             "| 1 | 2026-04-10 10:00 | Q1 | `a1b2c3d4` | — |\n"
         , encoding="utf-8")
 
-        sink2 = temp_wiki / "wiki" / ".sink" / "Query: B.sink.md"
+        sink2 = temp_wiki / "wiki" / ".sink" / f"{to_fs_name('Query: B')}.sink.md"
         sink2.write_text(
             '---\nformal_page: "Query: B"\n---\n\n# Sink: B\n\n'
             "---\n\n## Content Store\n\n"
@@ -418,7 +419,7 @@ class TestSynthesizeQueryWithSink:
         assert result["status"] == "sunk"
         assert "sink" in result["message"].lower()
 
-        sink_file = temp_wiki / "wiki" / ".sink" / "Query: Gold Mining.sink.md"
+        sink_file = temp_wiki / "wiki" / ".sink" / f"{to_fs_name('Query: Gold Mining')}.sink.md"
         assert sink_file.exists()
         wiki.close()
 
@@ -436,7 +437,7 @@ class TestSynthesizeQueryWithSink:
             answer="Gold mining involves extracting gold ore.",
         )
 
-        sink_file = temp_wiki / "wiki" / ".sink" / "Query: Gold Mining.sink.md"
+        sink_file = temp_wiki / "wiki" / ".sink" / f"{to_fs_name('Query: Gold Mining')}.sink.md"
         content = sink_file.read_text(encoding="utf-8")
         assert "Gold mining involves extracting gold ore." in content
         wiki.close()
@@ -485,7 +486,7 @@ class TestSynthesizeQueryWithSink:
         assert result["status"] == "updated"
         assert result["page_name"] == "Query: Gold Mining"
 
-        page_path = temp_wiki / "wiki" / "Query: Gold Mining.md"
+        page_path = temp_wiki / "wiki" / f"{to_fs_name('Query: Gold Mining')}.md"
         content = page_path.read_text(encoding="utf-8")
         assert "Updated comprehensive content." in content
         wiki.close()
@@ -506,7 +507,7 @@ class TestSynthesizeQueryWithSink:
         assert result["status"] == "updated"
         assert result["page_name"] == "Query: Gold Mining"
 
-        page_path = temp_wiki / "wiki" / "Query: Gold Mining.md"
+        page_path = temp_wiki / "wiki" / f"{to_fs_name('Query: Gold Mining')}.md"
         content = page_path.read_text(encoding="utf-8")
         assert "Merged comprehensive content." in content
         wiki.close()
@@ -583,7 +584,7 @@ class TestReadPageWithSinkInfo:
 
         wiki.write_page("Query: Test", "# Query: Test\n\nContent")
 
-        sink_file = temp_wiki / "wiki" / ".sink" / "Query: Test.sink.md"
+        sink_file = temp_wiki / "wiki" / ".sink" / f"{to_fs_name('Query: Test')}.sink.md"
         sink_file.write_text(
             '---\nformal_page: "Query: Test"\n---\n\n'
             "# Query Sink: Test\n\n"
@@ -605,12 +606,12 @@ class TestReadPageWithSinkInfo:
         wiki = Wiki(temp_wiki)
         wiki.init()
 
-        sink_file = temp_wiki / "wiki" / ".sink" / "Query: Test.sink.md"
+        sink_file = temp_wiki / "wiki" / ".sink" / f"{to_fs_name('Query: Test')}.sink.md"
         sink_file.write_text(
             '---\nformal_page: "Query: Test"\n---\n\n' "# Query Sink: Test\n\nContent\n"
         , encoding="utf-8")
 
-        result = wiki.read_page(".sink/Query: Test.sink.md")
+        result = wiki.read_page(f".sink/{to_fs_name('Query: Test')}.sink.md")
 
         assert result["is_sink"] is True
         assert "Query Sink: Test" in result["content"]
@@ -656,7 +657,7 @@ class TestSearchWithSinkInfo:
         )
         wiki.build_index()
 
-        sink_file = temp_wiki / "wiki" / ".sink" / "Query: Gold Mining.sink.md"
+        sink_file = temp_wiki / "wiki" / ".sink" / f"{to_fs_name('Query: Gold Mining')}.sink.md"
         sink_file.write_text(
             '---\nformal_page: "Query: Gold Mining"\n---\n\n'
             "# Query Sink: Gold Mining\n\n"
@@ -686,7 +687,7 @@ class TestUpdateIndexFileWithSink:
 
         wiki.write_page("Query: Gold Mining", "# Query: Gold Mining\n\nContent")
 
-        sink_file = temp_wiki / "wiki" / ".sink" / "Query: Gold Mining.sink.md"
+        sink_file = temp_wiki / "wiki" / ".sink" / f"{to_fs_name('Query: Gold Mining')}.sink.md"
         sink_file.write_text(
             '---\nformal_page: "Query: Gold Mining"\n---\n\n'
             "# Query Sink: Gold Mining\n\n"
@@ -741,7 +742,7 @@ class TestLintWithSinkStatus:
         wiki = Wiki(temp_wiki)
         wiki.init()
 
-        sink_file = temp_wiki / "wiki" / ".sink" / "Query: Test.sink.md"
+        sink_file = temp_wiki / "wiki" / ".sink" / f"{to_fs_name('Query: Test')}.sink.md"
         sink_file.write_text(
             '---\nformal_page: "Query: Test"\n---\n\n'
             "# Query Sink: Test\n\n"
@@ -795,12 +796,12 @@ class TestUpdatePageSinkMeta:
         wiki = Wiki(temp_wiki)
         wiki.init()
 
-        page_path = temp_wiki / "wiki" / "Query: Test.md"
+        page_path = temp_wiki / "wiki" / f"{to_fs_name('Query: Test')}.md"
         page_path.write_text(
             "---\ntitle: Test\ncategory: query\n---\n\n# Query: Test\n\nContent\n"
         , encoding="utf-8")
 
-        sink_file = temp_wiki / "wiki" / ".sink" / "Query: Test.sink.md"
+        sink_file = temp_wiki / "wiki" / ".sink" / f"{to_fs_name('Query: Test')}.sink.md"
         sink_file.write_text(
             '---\nformal_page: "Query: Test"\n---\n\n# Query Sink: Test\n\n'
         , encoding="utf-8")
@@ -808,7 +809,7 @@ class TestUpdatePageSinkMeta:
         wiki.query_sink._update_page_sink_meta(page_path, sink_file)
 
         content = page_path.read_text(encoding="utf-8")
-        assert "sink_path: wiki/.sink/Query: Test.sink.md" in content
+        assert f"sink_path: wiki/.sink/{to_fs_name('Query: Test')}.sink.md" in content
         assert "title: Test" in content
         assert "category: query" in content
         wiki.close()
@@ -818,10 +819,10 @@ class TestUpdatePageSinkMeta:
         wiki = Wiki(temp_wiki)
         wiki.init()
 
-        page_path = temp_wiki / "wiki" / "Query: Test.md"
+        page_path = temp_wiki / "wiki" / f"{to_fs_name('Query: Test')}.md"
         page_path.write_text("# Query: Test\n\nContent\n", encoding="utf-8")
 
-        sink_file = temp_wiki / "wiki" / ".sink" / "Query: Test.sink.md"
+        sink_file = temp_wiki / "wiki" / ".sink" / f"{to_fs_name('Query: Test')}.sink.md"
         sink_file.write_text(
             '---\nformal_page: "Query: Test"\n---\n\n# Query Sink: Test\n\n'
         , encoding="utf-8")
@@ -830,7 +831,7 @@ class TestUpdatePageSinkMeta:
 
         content = page_path.read_text(encoding="utf-8")
         assert content.startswith("---")
-        assert "sink_path: wiki/.sink/Query: Test.sink.md" in content
+        assert f"sink_path: wiki/.sink/{to_fs_name('Query: Test')}.sink.md" in content
         wiki.close()
 
 
@@ -912,7 +913,7 @@ class TestSinkSuggestions:
 
         wiki.write_page("Query: Gold Mining", "# Gold Mining\n\nContent.")
 
-        sink_file = temp_wiki / "wiki" / ".sink" / "Query: Gold Mining.sink.md"
+        sink_file = temp_wiki / "wiki" / ".sink" / f"{to_fs_name('Query: Gold Mining')}.sink.md"
         sink_file.write_text(
             '---\nformal_page: "Query: Gold Mining"\n---\n\n'
             "# Query Sink: Gold Mining\n\n"
@@ -957,7 +958,7 @@ class TestSinkSuggestions:
 
         wiki.write_page("Query: Gold Mining", "# Gold Mining\n\nContent.")
 
-        sink_file = temp_wiki / "wiki" / ".sink" / "Query: Gold Mining.sink.md"
+        sink_file = temp_wiki / "wiki" / ".sink" / f"{to_fs_name('Query: Gold Mining')}.sink.md"
         sink_file.write_text(
             '---\nformal_page: "Query: Gold Mining"\n---\n\n'
             "# Query Sink\n\n"

@@ -357,13 +357,16 @@ class LocalFileBackend:
 
     # === Helpers (private) ===
     def _page_path(self, name: str) -> Path:
-        """Resolve a page name to a file path under wiki_dir.
+        """Resolve a logical page name to a file path under wiki_dir.
 
         ``name`` is the relative path within ``wiki_dir`` minus the
         ``.md`` suffix (e.g. ``"concepts/Factor Investing"`` or
-        ``"index"``).
+        ``"index"``). On Windows, illegal characters (``:``) are mapped
+        via :mod:`llmwikify.kernel.path_codec`.
         """
-        return (self.wiki_dir / f"{name}.md").resolve()
+        from llmwikify.kernel.path_codec import to_fs_name
+
+        return (self.wiki_dir / f"{to_fs_name(name)}.md").resolve()
 
 
 # === Module-level helpers (shared between backend and Wiki mixins) ===

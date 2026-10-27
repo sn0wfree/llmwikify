@@ -6,6 +6,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from llmwikify.kernel import Wiki
+from llmwikify.kernel.path_codec import from_fs_name, to_fs_name
 
 
 class TestSynthesizeQueryBasic:
@@ -25,7 +26,7 @@ class TestSynthesizeQueryBasic:
         assert result["page_name"].startswith("Query:")
         assert "Gold Mining" in result["page_name"]
 
-        page_path = temp_wiki / "wiki" / f"{result['page_name']}.md"
+        page_path = temp_wiki / "wiki" / f"{to_fs_name(result['page_name'])}.md"
         assert page_path.exists()
 
         content = page_path.read_text(encoding="utf-8")
@@ -84,7 +85,7 @@ class TestSynthesizeWithSources:
             source_pages=["Gold Mining", "Economics"],
         )
 
-        content = (temp_wiki / "wiki" / f"{result['page_name']}.md").read_text(encoding="utf-8")
+        content = (temp_wiki / "wiki" / f"{to_fs_name(result['page_name'])}.md").read_text(encoding="utf-8")
 
         assert "## Sources" in content
         assert "[[Gold Mining]]" in content
@@ -110,7 +111,7 @@ class TestSynthesizeWithSources:
             raw_sources=["raw/research-article.md"],
         )
 
-        content = (temp_wiki / "wiki" / f"{result['page_name']}.md").read_text(encoding="utf-8")
+        content = (temp_wiki / "wiki" / f"{to_fs_name(result['page_name'])}.md").read_text(encoding="utf-8")
 
         assert "## Sources" in content
         assert "### Raw Sources" in content
@@ -131,7 +132,7 @@ class TestSynthesizeWithSources:
             raw_sources=["raw/data.csv", "raw/report.pdf"],
         )
 
-        content = (temp_wiki / "wiki" / f"{result['page_name']}.md").read_text(encoding="utf-8")
+        content = (temp_wiki / "wiki" / f"{to_fs_name(result['page_name'])}.md").read_text(encoding="utf-8")
 
         assert "[[Topic A]]" in content
         assert "[Source: data.csv](raw/data.csv)" in content
@@ -154,7 +155,7 @@ class TestSynthesizeWithSources:
             auto_link=False,
         )
 
-        content = (temp_wiki / "wiki" / f"{result['page_name']}.md").read_text(encoding="utf-8")
+        content = (temp_wiki / "wiki" / f"{to_fs_name(result['page_name'])}.md").read_text(encoding="utf-8")
         assert "[[Source]]" not in content
         assert "## Sources" not in content
 
@@ -170,7 +171,7 @@ class TestSynthesizeWithSources:
             answer="# Simple Answer\n\nJust the answer.",
         )
 
-        content = (temp_wiki / "wiki" / f"{result['page_name']}.md").read_text(encoding="utf-8")
+        content = (temp_wiki / "wiki" / f"{to_fs_name(result['page_name'])}.md").read_text(encoding="utf-8")
         assert "## Sources" not in content
 
         wiki.close()
@@ -253,7 +254,7 @@ class TestSynthesizeDuplicateDetection:
         assert result1["status"] == "created"
         assert result2["status"] == "sunk"
 
-        sink_file = temp_wiki / "wiki" / ".sink" / f"{result1['page_name']}.sink.md"
+        sink_file = temp_wiki / "wiki" / ".sink" / f"{to_fs_name(result1['page_name'])}.sink.md"
         assert sink_file.exists()
         assert "# Answer 2" in sink_file.read_text(encoding="utf-8")
 
@@ -304,7 +305,7 @@ class TestSynthesizeDuplicateDetection:
         assert result2["page_name"] == result1["page_name"]
 
         # Page should have updated content
-        page = temp_wiki / "wiki" / f"{result2['page_name']}.md"
+        page = temp_wiki / "wiki" / f"{to_fs_name(result2['page_name'])}.md"
         content = page.read_text(encoding="utf-8")
         assert "New, improved content" in content
         assert "Old content" not in content
@@ -342,7 +343,7 @@ class TestSynthesizeDuplicateDetection:
         # Create a Query page in a subdirectory
         subdir = temp_wiki / "wiki" / "queries"
         subdir.mkdir(parents=True)
-        (subdir / "Query: Gold Mining Methods.md").write_text(
+        (subdir / f"{to_fs_name('Query: Gold Mining Methods')}.md").write_text(
             "# Gold Mining Methods\n\nOverview of mining methods.\n\n- Keywords: gold, mining, methods"
         , encoding="utf-8")
 
@@ -440,7 +441,7 @@ class TestQueryPageNaming:
         )
 
         assert result["status"] == "sunk"
-        sink_file = temp_wiki / "wiki" / ".sink" / "Query: Test Page.sink.md"
+        sink_file = temp_wiki / "wiki" / ".sink" / f"{to_fs_name('Query: Test Page')}.sink.md"
         assert sink_file.exists()
 
         wiki.close()
@@ -485,7 +486,7 @@ class TestFullQueryFlow:
 
         # 4. Verify page created
         assert result["status"] == "created"
-        page = temp_wiki / "wiki" / f"{result['page_name']}.md"
+        page = temp_wiki / "wiki" / f"{to_fs_name(result['page_name'])}.md"
         assert page.exists()
 
         # 5. Verify sources section
@@ -521,7 +522,7 @@ class TestFullQueryFlow:
             raw_sources=["raw/report-2024.md", "raw/article.md"],
         )
 
-        content = (temp_wiki / "wiki" / f"{result['page_name']}.md").read_text(encoding="utf-8")
+        content = (temp_wiki / "wiki" / f"{to_fs_name(result['page_name'])}.md").read_text(encoding="utf-8")
 
         assert "[[Market Analysis]]" in content
         assert "[Source: report-2024.md](raw/report-2024.md)" in content
@@ -599,7 +600,7 @@ class TestSynthesizeEdgeCases:
         )
 
         assert result["status"] == "created"
-        page = temp_wiki / "wiki" / f"{result['page_name']}.md"
+        page = temp_wiki / "wiki" / f"{to_fs_name(result['page_name'])}.md"
         assert page.exists()
 
         wiki.close()
@@ -631,7 +632,7 @@ More content with `code` and **bold** text.
             answer=answer,
         )
 
-        content = (temp_wiki / "wiki" / f"{result['page_name']}.md").read_text(encoding="utf-8")
+        content = (temp_wiki / "wiki" / f"{to_fs_name(result['page_name'])}.md").read_text(encoding="utf-8")
         assert "## Section 1" in content
         assert "### Subsection" in content
         assert "`code`" in content

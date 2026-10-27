@@ -6,6 +6,8 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 
+from llmwikify.kernel.path_codec import from_fs_name, to_fs_name
+
 from ...constants import (
     MAX_KEY_TOPICS,
     MAX_QUERY_TOPIC_LENGTH,
@@ -67,7 +69,7 @@ class WikiQueryMixin(WikiProtocol):
         if similar_page and mode == "update":
             similar_name = similar_page["page_name"]
             page_name = similar_name
-            page_path = self.wiki_dir / f"{page_name}.md"
+            page_path = self.wiki_dir / f"{to_fs_name(page_name)}.md"
 
             if auto_link:
                 answer = self._append_sources_section(
@@ -121,13 +123,13 @@ class WikiQueryMixin(WikiProtocol):
 
         else:
             page_name = page_name or self._generate_query_page_name(query)
-            page_path = self.wiki_dir / f"{page_name}.md"
+            page_path = self.wiki_dir / f"{to_fs_name(page_name)}.md"
 
             counter = 1
             while page_path.exists():
                 base = page_name
                 page_name = f"{base} ({counter})"
-                page_path = self.wiki_dir / f"{page_name}.md"
+                page_path = self.wiki_dir / f"{to_fs_name(page_name)}.md"
                 counter += 1
 
             self._create_query_page(
@@ -202,7 +204,7 @@ class WikiQueryMixin(WikiProtocol):
         best_score = 0
 
         for page in self._wiki_pages():
-            page_name = page.stem
+            page_name = from_fs_name(page.stem)
 
             if not page_name.startswith("Query:"):
                 continue

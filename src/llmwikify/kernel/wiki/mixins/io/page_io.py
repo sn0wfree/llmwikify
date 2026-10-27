@@ -67,7 +67,9 @@ class WikiPageIOMixin(WikiProtocol):
         if "\\t" in content:
             content = content.replace("\\t", "\t")
 
-        page_path = (self.wiki_dir / f"{full_path}.md").resolve()
+        from llmwikify.kernel.path_codec import to_fs_name
+
+        page_path = (self.wiki_dir / f"{to_fs_name(full_path)}.md").resolve()
 
         try:
             page_path.relative_to(self.wiki_dir.resolve())
@@ -79,8 +81,10 @@ class WikiPageIOMixin(WikiProtocol):
         action = "Updated" if page_path.exists() else "Created"
         self._backend.put_page(full_path, content)
 
-        rel_path = page_path.relative_to(self.wiki_dir).as_posix()
-        self.index.upsert_page(rel_path[:-3], content, rel_path)
+        # Index uses logical names so wikilinks ([[Query: X]]) resolve;
+        # file_path is the on-disk relative path (Windows-safe).
+        rel_path = Path(to_fs_name(full_path) + ".md").as_posix()
+        self.index.upsert_page(full_path, content, rel_path)
 
         self._update_index_file()
 
@@ -99,17 +103,19 @@ class WikiPageIOMixin(WikiProtocol):
             page_name = page_name.replace("sink/", ".sink/", 1)
 
         if page_name.startswith(".sink/") or page_name.startswith("wiki/.sink/"):
+            from llmwikify.kernel.path_codec import from_fs_name, to_fs_name
+
             sink_name = page_name.rsplit("/", 1)[-1]
-            sink_file = self.sink_dir / sink_name
+            sink_file = self.sink_dir / to_fs_name(sink_name)
             if not sink_file.exists() and not sink_name.endswith(".md"):
-                sink_file = self.sink_dir / f"{sink_name}.md"
+                sink_file = self.sink_dir / f"{to_fs_name(sink_name)}.md"
             if not sink_file.exists():
                 return {"error": f"Sink file not found: {page_name}"}
-            raw_name = sink_file.name
+            raw_name = from_fs_name(sink_file.name)
             if raw_name.endswith(".sink.md"):
                 page_name_from_file = raw_name[: -len(".sink.md")]
             else:
-                page_name_from_file = sink_file.stem.replace(".sink", "")
+                page_name_from_file = raw_name[: -len(".md")].replace(".sink", "")
 
             return {
                 "page_name": page_name_from_file,
@@ -133,7 +139,9 @@ class WikiPageIOMixin(WikiProtocol):
         else:
             full_path = page_name
 
-        page_path = self.wiki_dir / f"{full_path}.md"
+        from llmwikify.kernel.path_codec import to_fs_name
+
+        page_path = self.wiki_dir / f"{to_fs_name(full_path)}.md"
 
         if not page_path.exists():
             return {"error": f"Page not found: {full_path}"}
@@ -336,6 +344,8 @@ class WikiPageIOMixin(WikiProtocol):
         - Word count and link statistics from SQLite index
         - Sink status if applicable
         """
+        from llmwikify.kernel.path_codec import from_fs_name
+
         dir_labels = {
             "sources": "Sources",
             "concepts": "Concepts",
@@ -368,7 +378,7 @@ class WikiPageIOMixin(WikiProtocol):
                         re.MULTILINE,
                     )
                     last_entry = last_match.group(1) if last_match else "unknown"
-                    sink_name = page_path.stem.replace(".sink", "")
+                    sink_name = from_fs_name(page_path.stem.replace(".sink", ""))
                     sink_entries.append(
                         f"- [[{sink_name}]] — {entries} pending updates\n"
                         f"  Last entry: {last_entry}"
@@ -380,7 +390,7 @@ class WikiPageIOMixin(WikiProtocol):
             if page.name in ("index.md", "log.md"):
                 continue
 
-            page_name = str(page_path.with_suffix(""))
+            page_name = from_fs_name(str(page_path.with_suffix("")))
 
             subdir = page_path.parts[0] if len(page_path.parts) > 1 else ""
             if len(page_path.parts) > 1:
