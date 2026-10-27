@@ -79,15 +79,19 @@ src/llmwikify/
 │
 ├── foundation/                   # Cross-cutting primitives
 │   ├── config.py / db.py / io.py / logging.py / migration.py
-│   ├── llm_client.py             # OpenAI-compatible client + retry/backoff
+│   ├── llm_client.py             # DEPRECATED shim → llm/base (compat)
 │   ├── auth/                     # JWT secret (OS keyring) + verification
 │   ├── callback/                 # AgentHook (13 hook points) + CompositeHook
 │   │   └── integrations/         # WikiHook / WikiDreamSyncHook / AutoIngestHook
 │   ├── llm/
+│   │   ├── base.py               # LLMClient + process-level client memo
 │   │   ├── client.py             # build_llm_client + load_llm_config
 │   │   ├── spec.py               # LLMSpec (LAL)
 │   │   ├── resolver.py           # from_spec / inheritance
-│   │   ├── streamable.py         # Streaming + tool-call accumulation
+│   │   ├── streamable.py         # StreamableLLMClient (streaming + tools)
+│   │   ├── connection.py         # RetryConfig / backoff / _post_with_retry_*
+│   │   ├── sse.py                # SSE line parse + tool-call accumulation
+│   │   ├── wire.py               # thinking / role alternation / validate
 │   │   ├── token_budget.py / token_estimator.py / budget_decorator.py
 │   │   ├── context_windows.py / provider_models.py / errors.py
 │   │   └── providers.yaml        # Provider metadata single source of truth
@@ -402,18 +406,24 @@ back-compat shim):
 
 | Module | Role |
 |--------|------|
-| `client.py` | `build_llm_client` + `load_llm_config` (config → client construction) |
+| `base.py` | `LLMClient` (non-streaming base) + process-level client memo |
+| `client.py` | `build_llm_client` + `load_llm_config` (config → client, memoized) |
 | `spec.py` | `LLMSpec` — declarative model config |
 | `resolver.py` | `from_spec` + subagent inheritance with strict validation |
-| `streamable.py` | Streaming responses + tool-call accumulation |
+| `streamable.py` | `StreamableLLMClient` — streaming + tool calling |
+| `connection.py` | `RetryConfig` / backoff / `Retry-After` / `RetryMetrics` / HTTP retry |
+| `sse.py` | SSE line parsing + tool-call delta accumulation |
+| `wire.py` | thinking extra_body / role alternation / request validation |
 | `token_budget.py` / `token_estimator.py` / `budget_decorator.py` | Token budgeting |
 | `context_windows.py` / `provider_models.py` | Provider capability tables |
-| `errors.py` | LAL-specific failure semantics (no legacy fallback) |
+| `errors.py` | LAL failure semantics + `LLMRequestError` + arrearage/429 classification |
 
-`llm_client.py` adds OpenAI-compatible chat with configurable retry,
-exponential backoff, `Retry-After` honoring, and streaming reuse for
-non-streaming `chat()`. `api.minimaxi.com` is constrained to ≤ 3 concurrent
-connections (6 triggers throttle).
+`llm_client.py` is a DEPRECATED re-export shim over `llm/base.py`
+(dual-stack merge, 2026-10-23). Retry honors exponential backoff and
+`Retry-After`; `api.minimaxi.com` is constrained to ≤ 3 concurrent
+connections (6 triggers throttle). `streamable.py` re-exports the split
+helpers for test compatibility — prefer importing from
+`connection` / `sse` / `wire` / `errors` in new code.
 
 ### Prompts (`foundation/prompts/`)
 
