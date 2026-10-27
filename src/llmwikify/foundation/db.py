@@ -24,11 +24,14 @@ from __future__ import annotations
 
 import atexit
 import dataclasses
+import logging
 import sqlite3
 import threading
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 # ─── 连接策略 (显式数据，不靠构造顺序) ──────────────────────────
 
@@ -93,6 +96,7 @@ def connect(
     wal: bool = False,
     busy_timeout: int | None = None,
     synchronous: str | None = None,
+    check_same_thread: bool = True,
 ) -> sqlite3.Connection:
     """Open a SQLite connection with project-standard pragmas.
 
@@ -103,11 +107,14 @@ def connect(
         wal: Enable WAL journal mode (default False).
         busy_timeout: Set busy_timeout in ms (default None = no change).
         synchronous: Set synchronous mode (default None = no change).
+        check_same_thread: sqlite3 thread guard (default True = sqlite3's own
+            default). ``False`` allows another thread to *close* the handle,
+            which ``ManagedConnection.close_all_threads()`` needs.
 
     Returns:
         Configured sqlite3.Connection.
     """
-    conn = sqlite3.connect(db_path)
+    conn = sqlite3.connect(db_path, check_same_thread=check_same_thread)
     if row_factory:
         conn.row_factory = sqlite3.Row
     if foreign_keys:
@@ -184,6 +191,17 @@ class ManagedConnection:
             "synchronous": synchronous,
         }
         self._local = threading.local()
+        # Every connection this manager hands out, across all threads, so
+        # teardown can release them all (see close_all_threads).
+        self._all_conns: list[sqlite3.Connection] = []
+        self._conns_lock = threading.Lock()
+        # sqlite3 refuses to close a connection from a thread other than the
+        # one that created it ("SQLite objects created in a thread can only
+        # be used in that same thread"). The thread-local storage above
+        # already guarantees one connection per thread, so the guard buys
+        # nothing during normal use — but it would make close_all_threads()
+        # unable to release a worker thread's handle. Hence: off.
+        self._check_same_thread = False
 
     @property
     def db_path(self) -> str:
@@ -195,8 +213,14 @@ class ManagedConnection:
         """Thread-local lazy-init connection."""
         c = getattr(self._local, "conn", None)
         if c is None:
-            c = connect(self._db_path, **self._pragmas)
+            c = connect(
+                self._db_path,
+                **self._pragmas,
+                check_same_thread=self._check_same_thread,
+            )
             self._local.conn = c
+            with self._conns_lock:
+                self._all_conns.append(c)
         return c
 
     @contextmanager
@@ -319,6 +343,35 @@ class ManagedConnection:
             c.close()
             self._local.conn = None
 
+    def close_all_threads(self) -> None:
+        """Close **every** connection this manager created, on all threads.
+
+        ``close()`` is deliberately thread-scoped: closing a connection
+        another thread is actively using raises ``ProgrammingError``.
+        This method is the blunt teardown variant — for process shutdown
+        and test teardown only.
+
+        Without it, a thread that touched the DB keeps its SQLite handle
+        open forever. On Windows that keeps the ``.db`` file locked, so
+        temp-dir cleanup fails with ``WinError 32``.
+
+        Connections are opened with ``check_same_thread=False`` precisely
+        so this can release another thread's handle; a failure to close is
+        logged rather than silently swallowed.
+        """
+        with self._conns_lock:
+            conns, self._all_conns = self._all_conns, []
+        for c in conns:
+            try:
+                c.close()
+            except Exception as exc:  # noqa: BLE001 — teardown must not raise
+                logger.warning(
+                    "failed to close a SQLite connection for %s: %s",
+                    self._db_path,
+                    exc,
+                    exc_info=True,
+                )
+        self._local.conn = None
 
 
 # ─── 模块级单例注册表 ────────────────────────────────────────
@@ -369,7 +422,16 @@ def get_connection(
 
 
 def close_all() -> None:
-    """Close all singleton connections (for atexit / test teardown)."""
+    """Close all singleton connections (for atexit / test teardown).
+
+    Thread-scoped: only the **calling thread's** connections are closed.
+    A connection still held by another thread is left alone — closing it
+    from here would break that thread's in-flight work.
+
+    Use ``ManagedConnection.close_all_threads()`` when you really need to
+    release every handle (e.g. a worker thread leaked one, and on Windows
+    the file stays locked).
+    """
     for mc in list(_connections.values()):
         mc.close()
     _connections.clear()
