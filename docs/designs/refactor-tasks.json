@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "plan": "docs/designs/reuse-and-performance-isolation-plan.md",
+  "notes": [
+    "任务板：编排者是唯一可写方。",
+    "候选池（U1-U13 / P1-P16）在 plan 文档里，本文件只跟踪已进入管线的任务。",
+    "批次 0 在本协议落地之前手工完成，未走 handoff 校验门，故不在此登记。",
+    "task_id 约定：<批次>-<候选 id 降写>-<短描述>，例如 p3-graph-snapshot、u1-llm-dispatch。"
+  ],
+  "tasks": []
+}
