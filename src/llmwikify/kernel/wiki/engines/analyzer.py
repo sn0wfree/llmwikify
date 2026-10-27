@@ -11,7 +11,7 @@ import json
 import logging
 import re
 import warnings
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from ..wiki import Wiki
@@ -228,9 +228,8 @@ class WikiAnalyzer:
         parts = []
 
         if self.wiki.wiki_md_file.exists():
-            parts.append(
-                f"=== WIKI SCHEMA (wiki.md) ===\n{self.wiki.wiki_md_file.read_text(encoding="utf-8")}"
-            )
+            wiki_md = self.wiki.wiki_md_file.read_text(encoding="utf-8")
+            parts.append(f"=== WIKI SCHEMA (wiki.md) ===\n{wiki_md}")
 
         pages = self.wiki._get_existing_page_names()
         pages_section = f"\n=== EXISTING PAGES ({len(pages)} total) ===\n"
