@@ -150,7 +150,4 @@ def format_run_not_found(run_id: Any, workflow_name: str | None = None) -> str:
             f"identifier returned by the *_run tool, not user input."
             f"{hint}"
         )
-    return (
-        f"no run with id {run_id!r} — run_id must be a 'wf_...' "
-        f"identifier returned by the *_run tool, not user input."
-    )
+    return f"no run with id {run_id!r}"
