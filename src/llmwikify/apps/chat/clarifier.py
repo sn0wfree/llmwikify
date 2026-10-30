@@ -10,31 +10,12 @@ import logging
 from typing import Any
 
 from llmwikify.apps.chat.prompts import _clarify_fallback
-from llmwikify.apps.chat.research_engine.llm_step import run_prompt
+from llmwikify.apps.chat.research_engine.llm_step import (
+    LLMRoleCtx,
+    run_prompt,
+)
 
 logger = logging.getLogger(__name__)
-
-
-class _ClarifierCtx:
-    """Minimal ctx-like object for run_prompt.
-
-    ``run_prompt`` needs ``default_llm``, ``planning_llm``, ``report_llm``,
-    and ``config``. The clarifier only has a single LLM client (the
-    planning one) so the other two default to the same client.
-    ``metrics`` is optional (None if the caller does not track them).
-    """
-
-    def __init__(
-        self,
-        llm_client: Any,
-        config: dict[str, Any],
-        metrics: Any = None,
-    ):
-        self.default_llm = llm_client
-        self.planning_llm = llm_client
-        self.report_llm = llm_client
-        self.config = config
-        self.metrics = metrics
 
 
 class ResearchClarifier:
@@ -60,9 +41,9 @@ class ResearchClarifier:
         self.config = config or {}
         self.metrics = metrics
 
-    def _as_ctx(self) -> _ClarifierCtx:
+    def _as_ctx(self) -> LLMRoleCtx:
         """Build a ctx-like object for ``run_prompt``."""
-        return _ClarifierCtx(self.llm_client, self.config, metrics=self.metrics)
+        return LLMRoleCtx(self.llm_client, self.config, metrics=self.metrics)
 
     async def clarify(self, query: str, wiki_context: str = "") -> dict[str, Any]:
         """Clarify the research query.

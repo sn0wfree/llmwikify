@@ -13,12 +13,12 @@ from typing import Any
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
-from llmwikify import __version__
 from llmwikify.foundation.logging import setup_logging
 from llmwikify.interfaces.server.constants import DEFAULT_HOST, DEFAULT_PORT
 from llmwikify.kernel import Wiki
 from llmwikify.kernel.multi_wiki.registry import WikiRegistry
 
+from ...foundation.version import __version__
 from ..mcp.adapter import MCPAdapter
 
 # Phase 2a: AuthMiddleware replaced by JWTAuthMiddleware (below).

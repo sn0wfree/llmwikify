@@ -56,7 +56,7 @@ class WikiUtilityMixin(WikiProtocol):
     def _get_version() -> str:
         """Get llmwikify version."""
         try:
-            from llmwikify import __version__
+            from ....foundation.version import __version__
 
             return __version__
         except ImportError:
@@ -232,26 +232,3 @@ class WikiUtilityMixin(WikiProtocol):
                 return pos
         return len(content)
 
-    @staticmethod
-    def _build_merge_notice(new_sections: list, version: str) -> str:
-        """Build the dedup instruction notice for LLM agents."""
-        section_list = "\n".join(f"  - {s}" for s in new_sections)
-        return f"""<!--
-  WIKI SCHEMA UPDATE NOTICE
-  =========================
-  This wiki.md has been updated with new sections from llmwikify v{version}.
-
-  NEW SECTIONS ADDED (please review and deduplicate):
-{section_list}
-
-  ACTION REQUIRED:
-  1. Review the "## Schema Updates (v{version})" section at the end of this file
-  2. If any new sections duplicate existing content, merge them into the existing sections
-  3. Remove the "## Schema Updates" section after deduplication
-  4. Remove this notice after cleanup is complete
-
-  The new sections contain updated conventions and workflows that may complement
-  or replace your existing customizations.
--->
-
-"""

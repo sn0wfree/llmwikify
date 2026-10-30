@@ -21,6 +21,8 @@ catch anything framework-emitted.
 
 from __future__ import annotations
 
+from typing import Any
+
 
 class SkillError(Exception):
     """Base class for all skill-framework errors."""
@@ -114,3 +116,41 @@ __all__ = [
     "SkillExecutionError",
     "ConfirmationRequiredError",
 ]
+
+
+def format_run_not_found(run_id: Any, workflow_name: str | None = None) -> str:
+    """Produce a helpful error when a run_id doesn't match any stored run.
+
+    run_id should be a 'wf_YYYY-MM-DDTHH-MM-SS_<8hex>' identifier
+    returned by a *_run tool. If the LLM passed something else
+    (e.g. user input starting with '/' or containing ':'), include
+    a hint plus up to 3 most recent run_ids to help it recover.
+
+    Regression: the bare "no run with id X" message was confusing
+    for the LLM, which would sometimes pass the user's slash command
+    input as a run_id (e.g. "study: 量化交易策略").
+    """
+    rid = str(run_id) if run_id else ""
+    if not rid or not rid.startswith("wf_"):
+        # Imported lazily: skills.workflows imports this module, so a
+        # module-level import here would close a cycle.
+        from llmwikify.apps.chat.skills.workflows.run_store import RunStore
+
+        try:
+            recent = RunStore.default().list_runs(
+                workflow_name=workflow_name,
+                limit=3,
+            )
+            recent_ids = [s.run_id for s in recent if s.run_id]
+        except Exception:
+            recent_ids = []
+        hint = f" Recent run_ids: {recent_ids}." if recent_ids else ""
+        return (
+            f"no run with id {run_id!r} — run_id must be a 'wf_...' "
+            f"identifier returned by the *_run tool, not user input."
+            f"{hint}"
+        )
+    return (
+        f"no run with id {run_id!r} — run_id must be a 'wf_...' "
+        f"identifier returned by the *_run tool, not user input."
+    )

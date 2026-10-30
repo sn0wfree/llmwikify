@@ -9,7 +9,6 @@ Based on Karpathy's LLM Wiki Principles:
 - Bidirectional reference tracking
 """
 
-__version__ = "0.40.6"
 __author__ = "sn0wfree"
 __email__ = "linlu1234567@sina.com"
 __license__ = "MIT"
@@ -23,6 +22,7 @@ from .foundation.config import (
     load_config,
 )
 from .foundation.extractors import ExtractedContent, Link
+from .foundation.version import __version__
 from .interfaces.cli import WikiCLI
 from .interfaces.mcp import create_mcp_server, serve_mcp
 

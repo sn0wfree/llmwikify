@@ -2,9 +2,9 @@
 
 import logging
 
-from llmwikify import __version__
 from llmwikify.kernel.storage.backend import is_path_excluded
 
+from .....foundation.version import __version__
 from ...protocols import WikiProtocol
 
 logger = logging.getLogger(__name__)

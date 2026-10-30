@@ -62,6 +62,28 @@ from llmwikify.apps.chat.state import LLMCallMetrics
 logger = logging.getLogger(__name__)
 
 
+class LLMRoleCtx:
+    """Minimal ctx-like object for :func:`run_prompt`.
+
+    ``run_prompt`` needs ``default_llm`` / ``planning_llm`` /
+    ``report_llm`` plus ``config``. Callers that hold a single LLM
+    client wrap it here; the same client serves all three roles.
+    ``metrics`` is optional (None when the caller does not track them).
+    """
+
+    def __init__(
+        self,
+        llm_client: Any,
+        config: dict[str, Any],
+        metrics: Any = None,
+    ):
+        self.default_llm = llm_client
+        self.planning_llm = llm_client
+        self.report_llm = llm_client
+        self.config = config
+        self.metrics = metrics
+
+
 # ─── client resolution ────────────────────────────────────────────────
 
 
