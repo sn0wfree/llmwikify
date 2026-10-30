@@ -145,58 +145,64 @@ def _delete_wiki_data(app_db: Any, wiki_id: str) -> dict:
             ("chat_sessions", "wiki_id"),
             ("autoresearch_sessions", "wiki_id"),
         ]
+        # Cascade BEFORE deleting the parent rows: the child DELETEs
+        # resolve session ids via a subquery on the parent table, so
+        # deleting the parent first left chat_messages / sub_queries /
+        # sources orphaned (silent data leak on `db clean`).
+        try:
+            cur = conn.execute(
+                """DELETE FROM chat_messages
+                   WHERE session_id IN
+                   (SELECT id FROM chat_sessions WHERE wiki_id = ?)""",
+                (wiki_id,),
+            )
+            result["chat_messages"] = cur.rowcount
+        except Exception:
+            logger.debug("DELETE from chat_messages failed for wiki %s", wiki_id)
+        try:
+            cur = conn.execute(
+                """DELETE FROM autoresearch_sub_queries
+                   WHERE session_id IN
+                   (SELECT id FROM autoresearch_sessions WHERE wiki_id = ?)""",
+                (wiki_id,),
+            )
+            result["autoresearch_sub_queries"] = cur.rowcount
+        except Exception:
+            logger.debug(
+                "DELETE from autoresearch_sub_queries failed for wiki %s", wiki_id
+            )
+        try:
+            cur = conn.execute(
+                """DELETE FROM autoresearch_sources
+                   WHERE session_id IN
+                   (SELECT id FROM autoresearch_sessions WHERE wiki_id = ?)""",
+                (wiki_id,),
+            )
+            result["autoresearch_sources"] = cur.rowcount
+        except Exception:
+            logger.debug(
+                "DELETE from autoresearch_sources failed for wiki %s", wiki_id
+            )
+
         for tbl, col in deletions:
             try:
                 cur = conn.execute(f"DELETE FROM {tbl} WHERE {col} = ?", (wiki_id,))
                 result[tbl] = cur.rowcount
             except Exception:
                 logger.debug("DELETE from %s failed for wiki %s", tbl, wiki_id)
-            # Cascading deletes
+        # Shared wiki-scoped tables — deleted ONCE, not once per parent
+        # table (nesting them in the loop above overwrote the counts).
+        for t in (
+            "dream_proposals",
+            "notifications",
+            "confirmations",
+            "ingest_log",
+        ):
             try:
-                cur = conn.execute(
-                    """DELETE FROM chat_messages
-                       WHERE session_id IN
-                       (SELECT id FROM chat_sessions WHERE wiki_id = ?)""",
-                    (wiki_id,),
-                )
-                result["chat_messages"] = cur.rowcount
+                cur = conn.execute(f"DELETE FROM {t} WHERE wiki_id = ?", (wiki_id,))
+                result[t] = cur.rowcount
             except Exception:
-                logger.debug("DELETE from chat_messages failed for wiki %s", wiki_id)
-            try:
-                cur = conn.execute(
-                    """DELETE FROM autoresearch_sub_queries
-                       WHERE session_id IN
-                       (SELECT id FROM autoresearch_sessions WHERE wiki_id = ?)""",
-                    (wiki_id,),
-                )
-                result["autoresearch_sub_queries"] = cur.rowcount
-            except Exception:
-                logger.debug(
-                    "DELETE from autoresearch_sub_queries failed for wiki %s", wiki_id
-                )
-            try:
-                cur = conn.execute(
-                    """DELETE FROM autoresearch_sources
-                       WHERE session_id IN
-                       (SELECT id FROM autoresearch_sessions WHERE wiki_id = ?)""",
-                    (wiki_id,),
-                )
-                result["autoresearch_sources"] = cur.rowcount
-            except Exception:
-                logger.debug(
-                    "DELETE from autoresearch_sources failed for wiki %s", wiki_id
-                )
-            for t in (
-                "dream_proposals",
-                "notifications",
-                "confirmations",
-                "ingest_log",
-            ):
-                try:
-                    cur = conn.execute(f"DELETE FROM {t} WHERE wiki_id = ?", (wiki_id,))
-                    result[t] = cur.rowcount
-                except Exception:
-                    logger.debug("DELETE from %s failed for wiki %s", t, wiki_id)
+                logger.debug("DELETE from %s failed for wiki %s", t, wiki_id)
         conn.commit()
     return result
 
