@@ -1,0 +1,90 @@
+{
+  "task_id": "p4-lint-snapshot",
+  "verdict": "approve",
+  "review_round": 2,
+  "reviewer": "verifier (independent) + orchestrator cross-check",
+  "findings": [
+    {
+      "severity": "medium",
+      "file": "docs/designs/refactor-designs/p4-lint-snapshot.md:459",
+      "message": "R8 已登记：fail-open 的连带副作用 —— status.py 的裸读早于 frontmatter 与 archive 两个排除判定，坏字节让两项排除都不执行",
+      "evidence": "设计文档 §11 R8 + §11.1 详述已含触发条件、实测证据（坏字节下 orphan_candidates 含 archive/Old 与 Draft，合法 UTF-8 对照组不含）、不修原因（status.py 正被并行 writer 修改，写冲突）与将来修复层次",
+      "state": "已按 round 1 的 required_action 登记为残留风险，未改代码（写冲突）"
+    },
+    {
+      "severity": "medium",
+      "file": "docs/designs/refactor-designs/p4-lint-snapshot.md:460",
+      "message": "R9 已登记：errors=replace 产生 U+FFFD，凭空造出假 broken_link 与假 value_conflict",
+      "evidence": "设计文档 §11 R9 + §11.2 详述已含触发条件、实测证据（假 broken_link='Target\\ufffd'、假 value_conflict='10ms vs 10ms\\ufffd'，对照组 0 条）、不修原因（输出层降级属行为变更，超出 P4-a 边界）与将来修复层次",
+      "state": "已按 round 1 的 required_action 登记为残留风险，未改代码（超边界）"
+    },
+    {
+      "severity": "low",
+      "file": "tests/test_lint_read_counts.py:339",
+      "message": "3 类边界用例已补：嵌套 raw 子目录 / 同 basename 不同目录 / excluded 目录，均以 oracle 比对并断言 sources 仍只扫 1 次",
+      "evidence": "新增 test_nested_raw_subdirs_resolve_like_per_path_lookup、test_same_basename_in_different_dirs_resolves_like_per_path_lookup、test_excluded_sources_dir_resolves_like_per_path_lookup",
+      "state": "已修"
+    },
+    {
+      "severity": "low",
+      "file": "tests/test_lint_read_counts.py:225",
+      "message": "等价性 oracle 已改有损读，与新实现语义对齐；docstring 注明它是改前算法的手抄副本",
+      "evidence": "oracle 的 read_text 已加 errors=replace，与 source_analysis.py 的读法一致；非 UTF-8 source 页上两者结果相同",
+      "state": "已修"
+    },
+    {
+      "severity": "low",
+      "file": "tests/test_wiki_analyzer.py:40",
+      "message": "死 stub 已换成 wiki._build_source_summary_map.return_value = {}，mock 重新反映真实调用路径",
+      "evidence": "该文件 diff 仅 1 行（2 insertions/1 deletion 含上下文）；该文件全部用例通过",
+      "state": "已修"
+    },
+    {
+      "severity": "low",
+      "file": "tests/test_lint_handles_non_utf8_page.py:209",
+      "message": "测试覆盖面声明已收窄为「只覆盖 wiki/ 下的页面，不覆盖 wiki/sources/ 下的 source 摘要页」，并新增 test_knowledge_gap_still_fails_on_bad_source_page 把 R1 从隐性变成显式断言",
+      "evidence": "新增用例以坏字节构造 wiki/sources/ 的 source 摘要页，显式断言 knowledge_gap 规则仍以 UnicodeDecodeError 失败并被 lint/__init__.py 的 except Exception 吞掉；docstring 注明这是「已知残留风险」的显式化而非期望语义",
+      "state": "已修"
+    },
+    {
+      "severity": "low",
+      "file": "tests/test_lint_handles_non_utf8_page.py:142",
+      "message": "本任务两个新增文件已 black-clean（black 26.10.1）",
+      "evidence": "black --check tests/test_lint_read_counts.py tests/test_lint_handles_non_utf8_page.py → 2 files would be left unchanged",
+      "state": "已修"
+    }
+  ],
+  "required_actions": [],
+  "verification": {
+    "round2_tests": "87 passed（本轮涉及 + 相关套件）",
+    "round2_ruff": "tests/test_lint_read_counts.py + tests/test_lint_handles_non_utf8_page.py + tests/test_wiki_analyzer.py → All checks passed",
+    "round2_black": "2 个新增文件 unchanged；tests/test_wiki_analyzer.py 的 3 处失败为预存，与基线逐字一致，未新增",
+    "round2_architecture": "scripts/check_architecture.py → 0 violations",
+    "src_untouched": "本轮未改 src/ 任何文件：analyzer.py / lint/__init__.py / source_analysis.py 的 mtime 停在 round 1；status.py 的 mtime 属并行 writer",
+    "eol": "全部改动文件 CRLF、无 BOM、无孤立 LF",
+    "A_映射语义等价": "通过（round 1 结论维持）：reviewer 独立 13 例差分探针 ALL_EQUAL=True；context 逐字节等价（两侧 26691 字符，同 SHA256）",
+    "G_缓存契约": "通过：三个 key、extra 语义、TTL 600.0s、返回结构、cached 标志均未变",
+    "计数基准": "before(pristine) sources rglob=8 read=87、context 构建=1、全量 rglob=10 read=103；after rglob=1 read=14、context 构建=0、全量 rglob=3 read=30"
+  },
+  "previous_round": {
+    "round": 1,
+    "verdict": "request_changes",
+    "medium": 3,
+    "low": 4,
+    "gate_effect": "scripts/validate_handoff.py 挡住 implement -> review，门按设计生效",
+    "resolution": [
+      "[medium] fail-open 连带废掉 frontmatter/archive 排除 -> 登记 R8，未改代码（status.py 写冲突）",
+      "[medium] U+FFFD 假阳性 -> 登记 R9，未改代码（输出层降级超出 P4-a 边界）",
+      "[medium] 测试覆盖面声明过宽 -> 已修：收窄 docstring + 新增 sources 坏页显式断言用例",
+      "[low] 死 stub -> 已修",
+      "[low] oracle 读法不一致 -> 已修",
+      "[low] 新增文件 black 失败 -> 已修",
+      "[low] 边界覆盖盲区 -> 已修：补 3 类用例"
+    ]
+  },
+  "notes": [
+    "工作区存在并行 writer 的未提交改动（apps/chat/clarifier.py、apps/chat/harness/review.py、apps/chat/skills/*、apps/research/llm_step.py、apps/research/report.py 等），不属于本任务，全程未触碰。ruff 全树因此由 round 1 的 2 错变为 All checks passed。",
+    "本任务源码改动止于 round 1 的 3 个文件，round 2 为纯测试与文档返工，基准数字不受影响。",
+    "review_round 1 的完整记录保留在本文件的 previous_round 段；编排者会话笔记另有逐条决策。"
+  ]
+}

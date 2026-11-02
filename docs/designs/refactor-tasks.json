@@ -7,5 +7,136 @@
     "批次 0 在本协议落地之前手工完成，未走 handoff 校验门，故不在此登记。",
     "task_id 约定：<批次>-<候选 id 降写>-<短描述>，例如 p3-graph-snapshot、u1-llm-dispatch。"
   ],
-  "tasks": []
+  "tasks": [
+    {
+      "task_id": "p4-lint-snapshot",
+      "batch": "batch-1",
+      "candidate": "P4",
+      "title": "一次 lint，一份页面快照",
+      "goal": "性能隔离：把 lint 的上下文构建与孤儿概念扫描收敛成一次，消除缓存命中路径上的无效重算",
+      "scope": "src/llmwikify/kernel/wiki/engines/analyzer.py",
+      "stage": "done",
+      "owner": "orchestrator",
+      "status": "done",
+      "completed_at": "2026-10-28",
+      "gates": {
+        "recon": "pass",
+        "design": "pass",
+        "implement": "pass",
+        "review_round_1": "BLOCKED (request_changes) — 门按设计生效",
+        "review_round_2": "pass (approve)",
+        "bench": "pass (regression=false)"
+      },
+      "result": {
+        "counts": {
+          "sources_rglob": "8 -> 1",
+          "sources_read_text": "87 -> 14",
+          "all_read_text": "103 -> 30",
+          "build_context_on_cache_hit": "1 -> 0"
+        },
+        "wall_clock_synthetic": {
+          "p50_ms": "16.51 -> 7.75 (-53.1%)",
+          "p95_ms": "25.82 -> 12.85 (-50.2%)",
+          "caveat": "合成 wiki 的方向性信号，不可作性能承诺"
+        },
+        "resources": "峰值内存 +6.8 KiB (+2.6%, 有界)；句柄数无增长；sqlite 连接 1->1->0 无泄漏",
+        "correctness": "非 UTF-8 页面不再让 wiki.lint() 抛 UnicodeDecodeError；8/8 规则跑完（改前 4/8 被静默吞掉）"
+      },
+      "files": {
+        "source": [
+          "src/llmwikify/kernel/wiki/engines/analyzer.py",
+          "src/llmwikify/kernel/wiki/lint/__init__.py",
+          "src/llmwikify/kernel/wiki/mixins/io/source_analysis.py"
+        ],
+        "test": [
+          "tests/test_lint_read_counts.py",
+          "tests/test_lint_handles_non_utf8_page.py",
+          "tests/test_wiki_analyzer.py"
+        ],
+        "artifact": [
+          "docs/designs/refactor-handoff/p4-lint-snapshot.recon.json",
+          "docs/designs/refactor-handoff/p4-lint-snapshot.design.json",
+          "docs/designs/refactor-handoff/p4-lint-snapshot.implement.json",
+          "docs/designs/refactor-handoff/p4-lint-snapshot.review.json",
+          "docs/designs/refactor-handoff/p4-lint-snapshot.bench.json",
+          "docs/designs/refactor-designs/p4-lint-snapshot.md"
+        ]
+      },
+      "residual_risks": ["R8 fail-open 连带废掉 frontmatter/archive 排除", "R9 U+FFFD 假阳性", "R1 knowledge_gap 规则读裸 source 页"],
+      "follow_up": {
+        "task_id": "p4b-lint-snapshot",
+        "parent": "p4-lint-snapshot",
+        "batch": "batch-1",
+        "candidate": "P4-b",
+        "title": "全量 PageSnapshot：一次 lint 一份页面快照",
+        "goal": "把 lint 路径的 wiki 页面内容读取从 ~5.4N 次降到 1 次：一次构建不可变快照，规则/扫描/context 共用",
+        "stage": "recon",
+        "owner": "recon",
+        "status": "in_progress",
+        "depends_on": ["p4-lint-snapshot"],
+        "why_now": "P4-a 已把 context 构建路径的浪费清掉（缓存命中时 0 次构建），剩下的重复读集中在规则层与 _scan_all_pages。P4-b 是 P4 的主体收益。",
+        "scope_facts": {
+          "read_multiplicity_now": "规则层 ~3.4N（P4-a recon 实测，151 页 → read_text 515）+ analyzer._scan_all_pages 2N ≈ 5.4N",
+          "rules_using_base_template": ["data_gap", "potentially_outdated", "dated_claim(super().run)"],
+          "rules_sharing_cross_page_load": ["missing_cross_ref", "contradiction"],
+          "rules_overriding_run_own_way": ["query_page_overlap(rglob Query: 页)", "redundancy(只 _wiki_pages 取名, O(n^2) 比较)", "dated_claim(先扫 raw_dir 读全部 raw)", "knowledge_gap(读 sources/ 的 source 页, R1 裸读)"],
+          "key_insight": "detect(page_name, content, wiki, results) 本来就收 content —— 变的只是 content 的来源。基础模板方法的 3 条规则 + 2 条 CrossPageRule 可零改动受益，方案文档『改 8 条规则签名』高估了改动面",
+          "not_in_scope": ["dated_claim 的 raw_dir 全扫（raw 不是 wiki 页，需扩展快照覆盖面 → 另立）", "R8 fail-open（status.py 正被并行 writer 修改）"]
+        },
+        "decomposition": {
+          "P4-b-1": "建边界（默认实现 = 现状）：新增 kernel/wiki/snapshot.py（PageSnapshot + PageSource Protocol + 内存上限与降级）+ lint/__init__.py（Rule.run / CrossPageRule._load_pages / LintEngine.run_all 接受可选 snapshot）+ 新测试。不传 snapshot 时行为与今天完全一致",
+          "P4-b-2": "接入：LintEngine.run_all 自建一次快照传给规则；analyzer.lint() 建一次快照供 _scan_all_pages / _build_lint_context / _run_all_rules 共用",
+          "P4-b-3": "规则层收尾：query_page_overlap / redundancy / knowledge_gaps 各自消���重复 rglob 与裸读（顺带把 R1 显式化）"
+        },
+        "constraints": [
+          "每个子任务源文件 <= 3",
+          "P4-b-1 的默认实现必须 = 现状（不传 snapshot 路径行为逐字节不变）",
+          "PageSnapshot 必须不可变（frozen）且可跨线程共享（无锁）",
+          "必须有内存上限与降级路径（方案文档 §P4：> 200MB 降级为流式/分块，否则大 wiki 会 OOM）",
+          "不得引入 feature flag：回滚靠独立 commit 可 revert",
+          "不得改公开 API 契约：LintEngine.run_all / run_rule / Rule.run / detect / detect_all 的既有调用方式必须继续可用（新增参数只能是可选的）"
+        ],
+        "acceptance": [
+          "recon 过 validate_handoff 的 recon 门",
+          "design 明确 snapshot API、内存上限、降级路径、do_not 清单",
+          "三个子任务各自 status == done，且各自有回归测试",
+          "计数型基准：lint 路径 wiki 页面 read_text 从 ~5.4N 降到 1N",
+          "review verdict == approve",
+          "bench regression == false"
+        ]
+      },
+      "review_round_1": {
+        "verdict": "request_changes",
+        "medium": 3,
+        "low": 4,
+        "gate": "blocked — scripts/validate_handoff.py 挡住 implement -> review",
+        "note": "3 条 medium 中 2 条（fail-open 副作用、U+FFFD 假阳性）改为登记残留风险不改代码：status.py 正在被并行 writer 修改，改它会写冲突；U+FFFD 降级属行为变更、超出 P4-a 边界。第 3 条（测试覆盖面声明过宽）是纯测试改动，必须实修。"
+      },
+      "depends_on": [],
+      "scope_decision": {
+        "included": {
+          "C1": "proceed — LLM 缓存命中时仍无条件构建 context，纯浪费，3 行可解",
+          "C2": "proceed — _find_source_summary_page 的 O(raw x sources) 嵌套扫，占 context 构建约 86%",
+          "C9": "proceed — 正确性缺陷，提到最前：except TypeError 无效重试 + 非 UTF-8 页面让 wiki.lint() 抛 UnicodeDecodeError（HTTP 500），且坏页面静默关掉 4/8 条规则"
+        },
+        "excluded": {
+          "C3": "observe — 6 条普通 Rule 各自重读，属 P4-b（改 8 条规则签名），另立任务",
+          "C4": "observe — status.py 有他人未提交改动，本轮不碰以免冲突，另立任务",
+          "C5": "observe — find_orphan_concepts 绝对成本低（1400 页 0.08s），属 P3",
+          "C6": "observe — RelationEngine 重复构造/DDL 重跑，属 P3",
+          "C7": "observe — HTTP async def 改 sync def 是批次 1 的 1.5 项（P3），本任务不混入",
+          "C8": "observe — 实测 0.13ms，非瓶颈",
+          "C10": "observe — context 内两套遍历，属 P4-b"
+        },
+        "batch_note": "P4-a 提前到批次 1 执行。依据：①方案文档 §P4 自己给出 P4-a/P4-b 拆分且 P4-a 标注「低风险 ~30 行」；②P4-a 含正确性缺陷修复(C9)，协议规定正确性缺陷优先于性能；③P4-a 不依赖批次 1 的其它事项（1.1-1.5 均为 P1/P3，彼此独立）；④基准用「读文件次数」计数而非墙钟，本机无 1400 页 wiki 也能验证"
+      },
+      "acceptance": [
+        "recon 产出带 file:line 证据的候选清单，过 scripts/validate_handoff.py 的 recon 门",
+        "design 明确边界、接口、默认实现=现状、do_not 清单",
+        "实现有回归测试网，且改动文件 <= 3",
+        "review verdict == approve",
+        "bench regression == false"
+      ]
+    }
+  ]
 }

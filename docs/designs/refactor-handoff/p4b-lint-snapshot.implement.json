@@ -1,0 +1,89 @@
+{
+  "task_id": "p4b-lint-snapshot",
+  "sub_task": "P4-b-1",
+  "status": "done",
+  "files_changed": [
+    "src/llmwikify/kernel/wiki/snapshot.py",
+    "src/llmwikify/kernel/wiki/lint/__init__.py",
+    "tests/test_lint_snapshot.py"
+  ],
+  "tests_added": [
+    "tests/test_lint_snapshot.py"
+  ],
+  "steps": [
+    {
+      "id": "A",
+      "title": "feat(lint): 引入不可变页面快照对象（kernel/wiki/snapshot.py）",
+      "changes": [
+        "新增 SNAPSHOT_MAX_PAGE_BYTES = 1 MiB / SNAPSHOT_MAX_TOTAL_BYTES = 64 MiB 两个上限常量",
+        "新增 @dataclass(frozen=True) PageSnapshot：names / contents / paths / relative_names / omitted / byte_size + content_of() / path_of() / degraded 属性；__post_init__ 用 MappingProxyType 包住 contents 与 paths（深度只读，可跨线程共享无锁）",
+        "新增 PageSource Protocol（snapshot() -> PageSnapshot）与 @dataclass(frozen=True, eq=False) WikiPageSource 默认实现",
+        "WikiPageSource.snapshot() 复用 wiki._wiki_pages() 枚举页面（recon C12），先 stat 卡单页/总量上界再 read_text(encoding='utf-8', errors='replace')；超限页或读失败的页不缓存但记入 omitted（不丢弃），降级时打一条 WARNING",
+        "Wiki 只在 TYPE_CHECKING 下 import（避免 wiki -> analyzer -> lint -> snapshot -> wiki 循环）"
+      ]
+    },
+    {
+      "id": "B",
+      "title": "feat(lint): 规则基类新增并行入口 run_with_snapshot",
+      "changes": [
+        "kernel/wiki/lint/__init__.py 新增模块级 _is_query_page(name)——与 _iter_pages / _load_pages 的内联谓词逐字相同（基于 display name）",
+        "Rule.run_with_snapshot(wiki, snapshot=None)：snapshot is None -> self.run(wiki)；规则自己覆写了 run() 或 _iter_pages() -> 回落到 self.run(wiki)；否则按 snapshot.names 迭代、取 content_of(name)，降级页回退 path.read_text(errors='replace')，max_results 提前 break + results[:max_results] 截断",
+        "CrossPageRule.run_with_snapshot(wiki, snapshot=None)：同样的三段回落逻辑 + CrossPageRule._pages_from_snapshot(snapshot) -> {display_name: content}（过滤语义与 _load_pages 逐字一致）",
+        "Rule.run / CrossPageRule.run / _load_pages / detect / detect_all / _iter_pages / LintEngine.run_all / LintEngine.run_rule 的签名与函数体一行未改；本次对 lint/__init__.py 的 diff 是纯追加（P4-a 的 errors='replace' 两处原样保留）"
+      ]
+    },
+    {
+      "id": "C",
+      "title": "test(lint): 补齐基类契约测试网 + 计数型门禁",
+      "changes": [
+        "tests/test_lint_snapshot.py 新增 19 条用例：不可变性 / 只读 mapping / 枚举复用 _wiki_pages() / relative_names 格式 / 有损读 / 快照不做 Query 过滤 / 预算降级与回退读 / 降级 WARNING / run_with_snapshot(None) 与 run 逐项相等且读次数相同 / run_with_snapshot(snapshot) 与 run 逐项相等 / _pages_from_snapshot == _load_pages / Query 过滤语义一致",
+        "新增计数型门禁 test_cold_lint_read_counts_are_unchanged：cold 口径（151 页 + 14 个 source 页 + 8 个 raw，内容不触发任何规则）断言 read_text == 929、rglob == 9（与 recon C3 一致），把「默认实现 = 现状」钉死",
+        "新增 test_small_fixture_has_teeth：断言小夹具确实让 5 条规则报出问题（data_gap / potentially_outdated / dated_claim / missing_cross_ref / contradiction），避免上面的相等性断言变成空断言"
+      ]
+    }
+  ],
+  "benchmark": {
+    "type": "counting (no wall-clock — 本机 wiki/ 仅 3 页，墙钟不可信；门禁是 read_text / rglob 次数)",
+    "before_ms": 0,
+    "after_ms": 0,
+    "command": "D:\\tools\\python312\\python.exe -m pytest tests/test_lint_snapshot.py -q -s --rootdir=D:\\Github\\llmwikify",
+    "fixture": "cold 口径合成 wiki：126 个常规页 + 10 个 Query 页 + 14 个 wiki/sources/source-*.md + wiki.init() 的 overview.md = 151 页，8 个 raw 文件；计数窗口 = WikiAnalyzer._scan_all_pages() + _run_all_rules()（8 条规则）",
+    "before": {
+      "read_text": 929,
+      "rglob": 9
+    },
+    "after": {
+      "read_text": 929,
+      "rglob": 9
+    },
+    "note": "数字未变是本子任务的验收标准（默认实现 = 现状，本子任务不接入任何生产调用方）。P4-b-2 接入 analyzer 后应降到 476 / 6，P4-b-3a 后 311 / 4，P4-b-3b 后 311 / 2。",
+    "platform_note": "夹具里 10 个 Query 页用全角冒号（path_codec 在 Windows 上写出的形态），使 POSIX 不会触发 \"Query:\" 过滤 -> 读次数在所有平台一致；POSIX 上若用 ASCII 冒号，recon C11/C6 的口径会变成 897 / 9。"
+  },
+  "validation": {
+    "ruff": "clean (3 files, --output-format=concise)",
+    "black": "clean (3 files, --check) — src/llmwikify/kernel/wiki/snapshot.py、src/llmwikify/kernel/wiki/lint/__init__.py、tests/test_lint_snapshot.py 全部 would be left unchanged",
+    "pytest_scoped": "106 passed（test_lint_snapshot 19 + test_lint_engine 20 + test_lint_engine_aggregator 8 + test_lint_handles_non_utf8_page 4 + test_wiki_analyzer 19 + test_direct_lint 15 + test_source_analysis 14 + test_lint_read_counts 7）",
+    "check_architecture": "0 violations across 4 layers",
+    "mypy": "src/llmwikify/kernel/wiki/snapshot.py 与 lint/__init__.py 无新增错误（仓库既有 11 条错误全在 foundation/ 与 interfaces/，与本任务无关）",
+    "line_endings": "本轮 3 个文件均已字节级校验：CRLF、无 BOM、无孤立 LF（自写 .analysis_tmp/normalize_crlf_p4b1.py 归一两个新文件；未修改仓库现成的 .analysis_tmp/normalize_crlf.py）",
+    "pytest_full_suite": "全量跑完（两次，442-482 s）：73 failed / 4873 passed / 110 skipped / 251 errors（--tb=no -rf，失败清单见 .analysis_tmp/p4b1_fullsuite.txt）。逐条核对：73 条 failed 按文件分布全在 apps/chat、kernel/agent、scenarios、db、maintenance、codegen 等区域，lint / snapshot / analyzer 相关失败 = 0；251 条 errors 多为 fixture/teardown 的 Windows 文件锁（PermissionError [WinError 32]，.llmwikify.db 被占用，例：tests/test_wiki_core.py 32 passed + 7 个 teardown ERROR）。对照 P4-a round 1 基线（4867 passed / 71 failed / 250 errors / 110 skipped）：failed/skipped 量级不变，errors +1 = 并行 writer 未提交的 apps/chat/skills/autoresearch_compound_skill.py 删掉 _format_run_not_found 导致 tests/test_apps_chat_skills_run_not_found.py 收集失败（本任务未碰该文件）。本任务相关测试集 106 条全绿。",
+    "diff_scope": "git diff --stat 里本任务只动了 src/llmwikify/kernel/wiki/lint/__init__.py（纯追加）；新增两个未跟踪文件（snapshot.py、test_lint_snapshot.py）。P4-a 的改动与并行 writer 的 12 个文件未碰、未 revert"
+  },
+  "open_issues": [],
+  "design_deviations": [
+    "签名：_pages_from_snapshot 按本轮 brief 写成 (self, snapshot)；设计 §3.4 写的是 (self, wiki, snapshot)。快照自带 names 与 paths，实现不需要 wiki，取 wiki 只会多一个用不到的参数。",
+    "既有内联谓词未重构：设计 §5 第 2 条建议把 \"Query:\" 谓词抽成 _is_query_page 并让 _iter_pages / _load_pages 共用；本轮 brief 要求「Rule.run / CrossPageRule.run / _load_pages / detect / detect_all 的签名与函数体一行都不改」，因此只新增了模块级 _is_query_page 供新入口使用，两处内联写法保持原样（语义逐字相同）。",
+    "LintEngine 未改：本轮 brief 把「lint/__init__.py 的引擎分支」划给 P4-b-2，故 run_all / run_rule 没有加 snapshot 参数（设计 §5 第 5/6 条列在 P4-b-1）。P4-b-2 需要给 run_all(snapshot=None) 与 run_rule(name, snapshot=None) 加可选参数。",
+    "额外加了两处反射回落：Rule.run_with_snapshot 额外检查 type(self)._iter_pages is not Rule._iter_pages，CrossPageRule.run_with_snapshot 额外检查 type(self)._load_pages is not CrossPageRule._load_pages —— 规则若自定义了页面迭代/加载，通用模板无法复现它，回落到旧路径才能保证 issues 逐项相等（今天 8 条规则都没有覆写这两个方法）。"
+  ],
+  "next_reviewer_focus": [
+    "先核对「默认实现 = 现状」这条：cold 口径 read_text 仍为 929、rglob 仍为 9（本轮没有生产调用方使用快照）。P4-b-2 接入 analyzer 后这个数字会变（预期 476 / 6），届时 tests/test_lint_snapshot.py::test_cold_lint_read_counts_are_unchanged 必须同步更新。",
+    "复核「不动既有签名」这条：git diff src/llmwikify/kernel/wiki/lint/__init__.py 应当是纯追加，既有函数的函数体一行未改；P4-a 的两处 errors='replace' 原样保留。既有测试把规则 run 包成 wrapper(self, wiki)、把 _load_pages 包成 wrapper(self, wiki)（tests/test_lint_handles_non_utf8_page.py:111-152），新入口 run_with_snapshot 是新方法，所以这些 wrapper 不会被多传参数。",
+    "复核降级语义：超限页不进缓存但记入 omitted（degraded=True），消费方回退 path.read_text(encoding='utf-8', errors='replace') —— 覆盖面与 issue 逐项不变，只有内存有界；降级时有一条 WARNING（lint page snapshot degraded: N/M pages not cached, X bytes used of Y budget）。",
+    "复核快照不做 Query 过滤：Windows 上 path_codec 把 ':' 映射成全角，startswith('Query:') 恒为 False，过滤是平台相关的 —— 过滤只留在消费者（_is_query_page），快照保留全部页面。",
+    "复核枚举来源：WikiPageSource 必须复用 wiki._wiki_pages()（is_path_excluded 判绝对路径每一段），快照没有自己 rglob。",
+    "P4-b-2 的复核重点：analyzer.py 接入时，LintEngine.run_all(snapshot=None) 的旧分支必须与今天的实现逐行相同（站点 ② 的三个 wrapper 全部照旧命中），且 analyzer 不得在内部自行构建快照（单规则路径 run_rule 不建快照，见设计 §3.6 的读次数依据）。",
+    "计数夹具的平台无关性：Query 页用全角冒号写成，使 POSIX 不触发 \"Query:\" 过滤；如需复现 POSIX 口径（897 / 9）请按 recon C11/C6 的模拟方式另建夹具，不要直接改本夹具的数字。",
+    "未触碰清单再次确认：kernel/wiki/engines/analyzer.py、kernel/wiki/mixins/analysis/status.py、kernel/wiki/mixins/core/utility.py、kernel/wiki/mixins/io/source_analysis.py、kernel/wiki/lint/rules/**、tests/test_wiki_analyzer.py、tests/test_lint_read_counts.py、tests/test_lint_handles_non_utf8_page.py、foundation/**、interfaces/**、apps/**、并行 writer 的 12 个未提交文件 —— 全部未碰。"
+  ]
+}

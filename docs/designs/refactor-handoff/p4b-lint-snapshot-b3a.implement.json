@@ -1,0 +1,123 @@
+{
+  "task_id": "p4b-lint-snapshot",
+  "sub_task": "P4-b-3a",
+  "status": "done",
+  "files_changed": [
+    "src/llmwikify/kernel/wiki/lint/rules/dated_claims.py",
+    "src/llmwikify/kernel/wiki/lint/rules/knowledge_gaps.py",
+    "tests/test_lint_snapshot.py",
+    "tests/test_lint_handles_non_utf8_page.py"
+  ],
+  "tests_added": [
+    "tests/test_lint_snapshot.py"
+  ],
+  "steps": [
+    {
+      "id": "A",
+      "title": "perf(lint): dated_claim 迁移到页面快照（raw 扫描保持原样）",
+      "changes": [
+        "DatedClaimsRule 抽出 _scan_latest_source_year(wiki)：raw 目录扫描的语义逐字保留（wiki.raw_dir.rglob(\"*\") -> 只取文件 -> read_text(errors=\"ignore\", encoding=\"utf-8\") -> 正则 \\b(20\\d{2})\\b 取最大值）。raw 目录不是 wiki 页目录，不进快照（设计 §7.1）",
+        "run(wiki) 改为：current_year = datetime.now(timezone.utc).year -> _scan_latest_source_year(wiki) -> 若为 0 则 return []（早退语义与旧实现逐字相同）-> 赋 self._latest_source_year / self._current_year -> super().run(wiki)",
+        "新增 run_with_snapshot(wiki, snapshot=None)：snapshot is None 时直接 return self.run(wiki)（旧路径逐行相同）；有快照时同样先跑 raw 扫描 + 同样的早退 + 同样的两个属性赋值，再走 _detect_pages(wiki, snapshot)",
+        "_detect_pages 是基类模板的复刻：按 snapshot.names 顺序遍历、_is_query_page(name) 跳过 Query 页、正文取 snapshot.content_of(name)、降级页回退 snapshot.path_of(name).read_text(encoding=\"utf-8\", errors=\"replace\")、results 满 max_results 即 break、最后 results[: self.max_results]",
+        "不复用基类 Rule.run_with_snapshot：基类有反射兜底（type(self).run is not Rule.run -> return self.run(wiki)），dated_claim 覆写了 run()，走基类会退回旧路径、拿不到快照",
+        "Rule.run / detect / detect_all 的签名与语义未变；_latest_source_year / _current_year 仍是实例属性（RULES 模块级单例导致的跨请求状态依旧保留，见设计 §14 R-2，本轮不修）"
+      ]
+    },
+    {
+      "id": "B",
+      "title": "perf(lint): knowledge_gap 迁移到页面快照 + 修掉残留风险 R1",
+      "changes": [
+        "KnowledgeGapsRule.run(wiki) 的两条来源分开：孤儿概念仍走 _orphan_concept_gaps(wiki)（关系引擎部分逐字未动）；source 摘要页改由 _source_pages_from_disk(wiki) 提供",
+        "_source_pages_from_disk 的读取从严格读改成有损读：read_text(encoding=\"utf-8\", errors=\"replace\")。这是残留风险 R1 的修复点——坏字节的 source 摘要页不再抛 UnicodeDecodeError、不再让 knowledge_gap 规则被 LintEngine.run_all 静默吞掉（设计 §9）。旧路径同样受益",
+        "新增 run_with_snapshot(wiki, snapshot=None)：snapshot is None -> return self.run(wiki)；有快照时孤儿概念部分不变，source 摘要页改由 _source_pages_from_snapshot(wiki, snapshot) 提供，之后仍是同一套 _collect_isolated_source 与 max_results 截断",
+        "_source_pages_from_snapshot 从快照取 source 摘要页：按路径归属筛出 <wiki_dir>/sources 下的页（与旧路径 sources_dir.rglob(\"*.md\") 的范围一致），正文取 snapshot.content_of(name)，降级页回退 read_text(errors=\"replace\")。快照键 = display name，即 sources/<name>",
+        "knowledge_gap 的 source 页裸读由 14 次降为 0 次（14 个 source 摘要页本来就在 _wiki_pages() 里、也就在快照里）；knowledge_gap 的 source rglob 由 1 次降为 0 次",
+        "孤儿概念（关系引擎）逻辑一行未改；公共 API（Rule.run / detect / detect_all 的签名与语义）未变"
+      ]
+    },
+    {
+      "id": "C",
+      "title": "test(lint): 计数门禁 311/4 + 语义等价 + R1 断言反转",
+      "changes": [
+        "tests/test_lint_snapshot.py 的 cold 门禁从 476 / 6 改成 311 / 4，并把演进路径注释写全（929/9 -> 476/6 -> 311/4 -> 311/2；174/3 需要 status.py 释放，见设计 §14 R-3）",
+        "新增 test_snapshot_rules_report_on_the_snapshot_wiki：新建的 snapshot_wiki 夹具让 dated_claim 与 knowledge_gap 都有问题可报（保证下面的等价断言不是空断言）",
+        "新增 test_snapshot_rules_are_equal_issue_by_issue：两条规则的 run_with_snapshot 与 run 逐条 issue 相等",
+        "新增 test_snapshot_rules_without_a_snapshot_are_the_legacy_path / test_snapshot_rules_read_no_wiki_page_again：run_with_snapshot(wiki, None) 等于 run(wiki)；有快照时两条规则不再读任何 wiki 页、不再对 wiki 目录 rglob",
+        "新增 test_dated_claim_keeps_the_raw_scan / test_dated_claim_keeps_the_early_return：raw 扫描仍发生（raw 目录不在快照里）；raw 里没有年份时两条路径都早退 []，且不写 _latest_source_year",
+        "新增 test_knowledge_gap_takes_the_source_pages_from_the_snapshot：快照键 = display name sources/<name>，isolated_source 的 page 字段即该 display name",
+        "新增 test_degraded_snapshot_keeps_the_source_pages：max_total_bytes=1 的降级快照下两条规则的 issue 与旧路径相同（source 摘要页回退读盘仍正确）",
+        "新增 test_knowledge_gap_survives_a_non_utf8_source_page：快照路径下坏字节的 source 摘要页不抛异常，旧路径与快照路径结果相同",
+        "tests/test_lint_handles_non_utf8_page.py：test_knowledge_gap_still_fails_on_bad_source_page 改写为 test_knowledge_gap_survives_non_utf8_source_page（断言从「仍失败」翻转为「跑完了」：rule_spies[\"failed\"] == [] 且 \"knowledge_gap\" in rule_spies[\"completed\"]），并补 test_knowledge_gap_reports_the_broken_source_page（坏页仍被分析、仍报 isolated_source）；模块 docstring 的覆盖说明同步更新（设计 §9 / §10 站点④）"
+      ]
+    }
+  ],
+  "benchmark": {
+    "type": "counting (no wall-clock — 本机 wiki/ 仅 3 页，墙钟不可信；门禁是 read_text / rglob 次数)",
+    "before_ms": 0,
+    "after_ms": 0,
+    "command": "D:\\tools\\python312\\python.exe -m pytest tests/test_lint_snapshot.py -q -s --rootdir=D:\\Github\\llmwikify",
+    "fixture": "cold 口径合成 wiki：126 个常规页 + 10 个 Query 页 + 14 个 wiki/sources/source-*.md + wiki.init() 的 overview.md = 151 页，8 个 raw 文件；内容不触发任何规则",
+    "before": {
+      "read_text": 476,
+      "rglob": 6
+    },
+    "after": {
+      "read_text": 311,
+      "rglob": 4
+    },
+    "breakdown_after": {
+      "snapshot_build": "151 read / 1 rglob（快照自身读一遍每页）",
+      "_scan_all_pages": "151 read（只剩 status.py 的 _should_exclude_orphan 裸读）/ 0 rglob",
+      "run_all_8_rules": "9 read / 3 rglob",
+      "per_rule": {
+        "dated_claim": "8 read（8 个 raw 文件）/ 1 rglob（raw 目录）",
+        "knowledge_gap": "1 read（关系引擎读 wiki.md 取 relation types）/ 0 rglob（source 页来自快照）",
+        "topic_overlap": "0 read / 1 rglob（P4-b-3b 才迁）",
+        "redundancy": "0 read / 1 rglob（P4-b-3b 才迁）",
+        "其余 4 条": "0 read / 0 rglob"
+      }
+    },
+    "delta_per_rule": {
+      "dated_claim": "159 read / 2 rglob -> 8 read / 1 rglob",
+      "knowledge_gap": "15 read / 1 rglob -> 1 read / 0 rglob"
+    },
+    "legacy_without_snapshot": {
+      "read_text": 929,
+      "rglob": 9,
+      "note": "无快照的旧路径计数未变（test_cold_lint_without_snapshot_keeps_the_old_counts）"
+    },
+    "note": "演进路径：929/9（P4-b-1 前）-> 476/6（P4-b-2）-> 311/4（本子任务）-> 311/2（P4-b-3b：topic_overlap / redundancy）。编排者最初给的 174/3 需要 status.py 的 151 次裸读也被消除，本轮 status.py 由并行 writer 持有 -> 不可碰（设计 §14 R-3）。",
+    "platform_note": "夹具里 10 个 Query 页用全角冒号（path_codec 在 Windows 上写出的形态），使 POSIX 不触发 \"Query:\" 过滤 -> 读次数在所有平台一致。"
+  },
+  "validation": {
+    "pytest_scoped": "146 passed（test_lint_snapshot 37 + test_lint_handles_non_utf8_page 5 + test_lint_engine 20 + test_lint_engine_aggregator 8 + test_direct_lint 15 + test_source_analysis 14 + test_lint_contradiction_b1 19 + test_lint_contradiction_parity 2 + test_lint_read_counts 7 + test_wiki_analyzer 19）",
+    "pytest_command": "D:\\tools\\python312\\python.exe -m pytest tests/test_lint_snapshot.py tests/test_lint_handles_non_utf8_page.py tests/test_lint_engine.py tests/test_lint_engine_aggregator.py tests/test_direct_lint.py tests/test_source_analysis.py tests/test_lint_contradiction_b1.py tests/test_lint_contradiction_parity.py tests/test_lint_read_counts.py tests/test_wiki_analyzer.py -q --rootdir=D:\\Github\\llmwikify",
+    "ruff": "clean (4 files, --output-format=concise)",
+    "black": "无新增失败：4 个文件全部 would be left unchanged（HEAD 基线同样干净）",
+    "check_architecture": "0 violations across 4 layers",
+    "line_endings": "4 个文件均已字节级校验：CRLF、无 BOM、无孤立 LF（新建 .analysis_tmp/normalize_crlf_p4b3a.py 做归一化；未改动仓库现成的 .analysis_tmp/normalize_crlf.py）",
+    "cold_counts": "实测 [cold lint] read_text=311 rglob=4；[cold lint, no snapshot] read_text=929",
+    "diff_scope": "本任务只改了 dated_claims.py、knowledge_gaps.py、tests/test_lint_snapshot.py、tests/test_lint_handles_non_utf8_page.py；kernel/wiki/snapshot.py、lint/__init__.py、engines/analyzer.py、其它 rules/*.py、mixins/**、kernel/storage/backend.py、foundation/io.py、interfaces/**、apps/**、P4-a 的 4 个文件（mixins/io/source_analysis.py、tests/test_wiki_analyzer.py、tests/test_lint_read_counts.py、tests/test_lint_handles_non_utf8_page.py 的前半段）、两份既有 p4b-lint-snapshot*.implement.json 全部未碰"
+  },
+  "open_issues": [
+    "R9 范围扩大（P4-a §11.2 登记的 U+FFFD 假阳性）：本子任务把 source 摘要页也纳入统一有损读，原来只覆盖 wiki 页的 R9 现在同样覆盖 source 摘要页——坏字节落在 source 摘要页的 [[...]] 目标内时，knowledge_gap 的 isolated_source 判定可能与「严格读抛异常」时不同（R-5 / R1b，同类假阳性）。属本仓既定取舍（有损读是 P4-a 统一后的既定事实），登记备查。",
+    "R-4 已知偏差（设计 §14）：knowledge_gap 迁移后不再检查名为 index.md / log.md 的 source 摘要页——_wiki_pages() 排除这两个 stem，而 knowledge_gap 自己的 rglob 不排除。病态命名下少检查一页，其它规则不受影响。",
+    "R-2 未修（设计 §14）：DatedClaimsRule._latest_source_year 仍是模块级 RULES 单例上的跨请求状态（raw 扫描结果为 0 时保留上次的旧值）。本轮刻意保持该语义（早退发生在赋值之前），不在快照范围内修。"
+  ],
+  "design_deviations": [
+    "dated_claim 的 run_with_snapshot 没有复用基类 Rule.run_with_snapshot，而是复刻了一份 per-page 模板（_detect_pages）。原因：基类有反射兜底 type(self).run is not Rule.run -> return self.run(wiki)，而 dated_claim 覆写了 run()，走基类会退回旧路径、拿不到快照。复刻的模板与基类逐行同构（同样的 _is_query_page 过滤、同样的降级回退读、同样的 max_results 截断）。",
+    "knowledge_gap 的 source 摘要页按「路径归属 <wiki_dir>/sources」筛选（snapshot.path_of(name).is_relative_to(sources_dir)），而不是按 display name 前缀 \"sources/\" 硬匹配——与旧路径 sources_dir.rglob(\"*.md\") 的范围一致（含 sources/ 下的子目录），且不依赖 display name 的前缀约定。",
+    "R1 的修复落在 _source_pages_from_disk / _source_pages_from_snapshot 两个来源函数的共享读取语义上（都改成 errors=\"replace\"），因此旧路径（无快照）也一并修复——不是只在快照路径上生效。",
+    "新增 test_knowledge_gap_reports_the_broken_source_page 一条用例（设计 §9 只要求改写原用例）：额外钉死「坏页仍被分析、仍报 isolated_source」，避免修复退化成「静默跳过坏页」。"
+  ],
+  "next_reviewer_focus": [
+    "先核对计数：cold 口径 read_text == 311 / rglob == 4（tests/test_lint_snapshot.py::test_cold_lint_read_counts_use_one_snapshot），且无快照时旧路径仍是 929 / 9（test_cold_lint_without_snapshot_keeps_the_old_counts）。311 的构成：151（快照）+ 151（status.py 裸读）+ 8（raw）+ 1（wiki.md）。",
+    "再核对语义等价：两条规则的 run_with_snapshot 与 run 逐条 issue 相等（test_snapshot_rules_are_equal_issue_by_issue），降级快照下也相等（test_degraded_snapshot_keeps_the_source_pages），且夹具确实让两条规则都有问题可报（test_snapshot_rules_report_on_the_snapshot_wiki）。",
+    "复核 R1 的断言反转：tests/test_lint_handles_non_utf8_page.py::test_knowledge_gap_survives_non_utf8_source_page 必须仍然断言「规则跑完了」（rule_spies[\"failed\"] == [] 且 \"knowledge_gap\" in rule_spies[\"completed\"]），而不是把断言删掉——这是设计 §9 对 reviewer 的硬要求。",
+    "复核 raw 扫描与早退语义未变：DatedClaimsRule._scan_latest_source_year 的 rglob/read_text/正则逐字与旧实现一致；raw 里没有年份时两条路径都返回 [] 且不写 _latest_source_year（test_dated_claim_keeps_the_early_return）。",
+    "复核公共 API 未变：Rule.run / detect / detect_all 的签名与语义未动；两条规则只是新增了 run_with_snapshot(wiki, snapshot=None) 这个并行入口（snapshot 为 None 时逐行走旧路径）。",
+    "复核未触碰清单：kernel/wiki/snapshot.py（本轮只读）、kernel/wiki/lint/__init__.py、kernel/wiki/engines/analyzer.py、其它 rules/*.py、kernel/wiki/mixins/**、kernel/storage/backend.py、foundation/io.py、interfaces/**、apps/**、P4-a 的文件（mixins/io/source_analysis.py、tests/test_wiki_analyzer.py、tests/test_lint_read_counts.py）、两份既有 p4b-lint-snapshot*.implement.json 全部未碰。",
+    "已知遗留（不在本子任务范围）：status.py 的 151 次裸读仍在 -> 311 / 2 与 160 / 2 需要 status.py 的 owner 释放该文件（设计 §14 R-3）；topic_overlap / redundancy 的 2 次 rglob 属 P4-b-3b。"
+  ]
+}

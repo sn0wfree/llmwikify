@@ -1,0 +1,131 @@
+{
+  "task_id": "p4b-lint-snapshot",
+  "sub_task": "P4-b-3b",
+  "status": "done",
+  "files_changed": [
+    "src/llmwikify/kernel/wiki/lint/rules/query_page_overlap.py",
+    "src/llmwikify/kernel/wiki/lint/rules/redundancy.py",
+    "tests/test_lint_snapshot.py"
+  ],
+  "tests_added": [
+    "tests/test_lint_snapshot.py"
+  ],
+  "steps": [
+    {
+      "id": "A",
+      "title": "perf(lint): topic_overlap 迁移到页面快照（消除自己那 1 次 rglob）",
+      "changes": [
+        "QueryPageOverlapRule 新增 run_with_snapshot(wiki, snapshot=None)：snapshot is None 时直接 return self.run(wiki)（旧路径逐行相同）；有快照时先判 wiki.wiki_dir.exists()（与 run 一致），再走 _query_pages_from_snapshot(snapshot) + 与 legacy 逐字相同的 Jaccard 比较块（seen_pairs 去重、0.85 阈值、max_results 外层截断与 results[:max_results] 全部照抄）",
+        "新增私有方法 _query_pages_from_snapshot(snapshot)：遍历 snapshot.names，用 snapshot.path_of(name).stem 取页面名（不是 Path(name).stem，也不是 display name）、用 str(snapshot.path_of(name)) 作 issue 的 file 字段；关键词提取（replace(\"Query:\", \"\").split() + STOP_WORDS + MIN_KEYWORD_LENGTH）、'Query:' 前缀谓词、.sink / is_path_excluded 之外的过滤全部与 legacy 逐字相同",
+        "run(wiki) 一个字符都没改（git diff 显示该文件只有新增行，0 删除行）：编排者要求「现有 run(wiki) 语义必须逐字保留，不要改 run」",
+        "不再对 wiki 目录 rglob：legacy 的 wiki.wiki_dir.rglob(\"*.md\") 被快照的页面枚举取代（快照的枚举来自 wiki._wiki_pages()，含 .sink / is_path_excluded 过滤，因此不重复过滤）",
+        "页面集合差异已在 docstring 里交代：legacy 枚举 wiki_dir.rglob(\"*.md\")（含 index.md / log.md），快照来自 _wiki_pages()（按 stem 排除 index / log）；这两个名字永远不会以 'Query:' 开头 -> Query 页集合不变 -> issue 不变，未为此加任何特判",
+        "平台陷阱原样保留：Windows 上 path_codec 把 ':' 写成全角 '：'，磁盘文件名是 'Query：foo.md'，stem.startswith(\"Query:\") 恒为 False -> 该规则在 Windows 上仍是死代码；快照实现用 snapshot.path_of(name).stem 自然复现（磁盘上的同一个文件名），没有改成全角/半角都认"
+      ]
+    },
+    {
+      "id": "B",
+      "title": "perf(lint): redundancy 迁移到页面快照（消除自己那 1 次 rglob）",
+      "changes": [
+        "RedundancyRule 新增 run_with_snapshot(wiki, snapshot=None)：snapshot is None 时直接 return self.run(wiki)（旧路径逐行相同）；有快照时 page_names = list(snapshot.names)，if not page_names: return []（对应 legacy 的 if not pages: return []）",
+        "快照的 name 就是 wiki._page_display_name() 的输出，且快照的页面集合就是 _wiki_pages() 的集合、顺序相同 -> 页面名集合与顺序完全等价 -> 两两比较的配对与顺序完全一致",
+        "两两比较（name1.lower() in name2.lower() or name2.lower() in name1.lower()）、len(name) > 5 门槛、max_results 截断（截断发生在外层循环体内）、results[: self.max_results] 与 legacy 逐字相同、顺序一致 -> issue 逐项相同",
+        "run(wiki) 一个字符都没改（git diff 显示该文件只有新增行，0 删除行）",
+        "不再对 wiki 目录 rglob：legacy 的 wiki._wiki_pages() 被快照的页面名列表取代"
+      ]
+    },
+    {
+      "id": "C",
+      "title": "test(lint): 计数门禁 311/2 + 语义等价 + 平台契约",
+      "changes": [
+        "tests/test_lint_snapshot.py 的 cold 门禁从 311 / 4 改成 311 / 2，并把演进路径注释写全（929/9 -> 476/6 -> 311/4 -> 311/2；并注明 311/2 已是本快照方案的终点：311 = 151（快照自身读每页一遍）+ 151（status.py 的 _should_exclude_orphan 裸读，设计 §14 R-3）+ 8（raw 文件）+ 1（wiki.md），2 = 快照枚举 + dated_claim 的 raw 目录；174/3 需要 status.py 的 owner 释放该文件）",
+        "模块 docstring 同步更新：计数口径改成 311 / 2，并新增 P4-b-3b 段落（两条规则逐条等价、不再 rglob、stem 而非 display name、Query: 前缀的平台契约）",
+        "新增夹具 name_rules_wiki（4 个真实页面：Kubernetes / Kubernetes Cluster / Prometheus / Prometheus Operator -> redundancy 报 2 条）与 posix_query_wiki（在 small_wiki 上注入 POSIX 文件名的 Query 页 -> topic_overlap 报 1 条）；两者都真的能产出 issue，断言不是空断言",
+        "新增 _inject_page_names(monkeypatch, wiki_dir, pages)：把 wiki_dir 的 *.md 枚举替换成指定的路径。Windows 的文件名不能含 ':'（path_codec 写全角冒号），legacy 的 wiki_dir.rglob(\"*.md\") 在 Windows 上永远看不到 Query 页 —— 注入 POSIX 文件名后两条路径在所有平台上可比",
+        "新增 _synthetic_snapshot(wiki_dir, file_names)：手工构造的快照（磁盘上没有这些文件），用来检查平台相关的 ':' 拼写",
+        "新增 test_name_rules_report_on_their_fixture：断言两个夹具真的让两条规则报出 issue（redundancy 2 条、topic_overlap 1 条，配对集合精确断言）",
+        "新增 test_redundancy_snapshot_path_matches_the_legacy_path：run_with_snapshot 与 run 逐条 issue 相等，且 page_a / page_b 的顺序也相等（整条列表逐元素比较）",
+        "新增 test_topic_overlap_snapshot_path_matches_the_legacy_path：run_with_snapshot 与 run 逐条 issue 相等",
+        "新增 test_name_rules_do_not_walk_the_wiki_with_a_snapshot：两条规则在有快照时对 wiki 目录 0 次 rglob、0 次 read_text",
+        "新增 test_name_rules_without_a_snapshot_are_the_legacy_path：run_with_snapshot(wiki, None) == run(wiki)",
+        "新增 test_topic_overlap_uses_the_file_stem_not_the_display_name：'Query:foo.bar.md' 的页面名是 'Query:foo.bar'（不是 Path('Query:foo.bar').stem 的 'Query:foo'），且 file 字段 == str(snapshot.path_of(name))",
+        "新增 test_topic_overlap_matches_the_half_width_colon_only：平台契约 —— 规则只匹配半角冒号；半角文件名的页面被识别并参与比较，全角冒号的页面既不被识别也不产生 issue（Windows 上规则因此是死代码，不得'修复'）",
+        "新增 test_topic_overlap_ignores_a_full_width_colon_file：真实文件名的全角冒号页面（旧路径与快照路径都返回 []）",
+        "新增 test_degraded_snapshot_keeps_the_name_rules / test_degraded_snapshot_keeps_the_topic_overlap_issues：max_total_bytes=1 的降级快照下两条规则的 issue 与旧路径相同",
+        "未改动的既有测试：test_cold_lint_without_snapshot_keeps_the_old_counts（929 / 9）保持原样"
+      ]
+    }
+  ],
+  "benchmark": {
+    "type": "counting (no wall-clock — 本机 wiki/ 仅 3 页，墙钟不可信；门禁是 read_text / rglob 次数)",
+    "before_ms": 0,
+    "after_ms": 0,
+    "command": "D:\\tools\\python312\\python.exe -m pytest tests/test_lint_snapshot.py -q -s --rootdir=D:\\Github\\llmwikify",
+    "fixture": "cold 口径合成 wiki：126 个常规页 + 10 个 Query 页 + 14 个 wiki/sources/source-*.md + wiki.init() 的 overview.md = 151 页，8 个 raw 文件；内容不触发任何规则（与 P4-b-3a 的夹具逐字相同）",
+    "before": {
+      "read_text": 311,
+      "rglob": 4
+    },
+    "after": {
+      "read_text": 311,
+      "rglob": 2
+    },
+    "breakdown_after": {
+      "snapshot_build": "151 read / 1 rglob（快照自身读一遍每页）",
+      "_scan_all_pages": "151 read（只剩 status.py 的 _should_exclude_orphan 裸读）/ 0 rglob",
+      "run_all_8_rules": "9 read / 1 rglob",
+      "per_rule": {
+        "dated_claim": "8 read（8 个 raw 文件）/ 1 rglob（raw 目录）",
+        "knowledge_gap": "1 read（关系引擎读 wiki.md 取 relation types）/ 0 rglob（source 页来自快照）",
+        "topic_overlap": "0 read / 0 rglob（本子任务迁完）",
+        "redundancy": "0 read / 0 rglob（本子任务迁完）",
+        "其余 4 条": "0 read / 0 rglob"
+      }
+    },
+    "delta_per_rule": {
+      "topic_overlap": "0 read / 1 rglob -> 0 read / 0 rglob",
+      "redundancy": "0 read / 1 rglob -> 0 read / 0 rglob"
+    },
+    "legacy_without_snapshot": {
+      "read_text": 929,
+      "rglob": 9,
+      "note": "无快照的旧路径计数未变（test_cold_lint_without_snapshot_keeps_the_old_counts）"
+    },
+    "note": "演进路径：929/9（P4-b-1 前）-> 476/6（P4-b-2）-> 311/4（P4-b-3a）-> 311/2（本子任务，终点）。311/2 已是本快照方案的终点：剩下的 151 次裸读属 status.py 的 _should_exclude_orphan（设计 §14 R-3），该文件由并行 writer 持有，本轮不可碰；编排者最初给的 174/3 需要那 151 次也被消除。",
+    "platform_note": "夹具里 10 个 Query 页用全角冒号（path_codec 在 Windows 上写出的形态），使 POSIX 不触发 \"Query:\" 过滤 -> 读次数在所有平台一致。topic_overlap 的 Query 页在 Windows 上永远匹配不上（死代码），这正是本子任务要钉死的平台契约。"
+  },
+  "validation": {
+    "pytest_scoped": "156 passed（test_lint_snapshot 47 + test_lint_handles_non_utf8_page 5 + test_lint_engine 20 + test_lint_engine_aggregator 8 + test_direct_lint 15 + test_source_analysis 14 + test_lint_contradiction_b1 19 + test_lint_contradiction_parity 2 + test_lint_read_counts 7 + test_wiki_analyzer 19）",
+    "pytest_command": "D:\\tools\\python312\\python.exe -m pytest tests/test_lint_snapshot.py tests/test_lint_handles_non_utf8_page.py tests/test_lint_engine.py tests/test_lint_engine_aggregator.py tests/test_direct_lint.py tests/test_source_analysis.py tests/test_lint_contradiction_b1.py tests/test_lint_contradiction_parity.py tests/test_lint_read_counts.py tests/test_wiki_analyzer.py -q --rootdir=D:\\Github\\llmwikify",
+    "ruff": "clean (3 files, --output-format=concise)",
+    "black": "3 个文件全部 would be left unchanged（HEAD 基线同样干净）",
+    "check_architecture": "0 violations across 4 layers",
+    "line_endings": "3 个文件均已字节级校验：CRLF、无 BOM、无孤立 LF（新建 .analysis_tmp/normalize_crlf_p4b3b.py 做归一化；未改动仓库现成的 .analysis_tmp/normalize_crlf.py）",
+    "cold_counts": "独立复算脚本 .analysis_tmp/recount_cold_p4b3b.py（不依赖 pytest 断言，直接测 Path.read_text / Path.rglob）：实测 [cold lint] read_text=311 rglob=2；[cold lint, no snapshot] read_text=929 rglob=9",
+    "diff_scope": "本任务只改了 query_page_overlap.py、redundancy.py、tests/test_lint_snapshot.py（另新增交接件 p4b-lint-snapshot-b3b.implement.json）；两个源文件的 git diff 只有新增行、0 删除行（run(wiki) 未动）；kernel/wiki/snapshot.py、lint/__init__.py、engines/analyzer.py、其它 rules/*.py、mixins/**（特别是 mixins/analysis/status.py）、kernel/storage/**、foundation/**、apps/**、interfaces/**、tests/test_lint_handles_non_utf8_page.py、以及既有的 p4b-lint-snapshot*.json 全部未碰"
+  },
+  "open_issues": [
+    "编排者简报里平台契约那一条的括号写法与代码语义相反：简报写「半角冒号文件名 → 不产出 issue；全角冒号 → 产出 issue」，但同一段简报也写明「Windows 上 stem.startswith(\"Query:\") 恒为 False → 该规则在 Windows 上是死代码」，而 legacy 代码只匹配半角冒号（startswith(\"Query:\")）。按「run 语义必须逐字保留 + 不得改成全角/半角都认」的红线，实现保持只匹配半角；测试据此钉死为「半角 → 被识别并参与比较；全角 → 不被识别、不产出 issue」（test_topic_overlap_matches_the_half_width_colon_only）。如果 Reviewer 认为简报的括号才是本意，那它与「不得修复平台陷阱」直接冲突，需要先澄清再改。",
+    "遗留 R-3（设计 §14）：status.py 的 _should_exclude_orphan 仍有 151 次裸读 -> 311/2 与 160/2 的差别就在这里；该文件由并行 writer 持有，本轮不可碰。",
+    "run(wiki) 按简报要求逐字未改，代价是 Jaccard 比较块（topic_overlap）与页面名比较块（redundancy）在 run 与 run_with_snapshot 各存一份。两条路径的 issue 相等由逐条相等的测试守住（任何一边漂移都会红）。若后续要合并成一个私有 helper，那是独立的重构，不在本子任务范围。",
+    "已知偏差（与 P4-b-3a 的 R-4 同类，本轮不修）：legacy 的 topic_overlap 枚举 wiki_dir.rglob(\"*.md\")，快照枚举的是 _wiki_pages()（按 stem 排除 index.md / log.md）。这两个文件名永远不会以 'Query:' 开头 -> Query 页集合不变 -> issue 不变；docstring 里已写明，未加特判。"
+  ],
+  "design_deviations": [
+    "两个源文件的 run(wiki) 一字未改（简报红线：「现有 run(wiki) 语义必须逐字保留，不要改 run」），因此 run_with_snapshot 里把 legacy 的比较块逐字抄了一份，而不是把比较逻辑抽成一个两路共用的私有 helper。git diff 可以复核：两个文件都是纯新增（0 删除行）。",
+    "topic_overlap 的页面枚举被抽成新的私有方法 _query_pages_from_snapshot(snapshot)（只在新代码里出现，不触碰 run）：这样「stem 而不是 display name」这条语义可以被直接断言（测试读该方法的输出），也让新入口本身可测。",
+    "topic_overlap 的测试用「注入 POSIX 文件名」（monkeypatch Path.rglob）与「手工构造快照」两种手段绕开 Windows 的文件名限制：Windows 的文件名不能含 ':'，legacy 的枚举在 Windows 上永远看不到 Query 页，因此「两条路径逐条相等」在 Windows 上若不用注入就只能是一条空断言。",
+    "平台契约测试断言的方向按 legacy 代码的实际语义确定（半角匹配 / 全角不匹配），而不是按简报括号里的方向 —— 见 open_issues 第一条。",
+    "降级快照（max_total_bytes=1）下两条规则的 issue 与旧路径相同：两条规则都只读页面名、不读正文，所以降级对它们没有影响；测试仍然钉住了这一点（快照降级不改变覆盖面）。"
+  ],
+  "next_reviewer_focus": [
+    "先核对计数：cold 口径 read_text == 311 / rglob == 2（tests/test_lint_snapshot.py::test_cold_lint_read_counts_use_one_snapshot），且无快照时旧路径仍是 929 / 9（test_cold_lint_without_snapshot_keeps_the_old_counts）。独立的复算脚本是 .analysis_tmp/recount_cold_p4b3b.py（不依赖 pytest 断言）。",
+    "再核对「run 没被动过」：git diff src/llmwikify/kernel/wiki/lint/rules/query_page_overlap.py src/llmwikify/kernel/wiki/lint/rules/redundancy.py 应当只有新增行、0 删除行（简报红线）。",
+    "核对语义等价：两条规则的 run_with_snapshot 与 run 逐条 issue 相等（test_redundancy_snapshot_path_matches_the_legacy_path 含 page_a / page_b 顺序，test_topic_overlap_snapshot_path_matches_the_legacy_path），且夹具真的让两条规则都有问题可报（test_name_rules_report_on_their_fixture：redundancy 2 条、topic_overlap 1 条）。",
+    "核对 stem 语义：test_topic_overlap_uses_the_file_stem_not_the_display_name 断言 'Query:foo.bar.md' 的页面名是 'Query:foo.bar'（不是 Path('Query:foo.bar').stem 的 'Query:foo'），file 字段等于 str(snapshot.path_of(name))。",
+    "核对平台契约：test_topic_overlap_matches_the_half_width_colon_only + test_topic_overlap_ignores_a_full_width_colon_file —— 半角冒号才匹配、全角冒号不匹配（Windows 上因此是死代码，不得'修复'）。注意简报括号里的方向与实现相反，详见 open_issues 第一条。",
+    "核对「不再 rglob」：test_name_rules_do_not_walk_the_wiki_with_a_snapshot 断言两条规则在有快照时对 wiki 目录 0 次 rglob、0 次 read_text。",
+    "复核公共 API 未变：Rule.run / detect / detect_all 的签名与语义未动；两条规则只是新增了 run_with_snapshot(wiki, snapshot=None) 这个并行入口（snapshot 为 None 时逐行走旧路径，test_name_rules_without_a_snapshot_are_the_legacy_path）。",
+    "复核未触碰清单：kernel/wiki/snapshot.py、kernel/wiki/lint/__init__.py、kernel/wiki/engines/analyzer.py、其它 rules/*.py、kernel/wiki/mixins/**（特别是 mixins/analysis/status.py）、kernel/storage/**、foundation/**、apps/**、interfaces/**、tests/test_lint_handles_non_utf8_page.py、以及既有的 p4b-lint-snapshot*.implement.json / .design.json 全部未碰。",
+    "已知遗留（不在本子任务范围）：status.py 的 151 次裸读仍在 -> 311 / 2 与 160 / 2 需要 status.py 的 owner 释放该文件（设计 §14 R-3）。"
+  ]
+}

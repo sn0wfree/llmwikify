@@ -1,0 +1,104 @@
+{
+  "task_id": "p4b-lint-snapshot",
+  "sub_task": "P4-b-2",
+  "status": "done",
+  "files_changed": [
+    "src/llmwikify/kernel/wiki/lint/__init__.py",
+    "src/llmwikify/kernel/wiki/engines/analyzer.py",
+    "tests/test_lint_snapshot.py"
+  ],
+  "tests_added": [
+    "tests/test_lint_snapshot.py"
+  ],
+  "steps": [
+    {
+      "id": "A",
+      "title": "feat(lint): LintEngine 增加可选快照入口（引擎侧分支）",
+      "changes": [
+        "LintEngine.run_all(snapshot: PageSnapshot | None = None)：snapshot is None 的分支与今天的实现逐行相同（CrossPageRule 仍共享一次 _load_pages，其余规则仍走 rule.run(wiki)）；snapshot 非 None 时每条规则走 _run_with_snapshot(rule, snapshot)——2 条 CrossPageRule 共享同一份快照（今天共享 shared_pages）",
+        "LintEngine.run_rule(name, snapshot=None)：snapshot is None -> rule.run(self.wiki)（旧路径逐行相同，单条规则不付全量快照的代价）；snapshot 非 None -> _run_with_snapshot(rule, snapshot)",
+        "新增 LintEngine._run_with_snapshot(rule, snapshot)：优先调 rule.run_with_snapshot(wiki, snapshot)，规则没有该方法时（理论上不会）兜底回 rule.run(wiki)",
+        "Rule.run / CrossPageRule.run / _load_pages / _pages_from_snapshot / detect / detect_all / run_with_snapshot 一行未改；本子任务对 lint/__init__.py 的 diff 只是在 LintEngine 末尾追加分支"
+      ]
+    },
+    {
+      "id": "B",
+      "title": "perf(lint): analyzer 一次 lint 共用一份页面快照（惰性构建）",
+      "changes": [
+        "analyzer.py 新增模块级 _LazyPageSnapshot：get() 首次调用时构建快照（一个 lint 调用内只构建一次），peek() 只在已构建时返回快照。持有者建在 lint() 调用内（不挂在 Wiki / WikiAnalyzer 实例上），快照不跨请求复用",
+        "WikiAnalyzer.__init__(wiki, page_source: PageSource | None = None)：默认 WikiPageSource(wiki)，协议在生产路径上真的被用到，测试可注入计数 source",
+        "lint()：新建 _LazyPageSnapshot -> core 未命中时 snapshots.get() 构建快照 -> 传给 _scan_all_pages / _run_all_rules；_build_lint_context 只在快照已构建时用 snapshots.peek()（core 命中缓存但 llm_gaps 未命中时不额外读 151 页）",
+        "_scan_all_pages(snapshot=None)：有快照时用 snapshot.names / snapshot.path_of(name)（仍调用 wiki._should_exclude_orphan(name, page)，status.py 未碰），正文取 snapshot.content_of(name)，降级页回退 page.read_text(errors='replace')；无快照时逐行保持旧路径（recommend() / _generate_hints() 走旧路径）",
+        "_build_lint_context(limit=20, snapshot=None)：只有页面名列表改用 list(snapshot.relative_names)，wiki.md / source 摘要页 / raw 目录三段未动；输出文本逐字符相同",
+        "_run_rule(rule_name, snapshot=None) / _run_all_rules(snapshot=None)：只做转发，单规则路径默认不建快照（设计 §3.6）",
+        "lint() 的 total_pages 改用 len(snapshot.names)（省掉一次 _wiki_pages() 的 rglob；值与 len(_wiki_pages()) 相同）"
+      ]
+    },
+    {
+      "id": "C",
+      "title": "test(lint): 钉死惰性快照 + 计数门禁 + 语义等价",
+      "changes": [
+        "tests/test_lint_snapshot.py 的 cold 门禁从 929 / 9 改成 476 / 6（注释写清演进路径 929/9 -> 476/6 -> 311/4 -> 311/2，以及 174/3 需要 status.py 释放才成立）",
+        "新增 test_cold_lint_without_snapshot_keeps_the_old_counts：旧路径仍是 929 / 9（引擎分支的 None 分支逐行未变）",
+        "新增 test_fully_cached_lint_builds_no_snapshot（最重要的一条）：两个缓存都命中 -> 快照构建 0 次、read_text == 0（P4-a 的收益没被吃掉）",
+        "新增 test_cold_lint_builds_the_snapshot_once：一次 lint 只构建一份快照",
+        "新增 test_build_lint_context_is_identical_with_and_without_snapshot：context 字符串完全相等",
+        "新增 test_scan_all_pages_is_identical_with_and_without_snapshot：issues 逐项相等",
+        "新增 test_run_all_with_snapshot_produces_the_same_issues / test_run_rule_with_snapshot_produces_the_same_issues：规则级语义不变",
+        "新增 test_run_rule_without_snapshot_builds_no_snapshot / test_run_rule_without_snapshot_keeps_the_legacy_reads：单规则路径不建快照、仍自己读页"
+      ]
+    }
+  ],
+  "benchmark": {
+    "type": "counting (no wall-clock — 本机 wiki/ 仅 3 页，墙钟不可信；门禁是 read_text / rglob 次数)",
+    "before_ms": 0,
+    "after_ms": 0,
+    "command": "D:\\tools\\python312\\python.exe -m pytest tests/test_lint_snapshot.py -q -s --rootdir=D:\\Github\\llmwikify",
+    "fixture": "cold 口径合成 wiki：126 个常规页 + 10 个 Query 页 + 14 个 wiki/sources/source-*.md + wiki.init() 的 overview.md = 151 页，8 个 raw 文件；内容不触发任何规则",
+    "before": {
+      "read_text": 929,
+      "rglob": 9
+    },
+    "after": {
+      "read_text": 476,
+      "rglob": 6
+    },
+    "breakdown_after": {
+      "snapshot_build": "151 read / 1 rglob（快照自身读一遍每页）",
+      "_scan_all_pages": "151 read（只剩 status.py 的 _should_exclude_orphan 裸读）/ 0 rglob",
+      "run_all_8_rules": "174 read（dated_claim 159 + knowledge_gap 15）/ 5 rglob"
+    },
+    "fully_cached": {
+      "read_text": 0,
+      "snapshot_builds": 0
+    },
+    "note": "演进路径：929/9（P4-b-1 后仍无生产调用方）-> 476/6（本子任务）-> 311/4（P4-b-3a：dated_claim / knowledge_gap）-> 311/2（P4-b-3b：topic_overlap / redundancy）。编排者最初给的 174/3 需要 status.py 的 151 次裸读也被消除，本轮 status.py 由并行 writer 持有 -> 不可碰（设计 §14 R-3）。",
+    "platform_note": "夹具里 10 个 Query 页用全角冒号（path_codec 在 Windows 上写出的形态），使 POSIX 不触发 \"Query:\" 过滤 -> 读次数在所有平台一致。"
+  },
+  "validation": {
+    "pytest_scoped": "115 passed（test_lint_snapshot 28 + test_lint_engine 20 + test_lint_engine_aggregator 8 + test_lint_handles_non_utf8_page 4 + test_lint_read_counts 7 + test_wiki_analyzer 19 + test_direct_lint 15 + test_source_analysis 14）",
+    "ruff": "clean (3 files, --output-format=concise)",
+    "black": "无新增失败：analyzer.py 有 1 处预存失败（cache_put(\"lint_llm_invest\", ...) 那段，本子任务未触碰），HEAD 版本同样 would reformat（已用 git show HEAD:... 取出基线对比）；lint/__init__.py 与 tests/test_lint_snapshot.py 均 would be left unchanged",
+    "check_architecture": "0 violations across 4 layers",
+    "mypy": "两个源文件无新增错误（仓库既有 11 条错误全在 foundation/ 与 interfaces/）",
+    "line_endings": "3 个文件均已字节级校验：CRLF、无 BOM、无孤立 LF（编辑工具沿用了文件既有的 CRLF，未改动仓库现成的 .analysis_tmp/normalize_crlf.py）",
+    "pytest_full_suite": "全量跑完（470.62 s）：73 failed / 4882 passed / 110 skipped / 56 deselected / 1 xfailed / 250 errors（--ignore=tests/test_apps_chat_skills_run_not_found.py，该模块因并行 writer 未提交的 apps/chat/skills/autoresearch_compound_skill.py 删掉 _format_run_not_found 而收集失败，本任务未碰该文件）。对照 P4-b-1 基线（73 failed / 4873 passed / 110 skipped / 251 errors）：failed 数不变、passed +9 = 本轮新增的 9 条用例、errors -1（teardown 的 Windows 文件锁抖动）。为确认「无新增失败」，用 pytest --lf 重跑上一轮的 318 个 failed/errored id：72 failed，且逐条比对 P4-b-1 基线的 73 条 FAILED 清单 -> 新增失败 0 条，基线里 1 条（tests/kernel/agent/test_agent.py::TestUnifiedContext::test_elapsed_sec，计时抖动）本轮通过。250 条 error 全是 teardown 的 PermissionError [WinError 32]（.llmwikify.db 被占用，临时目录删不掉），与基线同源；单独重跑 tests/scenarios/test_06_lint_rules.py、tests/test_p1_features.py、tests/test_api_routes.py、tests/test_cli_integration.py、tests/scenarios/test_01_wiki_core.py 共 51 passed / 0 failed（错误仍只是 teardown 文件锁）。",
+    "diff_scope": "本任务只改了 lint/__init__.py（引擎侧分支追加）、engines/analyzer.py（接入）、tests/test_lint_snapshot.py（测试追加）；kernel/wiki/snapshot.py、mixins/**、lint/rules/**、apps/**、interfaces/**、并行 writer 的 12 个未提交文件、P4-a 的 4 个文件全部未碰"
+  },
+  "open_issues": [],
+  "design_deviations": [
+    "lint() 里调用点写成 self._run_all_rules(snapshot)：tests/test_lint_engine_aggregator.py:103 断言 inspect.getsource(WikiAnalyzer.lint) 里含字面量 \"_run_all_rules()\"。该断言文件不在本子任务的所有权内，因此在该行上方保留了一句提到 ``_run_all_rules()`` 的注释（inspect.getsource 含注释），语义不变（lint() 仍然只调用一次 _run_all_rules）。",
+    "WikiAnalyzer.__init__ 增加了可选参数 page_source（设计 §2.1 明确要求协议在生产路径上被用到、测试可注入假 source）；既有调用点 WikiAnalyzer(self) 不受影响。",
+    "lint() 的 total_pages 从 len(self.wiki._wiki_pages()) 改为 len(snapshot.names)（设计 §3.5 的写法，省一次 rglob）。两者取值相同：_wiki_pages() 与 _get_existing_page_names() 的过滤条件逐字相同（recon C7），快照的 names 就是 _wiki_pages() 的顺序。",
+    "_build_lint_context 的快照只用于页面名列表（list(snapshot.relative_names)）；wiki.md / source 摘要页 / raw 目录三段未动（设计 §4.2，R-1 留给后续项）。"
+  ],
+  "next_reviewer_focus": [
+    "先核对惰性：tests/test_lint_snapshot.py::test_fully_cached_lint_builds_no_snapshot 断言两个缓存都命中时快照构建 0 次、read_text == 0 —— 这是本子任务最容易做错的一点（快照若在 lint() 开头无条件构建，就会白读 151 页并吃掉 P4-a 的收益）。",
+    "再核对计数：cold 口径 read_text == 476 / rglob == 6（tests/test_lint_snapshot.py::test_cold_lint_read_counts_use_one_snapshot），且无快照时旧路径仍是 929 / 9（test_cold_lint_without_snapshot_keeps_the_old_counts）。",
+    "复核 LintEngine 的 None 分支与今天的实现逐行相同：git diff src/llmwikify/kernel/wiki/lint/__init__.py 中 run_all 的 elif / else 分支应与 HEAD 一字不差；tests/test_lint_handles_non_utf8_page.py 的 wrapper(self, wiki) 不会因新参数炸。",
+    "复核语义等价：run_all(snapshot) == run_all()、run_rule(name, snapshot) == run_rule(name)、_scan_all_pages(snapshot) == _scan_all_pages()、_build_lint_context(snapshot=...) == _build_lint_context()（逐字符相等）。",
+    "复核未触碰清单：kernel/wiki/snapshot.py（本子任务只读）、kernel/wiki/mixins/analysis/status.py、kernel/wiki/lint/rules/**、kernel/storage/backend.py、foundation/io.py、interfaces/**、apps/**、并行 writer 的 12 个未提交文件、P4-a 的 4 个文件（mixins/io/source_analysis.py、tests/test_wiki_analyzer.py、tests/test_lint_read_counts.py、tests/test_lint_handles_non_utf8_page.py）全部未碰。",
+    "P4-b-3a / -3b 的接口已就位：引擎侧只调 rule.run_with_snapshot(wiki, snapshot)，规则侧覆写 run_with_snapshot 即可接入（dated_claim / knowledge_gap / topic_overlap / redundancy 仍在旧路径上跑）。",
+    "已知遗留（不在本子任务范围）：status.py 的 151 次裸读仍在 -> 311 / 2 与 160 / 2 需要 status.py 的 owner 释放该文件（设计 §14 R-3）。"
+  ]
+}

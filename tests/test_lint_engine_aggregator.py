@@ -99,8 +99,9 @@ def test_wiki_analyzer_lint_method_partitions_results_by_type():
     from llmwikify.kernel.wiki.engines.analyzer import WikiAnalyzer
 
     src = inspect.getsource(WikiAnalyzer.lint)
-    # Must use _run_all_rules
-    assert "_run_all_rules()" in src
+    # Must use _run_all_rules (the aggregate path). Match the name, not
+    # the exact call: the call now passes the page snapshot of this run.
+    assert "_run_all_rules" in src
     # Must use list-comprehension partitioning by type
     assert 'r.get("type")' in src or "r.get('type')" in src
     # Must NOT call individual _detect_X

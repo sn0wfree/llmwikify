@@ -2,6 +2,7 @@
 
 import hashlib
 import logging
+from collections.abc import Sequence
 from pathlib import Path
 
 from llmwikify.kernel.storage.backend import is_path_excluded
@@ -25,25 +26,53 @@ class WikiSourceAnalysisMixin(WikiProtocol):
         Looks in wiki/sources/ for a page that cites the raw source.
         Uses slug of source filename to find the page.
         """
+        return self._build_source_summary_map([source_path]).get(source_path)
+
+    def _build_source_summary_map(
+        self, source_paths: Sequence[str]
+    ) -> dict[str, Path | None]:
+        """Map each raw source path to its Source summary page (None if none).
+
+        One pass over ``wiki/sources/`` shared by every path, instead of one
+        full directory scan per path. Per-path semantics are identical to
+        :meth:`_find_source_summary_page`:
+
+        1. slug fast path — ``sources/<slug>.md`` exists → that page;
+        2. otherwise the first page (in ``rglob`` order, skipping excluded
+           paths) whose content contains ``(raw/<basename>)`` or the source
+           path itself.
+        """
+        resolved: dict[str, Path | None] = {}
         sources_dir = self.wiki_dir / "sources"
         if not sources_dir.exists():
-            return None
+            return dict.fromkeys(source_paths)
 
-        slug = self._slugify(Path(source_path).stem)
+        pending: list[str] = []
+        source_refs: dict[str, str] = {}
+        for source_path in source_paths:
+            slug = self._slugify(Path(source_path).stem)
+            candidate = sources_dir / f"{slug}.md"
+            if candidate.exists():
+                resolved[source_path] = candidate
+            else:
+                pending.append(source_path)
+                source_refs[source_path] = f"(raw/{Path(source_path).name})"
 
-        candidate = sources_dir / f"{slug}.md"
-        if candidate.exists():
-            return candidate
+        if pending:
+            for page in sources_dir.rglob("*.md"):
+                if is_path_excluded(page):
+                    continue
+                content = page.read_text(encoding="utf-8", errors="replace")
+                for source_path in pending[:]:
+                    if source_refs[source_path] in content or source_path in content:
+                        resolved[source_path] = page
+                        pending.remove(source_path)
+                if not pending:
+                    break
 
-        source_ref = f"(raw/{Path(source_path).name})"
-        for page in sources_dir.rglob("*.md"):
-            if is_path_excluded(page):
-                continue
-            content = page.read_text(encoding="utf-8")
-            if source_ref in content or source_path in content:
-                return page
-
-        return None
+        for source_path in pending:
+            resolved[source_path] = None
+        return {path: resolved.get(path) for path in source_paths}
 
     def _cache_source_analysis(
         self, page_path: Path, content_hash: str, analysis: dict

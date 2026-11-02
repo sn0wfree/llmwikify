@@ -18,11 +18,39 @@ if TYPE_CHECKING:
 
 from ..lint import LintEngine
 from ..lint.rules import RULES
+from ..snapshot import PageSnapshot, PageSource, WikiPageSource
 
 logger = logging.getLogger(__name__)
 
 # lint/gaps share the graph fingerprint cache (see docs/designs/lint-performance-2026-10-23.md)
 _LINT_TTL_S = 600.0
+
+
+class _LazyPageSnapshot:
+    """The page snapshot of one lint run, built on first use.
+
+    The scan, the rules and the LLM context share one snapshot, but it
+    must not be built before a consumer really needs it: a fully
+    cached run (neither the core nor the LLM gaps are recomputed)
+    touches none of them and must not read a single page.
+
+    The holder lives in the ``lint()`` call, so the snapshot never
+    outlives one lint run (it is not cached on the wiki).
+    """
+
+    def __init__(self, source: PageSource) -> None:
+        self._source = source
+        self._snapshot: PageSnapshot | None = None
+
+    def get(self) -> PageSnapshot:
+        """The snapshot of this run, built on the first call."""
+        if self._snapshot is None:
+            self._snapshot = self._source.snapshot()
+        return self._snapshot
+
+    def peek(self) -> PageSnapshot | None:
+        """The snapshot if it was built already, None otherwise."""
+        return self._snapshot
 
 
 class WikiAnalyzer:
@@ -34,16 +62,24 @@ class WikiAnalyzer:
         recommendations = analyzer.recommend()
     """
 
-    def __init__(self, wiki: "Wiki") -> None:
+    def __init__(self, wiki: "Wiki", page_source: PageSource | None = None) -> None:
         self.wiki = wiki
         # Phase 1 #3 — the 8 detection rules are now in
         # core.lint.rules. LintEngine runs all of them in one
         # place; this analyzer aggregates their results with
         # LLM-based investigations, sink warnings, etc.
         self._lint_engine = LintEngine(wiki, rules=RULES)
+        # Where the page snapshot of a lint run comes from. The
+        # snapshot itself is built per lint call and never kept here.
+        self._page_source = page_source or WikiPageSource(wiki)
 
-    def _scan_all_pages(self) -> tuple[dict[str, int], set[str], list[dict]]:
+    def _scan_all_pages(
+        self, snapshot: PageSnapshot | None = None
+    ) -> tuple[dict[str, int], set[str], list[dict]]:
         """Single filesystem pass: links, orphans, broken links.
+
+        With a snapshot the page contents come from the snapshot
+        instead of the disk; the pages and their order are the same.
 
         Returns:
             link_counts: target page name → reference count
@@ -55,15 +91,31 @@ class WikiAnalyzer:
         contents: list[tuple[str, str]] = []
         skip_names = {self.wiki._index_page_name, self.wiki._log_page_name}
 
-        for page in self.wiki._wiki_pages():
-            name = self.wiki._page_display_name(page)
-            if self.wiki._should_exclude_orphan(name, page):
+        if snapshot is None:
+            pages = [
+                (self.wiki._page_display_name(page), page)
+                for page in self.wiki._wiki_pages()
+            ]
+        else:
+            pages = [(name, snapshot.path_of(name)) for name in snapshot.names]
+
+        for name, page in pages:
+            try:
+                excluded = self.wiki._should_exclude_orphan(name, page)
+            except UnicodeDecodeError:
+                # The page is not valid UTF-8 (the orphan check reads it
+                # raw). Fail open: an undecodable page cannot be judged
+                # against the frontmatter exclusion keys, so it stays in
+                # the scan — the rules read it lossily below anyway.
+                excluded = False
+            if excluded:
                 continue
             page_names.append(name)
-            try:
-                content = page.read_text(encoding="utf-8")
-            except TypeError:
-                content = page.read_text(encoding="utf-8")
+            content = None if snapshot is None else snapshot.content_of(name)
+            if content is None:
+                # No snapshot, or the page did not fit into it (memory
+                # budget) → read it back from disk.
+                content = page.read_text(encoding="utf-8", errors="replace")
             contents.append((name, content))
 
         # Fast existence set — full display names only (stems can false-match).
@@ -99,13 +151,15 @@ class WikiAnalyzer:
 
     # ── Rule-based detectors ──────────────────────────────────────────
 
-    def _run_rule(self, rule_name: str) -> list[dict]:
+    def _run_rule(
+        self, rule_name: str, snapshot: PageSnapshot | None = None
+    ) -> list[dict]:
         """Run a single lint rule by name. Delegates to LintEngine."""
-        return self._lint_engine.run_rule(rule_name)
+        return self._lint_engine.run_rule(rule_name, snapshot)
 
-    def _run_all_rules(self) -> list[dict]:
+    def _run_all_rules(self, snapshot: PageSnapshot | None = None) -> list[dict]:
         """Run all lint rules. Delegates to LintEngine."""
-        return self._lint_engine.run_all()
+        return self._lint_engine.run_all(snapshot)
 
     def _detect_dated_claims(self) -> list[dict]:
         """Run the lint rule ``dated_claim`` (Phase 1 #3: delegated to LintEngine)."""
@@ -223,15 +277,26 @@ class WikiAnalyzer:
             "warning": "LLM investigation generation failed",
         }
 
-    def _build_lint_context(self, limit: int = 20) -> str:
+    def _build_lint_context(
+        self, limit: int = 20, snapshot: PageSnapshot | None = None
+    ) -> str:
         """Build minimal context for LLM lint analysis."""
         parts = []
 
         if self.wiki.wiki_md_file.exists():
-            wiki_md = self.wiki.wiki_md_file.read_text(encoding="utf-8")
+            wiki_md = self.wiki.wiki_md_file.read_text(
+                encoding="utf-8", errors="replace"
+            )
             parts.append(f"=== WIKI SCHEMA (wiki.md) ===\n{wiki_md}")
 
-        pages = self.wiki._get_existing_page_names()
+        # The snapshot knows the same page names as
+        # ``_get_existing_page_names()`` (relative path + ".md", native
+        # separator) -> the text below is unchanged.
+        pages = (
+            list(snapshot.relative_names)
+            if snapshot is not None
+            else self.wiki._get_existing_page_names()
+        )
         pages_section = f"\n=== EXISTING PAGES ({len(pages)} total) ===\n"
         for p in sorted(pages)[:100]:
             pages_section += f"  - {p}\n"
@@ -247,9 +312,15 @@ class WikiAnalyzer:
             src_section = f"\n=== SOURCE ANALYSIS ({len(raw_files)} total) ===\n"
             not_analyzed = []
 
-            for f in sorted(raw_files)[:limit]:
-                rel = str(f.relative_to(self.wiki.root))
-                source_page = self.wiki._find_source_summary_page(rel)
+            # One scan of wiki/sources/ for all raw files, instead of one
+            # full directory scan per raw file.
+            rels = [
+                str(f.relative_to(self.wiki.root)) for f in sorted(raw_files)[:limit]
+            ]
+            source_pages = self.wiki._build_source_summary_map(rels)
+
+            for rel in rels:
+                source_page = source_pages.get(rel)
 
                 if source_page and source_page.exists():
                     cached = self.wiki._get_cached_source_analysis(source_page)
@@ -398,11 +469,20 @@ class WikiAnalyzer:
             core = cache_get("lint", wkey, fp, extra=extra, ttl_s=_LINT_TTL_S)
             from_cache = core is not None
 
+        # The page snapshot of this run: the scan, the rules and the
+        # LLM context share it. It is built on first use, so a fully
+        # cached run (neither the core nor the LLM gaps are recomputed)
+        # does not read a single page.
+        snapshots = _LazyPageSnapshot(self._page_source)
+
         if core is None:
             issues = []
+            snapshot = snapshots.get()
 
             # One filesystem pass → links, orphans, broken links (was 3 passes).
-            link_counts, orphan_candidates, broken_links = self._scan_all_pages()
+            link_counts, orphan_candidates, broken_links = self._scan_all_pages(
+                snapshot
+            )
             issues.extend(broken_links)
 
             for page_name in orphan_candidates:
@@ -432,7 +512,8 @@ class WikiAnalyzer:
                         )
 
             # Rules once; reuse for hints + fallback gaps (was 3× missing_cross_ref).
-            all_rule_results = self._run_all_rules()
+            # ``_run_all_rules()`` now shares the page snapshot of this run.
+            all_rule_results = self._run_all_rules(snapshot)
             by_type: dict[str, list[dict]] = {}
             for r in all_rule_results:
                 by_type.setdefault(r.get("type") or "", []).append(r)
@@ -481,9 +562,7 @@ class WikiAnalyzer:
                     "knowledge_gaps": knowledge_gaps,
                     "redundancy_alerts": redundancy_alerts,
                 },
-                "total_pages": (
-                    len(self.wiki._wiki_pages()) if self.wiki.wiki_dir.exists() else 0
-                ),
+                "total_pages": len(snapshot.names),
                 "missing_cross_refs": by_type.get("missing_cross_ref", []),
                 "contradictions": contradictions,
                 "data_gaps": data_gaps,
@@ -497,7 +576,8 @@ class WikiAnalyzer:
 
         # LLM layers — fingerprint + model/prompt keyed cache (same
         # content + same model → reuse suggestions; force recomputes).
-        context = self._build_lint_context()
+        # The context is only needed by _llm_detect_gaps, so it is built
+        # lazily: a warm "lint_llm_gaps" cache skips the whole thing.
         llm_extra = self._llm_cache_extra("direct_lint", limit)
         llm_gaps = None
         if not force:
@@ -505,6 +585,9 @@ class WikiAnalyzer:
                 "lint_llm_gaps", wkey, fp, extra=llm_extra, ttl_s=_LINT_TTL_S
             )
         if llm_gaps is None:
+            # The snapshot is only used when it was already built (cold
+            # run); a warm core cache must not pay for 151 page reads.
+            context = self._build_lint_context(snapshot=snapshots.peek())
             llm_gaps = self._llm_detect_gaps(
                 context, missing_cross_refs=core.get("missing_cross_refs", [])
             )[:limit]

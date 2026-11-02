@@ -1,0 +1,196 @@
+{
+  "scope": "src/llmwikify/kernel/wiki/lint/",
+  "candidates": [
+    {
+      "id": "C1",
+      "kind": "performance",
+      "location": "src/llmwikify/kernel/wiki/lint/__init__.py:58-72",
+      "evidence": "Rule.run 模板（:66-69）对每个页面 page.read_text(encoding='utf-8', errors='replace')。走该模板的 3 条规则 data_gap / potentially_outdated / dated_claim，在同一合成 wiki（151 个 wiki/*.md + 8 个 raw/，Python 3.12.8 / Windows / D:\\tools\\python312\\python.exe）上逐条单独跑 LintEngine(wiki, rules=[<单条规则>]).run_all()，monkeypatch 计数 Path.read_text / Path.rglob / Path.stat：内容不触发任何规则时 data_gap=151 次 read_text、potentially_outdated=151、dated_claim=159(=151 页面 + 8 raw)；内容触发规则时因 :70-71 的 max_results 提前 break，data_gap=2、potentially_outdated=12、dated_claim=20(=12+8)。rglob 恒为 1（wiki._wiki_pages()）。",
+      "call_frequency": "high",
+      "test_coverage": "partial",
+      "risk": "medium",
+      "notes": "detect 的入参本来就带 content（lint/__init__.py:80-88），所以『让规则用快照』不必然要求改 detect 签名；改动落点是 Rule.run 模板与 3 条规则对 run 的继承关系。逐条读次数见 C14（内容依赖）。"
+    },
+    {
+      "id": "C2",
+      "kind": "performance",
+      "location": "src/llmwikify/kernel/wiki/lint/__init__.py:112-119",
+      "evidence": "CrossPageRule._load_pages 对 wiki._wiki_pages() 的每个非 Query 页各 read_text 一次（:118），返回 {display_name: content}。实测：MissingCrossRefsRule 单跑 = 151 read_text / 1 rglob；PotentialContradictionsRule 单跑 = 151 / 1。LintEngine.run_all() 让 2 条 CrossPageRule 共享同一份 shared_pages（:177-181），phase 归因显示 run_all 的 8 条规则只发生 1 次 _load_pages（read_text=151），不是 2 次。但走 analyzer._run_rule(name)（analyzer.py:107-109 → LintEngine.run_rule → rule.run）时没有共享：实测 run_rule('missing_cross_ref') = 151 次 read_text / 1 rglob。",
+      "call_frequency": "high",
+      "test_coverage": "partial",
+      "risk": "low",
+      "notes": "_load_pages 不提前 break（无 max_results 短路），所以它永远是全量读；单规则路径与全量路径的读次数相同。"
+    },
+    {
+      "id": "C3",
+      "kind": "both",
+      "location": "src/llmwikify/kernel/wiki/engines/analyzer.py:45-72 + src/llmwikify/kernel/wiki/lint/__init__.py:66-69,112-119",
+      "evidence": "一次冷 lint（不触发任何规则）的读次数实测（合成 wiki 151 页）：_scan_all_pages = 302 次 read_text（每页 2 次：mixins/analysis/status.py:31 的 _should_exclude_orphan 裸读 + analyzer.py:71 的正文读；rglob=1、stat=153、33.2 ms）+ run_all(8 条规则) = 627 次 read_text（rglob=8、155.0 ms）= 合计 929 次 read_text / 9 次 rglob / 300.9 ms。折算：每页平均被读 6.2 次，单页最多 7 次（普通页 6 次，wiki/sources/ 页再多 1 次，见 C4）。触发规则的 hot 口径同一条路径是 491 次 read_text / 138.8 ms。",
+      "call_frequency": "high",
+      "test_coverage": "none",
+      "risk": "medium",
+      "notes": "P4-a recon 报的『read_text=515（=3.4× 页面数）』属于 hot 口径（命中即提前 break）；cold 口径是 6.2×。"
+    },
+    {
+      "id": "C4",
+      "kind": "performance",
+      "location": "src/llmwikify/kernel/wiki/lint/rules/knowledge_gaps.py:56-63",
+      "evidence": "knowledge_gap 规则自己 rglob wiki/sources/ 并对每个 source 页 read_text(encoding='utf-8')（:59,:63，裸读、无 errors= 参数，即 P4-a 登记的残留风险 R1）。实测（14 个 source 页）：单跑 = 15 次 read_text / 1 rglob，其中 1 次是 get_relation_engine → _load_relation_types 读根目录 wiki.md，14 次是 source 页；触发 3 个缺口即 break 时 = 4 次。而这 14 个 source 页本来就在 wiki_dir 之下，已被 Rule.run 与 _load_pages 各读一遍（files_read_per_rule：MissingCrossRefsRule 读的 151 个文件里含 14 个 sources/source-*.md）——属于同一份内容的重复读。该规则不读任何普通 wiki 页正文。",
+      "call_frequency": "high",
+      "test_coverage": "partial",
+      "risk": "medium",
+      "notes": "这 14 次 source 页读取完全落在『快照应覆盖的文件集合』之内。"
+    },
+    {
+      "id": "C5",
+      "kind": "performance",
+      "location": "src/llmwikify/kernel/wiki/lint/rules/query_page_overlap.py:31-58 + src/llmwikify/kernel/wiki/lint/rules/redundancy.py:27-32",
+      "evidence": "实测这两条规则的 read_text = 0、rglob = 1：query_page_overlap 只用 page.stem 抽关键词（query_page_overlap.py:41），从不对页面正文 read_text；redundancy 只取 wiki._page_display_name(p) 做 O(n²) 名字比较（redundancy.py:28-37），也不读正文。→ 内容快照对这两条规则不是必需的；它们需要的是『名字集合』。",
+      "call_frequency": "high",
+      "test_coverage": "none",
+      "risk": "low",
+      "notes": "这两条规则是 4 个页面集合里唯二不消费内容的。"
+    },
+    {
+      "id": "C6",
+      "kind": "both",
+      "location": "src/llmwikify/kernel/wiki/lint/__init__.py:74-78,112-119 + src/llmwikify/kernel/wiki/lint/rules/query_page_overlap.py:36-43 + src/llmwikify/kernel/wiki/lint/rules/redundancy.py:28-32 + src/llmwikify/kernel/wiki/engines/analyzer.py:58-72",
+      "evidence": "4 个集合的成员与过滤规则实测（合成 wiki 151 页）：S1 _scan_all_pages = 151（= _wiki_pages() 减去 _should_exclude_orphan 判定的；默认配置 orphan_detection.exclude_patterns / exclude_frontmatter / archive_directories 全为空，wiki.py:106-112 → 不减）；S2 Rule._iter_pages = 151（减去 display name 以 'Query:' 开头的页；Windows 命名下 0 个被减，POSIX 命名下减 8 → 143）；S3 query_page_overlap = 0（Windows 命名）/ 10（POSIX 命名；自己 rglob wiki_dir + 跳过 '.sink' 与 is_path_excluded，只留 page.stem 以 'Query:' 开头者）；S4 redundancy = 151（wiki._wiki_pages() 全部，只取名）。并集 = S1 ∪ S2 ∪ S3 ∪ S4 = 全部 151 页（S1 已覆盖其余三者的文件）。需要正文的只有 S1 ∪ S2（POSIX 下 143 页），S3/S4 只要名字。",
+      "call_frequency": "high",
+      "test_coverage": "none",
+      "risk": "medium",
+      "notes": "另有一条集合差异：S2/S3 的 'Query:' 过滤只对『wiki 根目录下的 Query 页』生效——display name 含子目录前缀，子目录里的 'Query: …' 页不会被 S2 过滤（POSIX 实测：queries/ 与 archive/ 下的 2 个 Query 页仍进了 S2）。"
+    },
+    {
+      "id": "C7",
+      "kind": "duplication",
+      "location": "src/llmwikify/kernel/wiki/mixins/core/utility.py:143-165",
+      "evidence": "_get_existing_page_names（:147-152）与 _wiki_pages（:159-164）的过滤条件逐字相同：wiki_dir.rglob('*.md') + stem 不在 (index, log) + '.sink' not in str(p) + not is_path_excluded(p)。实测 4 种配置（win/posix × hot/cold）下『existing_names 与 _wiki_pages 是同一文件集合』均为 True（151 == 151）。差别只在字符串格式：_get_existing_page_names 返回 str(p.relative_to(wiki_dir))（带 .md 后缀 + Windows 下反斜杠分隔；实测 existing_names_keep_md_suffix=True、existing_names_use_native_separator=True），_page_display_name 返回 posix 相对路径去掉 .md（utility.py:167-170）。P4-a recon 的 C10 notes 写『一个含子目录相对路径、一个含排除规则』——与当前代码不符：排除规则两边一致。",
+      "call_frequency": "medium",
+      "test_coverage": "none",
+      "risk": "low",
+      "notes": "同一个页面在三条链路上出现三种名字形态：display name（posix、无 .md）、相对路径（原生分隔符、带 .md）、stem（无目录）。"
+    },
+    {
+      "id": "C8",
+      "kind": "performance",
+      "location": "src/llmwikify/kernel/wiki/lint/rules/dated_claims.py:31-52",
+      "evidence": "DatedClaimsRule.run 先扫 wiki.raw_dir.rglob('*') 并对每个 raw 文件 read_text(errors='ignore', encoding='utf-8')（:37-40），算出 latest_source_year 后写进实例属性 self._latest_source_year / self._current_year（:50-51），再调 super().run(wiki)（:52）；detect 用这两个属性（:65-66）。实测 dated_claim 单跑 = 159 次 read_text / 2 次 rglob / 13 次 stat，其中 8 次读 + 1 次 rglob 全在 raw 目录（与页面快照无关），其余 151 次是页面读。raw 扫描不经过 wiki 页面集合，快照化后仍会原样发生。",
+      "call_frequency": "high",
+      "test_coverage": "partial",
+      "risk": "low",
+      "notes": "RULES 是模块级单例（rules/__init__.py:27-36），analyzer.py:43 直接复用这批实例，wiki.py:124 又把 analyzer 缓存在 Wiki 实例上 → _latest_source_year 是跨请求的进程级实例状态（每次 run 覆盖上一次的值）。另注：latest_source_year == 0 时 run 在 :47-48 提前 return，_latest_source_year 保留上次的旧值。"
+    },
+    {
+      "id": "C9",
+      "kind": "performance",
+      "location": "src/llmwikify/kernel/wiki/lint/rules/potential_contradictions.py:47-201 + src/llmwikify/kernel/wiki/lint/rules/missing_cross_refs.py:29-91",
+      "evidence": "逐条读完 8 条规则的 detect / detect_all 方法体，并做 phase 归因实测：monkeypatch 住每个 detect/detect_all，执行期间给 Path.read_text / rglob / stat 打上 'detect:<Rule>' / 'detect_all:<Rule>' 标签。run_all(8) 的 by_phase 里只出现 CrossPageRule._load_pages / Rule.run / run:DatedClaimsRule / run:KnowledgeGapsRule / run:RedundancyRule / run:QueryPageOverlapRule 六个标签，没有任何 detect:* 或 detect_all:* 标签 → detect / detect_all 期间的 read_text / rglob / stat 全为 0。potential_contradictions.py（201 行）的三个私有方法 _detect_value_conflicts / _detect_year_conflicts / _detect_negation_patterns 只遍历传入的 pages dict；missing_cross_refs.py 的 detect_all 只对 pages.items() 做正则与集合运算。",
+      "call_frequency": "high",
+      "test_coverage": "partial",
+      "risk": "low",
+      "notes": "『规则只做纯计算』这一前提在当前代码里对 detect/detect_all 已成立；仍碰文件系统的是 4 条覆写 run 的规则（DatedClaims / KnowledgeGaps / QueryPageOverlap / Redundancy）。"
+    },
+    {
+      "id": "C10",
+      "kind": "duplication",
+      "location": "src/llmwikify/kernel/wiki/engines/analyzer.py:418,448,522 + src/llmwikify/kernel/wiki/lint/__init__.py:66-69,112-119",
+      "evidence": "analyzer.lint() 的执行顺序是 _scan_all_pages()（:418）→ _run_all_rules()（:448）→ _build_lint_context()（:522）。scan 先把每页读一遍，3 条 Rule.run 规则各再读一遍，_load_pages 再读一遍（实测合计 929 次 read_text / 151 页）。若页面在一次 lint 运行期间被改写，scan 得到的 link / broken_link 与规则看到的内容可能来自不同版本。没有任何消费者要求『读到更新的内容』：_build_lint_context 只读 wiki.md + source 摘要页 + 页面名列表（实测 read_text=16、rglob=3，不含任何 wiki 页面正文）。",
+      "call_frequency": "high",
+      "test_coverage": "none",
+      "risk": "medium",
+      "notes": "快照化会把各消费者统一到同一时刻的版本——这是一致性上的行为变化（变好），不是语义丢失；风险在于『当前这个不一致』若已被某些测试依赖。"
+    },
+    {
+      "id": "C11",
+      "kind": "both",
+      "location": "src/llmwikify/kernel/wiki/lint/__init__.py:77,117 + src/llmwikify/kernel/wiki/lint/rules/query_page_overlap.py:42 + src/llmwikify/kernel/path_codec.py:23-45",
+      "evidence": "两处 'Query:' 过滤都拿『磁盘原始名字』做 startswith('Query:')：Rule._iter_pages（lint/__init__.py:77）与 CrossPageRule._load_pages（:117）用 wiki._page_display_name(page)（= 磁盘相对路径去 .md），query_page_overlap（:42）用 page.stem。但 kernel/path_codec.py 在 Windows 上把 ':' 映射成全角 '：'（:23-31），write_page 也走 to_fs_name（mixins/io/page_io.py:72），所以 Windows 上页面真名是 'Query：X'（全角）→ startswith('Query:') 恒为 False。实测（同一批物理文件，只改名字映射）：Windows 命名下 topic_overlap 找到 0 个 Query 页、0 条告警、S2=151；POSIX 命名（Linux 生产，path_codec 为恒等）下 topic_overlap 找到 10 个 Query 页并报 2 条告警、S2=143。",
+      "call_frequency": "high",
+      "test_coverage": "none",
+      "risk": "medium",
+      "notes": "即『哪些页被跳过』是平台相关的，快照必须知道这一点。另外实测：Windows 上直接写 'Query: X.md' 会变成 NTFS 备用数据流（目录里只出现名为 'Query' 的 0 字节文件，rglob('*.md') 找不到）——这正是 path_codec 存在的原因，也说明本机无法用真实文件复现 POSIX 的 Query 页。"
+    },
+    {
+      "id": "C12",
+      "kind": "both",
+      "location": "src/llmwikify/kernel/storage/backend.py:59-65 + src/llmwikify/kernel/wiki/mixins/core/utility.py:150-152,162-164",
+      "evidence": "is_path_excluded(path) 判的是 path.parts（绝对路径的每一段）是否落在 EXCLUDED_DIR_NAMES={.DS_Store,.git,.hg,.idea,.ipynb_checkpoints,.svn,.vscode}；'.sink' 的判定是 '\".sink\" not in str(p)'（整条绝对路径的子串匹配）。实测（同一套 Wiki 代码，只换根目录名）：根目录 '.plain' → _wiki_pages=3、_get_existing_page_names=['overview.md','Page A.md','Page B.md']；根目录 '.idea' → _wiki_pages=0、existing=[]；根目录 '.git' → 0；根目录 'my.sink.dir' → 0（.sink 子串命中）。",
+      "call_frequency": "medium",
+      "test_coverage": "none",
+      "risk": "medium",
+      "notes": "4 个页面集合的成员因此还依赖 wiki 根目录的绝对路径，不只依赖页面内容；快照若在别处重新枚举页面，可能与规则当前看到的集合不一致。"
+    },
+    {
+      "id": "C13",
+      "kind": "duplication",
+      "location": "src/llmwikify/kernel/wiki/mixins/core/utility.py:167-170 + src/llmwikify/kernel/wiki/lint/rules/query_page_overlap.py:41,76",
+      "evidence": "_page_display_name(page) = page.relative_to(wiki_dir).as_posix()[:-3]：对不同的相对路径去掉定长 3 字符 '.md' 后仍是单射（两个不同相对路径去掉同样 3 个字符不可能相等）→ 以 display name 为键的快照不存在重名覆盖。实测 151 页里 display_name_duplicates = []（win/posix × hot/cold 四种配置均为空）。但 query_page_overlap 用 page.stem 作 page_name（:41），stem 不含目录 → 同名文件放在不同目录会撞名：实测构造 wiki/queries/'Query: kubernetes cluster deployment.md' 与 wiki/archive/ 下同名文件后，POSIX 命名下 stem_duplicates_query_pages = ['Query: kubernetes cluster deployment']，该规则会用 pair_key=(X, X) 自比（:76）。",
+      "call_frequency": "medium",
+      "test_coverage": "none",
+      "risk": "low",
+      "notes": "同一目录下同名文件在文件系统层就被覆盖（后写覆盖先写），与快照键无关。"
+    },
+    {
+      "id": "C14",
+      "kind": "performance",
+      "location": "src/llmwikify/kernel/wiki/lint/__init__.py:70-71",
+      "evidence": "break 发生在 detect() 之后（:70-71），判据是 len(results) >= self.max_results，所以命中越早读得越少。实测同一合成 wiki：内容不触发任何规则时 run_all(8) = 627 次 read_text；内容触发全部规则时 run_all(8) = 189 次。逐条差值：data_gap 151→2、potentially_outdated 151→12、dated_claim 159→20、knowledge_gap 15→4；missing_cross_ref / contradiction 恒为 151（_load_pages 不提前 break）。",
+      "call_frequency": "high",
+      "test_coverage": "none",
+      "risk": "low",
+      "notes": "『每页读 N 次』的基线应以 cold（不触发）口径为准；若拿 hot 口径做验收门槛，会漏掉真实的放大倍数。"
+    },
+    {
+      "id": "C15",
+      "kind": "both",
+      "location": "src/llmwikify/kernel/wiki/lint/__init__.py:42-128",
+      "evidence": "现有测试盘点（用例数以 pytest --collect-only -q 实测）：tests/test_lint_engine.py（20 个用例）只断言 Rule 可导入且有 name+run（:36-42）、LintEngine 机制（:45-152：名字校验/去重/未知名返回 []/rule_names 排序/失败规则被吞/多规则聚合）、8 条规则可导入 + 名字唯一 + 都有 run（:172-229）、WikiAnalyzer 的 _detect_X 是 1 行委托（:249-280）、以及 3 个端到端用例（:325-371，其中 dated_claim 用例直接调 rule.run(wiki)）。CrossPageRule._load_pages 没有任何契约测试（唯一直接调用在 tests/test_lint_handles_non_utf8_page.py:203，只断言坏字节页 lossy 可读）；detect / detect_all 也没有通用契约测试（只有 PotentialContradictionsRule 在 tests/test_lint_contradiction_b1.py 的 19 个用例里直调 _detect_value_conflicts / _detect_year_conflicts / _detect_negation_patterns，以及 tests/test_lint_contradiction_parity.py:229 直调 detect_all）。tests/test_lint_engine_aggregator.py（8 个用例）只断言 8 个规则文件存在（:226）+ 全流程跑通（:253）。",
+      "call_frequency": "medium",
+      "test_coverage": "none",
+      "risk": "medium",
+      "notes": "→ 给 run() 加可选参数几乎不会被现有测试网抓住；反过来，现有测试也拦不住语义漂移。"
+    },
+    {
+      "id": "C16",
+      "kind": "both",
+      "location": "tests/test_wiki_analyzer.py:30-31,71-88,99-113,124-136 + tests/test_lint_handles_non_utf8_page.py:104-157,181-237",
+      "evidence": "会因『规则不再自己读文件』而失败的现有测试：①tests/test_wiki_analyzer.py 的 mock_wiki 是 MagicMock，靠 mock_wiki._wiki_pages.return_value 喂页面（:30），并把 _page_display_name 设为 lambda p: p.stem（:31）——TestDetectDatedClaims::test_detects_outdated_claim（:71-88）、TestDetectMissingCrossRefs::test_detects_unlinked_mentions（:99-113）、TestDetectRedundancy::test_detects_similar_names（:124-136）三例都依赖规则通过 wiki._wiki_pages() + page.read_text() 读盘，若规则改为消费快照对象（MagicMock 上没有真实快照）就读不到内容。②tests/test_lint_handles_non_utf8_page.py 的 rule_spies 把 6 条普通规则的 run 包成 wrapper(self, wiki)（:111-121,:145-146），把 CrossPageRule._load_pages 包成 wrapper(self, wiki)（:135-152）；若 run/_load_pages 增加第二个参数（快照）且由 LintEngine 以位置参数传入，该 wrapper 会抛 TypeError → test_all_rules_complete_with_non_utf8_page（:181-190，断言 failed == []）失败。③同文件 test_rule_read_is_lossy_not_empty（:193-206）直接调用 MissingCrossRefsRule()._load_pages(wiki) 并断言返回字典含 'Broken Page' 键。④test_knowledge_gap_still_fails_on_bad_source_page（:209-237）把 knowledge_gap 在坏 source 页上抛 UnicodeDecodeError 钉死为『当前行为』——若快照把 source 页也纳入并统一 lossy 读，这条断言会反转。",
+      "call_frequency": "medium",
+      "test_coverage": "partial",
+      "risk": "medium",
+      "notes": "P4-a 新增的 tests/test_lint_read_counts.py 只覆盖 sources 目录扫描与 _build_lint_context 次数，不覆盖 8 条规则的页面读次数 —— 本轮逐规则读次数没有现成回归网可挂。"
+    },
+    {
+      "id": "C17",
+      "kind": "performance",
+      "location": "src/llmwikify/kernel/wiki/lint/__init__.py:112-119",
+      "evidence": "快照要持有的是全部页面正文。实测每页字节数：合成 wiki（151 页）总计 94,949 B（cold 内容）/ 134,296 B（hot 内容），均值 628.8 / 889.4 B，中位数 628 / 944 B，p90 1055 / 1368 B，最大 1161 / 1477 B，最小 73 / 52 B。本机真实 wiki/ 只有 3 个 md（index.md 1280 B、log.md 270 B、WIKILINK_TEST.md 1551 B）→ 真正的内容页只有 1 个（1551 B），样本不足以外推；仓库根 raw/ 的 15 个原始文档均值 6070.9 B、中位数 2643 B、p90 19,997 B、最大 27,631 B（这批更接近真实语料密度）。方案文档 §P4（reuse-and-performance-isolation-plan.md:615）的『1400 页 × ~4KB ≈ 5.6 MB』在本机既不能证实也不能证伪：实测页面均值 0.63-0.89 KB，唯一真实内容页 1.55 KB。按实测均值外推 1400 页 = 0.88-1.25 MB；按 4 KB = 5.6 MB；按 raw 文档均值 6.07 KB = 8.5 MB；按观测到的最大单文件 27.6 KB 估上界 = 38.7 MB。",
+      "call_frequency": "high",
+      "test_coverage": "none",
+      "risk": "medium",
+      "notes": "Python str 每条约 49 B 固定开销（1400 页约 0.07 MB，可忽略）。上限必须按『页数 × 单页上界』而不是均值来定，否则长文 wiki 会超；本机没有能定上界的真实样本。"
+    },
+    {
+      "id": "C18",
+      "kind": "duplication",
+      "location": "src/llmwikify/kernel/wiki/engines/analyzer.py:19-43 + src/llmwikify/kernel/wiki/lint/rules/__init__.py:27-36",
+      "evidence": "全 src/ 目录 grep 'LintEngine' 只命中 analyzer.py:19/:43 与 lint 包自身 → LintEngine 的唯一消费者是 WikiAnalyzer。analyzer.py:43 用模块级 RULES 列表构造 LintEngine（实测 8 个规则实例 id 互不相同但全进程唯一）；wiki.py:124 把 analyzer 缓存在 Wiki 实例上（:120-123 注释明说不每次新建）→ 规则实例与 LintEngine 的寿命 = Wiki 实例的寿命，快照的缓存期天然落在一次 lint 调用内，而不是跨请求。",
+      "call_frequency": "medium",
+      "test_coverage": "partial",
+      "risk": "low",
+      "notes": "RULES 是模块级单例这一点与 C8 的 _latest_source_year 跨请求状态是同一事实的两个侧面。"
+    }
+  ],
+  "unresolved": [
+    "POSIX（Linux 生产）侧的读次数是用『同一批物理文件 + 只改名字映射』模拟出来的（patch PurePath.stem / Wiki._page_display_name / Wiki._get_existing_page_names 三处），不是真机 Linux 实测；本机无 docker、无 WSL，无法在 Linux 文件系统上直接创建 'Query: X.md'（Windows 上会变成 NTFS 备用数据流）。计数（read_text / rglob）可信，耗时不可信（模拟 patch 明显拖慢：posix_cold run_all 331.9 ms vs win_cold 155.0 ms）。",
+    "本机没有真实规模 wiki：wiki/ 只有 3 个 md（1 个内容页），raw/ 15 个文件。1400 页级别的绝对耗时、每页字节分布与内存上界都无法在本机外推；C17 给出的是实测分布 + 按分布外推的区间。",
+    "『每条规则读多少页』的实测值强依赖页面内容（C14）。上表给的 cold 口径是不触发任何规则时的上界；真实 wiki 的命中率未知，因此不能用单一数字描述生产环境的读放大。",
+    "snapshot 化后『同一页在一次 lint 内被读 6-7 次』收敛为 1 次，这会改变一个可观测行为：lint 运行期间被改写的页面，scan 与规则将看到同一版本（C10）。现有测试没有覆盖这个差异（无跨消费者一致性的测试），因此无法判断该行为变化是否已被下游依赖。",
+    "knowledge_gap 的 14 次 source 页裸读（无 errors= 参数）是否会随快照一并变成 lossy 读，取决于实现选择；tests/test_lint_handles_non_utf8_page.py:209-237 把现状（抛 UnicodeDecodeError）钉死为断言，改动它需要同步改测试。",
+    "dated_claim 的 raw 扫描（8 次 read_text + 1 次 rglob）不在页面快照的覆盖范围内，是否一并纳入快照化范围属于方案决策，本轮只认定事实。",
+    "未跑真实 LLM 调用（按约束）：wiki.lint() 的完整链路（含 _build_lint_context 与 _llm_detect_gaps）没有整体计时，本轮的耗时数字只覆盖 _scan_all_pages / _run_all_rules / _build_lint_context 三个确定性阶段。",
+    "本机 6 个既有未提交改动（foundation/version.py 新增；__init__.py、interfaces/server/core.py、kernel/storage/backend.py、kernel/wiki/mixins/analysis/status.py、kernel/wiki/mixins/core/utility.py 修改）以及 P4-a 的 analyzer.py / lint/__init__.py / source_analysis.py 改动未逐一核对是否影响本报告引用的行号；utility.py 的改动经 git diff 核对只涉及 _get_version 的 import 与删除 _build_merge_notice，lint/__init__.py 的改动只涉及 errors='replace'（本报告的行号按当前工作区状态给出）。",
+    "本轮只做事实认定，未提出任何重构方案；测量脚本与结果落在 .analysis_tmp/（已 gitignore）：.analysis_tmp/p4b_recon.py、.analysis_tmp/p4b_recon_out.json、.analysis_tmp/p4b_show.py、.analysis_tmp/p4b_show2.py、.analysis_tmp/p4b_pathfilter.py。"
+  ]
+}

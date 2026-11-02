@@ -37,7 +37,7 @@ def mock_wiki(tmp_path):
         lambda link: link.split("|")[0].split("#")[0].strip()
     )
     wiki._get_existing_page_names.return_value = []
-    wiki._find_source_summary_page.return_value = None
+    wiki._build_source_summary_map.return_value = {}
     wiki._get_cached_source_analysis.return_value = None
     wiki.get_relation_engine.side_effect = Exception("No relation engine")
     wiki.config = {}

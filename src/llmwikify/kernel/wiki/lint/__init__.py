@@ -35,8 +35,22 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from ..snapshot import PageSnapshot
+
 if TYPE_CHECKING:
     from ..wiki import Wiki
+
+
+def _is_query_page(name: str) -> bool:
+    """True when a display name belongs to a query page.
+
+    Mirrors the inline predicate of ``Rule._iter_pages`` and
+    ``CrossPageRule._load_pages`` verbatim. The check is platform
+    dependent -- on Windows the path codec maps ``:`` to a full width
+    ``：``, so the prefix never matches -- therefore it stays with the
+    consumers: the snapshot keeps every page.
+    """
+    return name.startswith("Query:")
 
 
 class Rule:
@@ -65,8 +79,47 @@ class Rule:
         results: list[dict[str, Any]] = []
         for page in self._iter_pages(wiki):
             page_name = wiki._page_display_name(page)
-            content = page.read_text(encoding="utf-8")
+            content = page.read_text(encoding="utf-8", errors="replace")
             self.detect(page_name, content, wiki, results)
+            if len(results) >= self.max_results:
+                break
+        return results[: self.max_results]
+
+    def run_with_snapshot(
+        self, wiki: Wiki, snapshot: PageSnapshot | None = None
+    ) -> list[dict[str, Any]]:
+        """Run this rule against ``wiki``, taking the pages from a snapshot.
+
+        ``snapshot is None`` runs the legacy path (``self.run(wiki)``),
+        so every existing caller keeps its behaviour. With a snapshot
+        the pages are read from the snapshot instead of from disk; a
+        page that was left out of the snapshot (memory budget) is read
+        back from its path, so the checked pages do not change.
+        """
+        if snapshot is None:
+            return self.run(wiki)
+        if type(self).run is not Rule.run:
+            # The rule overrides run() (e.g. dated_claim scans the raw
+            # directory first): the generic template must not bypass it.
+            return self.run(wiki)
+        if type(self)._iter_pages is not Rule._iter_pages:
+            # The rule iterates its pages in its own way: only the rule
+            # knows how to replay that.
+            return self.run(wiki)
+        if not wiki.wiki_dir.exists():
+            return []
+        results: list[dict[str, Any]] = []
+        for name in snapshot.names:
+            if _is_query_page(name):
+                continue
+            content = snapshot.content_of(name)
+            if content is None:
+                # Degraded page: it did not fit into the snapshot, read
+                # it back from disk (same read as the legacy path).
+                content = snapshot.path_of(name).read_text(
+                    encoding="utf-8", errors="replace"
+                )
+            self.detect(name, content, wiki, results)
             if len(results) >= self.max_results:
                 break
         return results[: self.max_results]
@@ -109,16 +162,57 @@ class CrossPageRule(Rule):
         self.detect_all(pages, wiki, results)
         return results[: self.max_results]
 
+    def run_with_snapshot(
+        self, wiki: Wiki, snapshot: PageSnapshot | None = None
+    ) -> list[dict[str, Any]]:
+        """Run this rule against ``wiki``, taking the pages from a snapshot.
+
+        ``snapshot is None`` runs the legacy path (``self.run(wiki)``),
+        so every existing caller keeps its behaviour.
+        """
+        if snapshot is None:
+            return self.run(wiki)
+        if type(self).run is not CrossPageRule.run:
+            # The rule overrides run(): the generic template must not
+            # bypass it.
+            return self.run(wiki)
+        if type(self)._load_pages is not CrossPageRule._load_pages:
+            # The rule loads its pages in its own way: only the rule
+            # knows how to replay that.
+            return self.run(wiki)
+        if not wiki.wiki_dir.exists():
+            return []
+        pages = self._pages_from_snapshot(snapshot)
+        results: list[dict[str, Any]] = []
+        self.detect_all(pages, wiki, results)
+        return results[: self.max_results]
+
     def _load_pages(self, wiki: Wiki) -> dict[str, str]:
-        """Load all non-Query pages into a dict (utf-8)."""
+        """Load all non-Query pages into a dict (utf-8, lossy on bad bytes)."""
         pages: dict[str, str] = {}
         for page in wiki._wiki_pages():
             name = wiki._page_display_name(page)
             if not name.startswith("Query:"):
-                try:
-                    pages[name] = page.read_text(encoding="utf-8")
-                except TypeError:
-                    pages[name] = page.read_text(encoding="utf-8")
+                pages[name] = page.read_text(encoding="utf-8", errors="replace")
+        return pages
+
+    def _pages_from_snapshot(self, snapshot: PageSnapshot) -> dict[str, str]:
+        """Snapshot -> ``{display_name: content}``, the shape of ``_load_pages``.
+
+        The filter is the one of ``_load_pages``, verbatim: a display
+        name that starts with ``Query:`` is skipped. A page that is not
+        cached in the snapshot (memory budget) is read back from disk.
+        """
+        pages: dict[str, str] = {}
+        for name in snapshot.names:
+            if _is_query_page(name):
+                continue
+            content = snapshot.content_of(name)
+            if content is None:
+                content = snapshot.path_of(name).read_text(
+                    encoding="utf-8", errors="replace"
+                )
+            pages[name] = content
         return pages
 
     def detect_all(
@@ -161,12 +255,16 @@ class LintEngine:
         """Return the sorted list of registered rule names."""
         return sorted(self._rules.keys())
 
-    def run_all(self) -> list[dict[str, Any]]:
+    def run_all(self, snapshot: PageSnapshot | None = None) -> list[dict[str, Any]]:
         """Run every registered rule, return aggregated issues.
 
         Rules run in name-sorted order (deterministic for tests).
         Cross-page rules share one ``{name: content}`` load so each
         does not re-read the whole wiki.
+
+        With a snapshot the rules take their pages from it (the whole
+        run reads every page once); without one the legacy path is
+        taken unchanged.
         """
         import logging
 
@@ -177,7 +275,12 @@ class LintEngine:
         for name in self.rule_names:
             rule = self._rules[name]
             try:
-                if isinstance(rule, CrossPageRule):
+                if snapshot is not None:
+                    # The rules read their pages from the snapshot; the
+                    # two cross page rules share it like they shared
+                    # ``shared_pages`` before.
+                    all_issues.extend(self._run_with_snapshot(rule, snapshot))
+                elif isinstance(rule, CrossPageRule):
                     if shared_pages is None:
                         shared_pages = rule._load_pages(self.wiki)
                     results: list[dict[str, Any]] = []
@@ -189,8 +292,32 @@ class LintEngine:
                 logger.warning("lint rule %r failed: %s", name, e)
         return all_issues
 
-    def run_rule(self, name: str) -> list[dict[str, Any]]:
-        """Run a specific rule by name. Returns [] if the rule is unknown."""
+    def run_rule(
+        self, name: str, snapshot: PageSnapshot | None = None
+    ) -> list[dict[str, Any]]:
+        """Run a specific rule by name. Returns [] if the rule is unknown.
+
+        Without a snapshot the legacy path is taken: a single rule must
+        not pay for a full page snapshot.
+        """
         if name not in self._rules:
             return []
-        return self._rules[name].run(self.wiki)
+        rule = self._rules[name]
+        if snapshot is None:
+            return rule.run(self.wiki)
+        return self._run_with_snapshot(rule, snapshot)
+
+    def _run_with_snapshot(
+        self, rule: Rule, snapshot: PageSnapshot
+    ) -> list[dict[str, Any]]:
+        """Run one rule with the page snapshot of the current lint run.
+
+        The rule takes its pages from the snapshot. A rule without the
+        snapshot entry point (there is none today, but the engine does
+        not rely on it) falls back to the legacy path, so the issues
+        stay the same.
+        """
+        runner = getattr(rule, "run_with_snapshot", None)
+        if runner is None:
+            return rule.run(self.wiki)
+        return runner(self.wiki, snapshot)

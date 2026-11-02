@@ -1,0 +1,121 @@
+{
+ "task_id": "p4b-lint-snapshot",
+ "verdict": "request_changes",
+ "review_round": 1,
+ "reviewer": "verifier (independent)",
+ "reviewed_artifacts": [
+  "docs/designs/refactor-designs/p4b-lint-snapshot.md",
+  "docs/designs/refactor-handoff/p4b-lint-snapshot.design.json",
+  "docs/designs/refactor-handoff/p4b-lint-snapshot.recon.json",
+  "docs/designs/refactor-handoff/p4b-lint-snapshot.implement.json",
+  "docs/designs/refactor-handoff/p4b-lint-snapshot-b2.implement.json",
+  "docs/designs/refactor-handoff/p4b-lint-snapshot-b3a.implement.json",
+  "docs/designs/refactor-handoff/p4b-lint-snapshot-b3b.implement.json"
+ ],
+ "findings": [
+  {
+   "severity": "major",
+   "file": "src/llmwikify/kernel/wiki/lint/rules/knowledge_gaps.py",
+   "line": 117,
+   "file_line": "src/llmwikify/kernel/wiki/lint/rules/knowledge_gaps.py:117",
+   "message": "knowledge_gap 的 source 候选集在快照路径与旧路径不等价；实际影响大于 R-4 的登记（上报 issue 集合本身改变），且旧路径仍在第二个对外接口上存活，导致两个面向用户的接口对同一 wiki 产出不同结果。",
+   "evidence": "旧路径 _source_pages_from_disk (knowledge_gaps.py:106-115) 扫 sources_dir.rglob('*.md') 且只过滤 is_path_excluded；快照路径 _source_pages_from_snapshot (knowledge_gaps.py:117-135) 走 snapshot.names <- wiki._wiki_pages() (mixins/core/utility.py:155-165)，后者额外排除 stem in {index,log} (utility.py:162) 与路径含 '.sink' (utility.py:163)。实测（.analysis_tmp/surface_divergence.py，合成 wiki sources/{index,source-001..003}.md）：A=wiki._detect_knowledge_gaps() -> ['sources/index','sources/source-001','sources/source-002']；B=lint() 的 _run_all_rules(snapshot) -> ['sources/source-001','sources/source-002','sources/source-003']；DIVERGED? True。截断级联：max_results=3 (knowledge_gaps.py:37) 在循环体内 break (:82-83)，候选集少一项会让截断窗口前移，于是上报集合改变而非仅仅'少检查一页'——设计 md:775 的 R-4 与 b3a implement.json 的 open_issues 都按'少检查一页'描述，低估了影响。触发条件现实：raw 文档名为 index.md / log.md 时，_slugify (utility.py:43-48) 产出 slug 'index'，source_analysis.py:53-56 生成 wiki/sources/index.md。接口分叉未登记：mixins/analysis/lint.py:44 -> analyzer.py:209 _run_rule('knowledge_gap') 不带快照（走旧路径），而 lint() 走 analyzer.py:516 _run_all_rules(snapshot)（走快照路径）；chat skill detect_knowledge_gaps_skill (apps/chat/skills/actions/detect/knowledge_gaps.py:22 DETECT_METHOD='_detect_knowledge_gaps') 用的正是旧路径那条。",
+   "state": "未修（评审发现，设计与实现均未登记该影响面）",
+   "required_action": "二选一：(a) 让 knowledge_gap 的快照路径与旧路径候选集严格等价（例如 _source_pages_from_snapshot 改为按 sources_dir 枚举、绕开 _wiki_pages() 的 stem/.sink 排除），并补一条逐条相等的回归测试；或 (b) 保留现状但把 R-4 升级为准确表述——明确写出'上报的 issue 集合会改变（max_results 截断窗口前移）'以及'旧路径仍服务于 mixins/analysis/lint.py:44 的第二接口，两个接口结果可能不一致'，并给出可复现的触发条件（raw 文件名 index.md / log.md）。"
+  },
+  {
+   "severity": "major",
+   "file": "tests/test_lint_snapshot.py",
+   "line": 1057,
+   "file_line": "tests/test_lint_snapshot.py:1057",
+   "message": "设计 §8.1 明文要求的 15 条测试中有 2 条未实现，其中第 13 条是 §14 R-6 指定的唯一回归网；现有计数用例是聚合量断言，替代不了该契约。",
+   "evidence": "设计 md:644 第 2 条 test_detect_receives_same_page_name_and_content（用记录型探针比较两条路径喂给 detect 的 (page_name, content) 序列）与设计 md:655 第 13 条 test_each_page_read_at_most_once_during_lint（一次 wiki.lint() 内每个页面文件 read_text <= 1 次）在 tests/ 全树 grep 均无定义（仅匹配到第 1 条 test_run_with_snapshot_matches_run_for_every_rule）。现有 test_cold_lint_read_counts_use_one_snapshot (tests/test_lint_snapshot.py:1057-1079) 只断言聚合总数 read_text == COLD_READ_TEXT / rglob == COLD_RGLOB，不断言逐文件 <=1 次；且它调的是 analyzer._scan_all_pages(snapshot) + analyzer._run_all_rules(snapshot) (:1069-1072)，不是 wiki.lint()，与第 13 条的 'during lint' 口径不同。设计 md:777 的 R-6 明确写'§8.1 的第 13 条测试专门守它；Reviewer 需确认'——该测试不存在，故 R-6 所述的跨消费者一致性行为变更没有回归网。",
+   "state": "未修",
+   "required_action": "补齐第 2 条与第 13 条测试：第 13 条需在 wiki.lint() 口径上按路径统计 read_text 次数并逐文件断言 <=1（status.py 的裸读除外），从而让 R-6 的行为变更可被回归网守住；第 2 条需用探针规则逐条比较两条路径喂给 detect 的 (page_name, content) 序列。"
+  },
+  {
+   "severity": "minor",
+   "file": "src/llmwikify/kernel/wiki/mixins/core/utility.py",
+   "line": 163,
+   "file_line": "src/llmwikify/kernel/wiki/mixins/core/utility.py:163",
+   "message": "_wiki_pages() 的 '.sink' 路径排除对 knowledge_gap 的 source 候选集同样生效，但 §14 R 表只登记了 stem∈{index,log} 一项，属未登记的遗留。",
+   "evidence": "实测（.analysis_tmp/sink_probe.py）：legacy source pages ['sources/normal','sources/.sink/hidden'] vs snapshot ['sources/normal']，issue 集合同样少一条。is_path_excluded (kernel/storage/backend.py:59-65) 的 EXCLUDED_DIR_NAMES 只含 .ipynb_checkpoints/.git/.hg/.svn/.DS_Store/.vscode/.idea，不含 .sink，所以旧路径确实会看到它。现实性低：sink_dir 硬编码为 wiki_dir/'.sink' (kernel/wiki/wiki.py:92、kernel/storage/query_sink.py:28)，应用自身写路径不会在 wiki/sources/ 下创建 .sink 目录。",
+   "state": "未修（现实性低，建议登记备查）",
+   "required_action": "在 §14 R 表补一行登记该差异；或在 knowledge_gap 的快照路径上与 R-4 一并处理。"
+  },
+  {
+   "severity": "minor",
+   "file": "docs/designs/refactor-handoff/p4b-lint-snapshot.design.json",
+   "line": 9,
+   "file_line": "docs/designs/refactor-handoff/p4b-lint-snapshot.design.json:9",
+   "message": "performance_constraints.benchmark_command 指向的 tests/test_lint_snapshot_counts.py 不存在，命令实跑 exit=4；§8.2 要求的计数基准文件未落地。",
+   "evidence": "glob tests/test_lint_snapshot*.py 只匹配到 tests/test_lint_snapshot.py；实跑 design.json 里写的 pytest tests/test_lint_snapshot_counts.py 命令退出码 4（file not found）。设计 md:659-676 §8.2 要求该新文件同时量 cold 与 hot 两套口径并统计 Path.read_text / Path.rglob / Path.stat；实际计数被塞进 tests/test_lint_snapshot.py:1057，仅 cold 口径、且不含 stat 计数。design.json 的 benchmark_command 文本本身还宣称会打印 'cold/hot 两套 read_text/rglob/stat 计数'——这三项中只有 cold 的 read_text/rglob 存在。",
+   "state": "未修",
+   "required_action": "要么补上 tests/test_lint_snapshot_counts.py（含 cold/hot 两套口径 + stat 计数，并使 design.json 的 benchmark_command 可跑），要么把 benchmark_command 改指向真实存在的文件并同步改写其描述文本。"
+  },
+  {
+   "severity": "minor",
+   "file": "src/llmwikify/kernel/wiki/snapshot.py",
+   "line": 121,
+   "file_line": "src/llmwikify/kernel/wiki/snapshot.py:121",
+   "message": "重复 display name 时快照保留第一个并 WARNING（静默丢页），analyzer.py:565 的 total_pages 随之少计；该边界未登记且无测试覆盖。",
+   "evidence": "snapshot.py:121-128 的重复名分支只 logger.warning 后 continue，被丢弃的页面既不进 contents 也不进 omitted，因此是静默丢失而非可观测降级。analyzer.py:565 'total_pages': len(snapshot.names)。tests/test_lint_snapshot.py 全文件 grep 'unique/duplicate/collide' 无命中——§8.1 第 8 条 test_snapshot_keys_are_unique 也没有对应实现。正常文件系统下 _page_display_name (utility.py:167-170) 取相对路径去 .md 后缀，是单射，实测 17==17 不受影响。",
+   "state": "未修（边界未登记）",
+   "required_action": "在 §14 R 表登记该边界，或补测试钉死重复名时的行为（保留第一个 + WARNING + total_pages 少计）。"
+  },
+  {
+   "severity": "minor",
+   "file": "src/llmwikify/kernel/wiki/snapshot.py",
+   "line": 34,
+   "file_line": "src/llmwikify/kernel/wiki/snapshot.py:34",
+   "message": "内存预算按磁盘字节计（used += page.stat().st_size），设计 §6.2 称之为'整份快照的绝对上限'，易被读成内存上限；最坏情况下实际驻留可达磁盘预算的约 1.15 倍。",
+   "evidence": "快照按 stat 得到的磁盘字节累计 (snapshot.py:134/153)。实测（.analysis_tmp/mem_probe.py，151 个 ASCII 页面）：disk=92139 B、python str=98038 B、开销 5899 B（38.8 B/页）、str/disk=1.064；CJK（3 字节 UTF-8）比值 0.860；4 字节 UTF-8（emoji/astral）比值 1.150。design.json 的 'min(64 MiB 磁盘字节, 页数 × 1 MiB 每页预算)' 表述准确，但设计 md:506 称 64 MiB 为'整份快照的绝对上限'不精确——64 MiB 磁盘预算的最坏情况实际驻留约 73.6 MiB。",
+   "state": "未修（表述问题）",
+   "required_action": "把设计 §6.2 的'绝对上限'改为'磁盘字节预算（实际驻留最多约 1.15×，astral 字符最坏）'，与 design.json 的措辞对齐。"
+  },
+  {
+   "severity": "minor",
+   "file": "src/llmwikify/kernel/wiki/lint/__init__.py",
+   "line": 199,
+   "file_line": "src/llmwikify/kernel/wiki/lint/__init__.py:199",
+   "message": "设计 §3.3 称快照分支'不再需要 shared_pages：两条跨页规则读的是同一份快照 → 共享天然成立'，但实现里两条跨页规则各自建了一份 {name: content} 字典。",
+   "evidence": "实测（.analysis_tmp/shared_pages_probe.py）：调用 _pages_from_snapshot 的两条规则为 PotentialContradictionsRule 与 MissingCrossRefsRule；distinct dict ids=2、entries per dict=[21,21]、total entries=42（同 fixture 的 snapshot 只有 21 项），两字典不是同一对象。内容未翻倍：21/21 个键的值是同一个 str 对象，snapshot content objs=21。实际影响仅为两份 dict 壳（约 151×2 条目），内存可忽略。",
+   "state": "未修（表述问题）",
+   "required_action": "修正设计 §3.3 的表述为'内容共享、字典壳各建一份'；如需真正共享可让两条规则复用同一个字典对象，但收益极小。"
+  }
+ ],
+ "required_actions": [
+  "[major] knowledge_gap 快照路径与旧路径的 source 候选集不等价，且两个对外接口结果分叉：修正候选集或把 R-4 升级为准确表述并登记接口分叉（见 finding 1）。",
+  "[major] 补齐设计 §8.1 第 2 条与第 13 条测试，其中第 13 条是 §14 R-6 指定的唯一回归网（见 finding 2）。",
+  "[minor] 补上 design.json benchmark_command 指向的 tests/test_lint_snapshot_counts.py，或改指真实文件并同步描述文本（见 finding 4）。",
+  "[minor] 在 §14 R 表登记未登记的边界：'.sink' 路径排除（finding 3）、重复 display name 丢页与 total_pages 少计（finding 5）。",
+  "[minor] 修正文档表述：§6.2 的 64 MiB '绝对上限'（finding 6）与 §3.3 的 '不再需要 shared_pages'（finding 7）。"
+ ],
+ "verification": {
+  "count_gate_recount": "独立复算（.analysis_tmp/verify_recount3.py，独立于实现者的计数脚本）：快照路径 read_text=311 / rglob=2；无快照旧路径 read_text=929 / rglob=9，与设计 §0.2 目标一致。反作弊：(a) 同时 monkeypatch io.open 作第二个独立计数器，两次计数必须相等（311/311、929/929）否则脚本 FAIL；(b) 每次读都记录 str(path)，distinct paths read=160、max reads of one path=2（151 个页面各读 2 次：快照 1 次 + status.py:31 的 _should_exclude_orphan 裸读 1 次），8 个 raw 各 1 次、wiki.md 1 次，与设计预期吻合；(c) 旧路径下 max reads of one path=7；(d) 归因栈显示每次读都来自真实业务调用点。311 的构成：snapshot.py:148 151 + status.py:31 151 + dated_claims.py:76 8 + relation.py:65 1（该次读的正是 wiki.md）= 311；2 次 rglob = utility.py:161 枚举 + dated_claims.py:73 raw 目录。os.open 在 Windows 上不被 pathlib 走，故交叉校验只用 io.open。",
+  "e2e_lint_counts": "端到端 wiki.lint()（cold、LLM stub）实测 read_text=327 / rglob=4，比门禁口径多出 _build_lint_context 的 source_analysis.py:65 14 次 + analyzer.py:287 的 wiki.md 1 次 + relation.py:65 1 次 + 2 次 rglob；这是 R-1（context 构建）不在门禁口径内，非偏离。",
+  "teeth_check": "牙齿检查在副本 .analysis_tmp/teeth_p4b/ 内进行，真实工作区从未回退任何文件。baseline=106 passed；g3a（回退 dated_claims.py+knowledge_gaps.py）=5 failed/101 passed；g3b（回退 query_page_overlap.py+redundancy.py）=4 failed/102 passed，实测 read_text=311 / rglob=4（正是任务预期的 311/4，断言 4==2 失败）；gcore（回退 snapshot.py+lint/__init__.py+analyzer.py）=4 个测试文件收集期 ERROR；ganalyzer（只回退 analyzer.py）=9 failed/97 passed；glintinit/gsnapshot/gfull 均收集期 ERROR。",
+  "rule_dispatch": "8 条规则全部走快照路径，无一静默退回旧路径：data_gap / potentially_outdated -> Rule.run_with_snapshot；missing_cross_ref / contradiction -> CrossPageRule.run_with_snapshot；dated_claim / knowledge_gap / topic_overlap / redundancy -> 各自 run_with_snapshot。",
+  "semantic_equivalence": "topic_overlap 的 stem/display name 语义与 legacy 逐字一致（snapshot.path_of(name).stem 复刻 legacy page.stem），POSIX 注入 3 个半角冒号 Query 页后 legacy 与 snapshot 的 (page_name, file) 对完全相等；redundancy 的页面集合与顺序与 legacy _wiki_pages() 一致（same_set/same_order=True）；dated_claims 的 raw 扫描逐字保留且年份为 0 时早退发生在属性赋值之前；knowledge_gap 的孤儿概念部分一行未动；所有 content_of 消费方均用 'is None' 判断（lint/__init__.py:115-121、:210-214、analyzer.py:114-118、dated_claims.py:98-104、knowledge_gaps.py:128-134），无真值误判；_build_lint_context 输出逐字符相同。",
+  "architecture": "python scripts/check_architecture.py -> 0 architecture violations across 4 layers；grep 确认 kernel 无 import apps。",
+  "hygiene": "git ls-files --eol 显示 9 个已跟踪任务文件全部 i/lf w/crlf；4 个未跟踪新文件字节级检查全部无 BOM、纯 CRLF、无孤立 CR/LF、以 LF 结尾（snapshot.py 6477 B/CRLF=172、test_lint_snapshot.py 43611 B/CRLF=1211、test_lint_read_counts.py 16996 B/CRLF=436、test_lint_handles_non_utf8_page.py 8798 B/CRLF=254）；ruff check 13 个任务文件 -> All checks passed；black --check 13 个任务文件有 3 个 red（engines/analyzer.py、tests/test_wiki_analyzer.py、tests/test_lint_engine_aggregator.py），逐个与 HEAD 基线对比确认三者 HEAD 本身就是 red，新增 black 失败数 = 0。",
+  "tests": "受影响测试 6 个文件 106 passed；tests/test_lint_snapshot.py 单跑 47 passed。全量 pytest 扫描（tests/ 全树）在本轮评审窗口内两次运行均未完成（进程持续占用 CPU 推进但输出被管道缓冲），已被取消，因此全量结果未纳入本文件的结论。",
+  "do_not_15": "逐条核对：未碰 kernel/wiki/mixins/analysis/status.py（diff 仅为并行 writer 的 __version__ import）、未碰 interfaces/、未碰 foundation/io.py、无第三方依赖、快照内无 Query: 过滤、快照复用 wiki._wiki_pages()、raw 不入快照、_build_lint_context 输出文本不变、不缓存到 Wiki 实例、无墙钟断言、kernel/wiki/snapshot.py 仅在 TYPE_CHECKING 下 import Wiki。src/llmwikify/kernel/wiki/mixins/io/source_analysis.py 的改动属 P4-a 的遗留（P4-a implement.json 的 files_changed 已含该文件），非 P4-b 越界。"
+ },
+ "not_verified": [
+  "真实生产 wiki 上的墙钟耗时收益：设计 md:684 已说明本机 wiki 仅有 3 个 md，墙钟不可信，故本评审未做（门禁口径为计数型）。",
+  "design.json 的 benchmark_command 未被真正执行成功（目标文件不存在），故其 cold/hot 双口径与 stat 计数从未被验证过。",
+  "并行 writer 持有的 13 个文件（src/llmwikify/__init__.py、apps/chat/clarifier.py、apps/chat/harness/review.py、apps/chat/skills/autoresearch_compound_skill.py、apps/chat/skills/errors.py、apps/chat/skills/workflows/skill.py、apps/research/llm_step.py、apps/research/report.py、interfaces/server/core.py、kernel/storage/backend.py、kernel/wiki/mixins/analysis/status.py、kernel/wiki/mixins/core/utility.py、src/llmwikify/foundation/version.py）的行为影响未评估；它们与本任务改动同处一个工作区，可能掩盖真实的回归。",
+  "跨平台（Linux / macOS）行为未验证：本轮全部在 Windows 11 上执行；设计 md 的 POSIX 文件名注入测试（tests/test_lint_snapshot.py:860 起）是通过 monkeypatch Path.rglob 模拟的，不是真实 POSIX 文件系统。",
+  "tests/test_apps_chat_skills_run_not_found.py 的收集期失败来自并行 writer 的 apps/chat/skills/autoresearch_compound_skill.py 缺 _format_run_not_found，与本任务无关，本评审未追查。",
+  "LLM 层（_llm_detect_gaps / _llm_generate_investigations）的行为未验证：本评审用 stub 替代 LLM，LLM 层的真实调用路径不受快照影响但未做端到端确认。",
+  "tests/ 全树的完整 pytest 结果：两次全量扫描在评审窗口内未完成即被取消，仅验证了受本任务影响的 6 个测试文件（106 passed）；本仓其余模块的回归状态未确认。"
+ ],
+ "notes": [
+  "核心机制成立：计数门独立复算通过（311/2）、8 条规则全走快照、牙齿检查逐组有效（回退任一组必红）、架构门 0 violation、语义等价在已覆盖维度上逐字一致。",
+  "给出 request_changes 而非 approve 的理由：存在至少一条未登记的真实遗留（finding 1：两个对外接口对同一 wiki 产出不同 knowledge_gap 结果，且 R-4 低估了影响面），以及设计明文要求的两条测试缺失（finding 2，其中第 13 条是 R-6 指定的唯一回归网）。按角色契约，request_changes 是正常健康结果。",
+  "实施者已自行登记、本评审不重复计为 finding 的项：_pages_from_snapshot 签名 (self, snapshot) 与设计 §3.4 的 (self, wiki, snapshot) 不一致（已登记于 p4b-lint-snapshot.implement.json 的 design_deviations）；既有内联 Query: 谓词未重构（已登记）；LintEngine 引擎分支归属 P4-b-2（已登记）；dated_claim 复刻模板而非复用基类（已登记）。",
+  "本评审全程只读：未修改 src/、tests/ 或任何项目文件，未 commit / git add / push。牙齿检查的回退全部作用于 .analysis_tmp/teeth_p4b/ 副本；验证脚本存放于 .analysis_tmp/（已被 .gitignore 忽略，见 .gitignore:92）。唯一写入的是本文件。",
+  "工作区存在并行 writer 的未提交改动，全程未触碰。"
+ ]
+}

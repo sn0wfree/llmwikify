@@ -1,0 +1,37 @@
+{
+  "task_id": "p4-lint-snapshot",
+  "decision": "proceed",
+  "boundary": "仅在 kernel/wiki 内做方案文档 §P4 的 P4-a 三件事：(a) lint 的 LLM context 只在 lint_llm_gaps 缓存未命中时构建（analyzer.py:500 移入 if llm_gaps is None 分支）；(b) source 摘要页查找由「每个 raw 扫一遍 sources 目录」改为「一次扫描 → 映射」（source_analysis.py 新增 _build_source_summary_map，analyzer.py:250-252 改用它）；(c) lint 路径上的页面读取改为有损 UTF-8 读取 errors=replace（analyzer.py:60/64/231、lint/__init__.py:68/119、source_analysis.py:42），使非 UTF-8 页面不再让 lint 崩溃，也不再被 lint/__init__.py:188 的 except Exception 静默关掉规则。不引入快照对象、不改 8 条规则签名、不动 HTTP 层、不动 foundation。",
+  "interface": "def _build_source_summary_map(self, source_paths: Sequence[str]) -> dict[str, Path | None] —— 新增于 kernel/wiki/mixins/io/source_analysis.py（WikiSourceAnalysisMixin，kernel 层），私有方法，不新增公开接口；_find_source_summary_page(self, source_path: str) -> Path | None 签名不变、改为委托新方法；WikiAnalyzer.lint / _scan_all_pages / _build_lint_context 与 Rule.run / Rule._load_pages 签名全部不变；不改 kernel/wiki/protocols.py（Wiki 已继承该 mixin，见 wiki.py:31-37）。",
+  "performance_constraints": {
+    "complexity": "改动前：sources 目录读次数 O(min(20,raw) × sources) —— recon 实测 8 次全目录扫 ≈ 480 次读，占 _build_lint_context 72.18ms 中的 62.35ms（约 86%）；lint_llm_gaps 缓存命中时 _build_lint_context 仍被调用 1 次。改动后：sources 目录最多 1 次 rglob + O(sources) 次读（recon 口径 60 个 source 页 → ≤60 次读，且 ≤ 原实现的 Σ(命中页序号+1)，永不更多；全部走 slug 快速路径时两边都是 0 次读）；lint_llm_gaps 缓存命中时 _build_lint_context 调用次数 == 0。",
+    "extra_copies": "禁止：不做全量页面快照、不复制页面内容。只允许一个 dict[str, Path | None] 映射（≤ limit=20 条 Path 引用，不含文件内容）。",
+    "benchmark_command": "D:\\tools\\python312\\python.exe -m pytest tests/test_lint_read_counts.py -q -s --rootdir=D:\\Github\\llmwikify （计数型：测试用 monkeypatch 计数 Path.read_text / Path.rglob，打印 sources 目录 rglob 次数、sources read_text 次数、_build_lint_context 调用次数、实际执行的规则数；改动前后跑同一条命令即得同口径 before/after。辅助非门禁墙钟信号：python scripts/profile_lint_paths.py --wiki <真实 wiki 路径>，需 1400 页真实 wiki 环境，本机 wiki/ 仅 3 页不可信。）"
+  },
+  "reuse_constraints": {
+    "semantic_stability": "high",
+    "max_params": 3,
+    "side_effects": "none —— 全程只读：不写 wiki、不写缓存、不改 DB、不改 LLM 调用次数与参数。唯一允许的行为变化：非 UTF-8 文件的非法字节被替换为 U+FFFD（原先抛 UnicodeDecodeError）；UTF-8 文件读取结果逐字节不变。"
+  },
+  "rollback": "拆 3 个自洽 commit，各自独立可 revert（无 feature flag、无开关，回退靠独立 commit）：A fix(lint): 非 UTF-8 页面不再让 lint 崩溃（analyzer.py + lint/__init__.py + source_analysis.py，3 文件）；B perf(lint): LLM context 仅在缓存未命中时构建（analyzer.py，1 文件）；C perf(lint): source 摘要页一次扫描去 O(raw×sources)（analyzer.py + source_analysis.py，2 文件）。A/B/C 任意一个 revert 后代码仍自洽。",
+  "do_not": [
+    "不做 P4-b：不引入全量 PageSnapshot / PageSource，不改 8 条规则的签名，不改 Rule.run / Rule._load_pages / detect / detect_all 的入参形态",
+    "不改 HTTP 路由的 async/sync：C7（interfaces/server/http/wiki/wiki_routes.py:118）归批次 1 的 1.5 项，不混入本任务",
+    "不引入 CommonUtils / 万能工具类 / 用 if-else 开关控制行为的抽象",
+    "不做 feature flag / 开关：回滚靠独立 commit 可 revert",
+    "不改公开 API 契约：lint() 返回结构、缓存 key（lint / lint_llm_gaps / lint_llm_invest）与 extra 语义、_find_source_summary_page 签名全部不变",
+    "不改 foundation/io.py::safe_read_text 的契约，也不新增 foundation 工具函数（它的 except OSError 抓不到 UnicodeDecodeError，且失败返回空串会丢整页；理由见 design.md §4）",
+    "不碰 kernel/wiki/mixins/analysis/status.py（C4，有他人未提交改动）—— 改为在 analyzer.py:60 调用点兜底 UnicodeDecodeError",
+    "不碰 kernel/wiki/lint/rules/*（含 knowledge_gaps.py:63 的 source 页裸读、dated_claims.py:40 的既有 errors=ignore）—— 规则内部改造属 P4-b",
+    "不碰 kernel/storage/backend.py（:280 source cache 读）—— 已由 source_analysis.py:68 的 except (ValueError, OSError) 兜住（UnicodeDecodeError ⊂ ValueError）",
+    "不碰 kernel/wiki/protocols.py（Wiki 已继承 WikiSourceAnalysisMixin，wiki.py:31-37）",
+    "不把页面内容缓存/记忆化到 Wiki 实例上（不跨请求缓存，避免陈旧读）",
+    "不改 _build_lint_context 的输出文本：context 字符串必须逐字符等价，只允许「不再算」与「有损读」两处差异",
+    "不新增模块/新文件（源文件 ≤ 3；测试文件不计入）",
+    "不做墙钟断言：门禁基准必须是计数型（读文件次数 / 调用次数）",
+    "不在 apps/ / interfaces/ / reproduction/ 层加任何代码，不新增跨层 import（kernel 不 import apps，foundation 完全不动）",
+    "不重构 analyzer.py 里与本任务无关的部分（_fallback_detect_gaps / sink / investigations 等一律不动）",
+    "不改 _build_lint_context 的 limit 语义：limit 默认仍是 20，lint() 的 limit 仍只裁 LLM gaps、不传进 context 构建",
+    "不改 context 构建里的其它遍历（_get_existing_page_names / raw_dir.rglob）与 RelationEngine 相关逻辑（C5 / C6 / C10 归 P3 / P4-b）"
+  ]
+}

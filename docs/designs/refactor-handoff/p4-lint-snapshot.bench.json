@@ -1,0 +1,49 @@
+{
+  "task_id": "p4-lint-snapshot",
+  "before": {
+    "p50_ms": 16.5089,
+    "p95_ms": 25.8179,
+    "sources_rglob": 8,
+    "sources_read": 87,
+    "all_rglob": 10,
+    "all_read_text": 103,
+    "context_builds_cached_path": 1
+  },
+  "after": {
+    "p50_ms": 7.7469,
+    "p95_ms": 12.8518,
+    "sources_rglob": 1,
+    "sources_read": 14,
+    "all_rglob": 3,
+    "all_read_text": 30,
+    "context_builds_cached_path": 0
+  },
+  "regression": false,
+  "environment": "Windows 10.0.26200 / Python 3.12.8 / 合成 wiki（20 平铺 raw / 14 source 摘要页，与 tests/test_lint_read_counts.py 的 synthetic_wiki 同布局）/ 门禁=计数型（pytest monkeypatch 计数 Path.rglob / Path.read_text）；墙钟=辅助（time.perf_counter，warmup 3 次丢弃 + 每进程 15 个计时样本 × 3 个独立进程 = 45 样本，取中位数与 nearest-rank p95）；before 侧由把 3 个源文件临时换成 pristine HEAD 版本取得，after 侧为当前工作区代码",
+  "notes": "门禁口径（计数型）：after 各项计数全面优于 before，无任何劣化 —— sources 目录 rglob 8→1、sources read_text 87→14、全量 rglob 10→3、全量 read_text 103→30、lint_llm_gaps 缓存命中时 _build_lint_context 调用次数 1→0；门禁判定通过。计数经两套互相独立的口径互证并逐项一致：(1) pytest monkeypatch（tests/test_lint_read_counts.py -q -s 的 [context build] / [cached lint] 两行）；(2) 计时脚本内自带的 Path.rglob / Path.read_text 包装（单次 context 构建口径 10/103 → 3/30）。墙钟口径（辅助、非门禁）：p50 16.51ms → 7.75ms（-53.1%）、p95 25.82ms → 12.85ms（-50.2%），两项均远优于「劣化 >5% 即判 regression」的阈值，且方向为改善。墙钟可信度限制：数字取自合成 wiki（20 raw / 14 source 摘要页），不是设计文档所述 1400 页真实 wiki；OS 文件缓存已预热；本机 time.time() 粒度约 15.6ms（粗于被测量级）故一律改用 time.perf_counter；因此该组数字只能作方向性信号，不能作为性能承诺、容量规划或真实 wiki 上的耗时外推依据。资源检查：(1) 峰值内存（tracemalloc，独立于计时趟）before 263.62/264.14/264.37 KiB → after 271.09/271.15/271.04 KiB，即 +6.78 KiB（+2.6%），增量与 design.json「extra_copies」允许的单个 dict[str, Path | None]（≤ limit=20 条 Path 引用、不含文件内容）一致，属有界增量而非无界增长；(2) 进程句柄数（Windows GetProcessHandleCount）before 283→281→280、after 281→278→277，即构建后与 wiki.close() 后均无增长，且 after 在每个观测点都严格低于 before；(3) sqlite3 连接数（gc 扫活跃连接）before 与 after 均为 1→1→0，wiki.close() 后归零，无连接泄漏或累积。并发写保护：ab_teeth.py 与计时脚本 --variant head 共执行 4 次 HEAD swap，全部输出 restored=True 且字节级还原一致，全程未出现 `!! CONCURRENT EDIT detected`；benchmark 前后对 16 个源文件（含并行 writer 的全部未提交改动）逐一做 SHA256 快照比对，结果 changed_files=0，git status 与 benchmark 前完全一致。综合判定 regression=false：计数型门禁无劣化，墙钟 p50/p95 均显著改善，资源仅有一处与设计预期相符的有界内存增量。",
+  "evidence": {
+    "gate_command": "D:\\tools\\python312\\python.exe -m pytest tests/test_lint_read_counts.py -q -s --rootdir=D:\\Github\\llmwikify",
+    "ab_script": "D:\\tools\\python312\\python.exe .analysis_tmp\\ab_teeth.py",
+    "timing_script": "D:\\tools\\python312\\python.exe .analysis_tmp\\bench_lint_timing.py --variant {current|head} --out <json>（写入 .analysis_tmp/，已 gitignore，不入仓）",
+    "before_printed": "[context build] sources rglob=8 sources read=87 build context=1 (all rglob=10, all read_text=103) / [cached lint] sources rglob=8 sources read=87 build context=1 (all rglob=10, all read_text=103)",
+    "after_printed": "[context build] sources rglob=1 sources read=14 build context=1 (all rglob=3, all read_text=30) / [cached lint] sources rglob=0 sources read=0 build context=0 (all rglob=0, all read_text=0)",
+    "wallclock_method": "time.perf_counter()；每进程 warmup 3 次（结果丢弃）+ 15 个计时样本；每侧 3 个独立进程，合计 45 样本；p50=中位数，p95=nearest-rank ceil(0.95*n)",
+    "before_per_run_p50_ms": [18.633, 14.1665, 16.5089],
+    "before_per_run_p95_ms": [25.0801, 16.8224, 31.2495],
+    "after_per_run_p50_ms": [8.3321, 7.5793, 7.9912],
+    "after_per_run_p95_ms": [11.6821, 9.216, 12.3617],
+    "before_pooled_min_max_ms": [10.52, 35.1154],
+    "after_pooled_min_max_ms": [5.4356, 14.4266],
+    "wallclock_delta_pct": {"p50": -53.07, "p95": -50.22},
+    "memory_peak_kib": {"before": [263.62, 264.14, 264.37], "after": [271.09, 271.15, 271.04]},
+    "memory_delta_kib": 6.78,
+    "memory_delta_pct": 2.56,
+    "handles": {"before": {"start": 283, "after_build": 281, "after_close": 280}, "after": {"start": 281, "after_build": 278, "after_close": 277}},
+    "sqlite_conns": {"before": {"start": 1, "after_build": 1, "after_close": 0}, "after": {"start": 1, "after_build": 1, "after_close": 0}},
+    "concurrent_edit_detected": false,
+    "head_swaps_run": 4,
+    "head_swaps_restored": 4,
+    "source_files_changed_by_benchmark": 0,
+    "src_files_modified_by_benchmarker": 0
+  }
+}

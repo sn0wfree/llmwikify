@@ -1,0 +1,114 @@
+{
+  "scope": "src/llmwikify/kernel/wiki/engines/analyzer.py",
+  "candidates": [
+    {
+      "id": "C1",
+      "kind": "performance",
+      "location": "src/llmwikify/kernel/wiki/engines/analyzer.py:500",
+      "evidence": "`context = self._build_lint_context()` 位于 :500，在 `if core is None:` 块之外（该块 :401 开始、:492 `cache_put(\"lint\", ...)` 结束）。`context` 的唯一消费者是 :508 `self._llm_detect_gaps(context, missing_cross_refs=...)` -> :319 `registry.get_messages(\"direct_lint\", lint_context=context)`；:503-506 的 `cache_get(\"lint_llm_gaps\", wkey, fp, extra=llm_extra, ttl_s=_LINT_TTL_S)` 命中时 :508 不执行，context 算完即被丢弃。实测（真实 wiki 副本 + monkeypatch 计数）：core 与 lint_llm_gaps 双缓存命中时 `_build_lint_context` 仍被调用 1 次，`res[\"cached\"]==True`，该次调用耗时 2.6 ms（本机 wiki 仅 3 页）。",
+      "call_frequency": "high",
+      "test_coverage": "partial",
+      "risk": "low",
+      "notes": "函数的输出本身有测试：tests/test_direct_lint.py:12-77 (TestBuildLintContext)、tests/test_source_analysis.py:221-273、tests/test_wiki_analyzer.py:263-278。但没有任何测试覆盖“LLM 缓存命中时不应构建 context”——全仓 grep `lint_llm_gaps` 在 tests/ 下零命中。HTTP 入口 /api/wiki/lint 的默认 mode=\"check\" 即 cacheable=True（analyzer.py:387,397），所以每次 HTTP 请求都走这条浪费路径。"
+    },
+    {
+      "id": "C2",
+      "kind": "both",
+      "location": "src/llmwikify/kernel/wiki/mixins/io/source_analysis.py:38-44",
+      "evidence": "analyzer.py:250-252 对最多 `limit`(默认 20) 个 raw 文件各调一次 `_find_source_summary_page(rel)`。其 slug 快速路径（source_analysis.py:34-36 `candidate.exists()`）未命中时走 :39-44 `for page in sources_dir.rglob(\"*.md\")` + 逐页 `page.read_text(encoding=\"utf-8\")` 全量扫 sources 目录。实测（合成 wiki：361 页 / 120 raw / 60 sources / 400 relations）：`_build_lint_context()` = 72.18 ms，其中 `_find_source_summary_page x20` = 62.35 ms；单次 SLOW 路径扫 60 个 source 页 = 4.87 ms（20 次全 miss 约 97.48 ms）；合成 wiki 中 20 个 raw 文件有 8 个无同名 source 页 -> 触发 8 次全目录扫。",
+      "call_frequency": "high",
+      "test_coverage": "partial",
+      "risk": "medium",
+      "notes": "复杂度 O(min(20, raw) x sources)，是 `_build_lint_context` 的最大单项成本（约占 86%）。docs/designs/lint-performance-2026-10-23.md 未覆盖此路径。另：analyzer.py:500 调用 `self._build_lint_context()` 用的是默认 limit=20，lint() 的 `limit` 参数（默认 10）只用于 :510 `[:limit]` 裁剪 LLM gaps，不传递到 context 构建。"
+    },
+    {
+      "id": "C3",
+      "kind": "duplication",
+      "location": "src/llmwikify/kernel/wiki/lint/__init__.py:66-72",
+      "evidence": "`Rule.run` 每次 `for page in self._iter_pages(wiki)` -> `wiki._wiki_pages()`（utility.py:155-165 `wiki_dir.rglob(\"*.md\")`）-> `page.read_text(encoding=\"utf-8\")`；`break` 发生在 `detect()` 之后（:70-71），因此零命中的规则会读满全量。规则构成实测（rules/__init__.py:27-36）：6 条普通 Rule（dated_claim, topic_overlap, data_gap, potentially_outdated, knowledge_gap, redundancy）+ 2 条 CrossPageRule（missing_cross_ref, contradiction）；`LintEngine.run_all` 只在 CrossPageRule 之间共享 `shared_pages`（:176-187），6 条普通 Rule 各自重走一遍。实测（151 页合成 wiki）：`_run_all_rules()` -> rglob=7、read_text=515（= 页面数的 3.4x），289.7 ms。",
+      "call_frequency": "high",
+      "test_coverage": "partial",
+      "risk": "medium",
+      "notes": "8 条规则各有单测（tests/test_lint_engine.py、tests/test_lint_engine_aggregator.py 等），但没有任何测试断言读取次数或“共享快照”行为。scripts/clone_survey.py 全仓扫出 70 个克隆组，其中触及 lint 路径的为 0 组（只命中 storage/backend.py:424/437 与 utility.py:224/236 的 _find_insertion_point/_build_merge_notice）——所以这里的 duplication 是“同一份文件系统状态被重复访问”，不是代码克隆重复。"
+    },
+    {
+      "id": "C4",
+      "kind": "performance",
+      "location": "src/llmwikify/kernel/wiki/mixins/analysis/status.py:30-31",
+      "evidence": "analyzer.py:60 对每一页调用 `self.wiki._should_exclude_orphan(name, page)`；其 status.py:30-31 无条件 `page_path.read_text(encoding=\"utf-8\")`，读完之后才在 :32-34 检查 `self._exclude_frontmatter_keys` 是否非空。默认配置 `orphan_detection.exclude_frontmatter = []`（foundation/config.py:26-30）-> 这批读 100% 浪费。实测（31 页）：`_should_exclude_orphan` 触发 31 次 read_text（与页数 1:1）；`analyzer._scan_all_pages()` 共 62 次 read_text（2x 页面数，另 31 次来自 analyzer.py:64）。",
+      "call_frequency": "high",
+      "test_coverage": "none",
+      "risk": "medium",
+      "notes": "同一读取同时是 C9 崩溃的入口——此处无 UnicodeDecodeError 兜底。status.py 另有未提交改动（仅 import 路径重构，foundation/version.py），行号未偏移。"
+    },
+    {
+      "id": "C5",
+      "kind": "duplication",
+      "location": "src/llmwikify/kernel/wiki/engines/analyzer.py:288",
+      "evidence": "`find_orphan_concepts` 定义在 relation.py:620-629，是无 memo 的全关系表 `SELECT DISTINCT concept FROM (... UNION ...)` 扫描。一次 lint 内有 3 个调用点：analyzer.py:288（_build_lint_context 内）、analyzer.py:340（_fallback_detect_gaps 内）、lint/rules/knowledge_gaps.py:43（knowledge_gap 规则内，经 analyzer.py:435 `_run_all_rules()` 触发）。实测计数（真实 wiki 副本 + monkeypatch RelationEngine.find_orphan_concepts）：冷 lint 且 LLM 不可用 -> 3 次；双缓存命中 -> 1 次（仅剩 context 内那次）；LLM 可用时冷 lint 由调用链可推出为 2 次（规则 1 次 + context 1 次，fallback 不执行）——此路径本次未实测，因为需要真实 LLM 成功返回，按任务约束未调用任何 LLM API。",
+      "call_frequency": "high",
+      "test_coverage": "partial",
+      "risk": "low",
+      "notes": "“同一份关系数据扫两次”只在 fallback 路径成立（analyzer.py:340 仅在 LLM 失败时执行，:314/:330）；happy path 是 2 次而不是 3 次。绝对成本低：docs/designs/lint-performance-2026-10-23.md:18 记录 1400 页规模下该 SQL 仅 0.08s；本次实测 400 relations = 1.42 ms。方法语义有测试（tests/test_relation_engine.py:209-231、tests/test_v022_relations.py:214-225、tests/test_direct_lint.py:96-104），但调用次数无测试。"
+    },
+    {
+      "id": "C6",
+      "kind": "duplication",
+      "location": "src/llmwikify/kernel/wiki/mixins/analysis/relation.py:57-61",
+      "evidence": "`get_relation_engine()` 无 memo，每次 `return RelationEngine(self.index, wiki_root=self.root)`；RelationEngine.__init__（relation.py:41-45）依次调 `_load_relation_types()`（:47，读 wiki.md）与 `_ensure_table()`（:96-116 `executescript`：2x CREATE TABLE + 3x CREATE INDEX）。一次冷 lint（LLM 不可用）触发 3 次构造：lint/rules/knowledge_gaps.py:42、analyzer.py:287、analyzer.py:339。",
+      "call_frequency": "medium",
+      "test_coverage": "partial",
+      "risk": "low",
+      "notes": "RelationEngine 构造频次/DDL 重跑无任何测试覆盖；计划文档 docs/designs/reuse-and-performance-isolation-plan.md:313 把它列为 P3 的已知点（“每次请求 RelationEngine.__init__ 跑 DDL”）。"
+    },
+    {
+      "id": "C7",
+      "kind": "performance",
+      "location": "src/llmwikify/interfaces/server/http/wiki/wiki_routes.py:118",
+      "evidence": "wiki_routes.py:117-125：`@wiki_router.get(\"/lint\")` / `async def wiki_lint(...)` / `return wiki.lint(mode=mode, limit=limit, force=force)` —— 同步调用写死在 async endpoint 内。同文件 :139-141 注释明写 “Sync def: CPU-bound graph work must not block the event loop (FastAPI runs sync endpoints in the threadpool)”，:142-147 `/graph_analyze` 与 :149-158 `/graph` 均为同步 `def`，:251-261 `/{wiki_id}/graph` 同样是 `def`；而 :234-243 `/{wiki_id}/lint` 又是 `async def`。FastAPI 只把同步 `def` 放进线程池，`async def` 直接在事件循环线程执行 -> /lint 的全部同步工作（context 构建 + 8 条规则 + SQL + 同步 LLM 调用）都压在事件循环上。",
+      "call_frequency": "high",
+      "test_coverage": "partial",
+      "risk": "medium",
+      "notes": "事件循环阻塞的主因不是 context 构建（本次实测 51-72 ms），而是 analyzer.py:321 的同步 `client.chat_json(messages, **params)`（`LLMClient.chat_json` 是同步 httpx，foundation/llm/base.py:290-295），单次可达数十秒。HTTP 测试（tests/test_api_routes.py:106-125、tests/test_api_multi_wiki.py:149-152 与 :207-210）只断言 200 与返回结构，无事件循环响应性断言。async->def 的改动本身属于计划文档 P3 的范围。"
+    },
+    {
+      "id": "C8",
+      "kind": "performance",
+      "location": "src/llmwikify/kernel/graph/cache.py:31-48",
+      "evidence": "`graph_fingerprint` 每次调用执行 `_count_max(\"pages\")` + `_count_max(\"page_links\")` + `_count_max(\"relations\")`（:45-47），函数内无任何 memo 变量；同文件 `file_fingerprint`（:58-113）有 `_FP_MEMO`（:54-55）+ `_FP_MEMO_TTL_S = 600.0`（:53），命中即返回（:76-79）。`combined_fingerprint`（:116-117）= graph + file，两者在每次 `lint()` 入口各算一次（analyzer.py:389-392），随后 core 缓存与 llm 缓存各再取一次同一 fp（analyzer.py:398、:504-506）。",
+      "call_frequency": "medium",
+      "test_coverage": "partial",
+      "risk": "low",
+      "notes": "实测（400 relations）：graph_fingerprint = 0.13 ms、file_fingerprint 冷 4.92 ms / 热 0.01 ms、combined_fingerprint = 0.24 ms -> 在本规模下不是瓶颈。历史文档 docs/designs/lint-performance-2026-10-23.md:90 记录的是 file_fingerprint 2.1s（已由 memo 解决），graph_fingerprint 未被单列。tests/test_graph_cache.py:36-49 只测语义（稳定/变更/None），不测查询次数。"
+    },
+    {
+      "id": "C9",
+      "kind": "duplication",
+      "location": "src/llmwikify/kernel/wiki/engines/analyzer.py:63-66",
+      "evidence": "analyzer.py:63-66 的 `except TypeError:` 分支再次调用 `page.read_text(encoding=\"utf-8\")`，参数与 try 块完全相同 -> 永不生效（同样写法见 lint/__init__.py:118-121）。两处都只捕获 TypeError，不捕获 UnicodeDecodeError。实测：往 wiki 写入含 \\xff 非法字节的页面后，`analyzer._scan_all_pages()` 与 `wiki.lint()` 均 RAISED UnicodeDecodeError（lint 崩溃 -> HTTP 500）；而 `_run_all_rules()` 中 contradiction/data_gap/missing_cross_ref/potentially_outdated 4 条规则抛 UnicodeDecodeError，但被 lint/__init__.py:188-189 的 `except Exception` 吞掉只留 warning -> 一个坏页面静默关掉 4/8 条规则而 lint 仍返回“成功”。",
+      "call_frequency": "medium",
+      "test_coverage": "none",
+      "risk": "medium",
+      "notes": "tests/ 下无非 UTF-8 页面用例（grep UnicodeDecodeError 在 tests/ 零命中）。计划文档 docs/designs/reuse-and-performance-isolation-plan.md:622-631 已记录同一缺陷并给出 safe_read_text 的既有实现位置（foundation/io.py:50-66、kernel/storage/index.py:181）。"
+    },
+    {
+      "id": "C10",
+      "kind": "duplication",
+      "location": "src/llmwikify/kernel/wiki/engines/analyzer.py:234",
+      "evidence": "`_build_lint_context` 自带两套文件系统遍历：`_get_existing_page_names()`（utility.py:143-153 -> `wiki_dir.rglob(\"*.md\")`）与 `raw_dir.rglob(\"*\")`（analyzer.py:242-244）。同一趟 lint 里 `_scan_all_pages`（analyzer.py:58）已用 `_wiki_pages()`（utility.py:155-165，同样是 `wiki_dir.rglob(\"*.md\")`）列出过全部页面，6 条普通 Rule 又各自 rglob 一次（见 C3）。实测 `_build_lint_context()` 单独：rglob=11、read_text=283（151 页 wiki + 30 sources 合成 wiki），其中 9 次 rglob 来自 C2 的 SLOW 路径、其余来自 raw 目录与 wiki 目录遍历。",
+      "call_frequency": "high",
+      "test_coverage": "partial",
+      "risk": "low",
+      "notes": "context 里的“EXISTING PAGES”列表与 `_scan_all_pages` 得到的 page_names 语义上重叠，但两者来源不同（一个含子目录相对路径、一个含排除规则），是否可直接互换需要实现方确认，侦察阶段不做断言。"
+    }
+  ],
+  "unresolved": [
+    "1400 页级真实 wiki 上的绝对耗时未测：本机 D:/Github/llmwikify/wiki 只有 3 个 md 页 + 15 个 raw 文件，所有毫秒数来自合成 wiki（120-361 页）。需要一台装有真实 wiki 的环境跑 scripts/profile_lint_paths.py --wiki <path>；scripts/profile_lint_deep.py 硬编码 /app/wiki（:16），本机 Windows 无法运行。",
+    "冷 lint 各阶段耗时占比（rules / context / LLM）未做真实 wiki 分段实测。本次只测了 context 构建与其子步骤，未跑 wiki.lint 全流程（scripts/profile_lint_paths.py:113 会调 wiki.lint，按任务约束会触发真实 LLM API，已避免）。",
+    "/api/wiki/lint 的真实事件循环阻塞时长未测。C7 只做了代码路径认定（async def + 同步调用 + 与 /graph 的写法对比），定量需要计划文档 §P3 提到的 benchmark_event_loop_responsiveness 一类并发压测。",
+    "context 字符串体积对 LLM token 成本的影响未测：context 被 analyzer.py:319 送进 prompt，且 analyzer.py:138-157 的 knowledge_gap 规则另有 fingerprint 缓存。按任务约束本次未调用任何真实 LLM API。",
+    "graph_fingerprint 的 3 次 COUNT/MAX 在大 relations 表上的实际代价未测（合成库仅 400 relations，实测 0.13 ms）。大表下 COUNT(*) 的成本需要真实库测量。",
+    "本机 6 个既有未提交改动（foundation/version.py 为新增，__init__.py / interfaces/server/core.py / kernel/storage/backend.py / kernel/wiki/mixins/analysis/status.py / kernel/wiki/mixins/core/utility.py 为修改）未纳入本次侦察核对范围；已确认 status.py 与 utility.py 的改动仅为 import 路径重构，不影响本文引用的行号，但其余 4 个文件未逐一核对是否已触及 lint 路径。",
+    "未运行 graphify（god-nodes / cluster-only / extract）：该工具会把产物写进仓库内的 graphify-out/（虽被 .gitignore 忽略，但仍是往仓库树里写文件），与本任务“除 recon json 外不得创建/修改任何文件”的所有权约束冲突。churn 数据只作补充，call_frequency 已由代码可达性（每次 lint 调用必达）确定。"
+  ]
+}
