@@ -1,0 +1,1102 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>llmwikify 架构评审与演进方案 · v0.41-dev</title>
+<style>
+  :root{
+    --bg:#0A0D14; --surface:#111621; --surface2:#161C2A; --surface3:#1C2434;
+    --line:#232C3E; --line2:#2E3A50;
+    --ink:#E6EAF2; --ink2:#93A0B8; --ink3:#5E6B85;
+    --teal:#4EC9B0; --blue:#7AA2F7; --amber:#F0A868; --red:#F2777A; --green:#9ECE6A;
+    --mono:"SF Mono","Cascadia Code","JetBrains Mono",Consolas,"Liberation Mono",monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    --maxw:1180px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth; scroll-padding-top:84px}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:var(--sans); font-size:15px; line-height:1.75;
+    -webkit-font-smoothing:antialiased;
+    background-image:
+      radial-gradient(1200px 600px at 20% -10%, rgba(78,201,176,.055), transparent 60%),
+      radial-gradient(900px 500px at 90% 0%, rgba(122,162,247,.045), transparent 55%);
+  }
+  a{color:var(--blue); text-decoration:none}
+  a:hover{text-decoration:underline}
+
+  /* ── nav ─────────────────────────────────────────────── */
+  nav{
+    position:sticky; top:0; z-index:50;
+    background:rgba(10,13,20,.82); backdrop-filter:blur(14px);
+    border-bottom:1px solid var(--line);
+  }
+  .nav-in{max-width:var(--maxw); margin:0 auto; padding:0 28px;
+    height:56px; display:flex; align-items:center; gap:26px}
+  .brand{font-family:var(--mono); font-size:13px; font-weight:600; color:var(--teal);
+    letter-spacing:.02em; white-space:nowrap}
+  .brand span{color:var(--ink3); font-weight:400}
+  .nav-links{display:flex; gap:2px; overflow-x:auto; scrollbar-width:none}
+  .nav-links::-webkit-scrollbar{display:none}
+  .nav-links a{
+    color:var(--ink2); font-size:12.5px; padding:6px 10px; border-radius:6px;
+    white-space:nowrap; transition:color .15s, background .15s;
+  }
+  .nav-links a:hover{color:var(--ink); background:var(--surface2); text-decoration:none}
+  .nav-links a.active{color:var(--teal); background:rgba(78,201,176,.1)}
+  .nav-meta{margin-left:auto; font-family:var(--mono); font-size:11px; color:var(--ink3);
+    white-space:nowrap; display:flex; gap:12px; align-items:center}
+  .dot-ok{color:var(--green)}
+  @media(max-width:820px){ .nav-meta{display:none} .nav-in{gap:14px} }
+  @media(max-width:560px){
+    .wrap{padding:0 18px} .hero h1{font-size:32px} .hero .sub{font-size:15px}
+    h2{font-size:22px} .kpi .v{font-size:21px}
+  }
+
+  /* ── layout ──────────────────────────────────────────── */
+  .wrap{max-width:var(--maxw); margin:0 auto; padding:0 28px}
+  section{padding:72px 0 8px; border-top:1px solid var(--line)}
+  section:first-of-type{border-top:none}
+  .sec-head{display:flex; align-items:baseline; gap:16px; margin-bottom:10px}
+  .sec-num{font-family:var(--mono); font-size:12px; color:var(--teal);
+    border:1px solid rgba(78,201,176,.3); background:rgba(78,201,176,.07);
+    padding:2px 8px; border-radius:5px; letter-spacing:.06em}
+  h2{font-size:27px; font-weight:650; margin:0; letter-spacing:-.015em}
+  .sec-lede{color:var(--ink2); max-width:78ch; margin:12px 0 32px; font-size:15px}
+  h3{font-size:17.5px; font-weight:620; margin:40px 0 12px; letter-spacing:-.01em}
+  h4{font-size:14px; font-weight:600; margin:0 0 8px; color:var(--ink)}
+  p{margin:0 0 12px}
+  code{font-family:var(--mono); font-size:.88em; background:var(--surface2);
+    padding:1.5px 5px; border-radius:4px; color:#9FD3C6; border:1px solid var(--line)}
+  pre{font-family:var(--mono); font-size:12.5px; line-height:1.65; background:var(--surface);
+    border:1px solid var(--line); border-radius:10px; padding:16px 18px; overflow-x:auto;
+    color:var(--ink2); margin:0 0 16px}
+  pre b{color:var(--teal); font-weight:600}
+  pre i{color:var(--blue); font-style:normal}
+
+  /* ── hero ────────────────────────────────────────────── */
+  .hero{padding:76px 0 56px}
+  .hero .eyebrow{font-family:var(--mono); font-size:11.5px; letter-spacing:.16em;
+    text-transform:uppercase; color:var(--ink3); margin-bottom:18px}
+  .hero h1{font-size:46px; line-height:1.12; font-weight:680; margin:0 0 18px;
+    letter-spacing:-.028em; max-width:19ch}
+  .hero h1 em{font-style:normal; color:var(--teal)}
+  .hero .sub{font-size:17px; color:var(--ink2); max-width:64ch; margin-bottom:34px; line-height:1.7}
+  .hero .sub b{color:var(--ink); font-weight:600}
+  .kpis{display:grid; grid-template-columns:repeat(auto-fit,minmax(148px,1fr)); gap:12px}
+  .kpi{background:var(--surface); border:1px solid var(--line); border-radius:12px;
+    padding:16px 16px 14px; position:relative; overflow:hidden}
+  .kpi::before{content:""; position:absolute; left:0; top:0; bottom:0; width:2px; background:var(--teal)}
+  .kpi.b::before{background:var(--blue)} .kpi.w::before{background:var(--amber)}
+  .kpi.r::before{background:var(--red)}
+  .kpi .v{font-family:var(--mono); font-size:25px; font-weight:600; letter-spacing:-.02em; line-height:1.2}
+  .kpi .l{font-size:11.5px; color:var(--ink3); margin-top:3px; letter-spacing:.02em}
+  .kpi .d{font-size:11px; color:var(--ink3); margin-top:5px; opacity:.8; word-break:break-word}
+
+  /* ── cards ───────────────────────────────────────────── */
+  .card{background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:20px 22px}
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:14px}
+  .grid3{display:grid; grid-template-columns:repeat(3,1fr); gap:14px}
+  .grid4{display:grid; grid-template-columns:repeat(4,1fr); gap:12px}
+  @media(max-width:900px){.grid2,.grid3,.grid4{grid-template-columns:1fr}}
+
+  .good{border-left:2px solid var(--green)}
+  .p0{border-left:2px solid var(--red)}
+  .p1{border-left:2px solid var(--amber)}
+  .p2{border-left:2px solid var(--ink3)}
+  .p3{border-left:2px solid var(--blue)}
+
+  .tag{display:inline-block; font-family:var(--mono); font-size:10.5px; letter-spacing:.06em;
+    padding:2px 7px; border-radius:4px; font-weight:600; text-transform:uppercase}
+  .tag.p0{background:rgba(242,119,122,.14); color:var(--red); border:1px solid rgba(242,119,122,.28)}
+  .tag.p1{background:rgba(240,168,104,.14); color:var(--amber); border:1px solid rgba(240,168,104,.28)}
+  .tag.p2{background:rgba(94,107,133,.16); color:var(--ink2); border:1px solid rgba(94,107,133,.3)}
+  .tag.p3{background:rgba(122,162,247,.14); color:var(--blue); border:1px solid rgba(122,162,247,.28)}
+  .tag.ok{background:rgba(158,206,106,.14); color:var(--green); border:1px solid rgba(158,206,106,.28)}
+  .tag.teal{background:rgba(78,201,176,.13); color:var(--teal); border:1px solid rgba(78,201,176,.28)}
+
+  /* ── layer diagram ───────────────────────────────────── */
+  .archwrap{display:grid; grid-template-columns:1fr 300px; gap:18px; align-items:start}
+  @media(max-width:980px){.archwrap{grid-template-columns:1fr}}
+  .archbox{background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:20px}
+  .layer{cursor:pointer; transition:opacity .18s}
+  .layer rect{transition:fill .18s, stroke .18s}
+  .layer:hover rect, .layer.sel rect{stroke:var(--teal); stroke-width:1.6}
+  .layer.dim{opacity:.42}
+  .layer text{pointer-events:none}
+  .panel{background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:18px 20px;
+    position:sticky; top:76px}
+  .panel h4{font-family:var(--mono); font-size:12px; color:var(--teal); letter-spacing:.05em;
+    text-transform:uppercase; margin-bottom:10px}
+  .panel .row{display:flex; justify-content:space-between; gap:12px; padding:5px 0;
+    border-bottom:1px dashed var(--line); font-size:13px}
+  .panel .row:last-child{border:none}
+  .panel .row b{font-weight:600}
+  .panel .row span{color:var(--ink2); font-family:var(--mono); font-size:12px; text-align:right}
+  .panel .desc{font-size:12.5px; color:var(--ink2); margin-top:12px; line-height:1.65}
+
+  /* ── table ───────────────────────────────────────────── */
+  .tscroll{overflow-x:auto; -webkit-overflow-scrolling:touch; margin:0 0 8px;
+    border:1px solid var(--line); border-radius:12px}
+  .tscroll table{margin:0; min-width:920px}
+  table{width:100%; border-collapse:collapse; font-size:13px; margin:0 0 8px}
+  thead th{text-align:left; padding:9px 10px; font-size:11px; letter-spacing:.06em;
+    text-transform:uppercase; color:var(--ink3); border-bottom:1px solid var(--line2); font-weight:600}
+  tbody td{padding:10px; border-bottom:1px solid var(--line); vertical-align:top; color:var(--ink2)}
+  tbody tr:last-child td{border-bottom:none}
+  tbody tr:hover td{background:rgba(255,255,255,.016)}
+  td.name{color:var(--ink); font-weight:600; white-space:nowrap}
+  td.name small{display:block; font-weight:400; color:var(--ink3); font-size:11px; font-family:var(--mono); margin-top:1px}
+  .rating{display:inline-flex; gap:2px; vertical-align:middle; margin-right:6px}
+  .rating i{width:5px; height:5px; border-radius:50%; background:var(--line2); display:block}
+  .rating i.on{background:var(--teal)}
+  .rating i.mid{background:var(--amber)}
+  .rating i.bad{background:var(--red)}
+  .mtx td{font-size:12.5px; line-height:1.55}
+  .mtx td.name{font-size:13px}
+  .mtx .pill-list{margin-top:2px}
+
+  /* ── issue list ──────────────────────────────────────── */
+  .issue{background:var(--surface); border:1px solid var(--line); border-radius:12px;
+    padding:16px 20px; margin-bottom:10px}
+  .issue .hd{display:flex; align-items:center; gap:10px; margin-bottom:6px; flex-wrap:wrap}
+  .issue .hd strong{font-size:14.5px; font-weight:620}
+  .issue .loc{font-family:var(--mono); font-size:11px; color:var(--ink3)}
+  .issue p{font-size:13.5px; color:var(--ink2); margin:0 0 8px}
+  .issue .fix{font-size:13px; color:var(--ink2); border-top:1px dashed var(--line);
+    padding-top:9px; margin-top:2px}
+  .issue .fix b{color:var(--teal); font-weight:600}
+  .issue .fix .to{color:var(--blue)}
+
+  /* ── proposal ────────────────────────────────────────── */
+  .prop{background:var(--surface); border:1px solid var(--line); border-radius:14px;
+    padding:22px 24px; margin-bottom:16px}
+  .prop .top{display:flex; align-items:center; gap:11px; margin-bottom:14px}
+  .prop .top .n{font-family:var(--mono); font-size:12px; width:26px; height:26px;
+    display:grid; place-items:center; border-radius:6px; background:rgba(78,201,176,.11);
+    color:var(--teal); border:1px solid rgba(78,201,176,.26); flex:none}
+  .prop .top h3{margin:0; font-size:17px}
+  .trans{display:grid; grid-template-columns:1fr 26px 1fr; gap:12px; align-items:stretch; margin:14px 0}
+  @media(max-width:820px){.trans{grid-template-columns:1fr}}
+  .trans .arrow{display:grid; place-items:center; color:var(--teal); font-size:17px}
+  .trans .box{background:var(--surface2); border:1px solid var(--line); border-radius:10px; padding:13px 15px}
+  .trans .box .lbl{font-family:var(--mono); font-size:10.5px; letter-spacing:.08em;
+    text-transform:uppercase; color:var(--ink3); margin-bottom:6px}
+  .trans .box .val{font-size:13px; color:var(--ink2); line-height:1.6}
+  .trans .box.now .lbl{color:var(--red)} .trans .box.next .lbl{color:var(--teal)}
+  .steps{margin:12px 0 0; padding:0; list-style:none; counter-reset:s}
+  .steps li{counter-increment:s; position:relative; padding:5px 0 5px 30px; font-size:13.5px; color:var(--ink2)}
+  .steps li::before{content:counter(s); position:absolute; left:0; top:6px; width:19px; height:19px;
+    border-radius:5px; background:var(--surface3); border:1px solid var(--line2); color:var(--teal);
+    font-family:var(--mono); font-size:10.5px; display:grid; place-items:center}
+  .steps li b{color:var(--ink); font-weight:600}
+
+  /* ── roadmap ─────────────────────────────────────────── */
+  .phase{background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:22px 24px; position:relative}
+  .phase::before{content:""; position:absolute; left:0; top:20px; bottom:20px; width:2px;
+    background:linear-gradient(var(--teal), transparent)}
+  .phase.p2::before{background:linear-gradient(var(--blue), transparent)}
+  .phase.p3::before{background:linear-gradient(var(--ink3), transparent)}
+  .phase .meta{display:flex; align-items:center; gap:10px; margin-bottom:6px}
+  .phase .meta .ph{font-family:var(--mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--ink3)}
+  .phase h3{margin:0 0 4px; font-size:17px}
+  .phase .goal{font-size:13px; color:var(--ink3); margin-bottom:14px}
+  .phase ul{margin:0; padding-left:18px; font-size:13.5px; color:var(--ink2)}
+  .phase li{margin-bottom:6px}
+  .phase li b{color:var(--ink)}
+
+  /* ── misc ────────────────────────────────────────────── */
+  .note{border-left:2px solid var(--blue); background:rgba(122,162,247,.05);
+    padding:13px 17px; border-radius:0 9px 9px 0; font-size:13.5px; color:var(--ink2); margin:16px 0}
+  .note b{color:var(--ink)}
+  .note.warn{border-left-color:var(--amber); background:rgba(240,168,104,.05)}
+  .note.ok{border-left-color:var(--green); background:rgba(158,206,106,.05)}
+  .pill-list{display:flex; flex-wrap:wrap; gap:7px; margin:10px 0 0}
+  .pill{font-family:var(--mono); font-size:11.5px; padding:3px 9px; border-radius:20px;
+    background:var(--surface2); border:1px solid var(--line2); color:var(--ink2)}
+  footer{margin-top:70px; padding:28px 0 60px; border-top:1px solid var(--line);
+    color:var(--ink3); font-size:12.5px; display:flex; justify-content:space-between; gap:20px; flex-wrap:wrap}
+  footer code{font-size:11.5px}
+  .legend{display:flex; gap:14px; flex-wrap:wrap; font-size:11.5px; color:var(--ink3); margin-bottom:14px}
+  .legend span{display:flex; align-items:center; gap:5px}
+  .legend i{width:8px; height:8px; border-radius:2px; display:block}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-in">
+    <div class="brand">llmwikify <span>· 架构评审</span></div>
+    <div class="nav-links">
+      <a href="#overview">总览</a>
+      <a href="#current">现状</a>
+      <a href="#industry">业界对比</a>
+      <a href="#target">目标架构</a>
+      <a href="#proposals">改进方案</a>
+      <a href="#roadmap">路线图</a>
+      <a href="#risks">风险</a>
+    </div>
+    <div class="nav-meta">
+      <span>v0.41-dev</span>
+      <span class="dot-ok">0 architecture violations</span>
+    </div>
+  </div>
+</nav>
+
+<div class="wrap">
+
+<!-- ══════════ HERO ══════════ -->
+<div class="hero">
+  <div class="eyebrow">Architecture Review &amp; Evolution Plan · 2026-11-02</div>
+  <h1>llmwikify 架构评审<br/>与<em>演进方案</em></h1>
+  <p class="sub">
+    对 <b>80,357 LOC / 4 层 / 407 文件</b> 的完整架构梳理。<b>分层是干净的</b>——
+    <code>check_architecture.py</code> 0 violation，依赖方向单向可证。<b>问题在别处</b>：
+    5 套 Agent 循环并存、存储抽象被 95 处直连 FS 击穿、SSE 契约前后端漂移、
+    33 个 CLI 命令双清单、138 个模块被 mypy 豁免。本文档给出<b>业界对标</b>与
+    <b>8 项可执行改进</b>，按 3 阶段推进。
+  </p>
+
+  <div class="kpis">
+    <div class="kpi"><div class="v">4</div><div class="l">分层架构</div><div class="d">foundation→kernel→apps→interfaces</div></div>
+    <div class="kpi b"><div class="v">80.3%</div><div class="l">测试覆盖率</div><div class="d">24302 / 30279 语句</div></div>
+    <div class="kpi w"><div class="v">5</div><div class="l">Agent 循环实现</div><div class="d">应收敛为 1</div></div>
+    <div class="kpi r"><div class="v">95</div><div class="l">存储直连 FS 处</div><div class="d">Protocol 形同虚设</div></div>
+    <div class="kpi"><div class="v">277</div><div class="l">测试文件</div><div class="d">5286 passed</div></div>
+    <div class="kpi w"><div class="v">17</div><div class="l">类型豁免模块</div><div class="d">mypy ignore_errors</div></div>
+  </div>
+</div>
+
+<!-- ══════════ 01 总览 ══════════ -->
+<section id="overview">
+  <div class="sec-head"><span class="sec-num">01</span><h2>架构总览</h2></div>
+  <p class="sec-lede">
+    当前架构是一个<b>严格的四层单向依赖</b>结构，方向由 <code>scripts/check_architecture.py</code>
+    机器校验、0 violation。这在个人项目里并常见——它的问题不在结构，而在<b>层与层之间的契约没有被真正兑现</b>：
+    存储端口被绕开、Agent 运行时被复制 5 份、事件契约靠手工双写。
+  </p>
+
+  <div class="archwrap">
+    <div class="archbox">
+      <svg viewBox="0 0 680 400" width="100%" style="display:block" role="img" aria-label="llmwikify 四层架构与依赖方向">
+        <defs>
+          <marker id="ar" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M0 0 L8 4 L0 8" fill="none" stroke="#4EC9B0" stroke-width="1.2"/>
+          </marker>
+          <marker id="arB" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M0 0 L8 4 L0 8" fill="none" stroke="#7AA2F7" stroke-width="1.2"/>
+          </marker>
+        </defs>
+
+        <!-- dependency arrows on the left -->
+        <g stroke="#4EC9B0" stroke-width="1" fill="none" marker-end="url(#ar)" opacity=".75">
+          <path d="M52 92 L52 118"/>
+          <path d="M52 178 L52 204"/>
+          <path d="M52 264 L52 290"/>
+        </g>
+        <text x="34" y="108" fill="#5E6B85" font-size="9.5" font-family="monospace" text-anchor="end">依赖</text>
+        <text x="34" y="122" fill="#5E6B85" font-size="9.5" font-family="monospace" text-anchor="end">向下</text>
+
+        <!-- L1 interfaces -->
+        <g class="layer sel" data-layer="l1" onclick="pickLayer(this)">
+          <rect x="66" y="40" width="560" height="52" rx="9" fill="#161C2A" stroke="#2E3A50" stroke-width="1"/>
+          <text x="82" y="61" fill="#E6EAF2" font-size="13.5" font-weight="600" font-family="sans-serif">interfaces/</text>
+          <text x="82" y="79" fill="#93A0B8" font-size="10.5" font-family="monospace">cli · mcp · server(FastAPI) · web</text>
+          <text x="606" y="61" fill="#7AA2F7" font-size="11" font-family="monospace" text-anchor="end">11.7k LOC</text>
+          <text x="606" y="79" fill="#5E6B85" font-size="10" font-family="monospace" text-anchor="end">75 files</text>
+        </g>
+
+        <!-- L2 apps -->
+        <g class="layer" data-layer="l2" onclick="pickLayer(this)">
+          <rect x="66" y="126" width="560" height="52" rx="9" fill="#161C2A" stroke="#2E3A50" stroke-width="1"/>
+          <text x="82" y="147" fill="#E6EAF2" font-size="13.5" font-weight="600" font-family="sans-serif">apps/</text>
+          <text x="82" y="165" fill="#93A0B8" font-size="10.5" font-family="monospace">chat · research · agent · wiki · api</text>
+          <text x="606" y="147" fill="#F0A868" font-size="11" font-family="monospace" text-anchor="end">44.8k LOC</text>
+          <text x="606" y="165" fill="#5E6B85" font-size="10" font-family="monospace" text-anchor="end">201 files</text>
+        </g>
+
+        <!-- L3 kernel -->
+        <g class="layer" data-layer="l3" onclick="pickLayer(this)">
+          <rect x="66" y="212" width="560" height="52" rx="9" fill="#161C2A" stroke="#2E3A50" stroke-width="1"/>
+          <text x="82" y="233" fill="#E6EAF2" font-size="13.5" font-weight="600" font-family="sans-serif">kernel/</text>
+          <text x="82" y="251" fill="#93A0B8" font-size="10.5" font-family="monospace">agent · wiki · graph · search · storage · codegen</text>
+          <text x="606" y="233" fill="#7AA2F7" font-size="11" font-family="monospace" text-anchor="end">15.3k LOC</text>
+          <text x="606" y="251" fill="#5E6B85" font-size="10" font-family="monospace" text-anchor="end">78 files</text>
+        </g>
+
+        <!-- L4 foundation -->
+        <g class="layer" data-layer="l4" onclick="pickLayer(this)">
+          <rect x="66" y="298" width="560" height="52" rx="9" fill="#161C2A" stroke="#2E3A50" stroke-width="1"/>
+          <text x="82" y="319" fill="#E6EAF2" font-size="13.5" font-weight="600" font-family="sans-serif">foundation/</text>
+          <text x="82" y="337" fill="#93A0B8" font-size="10.5" font-family="monospace">llm · db · config · callback · extractors · auth</text>
+          <text x="606" y="319" fill="#7AA2F7" font-size="11" font-family="monospace" text-anchor="end">8.5k LOC</text>
+          <text x="606" y="337" fill="#5E6B85" font-size="10" font-family="monospace" text-anchor="end">53 files</text>
+        </g>
+
+        <!-- annotation -->
+        <text x="66" y="378" fill="#5E6B85" font-size="10.5" font-family="monospace">
+          禁止反向：kernel→apps · foundation→kernel · reproduction→apps
+        </text>
+        <text x="66" y="392" fill="#3D4A63" font-size="10" font-family="monospace">
+          check_architecture.py 每次 CI 校验 · 当前 0 violation
+        </text>
+      </svg>
+    </div>
+
+    <div class="panel" id="lpanel">
+      <h4 id="pl-name">interfaces/</h4>
+      <div class="row"><b>代码量</b><span id="pl-loc">11,746 LOC</span></div>
+      <div class="row"><b>文件数</b><span id="pl-files">75</span></div>
+      <div class="row"><b>覆盖率</b><span id="pl-cov">82.2%</span></div>
+      <div class="row"><b>可依赖</b><span id="pl-dep">kernel · apps</span></div>
+      <div class="row"><b>被依赖</b><span id="pl-depb">—（顶层）</span></div>
+      <p class="desc" id="pl-desc">
+        入口层：CLI（33 命令，Command Protocol + 注册表）、MCP server、FastAPI HTTP server、
+        WebUI 静态托管。协议形状正确，但命令清单双写、别名解析依赖 argparse 私有属性。
+      </p>
+    </div>
+  </div>
+
+  <h3>分层指标与依赖规则</h3>
+  <table>
+    <thead><tr><th style="width:15%">层</th><th style="width:12%">规模</th><th style="width:10%">覆盖</th>
+      <th style="width:26%">核心抽象</th><th>评价</th></tr></thead>
+    <tbody>
+      <tr><td class="name">foundation<small>零依赖</small></td><td class="name">8,529<small>53 files</small></td>
+        <td><span class="rating"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span>83.0%</td>
+        <td>LLMSpec · CompositeHook · ExtractorRegistry · ConnectionProfile</td>
+        <td>抽象质量最高。<b>resolver 是唯一配置入口</b>、providers.yaml 驱动、13 钩子带错误隔离。
+          渗漏：migration.py 含交互 CLI；llm_client shim 指向倒置；io.py 仍是 placeholder。</td></tr>
+      <tr><td class="name">kernel<small>通用框架</small></td><td class="name">15,285<small>78 files</small></td>
+        <td><span class="rating"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span>82.0%</td>
+        <td>UnifiedAgentLoop · Wiki+13 mixin · LintEngine+Rule · PageSnapshot · WikiBackend</td>
+        <td>lint 子系统设计优秀（模板方法 + 显式注册 + 快照 cache-not-filter）。
+          核心缺陷：<b>WikiBackend Protocol 被 95 处直连 FS 击穿</b>；双 hook 体系并存。</td></tr>
+      <tr><td class="name">apps<small>应用层</small></td><td class="name">44,797<small>201 files</small></td>
+        <td><span class="rating"><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i></span>78.4%</td>
+        <td>ChatOrchestrator · ChatRunnerV2 · SkillRuntime · WikiToolRegistry</td>
+        <td><b>最大风险区。</b>chat 一包 33.5k LOC；5 套 Agent 循环；chat↔research 包级循环；
+          44 个 &gt;500 行文件；process 内 dict 状态只增不减。</td></tr>
+      <tr><td class="name">interfaces<small>入口层</small></td><td class="name">11,746<small>75 files</small></td>
+        <td><span class="rating"><i class="on"></i><i class="on"></i><i class="on"></i><i class="mid"></i><i></i></span>82.2%</td>
+        <td>Command Protocol · WikiServer · MCPAdapter · ChatStreamEvent</td>
+        <td>CLI 88.5%（本轮补测后）。但命令双清单、WikiCLI 双轨、
+          <b>SSE 契约后端 17 事件 / 前端 12 事件</b>。</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ══════════ 02 现状 ══════════ -->
+<section id="current">
+  <div class="sec-head"><span class="sec-num">02</span><h2>现状体检</h2></div>
+  <p class="sec-lede">
+    分层是骨架，真正的问题在<b>层与层的接缝</b>。下表按严重度排列——
+    P0 是「架构承诺与实现不符」，P1 是「结构性问题」，P2 是「工程债」。
+  </p>
+
+  <h3>值得保留的六项设计</h3>
+  <div class="grid3">
+    <div class="card good"><span class="tag ok">Keep</span><h4 style="margin-top:9px">依赖方向机器可证</h4>
+      <p style="font-size:13px;color:var(--ink2);margin:0">四层单向依赖由 <code>check_architecture.py</code> 校验，0 violation。这比多数同规模项目做得好。</p></div>
+    <div class="card good"><span class="tag ok">Keep</span><h4 style="margin-top:9px">LLM 层抽象成熟</h4>
+      <p style="font-size:13px;color:var(--ink2);margin:0"><code>resolver.resolve_chat_llm()</code> 是唯一配置入口，provider 元数据全在 <code>providers.yaml</code>，<code>LLMSpec</code> 冻结契约。新增 provider 零代码。</p></div>
+    <div class="card good"><span class="tag ok">Keep</span><h4 style="margin-top:9px">PageSnapshot 是范本</h4>
+      <p style="font-size:13px;color:var(--ink2);margin:0">frozen dataclass + MappingProxyType 深只读；超预算页<b>不丢弃</b>而是回退磁盘——cache 而非 filter。一次 lint 每页只读一遍。</p></div>
+    <div class="card good"><span class="tag ok">Keep</span><h4 style="margin-top:9px">零代码插件机制</h4>
+      <p style="font-size:13px;color:var(--ink2);margin:0"><code>~/.llmwikify/skills/</code> 下的 SKILL.md / *.py 由 <code>plugin_loader</code> 自动发现。新增能力不需要改主仓库。</p></div>
+    <div class="card good"><span class="tag ok">Keep</span><h4 style="margin-top:9px">显式元数据命名空间</h4>
+      <p style="font-size:13px;color:var(--ink2);margin:0">bus 事件用 <code>_meta_*</code> 前缀承载控制信号，不污染 <code>payload</code>。借鉴 nanobot 的做法，做对了。</p></div>
+    <div class="card good"><span class="tag ok">Keep</span><h4 style="margin-top:9px">表驱动扩展点</h4>
+      <p style="font-size:13px;color:var(--ink2);margin:0">extractor 的 <code>_EXTRACTOR_REGISTRY</code>、lint 的 <code>RULES</code> 都是纯数据表驱动，加规则不需理解引擎内部。</p></div>
+  </div>
+
+  <h3>P0 — 架构承诺与实现不符（4 项）</h3>
+
+  <div class="issue p0">
+    <div class="hd"><span class="tag p0">P0-01</span><strong>5 套 Agent 循环并存</strong>
+      <span class="loc">runner_v2.py · research_runner.py · base.py:283 · subagent_worker.py:81 · research/engine.py</span></div>
+    <p>同一套 ReAct 语义（PRECHECK→REASON→ACT→OBSERVE→FINALIZE）、同一套 hook 点、同一套事件，各写一遍。
+      <code>runner_v2.py</code> 与 <code>subagent_worker.py</code> 的文本解析 + 工具循环逻辑同构；
+      <code>harness/quality_gate.py</code> 与 <code>research/gates.py</code> 各有一套质量门。</p>
+    <p class="fix"><b>影响</b> 任何 hook 语义变更、compact 策略、确认流程改动都要同步 5 处——这是最可能产生「改了 A 忘了 B」的根源。
+      <span class="to">→ 方案 P1：收敛为单一 <code>AgentRuntime</code>，其余降级为声明式 Plan。</span></p>
+  </div>
+
+  <div class="issue p0">
+    <div class="hd"><span class="tag p0">P0-02</span><strong>存储抽象被 95 处直连 FS 击穿</strong>
+      <span class="loc">kernel/storage/backend.py:9 · wiki/mixins/** · wiki.py:219,403</span></div>
+    <p><code>WikiBackend</code> Protocol 声称「可换 in-memory / 远程」，但 mixin 层有 <b>95 处</b>直接
+      <code>read_text / write_text / rglob</code>；Protocol 真正被调用的只有 5 处。
+      <code>wiki.py</code> 自身也直连文件系统，<code>backend.py:144</code> 直接 new <code>WikiIndex(db_path)</code>。</p>
+    <p class="fix"><b>影响</b> 非 FS 后端目前<b>不可实现</b>——这是分层的形式化胜利掩盖下的实质失败。
+      <span class="to">→ 方案 P2：引入 <code>PageStore</code> 端口，收敛直连 FS。</span></p>
+  </div>
+
+  <div class="issue p0">
+    <div class="hd"><span class="tag p0">P0-03</span><strong>SSE 契约前后端漂移</strong>
+      <span class="loc">apps/chat/agent/events.py:17-42 · ui/webui/src/api.ts:33-44</span></div>
+    <p>后端定义 <b>17</b> 种事件类型，前端 <code>ChatStreamEvent</code> union 只有 <b>12</b> 种。
+      <code>session_init</code> / <code>user_message</code> / <code>compacted</code> / <code>command_done</code> /
+      <code>phase</code> 五类在前端<b>没有对应类型</b>。契约纯手工双写，无 codegen、无契约测试、CI 不校验。
+      另有重复定义：<code>apps/chat/agent/unified/events.py:17</code> 又抄了一份。</p>
+    <p class="fix"><b>影响</b> 前端只能靠 <code>any</code> 兜底，事件字段一改就静默失效。
+      <span class="to">→ 方案 P4：契约即代码，单一 schema 源 + CI 校验。</span></p>
+  </div>
+
+  <div class="issue p0">
+    <div class="hd"><span class="tag p0">P0-04</span><strong>apps.chat ↔ apps.research 包级循环依赖</strong>
+      <span class="loc">apps/research/engine.py:16-30 ↔ apps/chat/gatherer.py:147</span></div>
+    <p><code>apps/research</code> 反向 import <code>apps.chat.agent.research_runner</code> / <code>gatherer</code> / <code>harness</code>；
+      而 <code>apps/chat/gatherer.py</code> 与 <code>skills/workflows/subagent_worker.py:727</code> 又 import
+      <code>apps.research.web_search</code>。<code>apps/research/base.py</code> 声称 research 是「base 的自然锚点」，但实际是双向的。</p>
+    <p class="fix"><b>影响</b> 同层循环是分层架构里最难拆的一类——它让「apps 可以自由组合」的前提失效。
+      <span class="to">→ 方案 P5：抽取 <code>apps/knowledge/</code> 共享内核，research 与 chat 均依赖它。</span></p>
+  </div>
+
+  <h3>P1 — 结构性问题（5 项）</h3>
+
+  <div class="issue p1">
+    <div class="hd"><span class="tag p1">P1-01</span><strong>Orchestrator 是 God Object</strong>
+      <span class="loc">apps/chat/agent/orchestrator.py（1,016 行）</span></div>
+    <p>一个类同时承担：SSE 事件工厂（<code>ChatEvent</code> 12 个静态方法）、会话 CRUD、确认流、
+      斜杠命令路由、Runner 构建、持久化 Hook、工具注册表缓存。</p>
+    <p class="fix"><span class="to">→ 拆为 <code>ChatService</code> / <code>SessionManager</code> / <code>CommandRouter</code> / <code>EventFactory</code> / <code>ToolRegistryCache</code>。</span></p>
+  </div>
+
+  <div class="issue p1">
+    <div class="hd"><span class="tag p1">P1-02</span><strong>双 Hook 体系</strong>
+      <span class="loc">foundation/callback/composite.py:25（13 钩子） vs kernel/agent/hook.py:17（16 钩子）</span></div>
+    <p>两套语义重叠的 hook 点，桥接在 apps 层 <code>unified/hook_adapter.py:21</code>。
+      桥接层本身位于「生产代码零引用」的死目录里。</p>
+    <p class="fix"><span class="to">→ 统一到 foundation 的 16 钩子集，kernel/agent/hook.py 改为 re-export。</span></p>
+  </div>
+
+  <div class="issue p1">
+    <div class="hd"><span class="tag p1">P1-03</span><strong>Lint 快照是隐式契约</strong>
+      <span class="loc">kernel/wiki/lint/__init__.py:101,105</span></div>
+    <p><code>run_with_snapshot</code> 用 <code>type(self).run is not Rule.run</code> 反射判断规则是否覆写——
+      新规则作者不知这条隐藏协议，<b>快照优化会静默失效</b>（退回逐页读盘，计数门禁却仍绿）。</p>
+    <p class="fix"><span class="to">→ 引入显式 <code>SnapshotRule</code> 基类或 <code>ClassVar[snapshot_capable]</code> 声明。</span></p>
+  </div>
+
+  <div class="issue p1">
+    <div class="hd"><span class="tag p1">P1-04</span><strong>进程内状态不可共享且泄漏</strong>
+      <span class="loc">orchestrator.py:244-246</span></div>
+    <p><code>_session_status</code> 仅在一处 pop；<code>_tool_registries</code> <b>只增不减</b>，key 为
+      <code>(session_id, wiki_id)</code>——长跑进程内存泄漏。多实例部署时这些状态无法共享
+      （<code>channels/websocket.py</code> 注释自述「单 process」）。</p>
+    <p class="fix"><span class="to">→ 引入 Checkpointer 抽象，状态外置到 SQLite/Redis，进程内只做缓存。</span></p>
+  </div>
+
+  <div class="issue p1">
+    <div class="hd"><span class="tag p1">P1-05</span><strong>Skill 白名单陷阱</strong>
+      <span class="loc">apps/agent/tools/skill_adapter.py:43-51</span></div>
+    <p><code>SkillToolAdapter.exposed_skills</code> 是硬编码白名单。注册了新 skill 但没加进这个列表 →
+      <b>LLM 永远调不到</b>，且没有任何提示。这是「注册了却调不到」最常见的坑。</p>
+    <p class="fix"><span class="to">→ 默认全暴露 + 显式 opt-out 列表，或让 skill 自身声明 <code>exposed: bool</code>。</span></p>
+  </div>
+
+  <h3>P2 — 工程债速览（8 项）</h3>
+  <div class="grid2">
+    <div class="issue p2"><div class="hd"><span class="tag p2">P2-01</span><strong>死代码</strong></div>
+      <p><code>apps/chat/agent/unified/</code> 15 文件生产零引用（仅测试引用）；<code>apps/chat/research_engine/</code> 9 文件全为 <code>sys.modules</code> 替换 shim。</p></div>
+    <div class="issue p2"><div class="hd"><span class="tag p2">P2-02</span><strong>CLI 双清单</strong></div>
+      <p><code>commands/__init__.py</code> 的 import 块与 register 块必须手工同步；注释写「27 commands」实际 33。WikiCLI 仍在 <code>_app.py:325</code> 实例化以持 wiki。</p></div>
+    <div class="issue p2"><div class="hd"><span class="tag p2">P2-03</span><strong>mypy 豁免 138 模块</strong></div>
+      <p>含 interfaces 关键路径与整个 <code>apps.chat</code>。<code>Command</code> Protocol 签名与 33 个实现不一致（<code>wiki_root: Path</code> vs <code>wiki: Any</code>）——正因 <code>Any</code> 才没被捕获。</p></div>
+    <div class="issue p2"><div class="hd"><span class="tag p2">P2-04</span><strong>CI 覆盖缺口</strong></div>
+      <p><code>addopts</code> 默认 <code>--ignore=tests/e2e</code>；<code>e2e.yml</code> 跑的是 shell 脚本链而非 playwright 用例；<b>WebUI 零 CI</b>（无 npm/vitest/tsc）；<code>check_architecture.py</code> 未接入任何 workflow。</p></div>
+    <div class="issue p2"><div class="hd"><span class="tag p2">P2-05</span><strong>打包漏 UI</strong></div>
+      <p><code>[tool.setuptools.package-data]</code> 不含 <code>ui/webui/dist</code>，<code>find_webui_dist()</code> 只在源码树找得到 → <code>pip install</code> 后 <code>serve --web</code> 无界面。</p></div>
+    <div class="issue p2"><div class="hd"><span class="tag p2">P2-06</span><strong>发布链路断点</strong></div>
+      <p><code>version-bump.yml</code> 的 <code>add-paths</code> 指向不存在的 <code>src/llmwikify/_version.py</code>（真实位置 <code>foundation/version.py</code>）；<code>all</code> extras 漏了 <code>llm</code>（tiktoken）。</p></div>
+    <div class="issue p2"><div class="hd"><span class="tag p2">P2-07</span><strong>文档漂移</strong></div>
+      <p>AGENTS.md 写 <code>apps/chat/agent/runner.py</code>（实为 <code>runner_v2.py</code>）；mixins 声称 <code>WikiMeta</code> metaclass（不存在，实为普通多继承）；<code>kernel/__init__.py:19</code> 仍宣称已删的 <code>quant</code> 子包。</p></div>
+    <div class="issue p2"><div class="hd"><span class="tag p2">P2-08</span><strong>质量门禁虚高</strong></div>
+      <p><code>fail_under = 15</code>，注释写「当前 16.27%（mock-only）」——实际全量已 80.3%。门禁设得极低，任何回退都不会被发现。importlinter <code>contracts = []</code> 空配置。</p></div>
+  </div>
+</section>
+
+<!-- ══════════ 03 业界对比 ══════════ -->
+<section id="industry">
+  <div class="sec-head"><span class="sec-num">03</span><h2>业界对比</h2></div>
+  <p class="sec-lede">
+    llmwikify 的形态在业界属于「<b>本地优先的知识库 + Agent 运行时</b>」——
+    与 Dify（平台型）、LangGraph（图编排）、OpenAI Agents SDK（极简）、Temporal（durable 工作流）、
+    nanobot（极简 channel/bus）各有交集。下表是七维度对标，
+    <span class="rating"><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i></span> 表示该维度的成熟度。
+  </p>
+
+  <div class="tscroll">
+  <table class="mtx">
+    <thead><tr>
+      <th style="width:15%">系统</th><th style="width:12%">分层范式</th><th style="width:13%">Agent 运行时</th>
+      <th style="width:13%">扩展机制</th><th style="width:12%">状态管理</th><th style="width:12%">事件契约</th>
+      <th style="width:13%">存储隔离</th><th style="width:10%">类型门禁</th>
+    </tr></thead>
+    <tbody>
+      <tr>
+        <td class="name">llmwikify<small>当前</small></td>
+        <td><span class="rating"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span>四层单向<br/><small>机器校验</small></td>
+        <td><span class="rating"><i class="mid"></i><i class="mid"></i><i></i><i></i><i></i></span>5 套循环<br/><small>应收敛为 1</small></td>
+        <td><span class="rating"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span>SKILL.md 插件<br/><small>零代码</small></td>
+        <td><span class="rating"><i class="mid"></i><i class="bad"></i><i></i><i></i><i></i></span>进程内 dict<br/><small>只增不减</small></td>
+        <td><span class="rating"><i class="mid"></i><i class="bad"></i><i></i><i></i><i></i></span>手工双写<br/><small>17 vs 12</small></td>
+        <td><span class="rating"><i class="bad"></i><i></i><i></i><i></i><i></i></span>形同虚设<br/><small>95 处绕过</small></td>
+        <td><span class="rating"><i class="mid"></i><i class="bad"></i><i></i><i></i><i></i></span>138 豁免</td>
+      </tr>
+      <tr>
+        <td class="name">LangGraph<small>LangChain</small></td>
+        <td><span class="rating"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span>单层 + 图<br/><small>节点即状态</small></td>
+        <td><span class="rating"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span>Pregel 图<br/><small>声明式</small></td>
+        <td><span class="rating"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span>节点/边组合</td>
+        <td><span class="rating"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span>Checkpointer<br/><small>可持久化</small></td>
+        <td><span class="rating"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span>Stream 协议</td>
+        <td><span class="rating"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span>Store 抽象</td>
+        <td><span class="rating"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span>Typed</td>
+      </tr>
+      <tr>
+        <td class="name">OpenAI Agents SDK<small>OpenAI</small></td>
+        <td><span class="rating"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span>极简单层</td>
+        <td><span class="rating"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span>单循环 + handoff</td>
+        <td><span class="rating"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span>工具即扩展</td>
+        <td><span class="rating"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span>Session 协议</td>
+        <td><span class="rating"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span>Runner hook</td>
+        <td><span class="rating"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span>Session 抽象</td>
+        <td><span class="rating"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span>Typed</td>
+      </tr>
+      <tr>
+        <td class="name">LlamaIndex<small>Workflows</small></td>
+        <td><span class="rating"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span>数据→索引→查询</td>
+        <td><span class="rating"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span>AgentWorkflow</td>
+        <td><span class="rating"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span>组件抽象</td>
+        <td><span class="rating"><i class="on"></i><i class="on"></i><i class="on"></i><i class="mid"></i><i></i></span>内存为主</td>
+        <td><span class="rating"><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i></span>Stream 回调</td>
+        <td><span class="rating"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span>Connector</td>
+        <td><span class="rating"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span>Typed</td>
+      </tr>
+      <tr>
+        <td class="name">Temporal<small>workflow</small></td>
+        <td><span class="rating"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span>worker + activity</td>
+        <td><span class="rating"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span>无 LLM 循环</td>
+        <td><span class="rating"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span>Operator</td>
+        <td><span class="rating"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span>事件溯源</td>
+        <td><span class="rating"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span>Event History</td>
+        <td><span class="rating"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span>Payload 隔离</td>
+        <td><span class="rating"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span>Typed</td>
+      </tr>
+      <tr>
+        <td class="name">Dify<small>平台</small></td>
+        <td><span class="rating"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span>画布编排</td>
+        <td><span class="rating"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span>workflow 节点</td>
+        <td><span class="rating"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span>Marketplace</td>
+        <td><span class="rating"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span>DB</td>
+        <td><span class="rating"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span>SSE</td>
+        <td><span class="rating"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span>模型适配层</td>
+        <td><span class="rating"><i class="mid"></i><i class="mid"></i><i></i><i></i><i></i></span>部分</td>
+      </tr>
+      <tr>
+        <td class="name">nanobot<small>极简</small></td>
+        <td><span class="rating"><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i></span>单包扁平</td>
+        <td><span class="rating"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span>单 loop</td>
+        <td><span class="rating"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span>skill 文件</td>
+        <td><span class="rating"><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i></span>单进程</td>
+        <td><span class="rating"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span>bus meta</td>
+        <td><span class="rating"><i class="mid"></i><i></i><i></i><i></i><i></i></span>直接 FS</td>
+        <td><span class="rating"><i class="mid"></i><i></i><i></i><i></i><i></i></span>少</td>
+      </tr>
+      <tr>
+        <td class="name">Kubernetes<small>API 范式</small></td>
+        <td><span class="rating"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span>API/Controller 分离</td>
+        <td><span class="rating"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span>reconcile 循环</td>
+        <td><span class="rating"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span>CRD/Operator</td>
+        <td><span class="rating"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span>etcd</td>
+        <td><span class="rating"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span>watch</td>
+        <td><span class="rating"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span>Volume/CSI</td>
+        <td><span class="rating"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span>Typed API</td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3>业界的三条主线 —— llmwikify 缺什么</h3>
+  <div class="grid3">
+    <div class="card">
+      <span class="tag teal">主线 A</span>
+      <h4 style="margin-top:9px">单一运行时 + 声明式编排</h4>
+      <p style="font-size:13.5px;color:var(--ink2)">
+        LangGraph 用 Pregel 图、Temporal 用 Operator、K8s 用 reconcile 循环——
+        <b>执行引擎只有一份</b>，差异用声明式配置表达。llmwikify 反其道：5 个引擎各写一遍。
+      </p>
+      <p style="font-size:12.5px;color:var(--ink3);margin:0">
+        收益：hook/compact/确认语义改动只需改一处；新增场景 = 写一份 Plan，不写一份引擎。
+      </p>
+    </div>
+    <div class="card">
+      <span class="tag teal">主线 B</span>
+      <h4 style="margin-top:9px">状态外置 + 可持久化</h4>
+      <p style="font-size:13.5px;color:var(--ink2)">
+        LangGraph Checkpointer、Temporal 事件溯源、K8s etcd——
+        <b>运行状态与进程分离</b>，才能水平扩容、崩溃恢复、断点续跑。
+        llmwikify 的会话状态在进程内 dict，且只增不减。
+      </p>
+      <p style="font-size:12.5px;color:var(--ink3);margin:0">
+        收益：多实例部署成为可能；长跑进程不再泄漏；崩溃可恢复。
+      </p>
+    </div>
+    <div class="card">
+      <span class="tag teal">主线 C</span>
+      <h4 style="margin-top:9px">契约即代码 + 自动校验</h4>
+      <p style="font-size:13.5px;color:var(--ink2)">
+        K8s CRD、protobuf、OpenAPI codegen、Temporal 的 payload schema——
+        <b>契约是单一源，客户端由它生成</b>。llmwikify 的 SSE 契约靠人手同步两份，
+        已经漂移出 5 种事件。
+      </p>
+      <p style="font-size:12.5px;color:var(--ink3);margin:0">
+        收益：前后端契约漂移在 CI 阶段就被拦下，而不是用户报「按钮不灵」。
+      </p>
+    </div>
+  </div>
+
+  <div class="note">
+    <b>llmwikify 的差异化优势</b>：本地优先、零代码技能插件、完整的知识图谱与 lint 体系、
+    MCP 原生、多入口（CLI/MCP/HTTP/WS）。这些是 Dify/LangGraph 都不提供的。
+    <b>需要补的不是功能，是把已有能力「声明化 + 契约化」</b>——
+    把 5 套循环收敛成 1 套 + 声明式 Plan，把手工双写的事件表变成单一 schema 源。
+  </div>
+</section>
+
+<!-- ══════════ 04 目标架构 ══════════ -->
+<section id="target">
+  <div class="sec-head"><span class="sec-num">04</span><h2>目标架构</h2></div>
+  <p class="sec-lede">
+    目标态不推翻现有分层，而是<b>把三处「层内复制」升级为「声明式配置」</b>，
+    并<b>把两处「契约手工同步」升级为「单一源 + 自动校验」</b>。
+    四层结构保持不变——它是对的。
+  </p>
+
+  <div class="card" style="padding:24px">
+    <svg viewBox="0 0 680 430" width="100%" style="display:block" role="img" aria-label="llmwikify 目标架构">
+      <defs>
+        <marker id="a2" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto">
+          <path d="M0 0 L8 4 L0 8" fill="none" stroke="#7AA2F7" stroke-width="1.2"/>
+        </marker>
+      </defs>
+
+      <!-- interfaces -->
+      <rect x="40" y="18" width="600" height="46" rx="9" fill="#141A28" stroke="#2E3A50"/>
+      <text x="56" y="37" fill="#E6EAF2" font-size="12.5" font-weight="600" font-family="sans-serif">interfaces/</text>
+      <text x="56" y="54" fill="#93A0B8" font-size="10" font-family="monospace">cli · mcp · http · web</text>
+      <rect x="330" y="28" width="298" height="26" rx="6" fill="#161C2A" stroke="#7AA2F7" stroke-opacity=".5"/>
+      <text x="479" y="45" fill="#7AA2F7" font-size="10" font-family="monospace" text-anchor="middle">contract: events.schema.json → 自动生成 TS</text>
+
+      <!-- apps -->
+      <rect x="40" y="78" width="600" height="146" rx="9" fill="#141A28" stroke="#2E3A50"/>
+      <text x="56" y="97" fill="#E6EAF2" font-size="12.5" font-weight="600" font-family="sans-serif">apps/</text>
+
+      <!-- runtime box -->
+      <rect x="60" y="106" width="560" height="66" rx="8" fill="#161C2A" stroke="#4EC9B0" stroke-opacity=".6"/>
+      <text x="76" y="124" fill="#4EC9B0" font-size="11.5" font-weight="600" font-family="sans-serif">kernel/agent/runtime.py — 单一 AgentRuntime</text>
+      <rect x="76" y="132" width="86" height="26" rx="5" fill="#0E1622" stroke="#2E3A50"/>
+      <text x="119" y="149" fill="#93A0B8" font-size="9.5" font-family="monospace" text-anchor="middle">ChatPlan</text>
+      <rect x="170" y="132" width="98" height="26" rx="5" fill="#0E1622" stroke="#2E3A50"/>
+      <text x="219" y="149" fill="#93A0B8" font-size="9.5" font-family="monospace" text-anchor="middle">ResearchPlan</text>
+      <rect x="276" y="132" width="102" height="26" rx="5" fill="#0E1622" stroke="#2E3A50"/>
+      <text x="327" y="149" fill="#93A0B8" font-size="9.5" font-family="monospace" text-anchor="middle">SubagentPlan</text>
+      <rect x="386" y="132" width="98" height="26" rx="5" fill="#0E1622" stroke="#2E3A50"/>
+      <text x="435" y="149" fill="#93A0B8" font-size="9.5" font-family="monospace" text-anchor="middle">CodegenPlan</text>
+      <rect x="492" y="132" width="112" height="26" rx="5" fill="#0E1622" stroke="#2E3A50"/>
+      <text x="548" y="149" fill="#93A0B8" font-size="9.5" font-family="monospace" text-anchor="middle">Checkpointer</text>
+
+      <!-- apps submodules -->
+      <rect x="60" y="182" width="272" height="32" rx="6" fill="#161C2A" stroke="#2E3A50"/>
+      <text x="76" y="202" fill="#93A0B8" font-size="10" font-family="monospace">chat/ · session/ · tools/ · memory/</text>
+      <rect x="348" y="182" width="272" height="32" rx="6" fill="#161C2A" stroke="#2E3A50"/>
+      <text x="364" y="202" fill="#93A0B8" font-size="10" font-family="monospace">research/ · agent/ · wiki/ · api/</text>
+
+      <!-- knowledge core -->
+      <rect x="40" y="238" width="600" height="42" rx="9" fill="#141A28" stroke="#F0A868" stroke-opacity=".55"/>
+      <text x="56" y="255" fill="#F0A868" font-size="11.5" font-weight="600" font-family="sans-serif">apps/knowledge/ — 共享内核（消除 chat↔research 循环）</text>
+      <text x="56" y="271" fill="#93A0B8" font-size="9.5" font-family="monospace">gatherer · web_search · source_summary · quality_gate</text>
+
+      <!-- kernel -->
+      <rect x="40" y="294" width="600" height="46" rx="9" fill="#141A28" stroke="#2E3A50"/>
+      <text x="56" y="313" fill="#E6EAF2" font-size="12.5" font-weight="600" font-family="sans-serif">kernel/</text>
+      <text x="56" y="330" fill="#93A0B8" font-size="10" font-family="monospace">agent · wiki · graph · search · storage · codegen</text>
+
+      <!-- foundation -->
+      <rect x="40" y="354" width="600" height="58" rx="9" fill="#141A28" stroke="#2E3A50"/>
+      <text x="56" y="373" fill="#E6EAF2" font-size="12.5" font-weight="600" font-family="sans-serif">foundation/</text>
+      <text x="56" y="390" fill="#93A0B8" font-size="9.5" font-family="monospace">llm · db · config · callback · extractors · auth</text>
+      <rect x="368" y="364" width="258" height="38" rx="6" fill="#161C2A" stroke="#4EC9B0" stroke-opacity=".55"/>
+      <text x="497" y="380" fill="#4EC9B0" font-size="9.5" font-family="monospace" text-anchor="middle">storage port: PageStore Protocol</text>
+      <text x="497" y="394" fill="#5E6B85" font-size="8.5" font-family="monospace" text-anchor="middle">adapter: LocalFileStore（默认）· InMemory（测试）</text>
+
+      <!-- arrows -->
+      <g stroke="#7AA2F7" stroke-width="1" fill="none" marker-end="url(#a2)" opacity=".7">
+        <path d="M340 64 L340 76"/>
+        <path d="M340 224 L340 236"/>
+        <path d="M340 280 L340 292"/>
+        <path d="M340 340 L340 352"/>
+      </g>
+    </svg>
+  </div>
+
+  <h3>八项关键设计决策</h3>
+  <table>
+    <thead><tr><th style="width:26%">决策</th><th style="width:37%">内容</th><th style="width:37%">对标</th></tr></thead>
+    <tbody>
+      <tr><td class="name">D1 单一运行时</td><td>5 套循环 → 1 套 <code>AgentRuntime</code> + 4 份声明式 Plan。执行语义只写一次。</td><td>LangGraph Pregel 图 / Temporal Operator</td></tr>
+      <tr><td class="name">D2 状态外置</td><td><code>Checkpointer</code> 抽象，SQLite 为默认实现。进程内 dict 降级为缓存层。</td><td>LangGraph Checkpointer / Temporal 事件溯源</td></tr>
+      <tr><td class="name">D3 契约即代码</td><td>后端单一 <code>events.schema.json</code>；前端类型由其生成；CI 校验漂移。</td><td>K8s CRD / protobuf / OpenAPI codegen</td></tr>
+      <tr><td class="name">D4 存储端口化</td><td><code>PageStore</code> Protocol 置于 foundation；<code>Wiki</code> 与 mixin 只经端口访问页面。</td><td>六边形架构 / LlamaIndex Connector</td></tr>
+      <tr><td class="name">D5 共享内核</td><td>抽 <code>apps/knowledge/</code>，chat 与 research 均单向依赖它，不互相依赖。</td><td>模块化单体（Martin Fowler）</td></tr>
+      <tr><td class="name">D6 单一 Hook 集</td><td>16 钩子定义在 foundation；kernel 与 apps 共用，删除桥接层。</td><td>LangSmith callback / OpenTelemetry span</td></tr>
+      <tr><td class="name">D7 显式能力声明</td><td>Skill 自带 <code>exposed</code> / <code>snapshot_capable</code> 等能力标记，取代反射与白名单。</td><td>Kubernetes capability / OpenAI tool schema</td></tr>
+      <tr><td class="name">D8 分层类型门禁</td><td>mypy 严格度按层递增：foundation 严格 → kernel 较严 → apps 渐进收敛。</td><td>Java JSpecify / Rust 渐进类型</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ══════════ 05 改进方案 ══════════ -->
+<section id="proposals">
+  <div class="sec-head"><span class="sec-num">05</span><h2>改进方案</h2></div>
+  <p class="sec-lede">
+    八项方案，每项给出<b>现状 → 目标</b>的对照、<b>迁移步骤</b>与<b>可验证的收益</b>。
+    顺序即依赖顺序：P1 先行（收敛运行时），P2 承接（端口化），P4 收口（契约固化）。
+  </p>
+
+  <div class="prop">
+    <div class="top"><span class="n">1</span><h3>收敛 Agent 运行时</h3><span class="tag p0">P0-01</span></div>
+    <div class="trans">
+      <div class="box now"><div class="lbl">现状</div><div class="val">5 个独立 ReAct 实现，各自的 hook 点、compact 策略、确认流程、事件语义。改一处漏三处。</div></div>
+      <div class="arrow">→</div>
+      <div class="box next"><div class="lbl">目标</div><div class="val"><code>kernel/agent/runtime.py</code> 单引擎 + <code>Plan</code> 声明式策略；Chat/Research/Subagent/Codegen 各写一份 Plan 配置，不写引擎。</div></div>
+    </div>
+    <ol class="steps">
+      <li>提取 <code>kernel/agent/runtime.py</code>：把 <code>runner_v2.py</code> 的 5 步状态机原样搬入，行为零变化</li>
+      <li>定义 <code>Plan</code> Protocol：<code>reasoner / actor / deciders / max_iterations / hooks / finalize</code> 五个槽位</li>
+      <li><code>ChatPlan</code> 包装现有 <code>ChatRunnerV2</code> 行为；<code>ResearchPlan</code> 包装规则驱动 5 步；<code>SubagentPlan</code> 包装子进程 ReAct</li>
+      <li>把 <code>research/engine.py</code> 与 <code>base.aask_with_tools</code> 降级为 Plan 实现；删除 <code>unified/</code> 目录</li>
+      <li>加计数门禁：任意 Plan 的 hook 触发序列必须与迁移前逐字相同（差分守卫）</li>
+    </ol>
+    <div class="note ok"><b>收益</b> 语义改动从 5 处降到 1 处；新增场景成本从「写 500 行引擎」降到「写 30 行 Plan」；
+      删除约 1,800 行重复代码。</div>
+  </div>
+
+  <div class="prop">
+    <div class="top"><span class="n">2</span><h3>存储端口化</h3><span class="tag p0">P0-02</span></div>
+    <div class="trans">
+      <div class="box now"><div class="lbl">现状</div><div class="val"><code>WikiBackend</code> Protocol 声称可换后端，但 mixin 有 95 处直连 <code>read_text/write_text/rglob</code>，Protocol 仅被调用 5 次。</div></div>
+      <div class="arrow">→</div>
+      <div class="box next"><div class="lbl">目标</div><div class="val"><code>foundation/storage/page_store.py</code> 定义 <code>PageStore</code>（read/write/list/stat）；<code>LocalFileStore</code> 与 <code>InMemoryStore</code> 两个 adapter；Wiki 全链路只经端口。</div></div>
+    </div>
+    <ol class="steps">
+      <li>定义 <code>PageStore</code> Protocol：<code>read_text / write_text / list_pages / stat / exists</code></li>
+      <li><code>LocalFileStore</code> 适配现有语义（含 UTF-8 强制、<code>errors="replace"</code> 降级）</li>
+      <li>按 mixin 逐个替换 95 处直连——<b>按改动量升序</b>，先叶子 mixin（query/link）后核心（io/page_io）</li>
+      <li>给 <code>InMemoryStore</code> 写实现，用它跑全量测试——<b>测试不碰磁盘</b>本身就是收益</li>
+      <li>把 <code>check_architecture.py</code> 加一条新规则：<code>kernel/wiki/**</code> 内禁止出现 <code>Path.read_text</code> 直接调用</li>
+    </ol>
+    <div class="note ok"><b>收益</b> 非 FS 后端（远程对象存储 / 内存）真正可实现；测试可完全无 IO，速度与稳定性双升；
+      <code>check_architecture.py</code> 从此能守住端口不被再次击穿。</div>
+  </div>
+
+  <div class="prop">
+    <div class="top"><span class="n">3</span><h3>抽取共享内核</h3><span class="tag p0">P0-04</span></div>
+    <div class="trans">
+      <div class="box now"><div class="lbl">现状</div><div class="val"><code>apps.research</code> ↔ <code>apps.chat</code> 包级双向 import。同层循环让「apps 可自由组合」的前提失效。</div></div>
+      <div class="arrow">→</div>
+      <div class="box next"><div class="lbl">目标</div><div class="val"><code>apps/knowledge/</code> 承载两者共用的采集/搜索/质量判定；chat 与 research 均<b>单向</b>依赖它，互不引用。</div></div>
+    </div>
+    <ol class="steps">
+      <li>识别循环边：<code>research→chat.research_runner / gatherer / harness</code> 与 <code>chat→research.web_search</code></li>
+      <li>把 <code>gatherer</code>、<code>web_search</code>、source summary 逻辑移入 <code>apps/knowledge/</code></li>
+      <li>research 的 rule-driven 5 步下沉到 <code>apps/knowledge/pipeline/</code>，chat 与 research 共用</li>
+      <li>两侧改为单向 import；在 <code>check_architecture.py</code> 加「同层包不得互相 import」规则</li>
+    </ol>
+    <div class="note"><b>取舍</b> 这是一次中等规模的重命名+移动，会产生较大的 diff。
+      建议在方案 1 完成后立即做——此时循环的语义边界已由 Plan 划清，搬迁更安全。</div>
+  </div>
+
+  <div class="prop">
+    <div class="top"><span class="n">4</span><h3>契约即代码</h3><span class="tag p0">P0-03</span></div>
+    <div class="trans">
+      <div class="box now"><div class="lbl">现状</div><div class="val">后端 17 种 SSE 事件 / 前端 12 种 union，纯手工双写，无 codegen、无契约测试、CI 不校验；<code>unified/events.py</code> 还抄了一份。</div></div>
+      <div class="arrow">→</div>
+      <div class="box next"><div class="lbl">目标</div><div class="val">后端维护唯一 <code>events.schema.json</code>；前端 <code>ChatStreamEvent</code> 由其生成；CI 有 contract job 拦截漂移。</div></div>
+    </div>
+    <ol class="steps">
+      <li>把手写 <code>events.py</code> 常量改成从 <code>events.schema.json</code> 读取并校验（保持同名常量 API 不变）</li>
+      <li>写 <code>scripts/gen_webui_types.py</code>：schema → <code>ui/webui/src/generated/events.ts</code></li>
+      <li>前端 <code>api.ts</code> 改为 <code>export type ChatStreamEvent = GeneratedChatEvent</code>，删掉手写 union</li>
+      <li>CI 加 <code>contract.yml</code>：重新生成并 <code>git diff --exit-code</code>，漂移即红</li>
+      <li>删 <code>unified/events.py</code> 重复定义</li>
+    </ol>
+    <div class="note ok"><b>收益</b> 契约漂移从「用户报障」变成「CI 拦截」；新增事件类型只需改一处 JSON。
+      这也是本次评审中<b>投入产出比最高</b>的一项。</div>
+  </div>
+
+  <div class="prop">
+    <div class="top"><span class="n">5</span><h3>状态外置</h3><span class="tag p1">P1-04</span></div>
+    <div class="trans">
+      <div class="box now"><div class="lbl">现状</div><div class="val">会话状态在 <code>orchestrator.py:244-246</code> 的进程内 dict；<code>_tool_registries</code> 只增不减，长跑进程泄漏；多实例不可共享。</div></div>
+      <div class="arrow">→</div>
+      <div class="box next"><div class="lbl">目标</div><div class="val"><code>Checkpointer</code> 抽象 + SQLite 实现；进程内只做 LRU 缓存。崩溃可恢复，水平扩容解锁。</div></div>
+    </div>
+    <ol class="steps">
+      <li>定义 <code>Checkpointer</code> Protocol：<code>load(session_id) / save(state) / list_sessions() / delete(id)</code></li>
+      <li><code>SQLiteCheckpointer</code> 存到既有 <code>chat_sessions</code> 表（加一列 JSON 状态）</li>
+      <li>把 <code>_session_status</code> / <code>_abort_events</code> 迁入；进程内 dict 改为 LRU 缓存（带 TTL 与上限）</li>
+      <li><code>_tool_registries</code> 改为按 wiki_id 缓存 + 引用计数或 TTL，修复泄漏</li>
+      <li>补一个「重启后可恢复会话」的集成测试</li>
+    </ol>
+    <div class="note warn"><b>取舍</b> SQLite 写入会给每次会话操作带来 I/O。
+      建议状态<b>写后异步</b>落盘、读时按需回填内存，保持热路径无感。</div>
+  </div>
+
+  <div class="prop">
+    <div class="top"><span class="n">6</span><h3>显式能力声明</h3><span class="tag p1">P1-03 / P1-05</span></div>
+    <div class="trans">
+      <div class="box now"><div class="lbl">现状</div><div class="val">lint 快照靠 <code>type(self).run is not Rule.run</code> 反射判断；skill 暴露靠硬编码白名单。两者都是「不写对就静默失效」。</div></div>
+      <div class="arrow">→</div>
+      <div class="box next"><div class="lbl">目标</div><div class="val">规则与技能自带能力标记；框架只读标记，不猜。新增能力不写对会<b>立刻报错</b>而不是静默退化。</div></div>
+    </div>
+    <ol class="steps">
+      <li><code>Rule</code> 加 <code>snapshot_capable: ClassVar[bool] = False</code>，删反射判断</li>
+      <li>新增 <code>SnapshotRule(Rule)</code> 子类，模板方法强制实现 <code>detect_from_snapshot</code></li>
+      <li>加规则时若未声明快照能力，<b>计数门禁</b>报错而非静默通过</li>
+      <li><code>Skill</code> 加 <code>exposed: bool = True</code> 默认值；删除 <code>exposed_skills</code> 白名单</li>
+      <li>保留一份显式 <code>hidden_skills</code> 排除列表（用于内部技能）</li>
+    </ol>
+    <div class="note ok"><b>收益</b> 消除两类「注册了却调不到」的静默故障；新贡献者的第一课从「读源码找隐藏协议」变成「看一个类字段」。</div>
+  </div>
+
+  <div class="prop">
+    <div class="top"><span class="n">7</span><h3>拆分 God Object</h3><span class="tag p1">P1-01</span></div>
+    <div class="trans">
+      <div class="box now"><div class="lbl">现状</div><div class="val"><code>orchestrator.py</code> 1,016 行承担 6 类职责；<code>apps/chat</code> 单包 33.5k LOC / 169 文件；44 个 &gt;500 行文件。</div></div>
+      <div class="arrow">→</div>
+      <div class="box next"><div class="lbl">目标</div><div class="val"><code>ChatService</code>（门面）/ <code>SessionManager</code> / <code>CommandRouter</code> / <code>EventFactory</code> / <code>ToolRegistryCache</code> 五个单一职责模块；每个子包 &lt; 8k LOC。</div></div>
+    </div>
+    <ol class="steps">
+      <li>先抽 <code>EventFactory</code>（纯函数，无状态，零风险）——顺带成为契约 schema 的生成源</li>
+      <li>抽 <code>CommandRouter</code>（斜杠命令）与 <code>SessionManager</code>（会话 CRUD + 确认流）</li>
+      <li><code>ChatService</code> 保留原 <code>ChatOrchestrator</code> 的公开 API 作为门面，内部委派</li>
+      <li>把 <code>apps/chat</code> 物理拆为 <code>chat/</code>（运行时）/ <code>session/</code>（状态）/ <code>tools/</code>（装配）三个包</li>
+      <li>每步一个 commit，保持全绿；用 <code>grep -c "def " 文件</code> 监控不反弹</li>
+    </ol>
+    <div class="note"><b>取舍</b> 这是纯结构调整、短期不产出用户可见价值。
+      建议在方案 1、4 完成后再做，届时新结构的边界已经清晰。</div>
+  </div>
+
+  <div class="prop">
+    <div class="top"><span class="n">8</span><h3>工程门禁</h3><span class="tag p2">P2 全集</span></div>
+    <div class="trans">
+      <div class="box now"><div class="lbl">现状</div><div class="val">e2e 默认被 pytest 忽略；WebUI 零 CI；架构校验未接 CI；mypy 豁免 138 模块；<code>fail_under=15</code>；打包不含 webui dist。</div></div>
+      <div class="arrow">→</div>
+      <div class="box next"><div class="lbl">目标</div><div class="val">架构/契约/类型/覆盖率四道门禁全部进 CI；e2e 用例可本地一键跑；发布产物含 UI。</div></div>
+    </div>
+    <ol class="steps">
+      <li><code>check_architecture.py</code> + <code>gen_webui_types.py --check</code> 接入 <code>lint.yml</code></li>
+      <li>新增 <code>webui.yml</code>：<code>npm ci && npm run build && vitest run && tsc --noEmit</code></li>
+      <li><code>fail_under</code> 从 15 提到 <b>80</b>（当前 80.3%，留 0.3% 余量），CI 实际执行全量含 e2e 标记</li>
+      <li>mypy 豁免按层递减：先 foundation 严格化，再 kernel</li>
+      <li>打包补 <code>ui/webui/dist</code>；修 <code>version-bump.yml</code> 的 <code>add-paths</code>；<code>all</code> extras 补 <code>llm</code></li>
+      <li>清死代码：<code>unified/</code>（15 文件）、<code>research_engine/</code>（9 文件）、<code>WikiCLI</code> 双轨</li>
+      <li>同步文档：AGENTS.md 文件名、mixins 元类说明、<code>kernel/__init__.py</code> 的 quant 残留</li>
+    </ol>
+    <div class="note ok"><b>收益</b> 让前述 7 项改造<b>不会回退</b>——没有门禁的架构改进等于没做。</div>
+  </div>
+</section>
+
+<!-- ══════════ 06 路线图 ══════════ -->
+<section id="roadmap">
+  <div class="sec-head"><span class="sec-num">06</span><h2>演进路线图</h2></div>
+  <p class="sec-lede">
+    三阶段推进。原则：<b>先立契约，再动结构；先有门禁，再做重构。</b>
+    每阶段结束时代码库必须比开始时<b>更绿</b>（测试数增加、门禁提高、违规数减少）。
+  </p>
+
+  <div class="grid3">
+    <div class="phase">
+      <div class="meta"><span class="ph">Phase 1</span><span class="tag teal">止血 + 固契约</span></div>
+      <h3>把承诺兑现</h3>
+      <p class="goal">消除 4 个 P0 中的 3 个，建立 CI 门禁基线</p>
+      <ul>
+        <li><b>契约即代码</b>（方案 4）— 前后端 SSE 单一源 + CI 校验</li>
+        <li><b>显式能力声明</b>（方案 6）— lint 快照 + skill 暴露</li>
+        <li><b>CI 门禁</b>（方案 8 前半）— 架构校验接入 / WebUI CI / fail_under=80</li>
+        <li><b>死代码清理</b> — <code>unified/</code>、<code>research_engine/</code>、WikiCLI 双轨</li>
+        <li>发布链路修复 — webui dist 打包 / version-bump 路径 / all extras</li>
+      </ul>
+      <p style="margin-top:14px;font-family:var(--mono);font-size:11.5px;color:var(--ink3)">
+        出口条件：CI 全绿 · 契约漂移可拦截 · 覆盖率 ≥80% 门禁生效</p>
+    </div>
+
+    <div class="phase p2">
+      <div class="meta"><span class="ph">Phase 2</span><span class="tag p3">结构收敛</span></div>
+      <h3>把重复变成声明</h3>
+      <p class="goal">单一 Agent 运行时 + 消除同层循环</p>
+      <ul>
+        <li><b>收敛 Agent 运行时</b>（方案 1）— 5 套循环 → 1 套 + 4 份 Plan</li>
+        <li><b>抽取共享内核</b>（方案 3）— <code>apps/knowledge/</code>，解除 chat↔research 循环</li>
+        <li><b>状态外置</b>（方案 5）— Checkpointer + SQLite</li>
+        <li>钩子统一到 foundation 16 点，删除桥接层</li>
+        <li>新增「同层包不得互相 import」架构规则</li>
+      </ul>
+      <p style="margin-top:14px;font-family:var(--mono);font-size:11.5px;color:var(--ink3)">
+        出口条件：循环实现仅 1 套 · 同层零循环 · 会话可跨进程恢复</p>
+    </div>
+
+    <div class="phase p3">
+      <div class="meta"><span class="ph">Phase 3</span><span class="tag p2">纵深优化</span></div>
+      <h3>把端口做实</h3>
+      <p class="goal">存储端口化 + 模块物理拆分 + 性能收尾</p>
+      <ul>
+        <li><b>存储端口化</b>（方案 2）— 95 处直连收敛，<code>InMemoryStore</code> 落地</li>
+        <li><b>拆分 God Object</b>（方案 7）— Orchestrator 五分，chat 三包化</li>
+        <li>类型门禁收敛 — foundation 严格化，mypy 豁免逐层递减</li>
+        <li>性能：LLM 响应缓存、索引增量更新、工具 lazy import</li>
+        <li>可观测性：接 OpenTelemetry（现有 <code>llm_metrics</code> 为基础）</li>
+      </ul>
+      <p style="margin-top:14px;font-family:var(--mono);font-size:11.5px;color:var(--ink3)">
+        出口条件：零直连 FS · 子包 &lt;8k LOC · 可插拔存储后端</p>
+    </div>
+  </div>
+
+  <h3>收益预期</h3>
+  <table>
+    <thead><tr><th style="width:22%">维度</th><th style="width:26%">当前</th><th style="width:26%">Phase 3 后</th><th>量级</th></tr></thead>
+    <tbody>
+      <tr><td class="name">改一处语义的改动点</td><td>5 处（5 套循环）</td><td>1 处（单一运行时）</td><td><b>−80%</b></td></tr>
+      <tr><td class="name">新增 Agent 场景成本</td><td>~500 行引擎</td><td>~30 行 Plan</td><td><b>−94%</b></td></tr>
+      <tr><td class="name">存储后端可选性</td><td>仅本地 FS</td><td>FS / 内存 / 远程</td><td>解锁</td></tr>
+      <tr><td class="name">契约漂移发现时机</td><td>用户报障</td><td>CI 拦截</td><td>提前一个发布周期</td></tr>
+      <tr><td class="name">横向扩容能力</td><td>单进程</td><td>多实例（状态外置）</td><td>解锁</td></tr>
+      <tr><td class="name">死代码</td><td>~24 文件 / ~2,000 行</td><td>0</td><td><b>−2,000 行</b></td></tr>
+      <tr><td class="name">类型覆盖</td><td>138 模块豁免</td><td>foundation 100% / kernel 80%+</td><td>门禁可逐步加严</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ══════════ 07 风险 ══════════ -->
+<section id="risks">
+  <div class="sec-head"><span class="sec-num">07</span><h2>风险与取舍</h2></div>
+  <p class="sec-lede">架构改造的失败模式通常不是技术难度，而是<b>范围失控</b>与<b>回归 undetected</b>。以下为已识别风险。</p>
+
+  <div class="grid2">
+    <div class="card p1">
+      <span class="tag p1">风险</span><h4 style="margin-top:9px">大重构与覆盖率提升抢带宽</h4>
+      <p style="font-size:13.5px;color:var(--ink2)">当前 80.3% 覆盖、目标 95%，补测试本身需要大量时间。
+        若同时推进大规模搬迁，两者会互相挤压。</p>
+      <p style="font-size:13px;color:var(--ink2);margin:0"><b>对策</b>：先做「不改变行为」的项（契约、门禁、死代码），
+        再做结构搬迁；每个结构 commit 必须补差分守卫测试。</p>
+    </div>
+    <div class="card p1">
+      <span class="tag p1">风险</span><h4 style="margin-top:9px">「收敛」误伤扩展性</h4>
+      <p style="font-size:13.5px;color:var(--ink2)">5 套循环看起来冗余，但它们服务于不同场景（LLM 驱动 / 规则驱动 / 子进程）。
+        强行合并成一个僵硬的引擎会让新场景无处安放。</p>
+      <p style="font-size:13px;color:var(--ink2);margin:0"><b>对策</b>：统一的是<b>执行骨架</b>，不是<b>场景语义</b>——
+        Plan 允许自定义 reasoner/actor/decider，差异留在 Plan 而非引擎。</p>
+    </div>
+    <div class="card p1">
+      <span class="tag p1">风险</span><h4 style="margin-top:9px">端口化改造的回归面</h4>
+      <p style="font-size:13.5px;color:var(--ink2)">替换 95 处直连 FS 是典型的「大量小改动」——
+        每一处都可能引入编码、路径、错误处理的细微差异。</p>
+      <p style="font-size:13px;color:var(--ink2);margin:0"><b>对策</b>：<code>InMemoryStore</code> 与 <code>LocalFileStore</code>
+        跑同一套测试，行为差异必须为零；按改动量升序迁移，每步一个 commit。</p>
+    </div>
+    <div class="card p1">
+      <span class="tag p1">风险</span><h4 style="margin-top:9px">单人多线并行的上下文损耗</h4>
+      <p style="font-size:13.5px;color:var(--ink2)">项目已在用多 agent 协作协议（<code>docs/designs/refactor-*</code>），
+        但并行改动同一层文件会产生合并冲突（此前 P4/P4b 的 lint 改动就曾与他人并行）。</p>
+      <p style="font-size:13px;color:var(--ink2);margin:0"><b>对策</b>：按层分工（一人一层），
+        跨层改动走 handoff 文档；每个 agent 的产出必须带可运行的回归测试。</p>
+    </div>
+  </div>
+
+  <div class="note ok" style="margin-top:24px">
+    <b>总体判断</b>：当前架构的<b>骨架是对的</b>——四层单向依赖、机器校验、插件机制、
+    快照式性能优化，都是高于同规模项目平均水准的设计。问题集中在<b>层的接缝处</b>：
+    抽象被绕过、语义被复制、契约被手工同步。这三件事恰好也是业界共识中最该自动化掉的部分。
+    <b>不必推倒重来</b>——按 8 个方案分三阶段收敛，同一份代码库可以做到既干净又不失现有能力。
+  </div>
+</section>
+
+<footer>
+  <div>
+    <strong style="color:var(--ink2)">llmwikify 架构评审与演进方案</strong> · v0.41-dev · 2026-11-02<br/>
+    基于 <code>src/llmwikify</code> 全量代码（407 文件 / 80,357 LOC）与 3 路并行代码走查
+  </div>
+  <div style="text-align:right">
+    覆盖率 80.3%（24302 / 30279）· 5286 tests passed · 架构校验 0 violation<br/>
+    <span style="color:var(--ink3)">配套文档：<code>docs/architecture/overview.md</code></span>
+  </div>
+</footer>
+
+</div>
+
+<script>
+(function(){
+  // ── wrap every table in a horizontal scroller (mobile) ──────
+  var tables = Array.prototype.slice.call(document.querySelectorAll('table'));
+  tables.forEach(function(t){
+    if(t.parentElement && t.parentElement.classList.contains('tscroll')) return;
+    var w = document.createElement('div');
+    w.className = 'tscroll';
+    t.parentNode.insertBefore(w, t);
+    w.appendChild(t);
+  });
+
+  // ── layer diagram interaction ──────────────────────────────
+  var LAYERS = {
+    l1:{name:'interfaces/', loc:'11,746 LOC', files:'75', cov:'82.2%', dep:'kernel · apps', depb:'—（顶层）',
+        desc:'入口层：CLI（33 命令，Command Protocol + 注册表）、MCP server、FastAPI HTTP server、WebUI 静态托管。协议形状正确，但命令清单双写、别名解析依赖 argparse 私有属性。'},
+    l2:{name:'apps/', loc:'44,797 LOC', files:'201', cov:'78.4%', dep:'kernel · foundation', depb:'interfaces',
+        desc:'应用层：ChatOrchestrator、ChatRunnerV2、Skill 运行时与插件加载、WikiToolRegistry、研究管线、维护调度。最大风险区——单包 33.5k LOC、5 套 Agent 循环、chat↔research 包级循环、进程内状态泄漏。'},
+    l3:{name:'kernel/', loc:'15,285 LOC', files:'78', cov:'82.0%', dep:'foundation', depb:'apps · interfaces',
+        desc:'通用框架：UnifiedAgentLoop 状态机、Wiki+13 mixin、LintEngine+Rule 模板方法、PageSnapshot、WikiBackend Protocol。lint 子系统设计优秀；核心缺陷是存储 Protocol 被 95 处直连 FS 击穿。'},
+    l4:{name:'foundation/', loc:'8,529 LOC', files:'53', cov:'83.0%', dep:'（零依赖）', depb:'kernel · apps · interfaces',
+        desc:'零依赖基础设施：LLM 协议与 resolver、db 连接 profile、callback 13 钩子、extractor 注册表、auth、config。抽象质量最高；渗漏点：migration.py 含交互 CLI 逻辑、llm_client shim 指向倒置、io.py 仍是 placeholder。'}
+  };
+  function pickLayer(g){
+    var key = g.getAttribute('data-layer');
+    var d = LAYERS[key]; if(!d) return;
+    document.getElementById('pl-name').textContent = d.name;
+    document.getElementById('pl-loc').textContent = d.loc;
+    document.getElementById('pl-files').textContent = d.files;
+    document.getElementById('pl-cov').textContent = d.cov;
+    document.getElementById('pl-dep').textContent = d.dep;
+    document.getElementById('pl-depb').textContent = d.depb;
+    document.getElementById('pl-desc').textContent = d.desc;
+    var gs = document.querySelectorAll('.layer');
+    for(var i=0;i<gs.length;i++){
+      gs[i].classList.toggle('sel', gs[i]===g);
+      gs[i].classList.toggle('dim', gs[i]!==g);
+    }
+  }
+  var layers = document.querySelectorAll('.layer');
+  for(var i=0;i<layers.length;i++){
+    (function(g){
+      g.addEventListener('mouseenter', function(){ pickLayer(g); });
+      g.addEventListener('click', function(){ pickLayer(g); });
+    })(layers[i]);
+  }
+
+  // ── scrollspy ──────────────────────────────────────────────
+  var links = Array.prototype.slice.call(document.querySelectorAll('.nav-links a'));
+  var secs = links.map(function(a){ return document.querySelector(a.getAttribute('href')); }).filter(Boolean);
+  function spy(){
+    var y = window.scrollY + 120, cur = 0;
+    for(var i=0;i<secs.length;i++){ if(secs[i].offsetTop <= y) cur = i; }
+    for(var i=0;i<links.length;i++) links[i].classList.toggle('active', i===cur);
+  }
+  window.addEventListener('scroll', spy, {passive:true});
+  spy();
+})();
+</script>
+</body>
+</html>
