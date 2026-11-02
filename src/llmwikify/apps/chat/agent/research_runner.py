@@ -45,6 +45,7 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any
 
+from llmwikify.apps.chat.agent import events as chat_events
 from llmwikify.apps.chat.skills.base import (
     SkillAction,
     SkillContext,
@@ -64,8 +65,12 @@ EVENT_REASONING = "reasoning"
 EVENT_ACTION_ERROR = "action_error"
 EVENT_OBSERVATION_ERROR = "observation_error"
 EVENT_ROUND_COMPLETE = "round_complete"
-EVENT_PHASE = "phase"
 EVENT_TIMEOUT = "timeout"
+
+# The phase event is shared with the chat vocabulary — same wire name,
+# same ``phase`` field; the research runner adds ``round`` / ``reason``
+# / ``final_state`` on top (see the PHASE spec in ``events.py``).
+EVENT_PHASE = chat_events.PHASE
 
 
 # ─── Hook type aliases ─────────────────────────────────────────────

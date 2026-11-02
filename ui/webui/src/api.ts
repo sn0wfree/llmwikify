@@ -1,4 +1,14 @@
 import { useAuthStore } from './stores/authStore';
+import type { ChatStreamEvent } from './generated/events';
+import type { ResearchRunStatus } from './types/research';
+
+// The SSE event union and the research status shape are generated from
+// the backend contract (src/llmwikify/apps/chat/agent/events.py) — see
+// scripts/gen_webui_types.py. They are re-exported here because the
+// existing call sites import them from '../api'.
+export { CHAT_EVENT_NAMES } from './generated/events';
+export type { ChatEventName, ChatStreamEvent } from './generated/events';
+export type { ResearchRunStatus, ResearchRunTimelineItem } from './types/research';
 
 const API_BASE = '/api';
 const API_TOKEN = import.meta.env.VITE_API_TOKEN;
@@ -7,41 +17,6 @@ function getAuthToken(): string | null {
   const storeToken = useAuthStore.getState().token;
   return storeToken || API_TOKEN || null;
 }
-
-export interface ResearchRunTimelineItem {
-  phase_id: string;
-  label: string;
-  status: string;
-}
-
-export interface ResearchRunStatus {
-  run_id: string;
-  workflow_name?: string;
-  status: string;
-  timeline: ResearchRunTimelineItem[];
-  artifact_counts?: Record<string, number>;
-  proposal_bundle?: unknown;
-  writes_wiki?: boolean;
-  proposal_only?: boolean;
-  started_at?: number;
-  last_updated?: number;
-  total_tokens_used?: number;
-  total_agents_spawned?: number;
-  error?: string;
-}
-
-export type ChatStreamEvent =
-  | { type: 'session_created'; session_id: string }
-  | { type: 'message_delta'; content: string }
-  | { type: 'thinking'; content: string }
-  | { type: 'tool_call_start'; tool: string; args: Record<string, unknown>; call_id: string }
-  | { type: 'tool_call_end'; tool: string; result: unknown; call_id: string; duration_ms: number }
-  | { type: 'tool_call_error'; tool: string; error: string; call_id: string; duration_ms: number }
-  | { type: 'done'; content: string; stop_reason?: string; compacted_count?: number }
-  | { type: 'save_warning'; reason: string }
-  | { type: 'confirmation_required'; confirmation_id: string; tool: string; args: Record<string, unknown>; impact: Record<string, unknown>; call_id: string; duration_ms: number }
-  | ({ type: 'research_run_started' } & ResearchRunStatus)
-  | { type: 'error'; message: string };
 
 // Phase 5.4 (v0.36): SSE reconnection configuration.
 const SSE_MAX_RETRIES = 3;

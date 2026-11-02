@@ -1,0 +1,335 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://llmwikify.readthedocs.io/events.schema.json",
+  "title": "llmwikify chat SSE events",
+  "description": "The chat SSE event stream. Generated from src/llmwikify/apps/chat/agent/events.py — do not edit by hand.",
+  "oneOf": [
+    {
+      "title": "SESSION_CREATED",
+      "properties": {
+        "type": {
+          "const": "session_created"
+        },
+        "session_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "session_id"
+      ]
+    },
+    {
+      "title": "SESSION_INIT",
+      "properties": {
+        "type": {
+          "const": "session_init"
+        },
+        "session_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "session_id"
+      ]
+    },
+    {
+      "title": "USER_MESSAGE",
+      "properties": {
+        "type": {
+          "const": "user_message"
+        },
+        "content": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "content"
+      ]
+    },
+    {
+      "title": "MESSAGE_DELTA",
+      "properties": {
+        "type": {
+          "const": "message_delta"
+        },
+        "content": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "content"
+      ]
+    },
+    {
+      "title": "THINKING",
+      "properties": {
+        "type": {
+          "const": "thinking"
+        },
+        "content": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "content"
+      ]
+    },
+    {
+      "title": "TOOL_CALL_START",
+      "properties": {
+        "type": {
+          "const": "tool_call_start"
+        },
+        "tool": {
+          "type": "string"
+        },
+        "args": {
+          "type": "object"
+        },
+        "call_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "tool",
+        "args",
+        "call_id"
+      ]
+    },
+    {
+      "title": "TOOL_CALL_END",
+      "properties": {
+        "type": {
+          "const": "tool_call_end"
+        },
+        "tool": {
+          "type": "string"
+        },
+        "result": {
+          "type": "object"
+        },
+        "call_id": {
+          "type": "string"
+        },
+        "duration_ms": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "type",
+        "tool",
+        "result",
+        "call_id",
+        "duration_ms"
+      ]
+    },
+    {
+      "title": "TOOL_CALL_ERROR",
+      "properties": {
+        "type": {
+          "const": "tool_call_error"
+        },
+        "tool": {
+          "type": "string"
+        },
+        "error": {
+          "type": "string"
+        },
+        "call_id": {
+          "type": "string"
+        },
+        "duration_ms": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "type",
+        "tool",
+        "error",
+        "call_id"
+      ]
+    },
+    {
+      "title": "CONFIRMATION_REQUIRED",
+      "properties": {
+        "type": {
+          "const": "confirmation_required"
+        },
+        "confirmation_id": {
+          "type": "string"
+        },
+        "tool": {
+          "type": "string"
+        },
+        "args": {
+          "type": "object"
+        },
+        "impact": {
+          "type": "object"
+        },
+        "call_id": {
+          "type": "string"
+        },
+        "duration_ms": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "type",
+        "confirmation_id",
+        "tool",
+        "args",
+        "impact",
+        "call_id"
+      ]
+    },
+    {
+      "title": "COMPACTED",
+      "properties": {
+        "type": {
+          "const": "compacted"
+        },
+        "call_id": {
+          "type": "string"
+        },
+        "tool": {
+          "type": "string"
+        },
+        "chars_saved": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "type",
+        "call_id",
+        "tool",
+        "chars_saved"
+      ]
+    },
+    {
+      "title": "COMMAND_DONE",
+      "properties": {
+        "type": {
+          "const": "command_done"
+        },
+        "command": {
+          "type": "string"
+        },
+        "ok": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "data": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "type",
+        "command",
+        "ok",
+        "message"
+      ]
+    },
+    {
+      "title": "RESEARCH_RUN_STARTED",
+      "properties": {
+        "type": {
+          "const": "research_run_started"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "description": "payload extends ResearchRunStatus"
+    },
+    {
+      "title": "DONE",
+      "properties": {
+        "type": {
+          "const": "done"
+        },
+        "content": {
+          "type": "string"
+        },
+        "stop_reason": {
+          "type": "string"
+        },
+        "error": {
+          "type": "string"
+        },
+        "compacted_count": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "type",
+        "content"
+      ]
+    },
+    {
+      "title": "ERROR",
+      "properties": {
+        "type": {
+          "const": "error"
+        },
+        "message": {
+          "type": "string"
+        },
+        "stop_reason": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "message"
+      ]
+    },
+    {
+      "title": "SAVE_WARNING",
+      "properties": {
+        "type": {
+          "const": "save_warning"
+        },
+        "reason": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "reason"
+      ]
+    },
+    {
+      "title": "PHASE",
+      "properties": {
+        "type": {
+          "const": "phase"
+        },
+        "phase": {
+          "type": "string"
+        },
+        "round": {
+          "type": "number"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "final_state": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "type",
+        "phase"
+      ]
+    }
+  ]
+}

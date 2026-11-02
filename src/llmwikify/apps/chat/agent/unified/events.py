@@ -1,9 +1,16 @@
-"""统一事件常量 — 合并 chat + research，re-export 兼容。
+"""Event constants — backward-compat re-export.
 
-chat events（原有 16 个）+ research events（6 个）统一定义。
-research_runner.py 通过 re-export 保持旧 import 路径不变。
+The chat SSE vocabulary lives in
+:mod:`llmwikify.apps.chat.agent.events` (the single source the WebUI
+types are generated from) and the research-runner vocabulary lives in
+:mod:`llmwikify.apps.chat.agent.research_runner`. This module used to
+define its own copies of both, which is how the frontend and the
+backend drifted apart.
 
-用法::
+It now only re-exports, so the old import path keeps working while
+there is exactly one definition of every event name.
+
+Usage::
 
     from llmwikify.apps.chat.agent.unified.events import (
         MESSAGE_DELTA, THINKING, TOOL_CALL_START, DONE, ERROR, PHASE,
@@ -13,41 +20,39 @@ research_runner.py 通过 re-export 保持旧 import 路径不变。
 
 from __future__ import annotations
 
-# ── session lifecycle ──────────────────────────────────────────
-SESSION_CREATED = "session_created"
-SESSION_INIT = "session_init"
-USER_MESSAGE = "user_message"
-
-# ── streaming output ───────────────────────────────────────────
-MESSAGE_DELTA = "message_delta"
-THINKING = "thinking"
-
-# ── tool execution ─────────────────────────────────────────────
-TOOL_CALL_START = "tool_call_start"
-TOOL_CALL_END = "tool_call_end"
-TOOL_CALL_ERROR = "tool_call_error"
-CONFIRMATION_REQUIRED = "confirmation_required"
-COMPACTED = "compacted"
-
-# ── commands / research ────────────────────────────────────────
-COMMAND_DONE = "command_done"
-RESEARCH_RUN_STARTED = "research_run_started"
-
-# ── terminal ───────────────────────────────────────────────────
-DONE = "done"
-ERROR = "error"
-SAVE_WARNING = "save_warning"
-
-# ── passthrough from LLM stream (consumed by the runner) ───────
-PHASE = "phase"
-
-# ── research events（原 research_runner.py EVENT_* 常量）───────
-REASONING = "reasoning"
-ACTION_ERROR = "action_error"
-OBSERVATION_ERROR = "observation_error"
-ROUND_COMPLETE = "round_complete"
-TIMEOUT = "timeout"
-
+from llmwikify.apps.chat.agent.events import (
+    COMMAND_DONE,
+    COMPACTED,
+    CONFIRMATION_REQUIRED,
+    DONE,
+    ERROR,
+    MESSAGE_DELTA,
+    PHASE,
+    RESEARCH_RUN_STARTED,
+    SAVE_WARNING,
+    SESSION_CREATED,
+    SESSION_INIT,
+    THINKING,
+    TOOL_CALL_END,
+    TOOL_CALL_ERROR,
+    TOOL_CALL_START,
+    USER_MESSAGE,
+)
+from llmwikify.apps.chat.agent.research_runner import (
+    EVENT_ACTION_ERROR as ACTION_ERROR,
+)
+from llmwikify.apps.chat.agent.research_runner import (
+    EVENT_OBSERVATION_ERROR as OBSERVATION_ERROR,
+)
+from llmwikify.apps.chat.agent.research_runner import (
+    EVENT_REASONING as REASONING,
+)
+from llmwikify.apps.chat.agent.research_runner import (
+    EVENT_ROUND_COMPLETE as ROUND_COMPLETE,
+)
+from llmwikify.apps.chat.agent.research_runner import (
+    EVENT_TIMEOUT as TIMEOUT,
+)
 
 __all__ = [
     # chat
