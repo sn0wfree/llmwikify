@@ -62,14 +62,20 @@ logger = logging.getLogger(__name__)
 
 
 class WikiCLI:
-    """CLI command handler.
+    """CLI command handler — **deprecated**, kept for backward compatibility.
 
-    Public methods preserve backward compatibility — each
-    migrated method is a 1-line delegate to the new
+    Every migrated method is a 1-line delegate to the new
     ``run_<name>`` function in ``llmwikify.cli.commands.<name>``.
-    The Wiki instance is still created once in __init__ and
-    reused across method calls (which is why the delegates
-    pass ``self.wiki`` rather than re-creating it).
+    The Wiki instance is still created once in __init__ and reused
+    across method calls (which is why the delegates pass
+    ``self.wiki`` rather than re-creating it).
+
+    New code should use the command registry
+    (``llmwikify.interfaces.cli._base.COMMAND_REGISTRY``) instead.
+    This class remains because it is part of the published API — it is
+    re-exported from ``llmwikify/__init__.py`` — so it will not be
+    removed without a major version bump. New methods must not be
+    added here.
     """
 
     def __init__(self, wiki_root: Path, config: dict[str, Any] | None = None) -> None:

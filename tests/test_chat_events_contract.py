@@ -136,25 +136,27 @@ def test_generator_check_mode_passes(generator) -> None:
 # ── there is only one vocabulary ──────────────────────────────────
 
 
-def test_unified_events_re_exports_the_canonical_values() -> None:
-    """The backward-compat module points at the canonical constants."""
-    from llmwikify.apps.chat.agent.unified import events as legacy
+def test_there_is_no_second_event_vocabulary() -> None:
+    """The event vocabulary has exactly one home.
 
-    for name in _event_constants():
-        assert getattr(legacy, name) == getattr(events, name), (
-            f"{name} differs between events.py and unified/events.py"
-        )
+    The chat agent used to carry a second copy of the wire names in
+    ``apps/chat/agent/unified/events.py``. That package is gone; the
+    vocabulary lives in ``events.py`` alone.
+    """
+    import importlib
+
+    with pytest.raises(ImportError):
+        importlib.import_module("llmwikify.apps.chat.agent.unified")
 
 
 def test_research_events_come_from_the_research_runner() -> None:
     """The research vocabulary has its own home, not a second copy."""
-    from llmwikify.apps.chat.agent.unified import events as legacy
-
-    assert legacy.REASONING == research_runner.EVENT_REASONING
-    assert legacy.ACTION_ERROR == research_runner.EVENT_ACTION_ERROR
-    assert legacy.OBSERVATION_ERROR == research_runner.EVENT_OBSERVATION_ERROR
-    assert legacy.ROUND_COMPLETE == research_runner.EVENT_ROUND_COMPLETE
-    assert legacy.TIMEOUT == research_runner.EVENT_TIMEOUT
+    assert research_runner.EVENT_REASONING == "reasoning"
+    assert research_runner.EVENT_ACTION_ERROR == "action_error"
+    assert research_runner.EVENT_OBSERVATION_ERROR == "observation_error"
+    assert research_runner.EVENT_ROUND_COMPLETE == "round_complete"
+    assert research_runner.EVENT_TIMEOUT == "timeout"
+    assert research_runner.EVENT_PHASE == events.PHASE
 
 
 def test_no_second_definition_of_the_wire_names() -> None:

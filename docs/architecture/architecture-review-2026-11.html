@@ -382,7 +382,7 @@
       <tr><td class="name">interfaces<small>入口层</small></td><td class="name">11,746<small>75 files</small></td>
         <td><span class="rating"><i class="on"></i><i class="on"></i><i class="on"></i><i class="mid"></i><i></i></span>82.2%</td>
         <td>Command Protocol · WikiServer · MCPAdapter · ChatStreamEvent</td>
-        <td>CLI 88.5%（本轮补测后）。但命令双清单、WikiCLI 双轨、
+        <td>CLI 88.5%（本轮补测后）。但命令双清单、<code>WikiCLI</code> 公开兼容层、
           <b>SSE 契约后端 17 事件 / 前端 12 事件</b>。</td></tr>
     </tbody>
   </table>
@@ -501,9 +501,13 @@
   <h3>P2 — 工程债速览（8 项）</h3>
   <div class="grid2">
     <div class="issue p2"><div class="hd"><span class="tag p2">P2-01</span><strong>死代码</strong></div>
-      <p><code>apps/chat/agent/unified/</code> 15 文件生产零引用（仅测试引用）；<code>apps/chat/research_engine/</code> 9 文件全为 <code>sys.modules</code> 替换 shim。</p></div>
+      <p><code>apps/chat/agent/unified/</code> 13 文件 / 1,119 LOC，生产零引用（仅测试引用）。
+        <b>2026-11-02 更正</b>：<code>apps/chat/research_engine/</code> <b>不是</b>死代码——
+        <code>apps/chat/clarifier.py</code> 与 <code>apps/chat/harness/review.py</code> 在用它。</p></div>
     <div class="issue p2"><div class="hd"><span class="tag p2">P2-02</span><strong>CLI 双清单</strong></div>
-      <p><code>commands/__init__.py</code> 的 import 块与 register 块必须手工同步；注释写「27 commands」实际 33。WikiCLI 仍在 <code>_app.py:325</code> 实例化以持 wiki。</p></div>
+      <p><code>commands/__init__.py</code> 的 import 块与 register 块必须手工同步；注释写「27 commands」实际 33。
+        <b>2026-11-02 更正</b>：<code>WikiCLI</code> <b>不是</b>意外双轨——它是有意的 backward-compat 公开 API
+        （<code>llmwikify/__init__.py</code> 导出），已加显式弃用说明。</p></div>
     <div class="issue p2"><div class="hd"><span class="tag p2">P2-03</span><strong>mypy 豁免 138 模块</strong></div>
       <p>含 interfaces 关键路径与整个 <code>apps.chat</code>。<code>Command</code> Protocol 签名与 33 个实现不一致（<code>wiki_root: Path</code> vs <code>wiki: Any</code>）——正因 <code>Any</code> 才没被捕获。</p></div>
     <div class="issue p2"><div class="hd"><span class="tag p2">P2-04</span><strong>CI 覆盖缺口</strong></div>
@@ -905,7 +909,7 @@
       <li><code>fail_under</code> 从 15 提到 <b>80</b>（当前 80.3%，留 0.3% 余量），CI 实际执行全量含 e2e 标记</li>
       <li>mypy 豁免按层递减：先 foundation 严格化，再 kernel</li>
       <li>打包补 <code>ui/webui/dist</code>；修 <code>version-bump.yml</code> 的 <code>add-paths</code>；<code>all</code> extras 补 <code>llm</code></li>
-      <li>清死代码：<code>unified/</code>（15 文件）、<code>research_engine/</code>（9 文件）、<code>WikiCLI</code> 双轨</li>
+      <li>清死代码：<code>unified/</code>（13 文件，生产零引用）、<code>WikiCLI</code> 显式标注弃用</li>
       <li>同步文档：AGENTS.md 文件名、mixins 元类说明、<code>kernel/__init__.py</code> 的 quant 残留</li>
     </ol>
     <div class="note ok"><b>收益</b> 让前述 7 项改造<b>不会回退</b>——没有门禁的架构改进等于没做。</div>
@@ -929,7 +933,7 @@
         <li><b>契约即代码</b>（方案 4）— 前后端 SSE 单一源 + CI 校验</li>
         <li><b>显式能力声明</b>（方案 6）— lint 快照 + skill 暴露</li>
         <li><b>CI 门禁</b>（方案 8 前半）— 架构校验接入 / WebUI CI / fail_under=80</li>
-        <li><b>死代码清理</b> — <code>unified/</code>、<code>research_engine/</code>、WikiCLI 双轨</li>
+        <li><b>死代码清理</b> — <code>unified/</code>（13 文件，生产零引用）；<code>WikiCLI</code> 标注弃用</li>
         <li>发布链路修复 — webui dist 打包 / version-bump 路径 / all extras</li>
       </ul>
       <p style="margin-top:14px;font-family:var(--mono);font-size:11.5px;color:var(--ink3)">

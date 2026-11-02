@@ -61,6 +61,16 @@ llmwikify 在这三条上均落后一代；优势在本地优先、零代码技�
 原则：**先立契约，再动结构；先有门禁，再做重构。**
 每阶段结束时代码库必须比开始时更绿（测试数增加、门禁提高、违规数减少）。
 
+## 实测更正（2026-11-02，Phase 1 实施后）
+
+完整版 HTML 里关于「死代码」的两处判断经实测有误，已修订：
+
+| 原判断 | 实测 | 处置 |
+|--------|------|------|
+| `apps/chat/research_engine/`（9 文件）是 `sys.modules` 替换 shim，属死代码 | **不是**：`apps/chat/clarifier.py:13` 与 `apps/chat/harness/review.py:10` 在 import 它的 `llm_step` | 保留，不动 |
+| `WikiCLI` 是意外的双轨，应删除 | **不是**：它是有意的 backward-compat 公开 API（`llmwikify/__init__.py` 导出） | 保留，加显式弃用说明；不再新增方法 |
+| `apps/chat/agent/unified/`（13 文件 / 1119 LOC）生产零引用 | 判断正确 | 已在 Phase 1 删除（含 7 个纯 shim 测试文件） |
+
 ## 关键取舍
 
 - **大重构 vs 覆盖率提升抢带宽** — 先做不改行为的项（契约/门禁/死代码），再做搬迁
