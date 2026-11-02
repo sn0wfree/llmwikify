@@ -208,6 +208,9 @@ def _progress_logger(evt: Any) -> None:
 
 
 class AutoResearchCompoundSkill(Skill):
+
+    # The LLM may call this skill directly as a tool.
+    exposed = True
     name = "autoresearch_compound"
     description = (
         "Run Skill-first AutoResearch as a compounding wiki workflow. "

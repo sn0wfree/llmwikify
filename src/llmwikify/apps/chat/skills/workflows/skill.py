@@ -173,6 +173,9 @@ def _progress_logger(evt: Any) -> None:
 class DynamicWorkflowSkill(Skill):
     """Skill that lets the LLM run multi-agent workflows."""
 
+    # The LLM may call this skill directly as a tool.
+    exposed = True
+
     name = "dynamic_workflow"
     description = (
         "Run a multi-agent dynamic workflow. Built-in workflows include "

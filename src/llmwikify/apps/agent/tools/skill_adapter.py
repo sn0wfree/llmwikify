@@ -40,21 +40,41 @@ class SkillToolAdapter:
         # (caller's responsibility) — children cannot grandchild.
         self.subagent_manager = subagent_manager
         self.child_tool_registry = child_tool_registry
-        default_exposed = [
-            "dynamic_workflow",
-            "autoresearch_compound",
-            "web_search",
-            "web_fetch",
-        ]
+        # The exposed set is declared by the skills themselves
+        # (``Skill.exposed``) — the adapter asks the registry instead of
+        # carrying a second list. A skill that is registered but never
+        # opted in was silently uncallable, which is the trap this
+        # replaces.
+        self.skill_service.register_all()
+        default_exposed = self._registry_exposed_names()
         if subagent_manager is not None:
+            # The subagent tool only exists with a SubagentManager.
             default_exposed.append("subagent")
         self.exposed_skills = set(exposed_skills or default_exposed)
         self._name_map: dict[str, tuple[str, str]] = {}
         self._tools: dict[str, dict[str, Any]] = {}
         self._pending_confirmations: dict[str, dict[str, Any]] = {}
-        self.skill_service.register_all()
         self._build_tools()
         self._register_get_skill_commands()
+
+    def _registry_exposed_names(self) -> list[str]:
+        """The skills the registry declares exposed to the LLM."""
+        registry = getattr(self.skill_service, "registry", None)
+        exposed = getattr(registry, "exposed_names", None)
+        if not callable(exposed):
+            logger.warning(
+                "skill registry does not expose 'exposed_names' — no skill "
+                "will be callable as a tool"
+            )
+            return []
+        try:
+            return list(exposed())
+        except TypeError:
+            logger.warning(
+                "skill registry 'exposed_names' did not return a list — "
+                "no skill will be callable as a tool"
+            )
+            return []
 
     @staticmethod
     def _tool_name(skill_name: str, action_name: str) -> str:

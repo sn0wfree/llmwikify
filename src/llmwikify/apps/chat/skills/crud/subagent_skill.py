@@ -147,6 +147,10 @@ _SPAWN_DESCRIPTION = (
 class SubagentSkill(Skill):
     """LLM-facing wrapper around :class:`SubagentManager`."""
 
+    # Not exposed by default: the subagent tool only exists when the
+    # adapter is built with a SubagentManager, so the adapter adds it
+    # to the exposed set itself.
+
     name = "subagent"
     description = "Spawn isolated in-process child assistants for sub-goals."
     actions = {

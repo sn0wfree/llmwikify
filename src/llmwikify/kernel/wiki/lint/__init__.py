@@ -33,7 +33,7 @@ writing a new file in ``rules/`` and importing it in
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from ..snapshot import PageSnapshot
 
@@ -64,10 +64,26 @@ class Rule:
     - ``max_results`` (int): max issues to return (default 3)
     - ``_iter_pages(wiki)``: custom page iteration (default: skip Query: pages)
     - ``__doc__``: a short description of what the rule detects
+
+    A rule that reads its pages in its own way (it overrides ``run()``
+    or ``_iter_pages()``) must declare ``snapshot_mode = "custom"`` and
+    own ``run_with_snapshot()`` as well. The declaration replaces a
+    reflection check that used to decide this silently: a rule author
+    who overrode ``run()`` without knowing about the reflection lost
+    the page-snapshot optimisation without any error.
     """
 
     name: str = ""
     max_results: int = 3
+
+    #: How the rule reads its pages.
+    #:
+    #: ``"template"`` — the generic per-page template; the rule only
+    #: implements ``detect()`` and works against a page snapshot out of
+    #: the box.
+    #: ``"custom"`` — the rule implements its own ``run()``; it owns
+    #: ``run_with_snapshot()`` as well.
+    snapshot_mode: ClassVar[str] = "template"
 
     def run(self, wiki: Wiki) -> list[dict[str, Any]]:
         """Run this rule against ``wiki`` and return any issues found.
@@ -95,15 +111,14 @@ class Rule:
         the pages are read from the snapshot instead of from disk; a
         page that was left out of the snapshot (memory budget) is read
         back from its path, so the checked pages do not change.
+
+        A rule with ``snapshot_mode = "custom"`` owns this method; the
+        generic template below only applies to the template rules.
         """
         if snapshot is None:
             return self.run(wiki)
-        if type(self).run is not Rule.run:
-            # The rule overrides run() (e.g. dated_claim scans the raw
-            # directory first): the generic template must not bypass it.
-            return self.run(wiki)
-        if type(self)._iter_pages is not Rule._iter_pages:
-            # The rule iterates its pages in its own way: only the rule
+        if self.snapshot_mode != "template":
+            # The rule reads its pages in its own way: only the rule
             # knows how to replay that.
             return self.run(wiki)
         if not wiki.wiki_dir.exists():
@@ -172,13 +187,9 @@ class CrossPageRule(Rule):
         """
         if snapshot is None:
             return self.run(wiki)
-        if type(self).run is not CrossPageRule.run:
+        if self.snapshot_mode != "template":
             # The rule overrides run(): the generic template must not
             # bypass it.
-            return self.run(wiki)
-        if type(self)._load_pages is not CrossPageRule._load_pages:
-            # The rule loads its pages in its own way: only the rule
-            # knows how to replay that.
             return self.run(wiki)
         if not wiki.wiki_dir.exists():
             return []

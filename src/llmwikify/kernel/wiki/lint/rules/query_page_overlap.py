@@ -26,6 +26,10 @@ class QueryPageOverlapRule(Rule):
     Behavior is preserved.
     """
 
+    # The rule reads its pages in its own way, so it owns
+    # run_with_snapshot() as well.
+    snapshot_mode = "custom"
+
     name = "topic_overlap"
     max_results = MAX_QUERY_OVERLAP_HINTS
 

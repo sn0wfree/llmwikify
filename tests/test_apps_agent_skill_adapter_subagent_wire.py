@@ -37,6 +37,14 @@ def _make_skill_service():
     svc.register_all = lambda: None
     registry = MagicMock()
     registry.all_actions = lambda: []
+    # The exposed set is declared by the skills and read from the
+    # registry (``Skill.exposed`` / ``SkillRegistry.exposed_names``).
+    registry.exposed_names = lambda: [
+        "dynamic_workflow",
+        "autoresearch_compound",
+        "web_search",
+        "web_fetch",
+    ]
     svc.registry = registry
     return svc
 

@@ -256,6 +256,9 @@ async def _fetch_url_handler(args: dict, ctx: SkillContext) -> SkillResult:
 class WebFetchSkill(Skill):
     """Fetch a URL and extract readable text."""
 
+    # The LLM may call this skill directly as a tool.
+    exposed = True
+
     name = "web_fetch"
     description = (
         "Fetch a single URL via HTTP GET and return its title plus "

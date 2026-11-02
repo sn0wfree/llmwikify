@@ -26,6 +26,10 @@ class DatedClaimsRule(Rule):
     is now the rule's ``name``).
     """
 
+    # The rule reads its pages in its own way, so it owns
+    # run_with_snapshot() as well.
+    snapshot_mode = "custom"
+
     name = "dated_claim"
     max_results = MAX_DATED_CLAIM_HINTS
 

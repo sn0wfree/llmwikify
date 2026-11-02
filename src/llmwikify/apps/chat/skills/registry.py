@@ -135,6 +135,20 @@ class SkillRegistry:
         with self._lock:
             return sorted(self._skills.keys())
 
+    def exposed_names(self) -> list[str]:
+        """The skills that declare themselves exposed to the LLM.
+
+        A skill opts in with ``exposed = True`` (see
+        :class:`~llmwikify.apps.chat.skills.base.Skill`); the tool
+        adapter asks the registry instead of carrying its own list.
+        """
+        with self._lock:
+            return sorted(
+                name
+                for name, skill in self._skills.items()
+                if getattr(skill, "exposed", False)
+            )
+
     def find_action(
         self, skill_name: str, action_name: str
     ) -> tuple[Skill, SkillAction]:

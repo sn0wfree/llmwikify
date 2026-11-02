@@ -207,6 +207,9 @@ async def _do_search(
 class WebSearchSkill(Skill):
     """External web search via DuckDuckGo / Tavily / SearXNG / MiniMax."""
 
+    # The LLM may call this skill directly as a tool.
+    exposed = True
+
     name = "web_search"
     description = (
         "Search the public web via DuckDuckGo, Tavily, SearXNG, or MiniMax "

@@ -271,6 +271,12 @@ class Skill(ABC):  # noqa: B024
       in the manifest.
     - ``actions`` (dict[str, SkillAction], class attribute) —
       the operations this skill exposes.
+    - ``exposed`` (bool, class attribute) — whether the LLM may call
+      this skill directly as a tool. Default ``False``: a skill is
+      internal unless it opts in. The tool adapter reads this flag, so
+      the decision lives on the skill instead of in a list somewhere
+      else (a skill that was registered but never listed was silently
+      uncallable).
 
     Subclasses MAY override ``setup`` (called once at
     registration time) and ``teardown`` (called when the
@@ -280,6 +286,10 @@ class Skill(ABC):  # noqa: B024
     name: str = ""
     description: str = ""
     actions: dict[str, SkillAction] = {}
+
+    #: Whether the LLM may call this skill directly as a tool.
+    #: Internal helper skills keep the default (False).
+    exposed: bool = False
 
     def __init__(self) -> None:
         if not self.name:

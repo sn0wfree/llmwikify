@@ -35,6 +35,10 @@ class KnowledgeGapsRule(Rule):
     the two public interfaces of this rule can not diverge.
     """
 
+    # The rule reads its pages in its own way, so it owns
+    # run_with_snapshot() as well.
+    snapshot_mode = "custom"
+
     name = "knowledge_gap"
     max_results = 3
 
