@@ -127,3 +127,106 @@ def test_self_page_not_reported(wiki_instance):
     results = _detect(pages, wiki_instance)
 
     assert all(r["concept"] != "concepts/Foo" for r in results)
+
+
+def test_title_inside_a_path_is_not_a_bare_mention(wiki_instance):
+    """``concepts/Foo`` written as a path is a mention of the page, but
+    must not be split into a bare title match."""
+    pages = {
+        "concepts/Foo": "# Foo\n\nContent.\n",
+        "sources/Bar": "# Bar\n\nSee the concepts/Foo page.\n",
+        "sources/Baz": "# Baz\n\nAlso the concepts/Foo page.\n",
+    }
+    results = _detect(pages, wiki_instance)
+
+    # both pages write the path, so it IS a mention — but of the page,
+    # not of a stray bare title.
+    assert [r["concept"] for r in results] == ["concepts/Foo"]
+
+
+def test_output_is_deterministic_under_hash_seed(tmp_path):
+    """Same wiki must report the same gaps whatever the hash seed is.
+
+    The title→page map used to be built from a set, so the winner for an
+    ambiguous title varied with PYTHONHASHSEED and the rule reported a gap
+    only on some runs.
+    """
+    import os
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    src_root = Path(__file__).resolve().parents[1] / "src"
+    script = tmp_path / "determinism.py"
+    script.write_text(
+        "\n".join(
+            [
+                "import json, sys",
+                f"sys.path.insert(0, {str(src_root)!r})",
+                "from llmwikify.kernel.wiki.lint.rules.missing_cross_refs import (",
+                "    MissingCrossRefsRule,",
+                ")",
+                "",
+                "class W:",
+                "    _index_page_name = 'index'",
+                "    _log_page_name = 'log'",
+                "",
+                "    @staticmethod",
+                "    def _parse_wikilink_target(link):",
+                "        return link.split('|')[0].split('#')[0].strip()",
+                "",
+                "pages = {",
+                "    'concepts/Risk Parity': '# Risk Parity\\n\\ncontent',",
+                "    'sources/A': '# A\\n\\nRisk Parity here.',",
+                "    'sources/B': '# B\\n\\nRisk Parity there.',",
+                "    'concepts/Foo': '# Foo\\n\\nx',",
+                "    'entities/Foo': '# Foo\\n\\ny',",
+                "    'sources/C': '# C\\n\\nFoo here.',",
+                "    'sources/D': '# D\\n\\nFoo there.',",
+                "}",
+                "res = []",
+                "MissingCrossRefsRule().detect_all(pages, W(), res)",
+                "print(json.dumps(sorted(r['concept'] for r in res)))",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    outcomes = set()
+    for seed in ("0", "1", "2", "3", "4", "5", "6", "7"):
+        env = dict(os.environ)
+        env["PYTHONHASHSEED"] = seed
+        env["PYTHONIOENCODING"] = "utf-8"
+        r = subprocess.run(
+            [sys.executable, str(script)],
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+        lines = r.stdout.strip().splitlines()
+        assert r.returncode == 0, r.stderr[-500:]
+        outcomes.add(lines[-1])
+
+    assert len(outcomes) == 1, outcomes
+    assert outcomes == {'["concepts/Risk Parity"]'}
+
+
+def test_large_wiki_scan_stays_fast(wiki_instance):
+    """Guard the inverted index: a 1400-page wiki must scan in seconds.
+
+    A per-page-per-candidate regex scan took minutes and hid the cost
+    behind a substring precheck.
+    """
+    import time
+
+    pages = {}
+    for i in range(1400):
+        pages[f"concepts/Page {i}"] = "x" * 20000 + f"\n\nPage {i} mentions Foo.\n"
+    pages["concepts/Foo"] = "# Foo\n\n" + "y" * 20000
+
+    t0 = time.monotonic()
+    results = _detect(pages, wiki_instance)
+    elapsed = time.monotonic() - t0
+
+    assert elapsed < 5.0, f"scan took {elapsed:.2f}s"
+    assert [r["concept"] for r in results] == ["concepts/Foo"]

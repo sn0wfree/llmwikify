@@ -455,8 +455,8 @@ class AutoIngestService:
             result = await self._enricher.enrich(
                 llm_result=llm_result, exec_result=exec_result
             )
-            self.stats["enriched"] = getattr(result, "links_added", 0)
-            self.stats["enrich_proposals"] = getattr(result, "proposals_created", 0)
+            self.stats["enriched"] += getattr(result, "links_added", 0)
+            self.stats["enrich_proposals"] += getattr(result, "proposals_created", 0)
         except Exception as exc:
             self.stats["last_error"] = f"enrich: {exc}"
             logger.warning(

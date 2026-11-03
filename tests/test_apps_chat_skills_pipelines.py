@@ -101,9 +101,11 @@ class TestIngestWithExtract:
 
         mock_extract_result = MagicMock()
         mock_extract_result.status = "ok"
+        # The extract action returns content/title/source_type/metadata —
+        # it has no page_name, so the pipeline derives one from the URL.
         mock_extract_result.data = {
             "content": "Extracted content",
-            "page_name": "derived_page",
+            "title": "Article",
         }
         mock_extract_skill = MagicMock()
         mock_extract_skill.actions = {
@@ -119,7 +121,7 @@ class TestIngestWithExtract:
                 ctx,
             )
             assert result.status == "ok"
-            assert result.data["page_name"] == "derived_page"
+            assert result.data["page_name"] == "article"
             assert result.data["extracted"] is True
 
 
@@ -129,7 +131,41 @@ class TestIngestWithExtract:
 class TestIngestWithWiki:
     @pytest.mark.asyncio
     async def test_ingest_writes_to_wiki(self):
-        """When wiki is available, content should be written."""
+        """The pipeline must really write the page.
+
+        Uses the *real* action skills (not mocked action dicts): the
+        pipeline looks actions up by key, and a mock with a wrong key
+        would hide a broken lookup completely.
+        """
+        import shutil
+        import tempfile
+        from pathlib import Path
+
+        from llmwikify.kernel import Wiki
+
+        root = Path(tempfile.mkdtemp())
+        try:
+            wiki = Wiki(root)
+            (root / "raw").mkdir(exist_ok=True)
+            (root / "wiki").mkdir(exist_ok=True)
+            src = root / "article.md"
+            src.write_text("# Article\n\nBody text.\n", encoding="utf-8")
+
+            ctx = SkillContext(db=None, config={})
+            ctx.wiki = wiki
+
+            result = await _ingest({"url_or_path": str(src)}, ctx)
+
+            assert result.status == "ok", result.error
+            assert result.data["written"] is True
+            assert result.data["read_back"].get("content")
+            assert (root / "wiki" / "article.md").exists()
+        finally:
+            shutil.rmtree(root, ignore_errors=True)
+
+    @pytest.mark.asyncio
+    async def test_ingest_reports_write_failure(self):
+        """A failed write must surface as an error, not a silent ok."""
         from unittest.mock import AsyncMock, MagicMock, patch
 
         class MockWiki:
@@ -139,19 +175,13 @@ class TestIngestWithWiki:
         ctx = SkillContext(db=None, config={})
         ctx.wiki = MockWiki()
 
-        # Mock extract
         mock_extract_result = MagicMock()
         mock_extract_result.status = "ok"
-        mock_extract_result.data = {"content": "Content", "page_name": "test"}
+        mock_extract_result.data = {"content": "Content"}
 
-        # Mock write
         mock_write_result = MagicMock()
-        mock_write_result.status = "ok"
-
-        # Mock read
-        mock_read_result = MagicMock()
-        mock_read_result.status = "ok"
-        mock_read_result.data = {"name": "test", "content": "Content"}
+        mock_write_result.status = "error"
+        mock_write_result.error = "disk full"
 
         mock_extract_skill = MagicMock()
         mock_extract_skill.actions = {
@@ -159,11 +189,7 @@ class TestIngestWithWiki:
         }
         mock_write_skill = MagicMock()
         mock_write_skill.actions = {
-            "write_page": MagicMock(handler=AsyncMock(return_value=mock_write_result))
-        }
-        mock_read_skill = MagicMock()
-        mock_read_skill.actions = {
-            "read_page": MagicMock(handler=AsyncMock(return_value=mock_read_result))
+            "write": MagicMock(handler=AsyncMock(return_value=mock_write_result))
         }
 
         with (
@@ -175,15 +201,10 @@ class TestIngestWithWiki:
                 "llmwikify.apps.chat.skills.actions.write_action.write_skill",
                 mock_write_skill,
             ),
-            patch(
-                "llmwikify.apps.chat.skills.actions.read_action.read_skill",
-                mock_read_skill,
-            ),
         ):
             result = await _ingest(
                 {"url_or_path": "https://example.com/article"},
                 ctx,
             )
-            assert result.status == "ok"
-            assert result.data["written"] is True
-            assert result.data["read_back"]["name"] == "test"
+            assert result.status == "error"
+            assert "disk full" in result.error

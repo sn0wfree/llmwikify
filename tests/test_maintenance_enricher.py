@@ -59,6 +59,16 @@ def test_collect_units_reads_cross_refs_and_suggestions():
     assert suggested == ["Brand New", "Another"]
 
 
+def test_collect_units_routes_source_cross_refs_to_sources():
+    """A cross-reference naming a source page belongs in the source bucket."""
+    concepts, sources, _ = collect_units(
+        _ops("concepts/Foo"),
+        {"cross_refs": ["sources/Old Paper", "Risk Parity"]},
+    )
+    assert concepts == ["concepts/Foo", "Risk Parity"]
+    assert sources == ["sources/Old Paper"]
+
+
 def test_collect_units_ignores_non_written_operations():
     concepts, sources, suggested = collect_units(
         {
@@ -323,6 +333,79 @@ def test_cross_ref_named_by_title_resolves_to_page(wiki_instance):
     assert result.links_added == 1
     content = wiki_instance.read_page("sources/Portfolio A")["content"]
     assert "[[concepts/Risk Parity]]" in content
+
+
+def test_unresolvable_cross_ref_writes_no_link(wiki_instance):
+    """A name with no page must not become a link to a missing page."""
+    wiki_instance.write_page("sources/Bar", "# Bar\n\nAbout Ghost Concept here.\n")
+
+    result = asyncio.run(
+        _enricher(wiki_instance).enrich(
+            llm_result={"analysis": {"cross_refs": ["Ghost Concept"]}},
+        )
+    )
+
+    assert result.links_added == 0
+    assert result.skipped_units == 1
+    content = wiki_instance.read_page("sources/Bar")["content"]
+    assert "[[" not in content
+
+
+def test_page_already_linking_target_is_skipped(wiki_instance):
+    """A page that links the target must not get a second link."""
+    wiki_instance.write_page("concepts/Foo", "# Foo\n\nContent.\n")
+    wiki_instance.write_page(
+        "sources/Bar", "# Bar\n\nSee [[concepts/Foo]] first. Foo is also plain here.\n"
+    )
+
+    result = asyncio.run(
+        _enricher(wiki_instance).enrich(exec_result=_ops("concepts/Foo"))
+    )
+
+    assert result.links_added == 0
+    content = wiki_instance.read_page("sources/Bar")["content"]
+    assert content.count("[[concepts/Foo]]") == 1
+
+
+def test_bare_title_link_counts_as_linked(wiki_instance):
+    """``[[Foo]]`` names the same page as ``concepts/Foo``."""
+    wiki_instance.write_page("concepts/Foo", "# Foo\n\nContent.\n")
+    wiki_instance.write_page("sources/Bar", "# Bar\n\nSee [[Foo]] first. Foo here.\n")
+
+    result = asyncio.run(
+        _enricher(wiki_instance).enrich(exec_result=_ops("concepts/Foo"))
+    )
+
+    assert result.links_added == 0
+
+
+def test_title_inside_a_path_is_not_split(wiki_instance):
+    """``concepts/Foo`` must not become ``concepts/[[concepts/Foo]]``."""
+    wiki_instance.write_page("concepts/Foo", "# Foo\n\nContent.\n")
+    wiki_instance.write_page("sources/Bar", "# Bar\n\nSee the concepts/Foo page.\n")
+
+    asyncio.run(_enricher(wiki_instance).enrich(exec_result=_ops("concepts/Foo")))
+
+    content = wiki_instance.read_page("sources/Bar")["content"]
+    assert "concepts/[[concepts/Foo]]" not in content
+
+
+def test_duplicate_suggestion_queues_one_proposal(wiki_instance):
+    """The same suggestion must not queue two identical proposals."""
+    enricher = _enricher(wiki_instance)
+    created: list[dict] = []
+
+    class _Recorder:
+        def create_proposal(self, *args, **kwargs):
+            created.append({"args": args})
+            return {"id": "p1"}
+
+    enricher._proposal_manager = _Recorder()
+
+    analysis = {"suggested_pages": [{"name": "Brand New"}, {"name": "Brand New"}]}
+    asyncio.run(enricher.enrich(llm_result={"analysis": analysis}))
+
+    assert len(created) == 1
 
 
 def test_disabled_enricher_skips(wiki_instance):

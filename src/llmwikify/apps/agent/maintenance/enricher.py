@@ -41,12 +41,19 @@ from llmwikify.apps.agent.wiki_dream_editor import WikiDreamProposalManager
 from .config import EnricherConfig
 from .llm_support import ensure_global_llm_fallback
 from .rate_limit import SlidingWindowRateLimiter
-from .wikilink import build_pattern, link_first_occurrence
+from .wikilink import build_pattern, is_linked, link_first_occurrence
 
 logger = logging.getLogger(__name__)
 
 #: Page directories that hold concept-like knowledge units.
 _CONCEPT_DIRS = ("concepts", "entities", "comparisons", "synthesis", "claims")
+
+#: Source pages live in their own directory and are enriched separately.
+_SOURCE_DIR = "sources"
+
+#: Every directory a knowledge unit may live in. A cross-reference may
+#: name a page by its bare title, so all of them are search roots.
+_PAGE_DIRS = _CONCEPT_DIRS + (_SOURCE_DIR,)
 
 
 @dataclass
@@ -59,6 +66,7 @@ class EnrichResult:
     pages_touched: int = 0
     proposals_created: int = 0
     errors: int = 0
+    skipped_units: int = 0
     skipped: bool = False
     ran_at: float = field(default_factory=time.time)
 
@@ -70,6 +78,7 @@ class EnrichResult:
             "pages_touched": self.pages_touched,
             "proposals_created": self.proposals_created,
             "errors": self.errors,
+            "skipped_units": self.skipped_units,
             "skipped": self.skipped,
             "ran_at": self.ran_at,
         }
@@ -95,30 +104,38 @@ def collect_units(
     sources: list[str] = []
     suggested: list[str] = []
 
-    def add(page_name: str) -> None:
-        page_name = (page_name or "").strip().strip("/")
-        if not page_name:
+    def add(name: str, written: bool) -> None:
+        """Classify a page name into concept / source buckets.
+
+        ``written`` pages always carry a directory prefix (``write_page``
+        stores them as ``concepts/Foo``). Cross-references may be a bare
+        title ("Risk Parity") — those default to the concept bucket and
+        are resolved to a real path later.
+        """
+        name = (name or "").strip().strip("/")
+        if not name:
             return
-        if page_name.startswith("sources/"):
-            if page_name not in sources:
-                sources.append(page_name)
-        elif page_name.startswith(_CONCEPT_DIRS):
-            if page_name not in concepts:
-                concepts.append(page_name)
+        if name.startswith(f"{_SOURCE_DIR}/"):
+            if name not in sources:
+                sources.append(name)
+        elif name.startswith(_CONCEPT_DIRS):
+            if name not in concepts:
+                concepts.append(name)
+        elif not written:
+            if name not in concepts:
+                concepts.append(name)
 
     if exec_result:
         for item in exec_result.get("results", []) or []:
             if item.get("action") == "write_page" and item.get("status") == "done":
-                add(str(item.get("page", "")))
+                add(str(item.get("page", "")), written=True)
 
     if analysis:
         # cross_refs name existing pages — the LLM may use the bare title
         # ("Risk Parity") or the qualified path ("concepts/Risk Parity").
         for name in analysis.get("cross_refs", []) or []:
             if isinstance(name, str) and name.strip():
-                name = name.strip()
-                if name not in concepts:
-                    concepts.append(name)
+                add(name, written=False)
         for item in analysis.get("suggested_pages", []) or []:
             name = item.get("name") if isinstance(item, dict) else item
             if isinstance(name, str) and name.strip():
@@ -155,6 +172,9 @@ class KnowledgeEnricher:
         self._proposal_manager = proposal_manager or WikiDreamProposalManager(
             wiki_id=wiki_id,
         )
+        # Pages already proposed in this pass — the same suggestion must
+        # not queue two identical proposals.
+        self._proposed_pages: set[str] = set()
         self.last_result: EnrichResult | None = None
 
     async def enrich(
@@ -247,8 +267,13 @@ class KnowledgeEnricher:
     async def _link_references(self, page_name: str, result: EnrichResult) -> None:
         """Link pages that mention ``page_name`` but never link to it."""
         # Resolve to the real page path so the link we insert is the
-        # canonical one even when the LLM named the page by title.
-        target = await self._resolve_page(page_name) or page_name
+        # canonical one even when the LLM named the page by title. A name
+        # that resolves to nothing would produce a link to a page that
+        # does not exist — skip it instead.
+        target = await self._resolve_page(page_name)
+        if target is None:
+            result.skipped_units += 1
+            return
         title = target.rsplit("/", 1)[-1]
         pattern = build_pattern(title)
         candidates = await self._pages_mentioning(title)
@@ -262,6 +287,8 @@ class KnowledgeEnricher:
             if page.get("error") or page.get("is_sink"):
                 continue
             content = page.get("content", "")
+            if is_linked(content, target):
+                continue
             if not self._has_plain_mention(content, pattern):
                 continue
             new_content = link_first_occurrence(content, pattern, target)
@@ -281,6 +308,9 @@ class KnowledgeEnricher:
         target = await self._resolve_page(name)
         if target is not None:
             return
+        if name in self._proposed_pages:
+            return
+        self._proposed_pages.add(name)
         related = await self._pages_mentioning(name)
         links = "".join(f"- [[{page}]]\n" for page in related[:5])
         content = (
@@ -310,7 +340,7 @@ class KnowledgeEnricher:
         """
         candidates = [name]
         if "/" not in name:
-            candidates = [f"{d}/{name}" for d in _CONCEPT_DIRS] + [name]
+            candidates = [f"{d}/{name}" for d in _PAGE_DIRS] + [name]
         for candidate in candidates:
             page = await asyncio.to_thread(self.wiki.read_page, candidate)
             if not page.get("error"):

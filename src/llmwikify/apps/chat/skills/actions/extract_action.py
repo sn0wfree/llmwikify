@@ -13,6 +13,7 @@ called via a simple dispatch (URL vs file path vs YouTube).
 
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from llmwikify.apps.chat.skills.base import (
@@ -24,6 +25,9 @@ from llmwikify.apps.chat.skills.base import (
 
 logger = logging.getLogger(__name__)
 
+#: Hard ceiling for one extraction (network fetch + parsing).
+EXTRACT_TIMEOUT_SECONDS = 60.0
+
 
 async def _extract(args: dict, ctx: SkillContext) -> SkillResult:
     """Extract content from a file/URL/YouTube.
@@ -32,6 +36,11 @@ async def _extract(args: dict, ctx: SkillContext) -> SkillResult:
     entry point that auto-detects the source type (YouTube / HTTP URL /
     local file) and picks the right extractor. Relative file paths are
     resolved against the wiki root, matching ``wiki.ingest_source()``.
+
+    Extraction is synchronous and may block for tens of seconds on a slow
+    network, so it runs in a worker thread with a hard timeout — calling
+    it directly would stall the whole event loop (SSE streams, other
+    tools) for the duration.
     """
     url_or_path = args.get("url_or_path", "")
     if not url_or_path:
@@ -41,7 +50,15 @@ async def _extract(args: dict, ctx: SkillContext) -> SkillResult:
 
     wiki_root = getattr(getattr(ctx, "wiki", None), "root", None)
     try:
-        result = extract(url_or_path, wiki_root=wiki_root)
+        result = await asyncio.wait_for(
+            asyncio.to_thread(extract, url_or_path, wiki_root=wiki_root),
+            timeout=EXTRACT_TIMEOUT_SECONDS,
+        )
+    except asyncio.TimeoutError:
+        logger.warning("extract timed out after %ss: %s", EXTRACT_TIMEOUT_SECONDS, url_or_path)
+        return SkillResult.fail(
+            f"extract timed out after {EXTRACT_TIMEOUT_SECONDS}s: {url_or_path}"
+        )
     except Exception as e:
         logger.warning("extract failed: %s", e, exc_info=True)
         return SkillResult.fail(f"extract failed: {e!r}")

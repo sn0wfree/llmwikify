@@ -198,6 +198,10 @@ class MaintenanceManager:
     async def _start_for_wiki(self, wiki_id: str, wiki: Any, loop: Any) -> None:
         """Create and start per-wiki components (watcher + filler + enricher)."""
         try:
+            # One proposal pool per wiki: the in-memory list would otherwise
+            # be split across components, hiding half the proposals from
+            # the review UI (the DB path shares them, the memory path does not).
+            proposal_manager = self._make_proposal_manager(wiki_id)
             enricher = None
             if self.config.enricher.enabled:
                 enricher = KnowledgeEnricher(
@@ -205,7 +209,7 @@ class MaintenanceManager:
                     wiki_id=wiki_id,
                     config=self.config.enricher,
                     llm_semaphore=self.llm_semaphore,
-                    proposal_manager=self._make_proposal_manager(wiki_id),
+                    proposal_manager=proposal_manager,
                     rate_limiter=self.llm_rate_limiter,
                 )
                 self.enrichers[wiki_id] = enricher
@@ -216,7 +220,7 @@ class MaintenanceManager:
                     config=self.config.auto_ingest,
                     llm_semaphore=self.llm_semaphore,
                     loop=loop,
-                    proposal_manager=self._make_proposal_manager(wiki_id),
+                    proposal_manager=proposal_manager,
                     rate_limiter=self.llm_rate_limiter,
                     enricher=enricher,
                 )
@@ -228,7 +232,7 @@ class MaintenanceManager:
                     wiki_id=wiki_id,
                     config=self.config.gap_filler,
                     llm_semaphore=self.llm_semaphore,
-                    proposal_manager=self._make_proposal_manager(wiki_id),
+                    proposal_manager=proposal_manager,
                     rate_limiter=self.llm_rate_limiter,
                 )
         except Exception:

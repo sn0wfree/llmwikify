@@ -396,3 +396,41 @@ def test_ensure_llm_config_keeps_local_when_enabled(tmp_path: Path):
     )
     svc._ensure_llm_config()
     assert wiki.config["llm"]["provider"] == "local"  # untouched
+
+
+# -- Track C: enrichment stats must accumulate ----------------------------
+
+
+@pytest.mark.asyncio
+async def test_enrich_stats_accumulate_across_ingests(tmp_path: Path):
+    """Each ingest adds to the counters instead of overwriting them."""
+    from types import SimpleNamespace
+
+    svc = _make_service(tmp_path)
+
+    class _Enr:
+        async def enrich(self, llm_result=None, exec_result=None):
+            return SimpleNamespace(links_added=1, proposals_created=1)
+
+    svc._enricher = _Enr()
+    await svc._run_enricher({}, {})
+    await svc._run_enricher({}, {})
+
+    assert svc.stats["enriched"] == 2
+    assert svc.stats["enrich_proposals"] == 2
+
+
+@pytest.mark.asyncio
+async def test_enricher_failure_is_isolated(tmp_path: Path):
+    """A failing enrichment must not undo the ingest result."""
+    svc = _make_service(tmp_path)
+
+    class _Boom:
+        async def enrich(self, **kwargs):
+            raise RuntimeError("enrich exploded")
+
+    svc._enricher = _Boom()
+    await svc._run_enricher({"source_name": "s"}, {})
+
+    assert svc.stats["enriched"] == 0
+    assert "enrich:" in svc.stats["last_error"]

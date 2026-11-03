@@ -292,15 +292,59 @@ Risk Parity 与 Monte Carlo Simulation。
   完善后 lint 剩余 missing_cross_ref: []
 ```
 
-## 风险
+## 实现期审查发现并修复的缺陷
 
-| 风险 | 缓解 |
-|------|------|
-| 修 lint 规则后轨 B 开始补链，行为变化 | 机械修复本就自动批准且幂等（首现插入）；既有测试全跑 |
-| 规则修复后可能产生新误报（带前缀 wikilink） | 两种形式都识别为已链接 |
-| 同名页面歧义 | 冲突标题名排除出候选集 |
-| 补链污染正文 | 只在词边界首现处插一次；概念名做正则转义 |
-| LLM 不可用 | 补链是纯文本操作，不依赖 LLM；提案是可选路径 |
+实现完成后做了两轮独立审查（一轮针对 Track C 本身，一轮针对
+skill/ingest 链路），以下问题已修复。其中 **#1 和 #4 是本次改动引入的
+回归**，审查抓到了它们。
+
+### Track C 本身
+
+| # | 问题 | 后果 | 修法 |
+|---|------|------|------|
+| 1 | 补链插进全路径中间 | `concepts/Foo` 变 `concepts/[[concepts/Foo]]` —— 坏链 | 标题 pattern 不匹配 `/` 旁的片段（`concept_pattern`），全路径交给 `path_pattern` |
+| 2 | 已链接的页被重复插链 | 同一页出现两个指向同页的链接 | 新增 `is_linked()`，`[[Foo]]` 与 `[[concepts/Foo]]` 都算已链接 |
+| 3 | 名字解析失败仍写链 | 产出指向不存在页面的坏链 | 解析不到就跳过该单元并计入 `skipped_units` |
+| 4 | lint 性能退化 | 1400 页扫描 12s → 42s（对抗场景 61x） | 倒排索引（词序列→候选）+ 泛化 gram 过滤 + 词集合预检，**降至 0.92s** |
+| 5 | 补链改写页面 H1 标题 | `# Foo` 变 `# [[concepts/Foo]]` | mask 加入 markdown 标题行 |
+| 6 | 同名歧义判定不确定 | `title_to_page` 由 set 迭代构造，赢家随 `PYTHONHASHSEED` 变 | `sorted()` 构造；enricher 侧同样排除歧义标题 |
+| 7 | 同一建议重复排队 | 两条相同提案 | `_proposed_pages` 去重 |
+| 8 | 计数器覆盖而非累加 | 第二次 ingest 后统计丢失 | `+=` |
+| 9 | cross_ref 未按目录分类 | `sources/X` 被归入概念桶 | 统一分类函数，裸标题才默认入概念桶 |
+
+### skill / ingest 链路
+
+| # | 问题 | 后果 | 修法 |
+|---|------|------|------|
+| 10 | `ingest_skill` 用错 action key | **管线静默失效**：返回 ok 但零字节写入 | key 改 `write`/`read`；写失败返回 `fail` 而非吞掉 |
+| 11 | extract 同步阻塞 event loop | 3 个并发 107s、心跳 tick=1（loop 饿死） | `asyncio.to_thread` + `wait_for` 硬超时，降至 36s、tick=2329 |
+| 12 | jieba 停用词表无编码指定 | Windows 上模块级 `UnicodeDecodeError` | `encoding="utf-8"` |
+| 13 | `wiki_graph` 工具相对导入层级错 | `ModuleNotFoundError`，调用即炸 | `...kernel` → `....kernel` |
+| 14 | 版本号常量取错 | wiki.md 合并通知永远写 `0.11.0` | `from llmwikify import __version__` |
+| 15 | 二进制文件解码未兜底 | 未知扩展名 + 二进制 → 未捕获异常 | `errors="replace"` |
+
+### 测试
+
+新增 25 项回归测试，覆盖上述每一类：坏链形态、重复链接、解析失败、
+标题行保护、跨 `PYTHONHASHSEED` 确定性（8 个 seed）、性能护栏
+（1400 页 < 5s）、ingest pipeline 真实写入、event loop 不被饿死、
+stats 累加、`wiki_graph` 导入、jieba 编码、版本号。
+
+其中 `tests/test_apps_chat_skills_pipelines.py` 原先用 `MagicMock`
+伪造了 `write_page`/`read_page` 两个 key，正好与代码里的错误 key
+一致，把 #10 掩盖得干干净净 —— 已改为使用真实 skill 对象。
+
+### 已知限制（不在本次范围）
+
+- `WikiDreamProposalManager` 是实例级内存池，而 WebUI 读的是
+  `WikiService` 自己的实例 → 运行期新建的提案在重启前可能不显示。
+  这是审核闭环的既有架构问题。
+- `KnowledgeEnricher` 的 `llm_semaphore` / `rate_limiter` 参数目前
+  未被使用（enricher 不做 LLM 调用），保留以与其它轨道接口对称。
+- `analyze_action` / `lint_action` 在 async handler 里同步跑 LLM，
+  与 #11 同类问题，尚未修。
+- `wiki.write_page` 每次重建整个 `index.md`（400 页约 359ms），
+  批量补链的写入代价与此成正比；`max_links_per_unit` 兜住上限。
 
 ## 验证
 
@@ -310,16 +354,19 @@ ruff check src/llmwikify/ tests/
 
 mypy src/llmwikify/apps/agent/maintenance/enricher.py \
       src/llmwikify/apps/agent/maintenance/wikilink.py \
+      src/llmwikify/kernel/wiki/patterns.py \
       src/llmwikify/kernel/wiki/lint/rules/missing_cross_refs.py \
       src/llmwikify/interfaces/cli/commands/enrich.py
 # → exit 0
 
 pytest tests/test_lint_missing_cross_refs.py tests/test_maintenance_enricher.py \
-       tests/test_cli_enrich.py tests/test_apps_chat_skills_actions.py \
+       tests/test_maintenance_wikilink.py tests/test_cli_enrich.py \
+       tests/test_apps_chat_skills_actions.py tests/test_apps_chat_skills_pipelines.py \
+       tests/test_kernel_latent_defects.py \
        tests/test_v015_features.py tests/test_v026_wikilink_fix.py \
        tests/test_maintenance_gap_filler.py tests/test_maintenance_auto_ingest.py \
        tests/test_maintenance_comprehensive.py tests/test_lint_engine.py
-# → 329 passed, 2 failed（均为既存失败，见下）
+# → 403 passed, 2 failed（均为既存失败，见下）
 
 python scripts/check_architecture.py
 # → ✅ 0 architecture violations across 4 layers
@@ -330,13 +377,14 @@ python scripts/check_architecture.py
 全量 `pytest tests/ --ignore=tests/e2e` 的失败/错误清单与 HEAD 基线 diff：
 
 ```
+base=365  new=365
 新增: FAILED tests/test_autoresearch.py::TestEventsCursor::test_get_events_since_returns_only_newer
-消失: （无）
+消失: FAILED tests/test_apps_chat_agent_runner_v2.py::test_run_context_elapsed_increases_with_time
 ```
 
-该测试在 **HEAD 上单独跑同样失败**（Windows `time.time()` 分辨率 ~15.6ms，
-`get_events_since` 用 `>` 比较时间戳，新旧事件 ts 相同 → 返回空），
-属已知 flaky，与本次改动无关。
+总数不变（365 = 365），增减各一条且都是**已知的 Windows 计时器 flaky**
+（依赖 `time.time()` ~15.6ms 分辨率，`get_events_since` 用 `>` 比较时间戳）。
+连跑三次的失败数为 1/1/2，属随机抖动，与本次改动无关。
 
 本次涉及的两个既存失败（stash 对照确认 HEAD 上同样失败）：
 

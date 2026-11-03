@@ -40,7 +40,7 @@ _stop_path = Path(__file__).parent / "jieba_stopwords.txt"
 if _stop_path.exists():
     _STOP_WORDS = {
         line.strip()
-        for line in _stop_path.read_text().splitlines()
+        for line in _stop_path.read_text(encoding="utf-8").splitlines()
         if line.strip() and not line.startswith("#")
     }
 

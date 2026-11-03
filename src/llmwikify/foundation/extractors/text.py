@@ -6,9 +6,19 @@ from pathlib import Path
 from .base import ExtractedContent
 
 
+def _read_text(path: Path) -> str:
+    """Read a text file, tolerating bytes that are not valid UTF-8.
+
+    Unknown extensions fall through to this extractor, so a binary file
+    (or one in a legacy codepage) must not raise UnicodeDecodeError at
+    the caller — the content is simply lossy.
+    """
+    return path.read_text(encoding="utf-8", errors="replace")
+
+
 def _extract_text_file(path: Path) -> ExtractedContent:
     """Extract content from a plain text or markdown file."""
-    content = path.read_text(encoding="utf-8")
+    content = _read_text(path)
 
     # Try to get title from first heading
     heading_match = re.search(r"^#\s+(.+)$", content, re.MULTILINE)
@@ -24,7 +34,7 @@ def _extract_text_file(path: Path) -> ExtractedContent:
 
 def _extract_html_file(path: Path) -> ExtractedContent:
     """Extract content from a local HTML file."""
-    content = path.read_text(encoding="utf-8")
+    content = _read_text(path)
 
     # Simple HTML to text conversion
     text = re.sub(

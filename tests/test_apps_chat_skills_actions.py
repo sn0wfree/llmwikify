@@ -748,3 +748,47 @@ class TestExtractAction:
 
         assert r.status == "ok"
         assert "Relative body." in r.data["content"]
+
+    @pytest.mark.asyncio
+    async def test_extract_does_not_block_the_event_loop(
+        self, monkeypatch, ctx: SkillContext
+    ) -> None:
+        """Extraction is synchronous and slow; it must not stall the loop."""
+        import asyncio
+        import time
+
+        from llmwikify.foundation.extractors import base as extract_base
+
+        def slow_extract(source, wiki_root=None):
+            time.sleep(0.5)
+            return extract_base.ExtractedContent(
+                text="slow body", source_type="markdown", title="Slow"
+            )
+
+        monkeypatch.setattr(extract_base, "extract", slow_extract)
+
+        ticks = 0
+        stop = False
+
+        async def heartbeat():
+            nonlocal ticks
+            while not stop:
+                ticks += 1
+                await asyncio.sleep(0.01)
+
+        hb = asyncio.create_task(heartbeat())
+        try:
+            await asyncio.gather(
+                *[
+                    extract_skill.actions["extract"].handler(
+                        {"url_or_path": "x.md"}, ctx
+                    )
+                    for _ in range(3)
+                ]
+            )
+        finally:
+            stop = True
+            await hb
+
+        # The loop kept running while the three extractions were in flight.
+        assert ticks > 20, f"event loop was starved (ticks={ticks})"

@@ -454,7 +454,7 @@ def _build_merge_notice(new_sections: list[str], version: str) -> str:
 
 def _get_version_safe() -> str:
     try:
-        from .. import __version__
+        from llmwikify import __version__
 
         return __version__
     except ImportError:

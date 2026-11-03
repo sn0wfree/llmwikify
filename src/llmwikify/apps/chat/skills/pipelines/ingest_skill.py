@@ -94,9 +94,7 @@ async def _ingest(args: dict, ctx: SkillContext) -> SkillResult:
                 extracted_content = er.data.get("content", "")
                 was_extracted = True
                 if not page_name:
-                    page_name = er.data.get("page_name", "") or _derive_page_name(
-                        url_or_path
-                    )
+                    page_name = _derive_page_name(url_or_path)
             else:
                 return SkillResult.fail(f"Extract failed: {er.error}")
         except Exception as e:
@@ -129,16 +127,16 @@ async def _ingest(args: dict, ctx: SkillContext) -> SkillResult:
                 write_skill,
             )
 
-            wr = await write_skill.actions["write_page"].handler(
+            wr = await write_skill.actions["write"].handler(
                 {"page_name": page_name, "content": extracted_content},
                 ctx,
             )
             if wr.status == "ok":
                 was_written = True
             else:
-                logger.warning("Write failed for %s: %s", page_name, wr.error)
+                return SkillResult.fail(f"Write failed for {page_name}: {wr.error}")
         except Exception as e:
-            logger.warning("Write error for %s: %s", page_name, e)
+            return SkillResult.fail(f"Write error for {page_name}: {e}")
 
     # Step 3: Read back to verify
     read_back = {}
@@ -148,7 +146,7 @@ async def _ingest(args: dict, ctx: SkillContext) -> SkillResult:
                 read_skill,
             )
 
-            rr = await read_skill.actions["read_page"].handler(
+            rr = await read_skill.actions["read"].handler(
                 {"page_name": page_name},
                 ctx,
             )
