@@ -151,20 +151,6 @@ module = [
     "llmwikify.apps.research.web_search",
     "llmwikify.apps.wiki.db",
     "llmwikify.apps.wiki.service",
-    "llmwikify.foundation.auth._jwt",
-    "llmwikify.foundation.auth.db",
-    "llmwikify.foundation.auth.prompt",
-    "llmwikify.foundation.callback.composite",
-    "llmwikify.foundation.config",
-    "llmwikify.foundation.db",
-    "llmwikify.foundation.extractors.youtube",
-    "llmwikify.foundation.llm",
-    "llmwikify.foundation.llm.client",
-    "llmwikify.foundation.llm.resolver",
-    "llmwikify.foundation.llm.streamable",
-    "llmwikify.foundation.llm_client",
-    "llmwikify.foundation.migration",
-    "llmwikify.foundation.prompts.prompt_registry",
     "llmwikify.interfaces.cli._app",
     "llmwikify.interfaces.cli.commands",
     "llmwikify.interfaces.cli.commands.db",
@@ -241,7 +227,9 @@ no_implicit_optional = true
 warn_redundant_casts = true
 warn_unused_ignores = true
 [[tool.mypy.overrides]]
-module = [ "croniter", "networkx", "networkx.*", "pyvis.*", "community",]
+module = [ "croniter", "networkx", "networkx.*", "pyvis.*", "community",
+        "yaml", "tiktoken", "trafilatura", "markitdown",
+        "youtube_transcript_api",]
 ignore_missing_imports = true
 
 [tool.importlinter]

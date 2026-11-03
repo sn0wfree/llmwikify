@@ -27,6 +27,7 @@ import dataclasses
 import logging
 import sqlite3
 import threading
+from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
@@ -183,13 +184,11 @@ class ManagedConnection:
         synchronous: str = "NORMAL",
     ):
         self._db_path = str(db_path)
-        self._pragmas = {
-            "row_factory": row_factory,
-            "foreign_keys": foreign_keys,
-            "wal": wal,
-            "busy_timeout": busy_timeout,
-            "synchronous": synchronous,
-        }
+        self._row_factory = row_factory
+        self._foreign_keys = foreign_keys
+        self._wal = wal
+        self._busy_timeout = busy_timeout
+        self._synchronous = synchronous
         self._local = threading.local()
         # Every connection this manager hands out, across all threads, so
         # teardown can release them all (see close_all_threads).
@@ -215,7 +214,11 @@ class ManagedConnection:
         if c is None:
             c = connect(
                 self._db_path,
-                **self._pragmas,
+                row_factory=self._row_factory,
+                foreign_keys=self._foreign_keys,
+                wal=self._wal,
+                busy_timeout=self._busy_timeout,
+                synchronous=self._synchronous,
                 check_same_thread=self._check_same_thread,
             )
             self._local.conn = c
@@ -224,7 +227,7 @@ class ManagedConnection:
         return c
 
     @contextmanager
-    def transaction(self) -> None:
+    def transaction(self) -> Iterator[sqlite3.Connection]:
         """Transaction context manager (auto-commit/rollback).
 
         Usage::
@@ -376,7 +379,7 @@ class ManagedConnection:
 
 # ─── 模块级单例注册表 ────────────────────────────────────────
 
-_connections: dict[str, ManagedConnection] = {}
+_connections: dict[tuple[str, ConnectionProfile], ManagedConnection] = {}
 _connections_lock = threading.Lock()
 
 

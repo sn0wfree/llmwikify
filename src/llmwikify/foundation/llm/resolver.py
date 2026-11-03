@@ -94,14 +94,17 @@ def get_provider_metadata(provider: str) -> dict[str, Any]:
         Returns empty dict if provider unknown.
     """
     data = _load_providers()
-    return data["providers"].get(provider, {})
+    providers = data.get("providers") or {}
+    return dict(providers.get(provider, {}))
 
 
 # ─── Alias table（从 YAML 加载）─────────────────────────────
 
 
 def _get_aliases() -> dict[str, str]:
-    return _load_providers().get("aliases", {})
+    data = _load_providers()
+    aliases = data.get("aliases") or {}
+    return {str(k): str(v) for k, v in aliases.items()}
 
 
 def apply_provider_alias(provider: str) -> str:
@@ -123,7 +126,7 @@ def apply_provider_alias(provider: str) -> str:
 
 # 向后兼容：保留 PROVIDER_ALIASES 作为模块级属性（仍可被外部引用）
 # 通过 __getattr__ 拦截，惰性加载 YAML。
-def __getattr__(name: str):
+def __getattr__(name: str) -> Any:
     if name == "PROVIDER_ALIASES":
         return _get_aliases()
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
@@ -134,17 +137,17 @@ def __getattr__(name: str):
 
 def _provider_default_base_url(provider: str) -> str:
     meta = get_provider_metadata(provider)
-    return meta.get("base_url", "")
+    return str(meta.get("base_url") or "")
 
 
 def _provider_default_model(provider: str) -> str:
     meta = get_provider_metadata(provider)
-    return meta.get("default_model", "")
+    return str(meta.get("default_model") or "")
 
 
 def _provider_auth_scheme(provider: str) -> str:
     meta = get_provider_metadata(provider)
-    return meta.get("auth_scheme", "bearer")
+    return str(meta.get("auth_scheme") or "bearer")
 
 
 def _provider_reasoning_split(provider: str) -> bool:

@@ -391,7 +391,10 @@ class ApiKeyRepository:
                 """,
                 (api_key_id, key_prefix, key_hash, user_id, name, scopes, expires_at),
             )
-        return self.get_by_id(api_key_id)
+        created = self.get_by_id(api_key_id)
+        if created is None:
+            raise RuntimeError("api key insert succeeded but row not found")
+        return created
 
     def get_by_id(self, key_id: str) -> ApiKey | None:
         with self._connect() as conn:

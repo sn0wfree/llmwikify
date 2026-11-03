@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import asdict, dataclass
+from typing import Any
 
 import jwt
 
@@ -84,7 +85,7 @@ class TokenClaims:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, data: dict[str, object]) -> TokenClaims:
+    def from_dict(cls, data: dict[str, Any]) -> TokenClaims:
         # PyJWT returns dict-of-str-or-int; we coerce back into the dataclass.
         # `wikis` is always a list per our schema; default to [] for
         # forward-compat with tokens that omit it.

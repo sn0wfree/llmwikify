@@ -60,7 +60,8 @@ def load_llm_config(config_path: Path | None = None) -> dict[str, Any]:
     except (json.JSONDecodeError, OSError) as exc:
         logger.warning("Failed to parse %s: %s", path, exc)
         return {}
-    return data.get("llm", {})
+    llm_section = data.get("llm") if isinstance(data, dict) else None
+    return dict(llm_section) if isinstance(llm_section, dict) else {}
 
 
 # ─── Client construction ─────────────────────────────────────────────

@@ -13,6 +13,8 @@ merge). ``StreamableLLMClient`` is re-exported lazily via PEP 562 to keep
     from llmwikify.foundation.llm import resolve_chat_llm       # LAL resolver
 """
 
+from typing import Any
+
 from .budget_decorator import check_token_budget
 from .context_windows import (
     CONTEXT_WINDOWS,
@@ -37,7 +39,7 @@ from .token_budget import (
 from .token_estimator import count_messages, count_tokens
 
 
-def __getattr__(name: str):
+def __getattr__(name: str) -> Any:
     """Lazy re-export of LLMClient / StreamableLLMClient (PEP 562).
 
     ``LLMClient`` resolves via the ``llm_client`` shim so tests that

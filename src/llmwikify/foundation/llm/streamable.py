@@ -30,6 +30,7 @@ import json
 import logging
 import re
 import time
+from collections.abc import AsyncIterator, Iterator
 from typing import Any
 
 from .base import LLMClient, _legacy_fallback_enabled
@@ -60,7 +61,11 @@ from .errors import (
 from .resolver import resolve_chat_llm, resolver_enabled
 from .spec import LLMSpec
 from .sse import _parse_sse_line
-from .token_budget import TokenBudgetChecker, TokenBudgetConfig
+from .token_budget import (
+    TokenBudgetChecker,
+    TokenBudgetConfig,
+    normalize_on_exceed,
+)
 from .wire import (
     _enforce_role_alternation,
     _normalize_tool_call_ids,
@@ -160,7 +165,7 @@ class StreamableLLMClient(LLMClient):
                 context_window=context_window,
                 base_url=self.base_url,
                 api_key=api_key,
-                on_exceed=budget_on_exceed,
+                on_exceed=normalize_on_exceed(budget_on_exceed),
             )
         )
 
@@ -179,10 +184,10 @@ class StreamableLLMClient(LLMClient):
 
         meta = get_provider_metadata(provider)
         if meta.get("base_url"):
-            return meta["base_url"]
+            return str(meta["base_url"])
         # Fallback for unknown providers
         openai_meta = get_provider_metadata("openai")
-        return openai_meta.get("base_url", "https://api.openai.com/v1")
+        return str(openai_meta.get("base_url") or "https://api.openai.com/v1")
 
     @classmethod
     def from_config(cls, config: dict[str, Any]) -> StreamableLLMClient:
@@ -384,7 +389,7 @@ class StreamableLLMClient(LLMClient):
         messages: list[dict[str, str]],
         tools: list[dict[str, Any]] | None = None,
         **generation_params: Any,
-    ):
+    ) -> Iterator[dict[str, Any]]:
         """Streaming chat completion (yield chunks) — sync version using httpx.
 
         Yields:
@@ -534,7 +539,7 @@ class StreamableLLMClient(LLMClient):
         messages: list[dict[str, str]],
         tools: list[dict[str, Any]] | None = None,
         **generation_params: Any,
-    ):
+    ) -> AsyncIterator[dict[str, Any]]:
         """Async streaming chat completion using httpx.
 
         Yields:
@@ -701,6 +706,7 @@ class StreamableLLMClient(LLMClient):
                 if resp.status_code >= 400:
                     raise _format_http_error(resp.status_code, url, resp.content)
                 data = resp.json()
-                return data["choices"][0]["message"]["content"]
+                content = data["choices"][0]["message"]["content"]
+                return str(content)
             finally:
                 await resp.aclose()

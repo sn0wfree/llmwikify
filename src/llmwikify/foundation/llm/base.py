@@ -16,7 +16,11 @@ from .budget_decorator import check_token_budget
 from .errors import LLMNotConfiguredError
 from .resolver import resolve_chat_llm, resolver_enabled
 from .spec import LLMSpec
-from .token_budget import TokenBudgetChecker, TokenBudgetConfig
+from .token_budget import (
+    TokenBudgetChecker,
+    TokenBudgetConfig,
+    normalize_on_exceed,
+)
 
 # Process-level client memo: from_config is called on every LLM-layer
 # request (lint/gaps). Rebuilding clients is pure overhead once config
@@ -116,7 +120,7 @@ class LLMClient:
                 context_window=context_window,
                 base_url=self.base_url,
                 api_key=api_key,
-                on_exceed=budget_on_exceed,
+                on_exceed=normalize_on_exceed(budget_on_exceed),
             )
         )
 
@@ -263,7 +267,7 @@ class LLMClient:
             "Authorization": f"Bearer {self.api_key}",
         }
 
-        payload = {
+        payload: dict[str, Any] = {
             "model": self.model,
             "messages": messages,
         }
@@ -281,7 +285,8 @@ class LLMClient:
             )
             resp.raise_for_status()
             data = resp.json()
-            return data["choices"][0]["message"]["content"]
+            content = data["choices"][0]["message"]["content"]
+            return str(content)
         except requests.exceptions.RequestException as e:
             raise ConnectionError(f"LLM API request failed: {e}") from e
         except (KeyError, IndexError) as e:

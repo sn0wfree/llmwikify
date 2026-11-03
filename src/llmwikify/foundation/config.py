@@ -11,7 +11,7 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 # Default configuration (embedded for zero-dependency)
-DEFAULT_CONFIG = {
+DEFAULT_CONFIG: dict[str, Any] = {
     "directories": {
         "raw": "raw",
         "wiki": "wiki",
@@ -111,6 +111,7 @@ class Config:
     """
 
     _instance: Config | None = None
+    _initialized: bool = False
 
     def __new__(cls) -> Config:
         if cls._instance is None:
@@ -297,7 +298,7 @@ def get_db_path(wiki_root: Path, cfg: dict[str, Any] | None = None) -> Path:
         cfg = get_default_config()
 
     db_name = cfg.get("database", {}).get("name", DEFAULT_CONFIG["database"]["name"])
-    return wiki_root / db_name
+    return wiki_root / str(db_name)
 
 
 def get_directory(
@@ -319,7 +320,7 @@ def get_directory(
     dir_name = cfg.get("directories", {}).get(
         dir_type, DEFAULT_CONFIG["directories"][dir_type]
     )
-    return wiki_root / dir_name
+    return wiki_root / str(dir_name)
 
 
 def get_mcp_config(cfg: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -334,7 +335,7 @@ def get_mcp_config(cfg: dict[str, Any] | None = None) -> dict[str, Any]:
     if cfg is None:
         cfg = get_default_config()
 
-    mcp_config: dict = DEFAULT_CONFIG["mcp"].copy()  # type: ignore[attr-defined]
+    mcp_config: dict = DEFAULT_CONFIG["mcp"].copy()
     user_mcp = cfg.get("mcp", {})
 
     if user_mcp:
@@ -355,7 +356,7 @@ def get_search_config(cfg: dict[str, Any] | None = None) -> dict[str, Any]:
     if cfg is None:
         cfg = get_default_config()
 
-    search_config: dict = DEFAULT_CONFIG["search"].copy()  # type: ignore[attr-defined]
+    search_config: dict = DEFAULT_CONFIG["search"].copy()
     user_search = cfg.get("search", {})
 
     if user_search:
@@ -402,7 +403,8 @@ def expand_env_vars(value: str) -> str:
 
     def replace_env(match: re.Match) -> str:
         var_name = match.group(1)
-        return os.environ.get(var_name, match.group(0))
+        value = os.environ.get(var_name)
+        return value if value is not None else match.group(0)
 
     return re.sub(r"\$\{(\w+)\}", replace_env, value)
 

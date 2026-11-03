@@ -174,10 +174,11 @@ def _load_global_config() -> dict[str, Any]:
     if not global_path.exists():
         return {}
     try:
-        return json.loads(global_path.read_text(encoding="utf-8"))
+        data = json.loads(global_path.read_text(encoding="utf-8"))
     except Exception as exc:
         logger.warning("[migrate] failed to parse global config: %s", exc)
         return {}
+    return dict(data) if isinstance(data, dict) else {}
 
 
 def _save_global_config(config: dict[str, Any]) -> None:

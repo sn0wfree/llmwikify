@@ -45,6 +45,18 @@ class TokenBudgetConfig:
     api_key: str | None = None
 
 
+def normalize_on_exceed(value: str) -> Literal["warn", "raise"]:
+    """Map the user-facing on_exceed value to the checker's supported set.
+
+    Only ``"raise"`` raises on budget exceeded; any other value
+    (including the legacy ``"truncate"``) falls back to warn, matching
+    the historical behaviour of ``TokenBudgetChecker``.
+    """
+    if value == "raise":
+        return "raise"
+    return "warn"
+
+
 class TokenBudgetExceeded(Exception):
     """Raised when token budget is exceeded and on_exceed="raise"."""
 

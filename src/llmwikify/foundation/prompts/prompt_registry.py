@@ -376,4 +376,7 @@ class PromptRegistry:
     def get_retry_config(self, prompt_name: str) -> dict[str, Any]:
         """Get retry configuration for a prompt."""
         template = self._load_template(prompt_name)
-        return template.post_process.get("retry_on_failure", {"max_attempts": 1})
+        retry = template.post_process.get("retry_on_failure")
+        if isinstance(retry, dict):
+            return dict(retry)
+        return {"max_attempts": 1}

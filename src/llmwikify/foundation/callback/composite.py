@@ -14,12 +14,17 @@ This avoids forcing every consumer to migrate to async in one step.
 from __future__ import annotations
 
 import logging
+from collections.abc import Awaitable
 from typing import Any
 
 from llmwikify.foundation.callback.context import AgentHookContext
 from llmwikify.foundation.utils import maybe_await as _maybe_await
 
 logger = logging.getLogger(__name__)
+
+# Hook 方法既允许 sync 实现（返回 None），也允许 async 实现（返回 Awaitable）。
+# 调用方统一用 maybe_await，故基类声明二者的并集以满足 LSP。
+_HookRet = Awaitable[None] | None
 
 
 class AgentHook:
@@ -28,53 +33,53 @@ class AgentHook:
     def wants_streaming(self) -> bool:
         return False
 
-    def before_iteration(self, ctx: AgentHookContext) -> None:
-        pass
+    def before_iteration(self, ctx: AgentHookContext) -> _HookRet:
+        return None
 
-    def on_stream(self, ctx: AgentHookContext, delta: str) -> None:
-        pass
+    def on_stream(self, ctx: AgentHookContext, delta: str) -> _HookRet:
+        return None
 
-    def on_stream_end(self, ctx: AgentHookContext, *, resuming: bool) -> None:
-        pass
+    def on_stream_end(self, ctx: AgentHookContext, *, resuming: bool) -> _HookRet:
+        return None
 
-    def emit_reasoning(self, ctx: AgentHookContext, content: str) -> None:
-        pass
+    def emit_reasoning(self, ctx: AgentHookContext, content: str) -> _HookRet:
+        return None
 
-    def emit_reasoning_end(self, ctx: AgentHookContext) -> None:
-        pass
+    def emit_reasoning_end(self, ctx: AgentHookContext) -> _HookRet:
+        return None
 
-    def before_execute_tools(self, ctx: AgentHookContext) -> None:
-        pass
+    def before_execute_tools(self, ctx: AgentHookContext) -> _HookRet:
+        return None
 
     def after_tool_executed(
         self,
         ctx: AgentHookContext,
         tool_call: Any,
         result: Any,
-    ) -> None:
-        pass
+    ) -> _HookRet:
+        return None
 
     def on_tool_error(
         self,
         ctx: AgentHookContext,
         tool_call: Any,
         error: BaseException,
-    ) -> None:
-        pass
+    ) -> _HookRet:
+        return None
 
-    def on_confirmation(self, ctx: AgentHookContext, tool_call: Any) -> None:
-        pass
+    def on_confirmation(self, ctx: AgentHookContext, tool_call: Any) -> _HookRet:
+        return None
 
-    def after_iteration(self, ctx: AgentHookContext) -> None:
-        pass
+    def after_iteration(self, ctx: AgentHookContext) -> _HookRet:
+        return None
 
     def finalize_content(
         self, ctx: AgentHookContext, content: str | None
-    ) -> str | None:
+    ) -> Awaitable[str | None] | str | None:
         return content
 
-    def on_error(self, ctx: AgentHookContext, error: BaseException) -> None:
-        pass
+    def on_error(self, ctx: AgentHookContext, error: BaseException) -> _HookRet:
+        return None
 
 
 class NoOpHook(AgentHook):
