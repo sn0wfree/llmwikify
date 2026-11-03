@@ -260,6 +260,8 @@ def test_runner_dependencies_are_minimal() -> None:
         "from llmwikify.foundation.llm.streamable import",
         "from llmwikify.foundation.utils import",
         "from llmwikify.foundation.utils_timing import",
+        # The shared agent runtime — the loop body lives there now.
+        "from llmwikify.kernel.agent.runtime import",
     }
     for line in src.splitlines():
         if line.startswith("from llmwikify") or line.startswith("import llmwikify"):

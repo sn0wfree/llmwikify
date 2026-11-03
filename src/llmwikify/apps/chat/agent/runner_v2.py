@@ -43,23 +43,13 @@ from llmwikify.foundation.llm.errors import LLMError
 from llmwikify.foundation.llm.streamable import LLMRequestError
 from llmwikify.foundation.utils import maybe_await as _maybe_await
 from llmwikify.foundation.utils_timing import measure_latency
+from llmwikify.kernel.agent.runtime import RUNTIME, RuntimeContext
+
+from .chat_plan import ChatPlan
+from .state_trace import StateTrace as _StateTrace
+from .state_trace import StateTraceEntry as _StateTraceEntry
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass(slots=True)
-class _StateTraceEntry:
-    """Single state transition in the 5-step machine.
-
-    Pattern borrowed from nanobot v0.2.1 ``StateTraceEntry``
-    (``nanobot/agent/loop.py``) but trimmed to our 5 steps.
-    """
-
-    state: str
-    started_at: float
-    duration_ms: float
-    event: str  # "ok" | "error" | "skipped"
-    error: str | None = None
 
 
 @dataclass(slots=True)
@@ -242,85 +232,55 @@ class ChatRunnerV2(AgentRunner["ChatRunSpec", "ChatRunResult"]):
                 yield ev
             return
 
-        for iteration in range(spec.max_iterations):
-            await _maybe_await(self._hook.before_iteration(ctx.hook_ctx(iteration)))
-
-            with _StateTrace(ctx, "PRECHECK") as tr:
-                should_break = await self._precheck(ctx)
-            if should_break:
-                tr.event = "skipped"
-                break
-
-            with _StateTrace(ctx, "REASON"):
-                async for ev in self._reason(ctx, system_prompt, iteration):
-                    yield ev
-            if ctx.reason_failed:
-                ctx.stop_reason = "error"
-                break
-
-            if ctx.last_tool_calls:
-                self._append_assistant_tool_calls(ctx)
-
-            if not ctx.last_tool_calls:
-                ctx.final_content = ctx.last_accumulated
-                if ctx.stop_reason not in {"cancelled", "paused", "timeout"}:
-                    ctx.stop_reason = "completed"
-                break
-
-            with _StateTrace(ctx, "ACT"):
-                async for ev in self._act(ctx, ctx.last_tool_calls, iteration):
-                    yield ev
-            if ctx.confirmation_required:
-                ctx.stop_reason = "confirmation_required"
-                break
-
-            with _StateTrace(ctx, "OBSERVE"):
-                self._observe(ctx, ctx.last_thinking)
-
-            await _maybe_await(self._hook.after_iteration(ctx.hook_ctx(iteration)))
-
-            # Phase 6 (2026-06-19): Optional memory consolidation after
-            # each iteration. Borrowed from nanobot Consolidator
-            # architecture; uses MemoryManager.consolidate_session()
-            # which is a thin shim over Consolidator.maybe_consolidate.
-            # Failures are logged + swallowed (don't break the chat loop).
-            if (
-                self._memory_manager is not None
-                and self._memory_manager.consolidator is not None
-            ):
-                try:
-                    session_id = getattr(spec, "session_id", None) or ctx.session_id
-                    messages = list(ctx.messages) if hasattr(ctx, "messages") else []
-                    total_tokens = sum(
-                        len(str(m.get("content", ""))) // 4 for m in messages
-                    )
-                    if session_id and messages:
-                        result = await self._memory_manager.consolidate_session(
-                            session_id=session_id,
-                            messages=messages,
-                            session_tokens=total_tokens,
-                        )
-                        if result is not None:
-                            ctx.compacted_count += 1
-                except (LLMError, OSError, ValueError) as exc:
-                    logger.warning(
-                        "memory consolidation failed in run_stream: %s",
-                        exc,
-                        exc_info=True,
-                    )
-                except Exception:
-                    logger.warning(
-                        "memory consolidation UNEXPECTED failure in run_stream",
-                        exc_info=True,
-                    )
-
-        with _StateTrace(ctx, "FINALIZE"):
-            async for ev in self._emit_done(ctx):
-                yield ev
+        # The loop body now lives in the shared runtime; this plan is
+        # the chat-specific adapter over the runner's own step methods.
+        plan = ChatPlan(self, spec, ctx, system_prompt)
+        runtime_ctx = RuntimeContext()
+        async for ev in RUNTIME.run_stream(runtime_ctx, plan):
+            yield ev
 
         # Note: ``self._current_ctx`` is left pointing at this run's
         # context so ``run_to_completion`` can read the trace. It is
         # overwritten on the next ``run_stream`` call.
+
+    async def _consolidate_memory(self, ctx: _RunContext) -> None:
+        """Optional memory consolidation after each iteration.
+
+        Phase 6 (2026-06-19): borrowed from the nanobot Consolidator
+        architecture; uses MemoryManager.consolidate_session() which is
+        a thin shim over Consolidator.maybe_consolidate. Failures are
+        logged + swallowed (they must not break the chat loop).
+        """
+        if (
+            self._memory_manager is None
+            or self._memory_manager.consolidator is None
+        ):
+            return
+        try:
+            session_id = getattr(ctx.spec, "session_id", None) or ctx.session_id
+            messages = list(ctx.messages) if hasattr(ctx, "messages") else []
+            total_tokens = sum(
+                len(str(m.get("content", ""))) // 4 for m in messages
+            )
+            if session_id and messages:
+                result = await self._memory_manager.consolidate_session(
+                    session_id=session_id,
+                    messages=messages,
+                    session_tokens=total_tokens,
+                )
+                if result is not None:
+                    ctx.compacted_count += 1
+        except (LLMError, OSError, ValueError) as exc:
+            logger.warning(
+                "memory consolidation failed in run_stream: %s",
+                exc,
+                exc_info=True,
+            )
+        except Exception:
+            logger.warning(
+                "memory consolidation UNEXPECTED failure in run_stream",
+                exc_info=True,
+            )
 
     async def run_to_completion(self, spec: ChatRunSpec) -> ChatRunResult:
         final_content: str | None = None
@@ -1018,43 +978,3 @@ def _last_user_content(messages: list[dict[str, Any]]) -> str:
     return ""
 
 
-class _StateTrace:
-    """Context manager that records a state transition.
-
-    Records ``{state, started_at, duration_ms, event, error}`` to
-    ``ctx.state_trace``.  Pattern from nanobot v0.2.1
-    ``StateTraceEntry`` — but ours is a context manager so the
-    per-step wrapper stays a single line::
-
-        with _StateTrace(ctx, "REASON") as tr:
-            ...
-    """
-
-    __slots__ = ("_ctx", "state", "_start", "event", "error")
-
-    def __init__(self, ctx: _RunContext, state: str) -> None:
-        self._ctx = ctx
-        self.state = state
-        self._start = 0.0
-        self.event = "ok"
-        self.error: str | None = None
-
-    def __enter__(self) -> _StateTrace:
-        self._start = time.monotonic()
-        return self
-
-    def __exit__(self, exc_type, exc, tb) -> bool:
-        duration_ms = (time.monotonic() - self._start) * 1000.0
-        if exc is not None:
-            self.event = "error"
-            self.error = f"{type(exc).__name__}: {exc}"
-        self._ctx.state_trace.append(
-            _StateTraceEntry(
-                state=self.state,
-                started_at=self._start,
-                duration_ms=duration_ms,
-                event=self.event,
-                error=self.error,
-            )
-        )
-        return False  # do not suppress exception

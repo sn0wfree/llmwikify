@@ -58,6 +58,7 @@ from llmwikify.kernel.agent.runtime import (
     PHASE_AFTER_REASON,
     RUNTIME,
     AgentPlan,
+    RuntimeContext,
 )
 
 logger = logging.getLogger(__name__)
@@ -220,7 +221,7 @@ class ReactLoop:
         self._start_time = time.monotonic()
 
         plan = _ResearchPlan(self, ctx, emit)
-        runtime_ctx = _RuntimeContext(ctx)
+        runtime_ctx = RuntimeContext()
         async for event in RUNTIME.run_stream(runtime_ctx, plan):
             yield event
 
@@ -243,23 +244,6 @@ class ReactLoop:
 
 
 # ─── The plan ───────────────────────────────────────────────────────
-
-
-class _RuntimeContext:
-    """The runtime's own context — it does not touch the caller's ctx.
-
-    The research pipeline passes an arbitrary ``ctx`` to the reason
-    and action handlers; the runtime's bookkeeping (iteration number,
-    decision, result, stop flag) must not leak into it.
-    """
-
-    def __init__(self, user_ctx: Any) -> None:
-        self.user_ctx = user_ctx
-        self.iteration: int = -1
-        self.decision: Any = None
-        self.result: Any = None
-        self.stop: bool = False
-        self.stop_reason: str = ""
 
 
 class _ResearchPlan(AgentPlan):

@@ -94,10 +94,70 @@ pytest -k "research or autoresearch or react or engine"
 ruff check → clean
 ```
 
-## 未做（Stage 3）
+## Stage 3：chat 迁移（已完成）
 
-- **ChatPlan**：`runner_v2.ChatRunnerV2` 迁到共享运行时（生产影响最大的一步）
-- **SubagentPlan**：`subagent_worker` 的工具循环
+`runner_v2.ChatRunnerV2` 是生产影响最大的一处——它跑在 orchestrator 的每一次对话里。
+
+### 结构拆分
+
+| 改动 | 内容 |
+|------|------|
+| `apps/chat/agent/chat_plan.py`（新） | `ChatPlan` —— 纯粹的**适配器**：每个 stage 调 runner 现有的 step 方法 |
+| `apps/chat/agent/state_trace.py`（新） | `_StateTrace` / `_StateTraceEntry` 从 runner_v2 移出（plan 需要它，又不能循环 import） |
+| `runner_v2.run_stream` | 循环体换成 `RUNTIME.run_stream(runtime_ctx, ChatPlan(...))` |
+| `runner_v2._consolidate_memory`（新方法） | 记忆合并从循环体里抽出（原本 30 行内联在 `for` 里） |
+
+`runner_v2` 里原来的私有名 `_StateTrace` / `_StateTraceEntry` 仍可导入（别名），
+现有测试不受影响。
+
+### stage 映射
+
+| runtime stage | runner 方法 |
+|---------------|-------------|
+| before_iteration | `hook.before_iteration` |
+| precheck | `_precheck`（超时 / goal 谓词 / cancelled / paused） |
+| reason | `_reason`（LLM 流 + tool-call 解析） |
+| decide after_reason | tool-call 记账 + 「无 tool_calls → 收敛」 |
+| act | `_act`（工具执行 + microcompact） |
+| decide after_act | confirmation → 停 |
+| observe | `_observe`（截断的 thinking 记录） |
+| after_iteration | `hook.after_iteration` + 记忆合并 |
+| finalize | `_emit_done` |
+
+### 途中踩到的两个坑
+
+1. **`async def` 里没有 `yield` 就不是异步生成器**。`ChatPlan.decide` 起初写成
+   纯协程，运行时 `async for` 直接抛 `TypeError` → 373 个测试变红。
+   修法：函数体末尾留一个不可达的 `yield {}` 标记。
+2. **不可达的 `yield {}` 标记不能放在会 fall-through 的位置**。它一度被实际
+   执行，产出一个没有 `type` 的事件 → 39 个测试变红（`KeyError: 'type'`）。
+   修法：`yield {}` 之前加 `return`，保证不可达。
+
+### 回归网
+
+| 文件 | 项 | 内容 |
+|------|----|------|
+| `tests/test_chat_plan.py` | 13 | plan↔runtime 边界：stage 映射顺序、四个停止路径、runner 确实走共享运行时、state_trace 五态仍在、旧私有名仍可导入 |
+| `tests/test_apps_chat_agent_runner_v2.py` | 627 | 既有覆盖（本次只更新了 runner 的导入契约白名单——新增 runtime 依赖） |
+
+## 验证
+
+```
+pytest tests/test_chat_plan.py + test_apps_chat_agent_runner_v2.py
+  + test_runtime.py + test_research_runner_plan.py  → 675 passed
+pytest -k "chat or agent or runner or orchestrator" → 失败项均为基线已有
+全量 pytest → 58 failed（基线 58）
+ruff check → clean
+```
+
+> 唯一「新增」的失败 `test_autoresearch.py::TestEventsCursor::test_get_events_since_returns_only_newer`
+> 经 stash 对照确认为**预存的时间戳精度 flaky**（两次 append 落在同一毫秒 →
+> 游标不前进），与本次改动无关：改动前后单跑都是 3/3 失败。
+
+## 未做（Stage 4）
+
+- **SubagentPlan**：`subagent_worker` 的工具循环（跨进程边界，收益小于 chat/research）
 - 删除死代码 `base.aask_with_tools`（生产零调用者）
 - `kernel/agent/loop.py` 的 `UnifiedAgentLoop` 与新运行时二者的关系（前者只有
   codegen 一条腿在用，且那条腿自身无生产入口）
+

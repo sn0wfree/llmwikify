@@ -66,6 +66,26 @@ PHASE_AFTER_ACT = "after_act"
 PHASE_AFTER_OBSERVE = "after_observe"
 
 
+class RuntimeContext:
+    """The runtime's own context.
+
+    The runtime needs a handful of attributes (the iteration number,
+    the decision, the result, the stop flag). They must not land on the
+    plan's own state carrier — the research pipeline passes an
+    arbitrary ``ctx`` to its reason and action handlers, and that object
+    belongs to the caller.
+
+    So the runtime keeps its own context and the plan holds both.
+    """
+
+    def __init__(self) -> None:
+        self.iteration: int = -1
+        self.decision: Any = None
+        self.result: Any = None
+        self.stop: bool = False
+        self.stop_reason: str = ""
+
+
 class AgentPlan:
     """The declarative configuration of one agent loop.
 
@@ -213,6 +233,7 @@ RUNTIME = AgentRuntime()
 __all__ = [
     "AgentPlan",
     "AgentRuntime",
+    "RuntimeContext",
     "RUNTIME",
     "PHASE_AFTER_REASON",
     "PHASE_AFTER_ACT",

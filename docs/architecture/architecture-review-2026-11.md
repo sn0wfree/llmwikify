@@ -25,7 +25,7 @@
 
 | # | 问题 | 证据 |
 |---|------|------|
-| P0-01 | 5 套 Agent 循环并存 | `runner_v2.py` · `research_runner.py` · `base.py:283` · `subagent_worker.py:81` · `research/engine.py` |
+| P0-01 | 5 套 Agent 循环并存 | `runner_v2.py` · `research_runner.py` · `base.py:283` · `subagent_worker.py:81` · `research/engine.py`<br/>**2026-11-02 实测更正**：实为 4 处循环——`research/engine.py` 是接线层不是循环；`base.py:283` 的 `aask_with_tools` **生产零调用者**（事实死代码）。其中 `runner_v2` 与 `research_runner` 结构完全同源 |
 | P0-02 | 存储抽象被 95 处直连 FS 击穿 | `kernel/storage/backend.py:9` 声称可换后端，Protocol 实际仅被调用 5 处 |
 | P0-03 | SSE 契约前后端漂移 | 后端 17 种事件（`apps/chat/agent/events.py:17-42`）vs 前端 12 种（`ui/webui/src/api.ts:33-44`），5 类无对应类型 |
 | P0-04 | apps.chat ↔ apps.research 包级循环 | `apps/research/engine.py:16-30` ↔ `apps/chat/gatherer.py:147` |
@@ -43,7 +43,7 @@ llmwikify 在这三条上均落后一代；优势在本地优先、零代码技�
 
 | # | 方案 | 产出 |
 |---|------|------|
-| 1 | 收敛 Agent 运行时 | 5 套循环 → 1 套 `AgentRuntime` + 4 份声明式 Plan（删 ~1800 行） |
+| 1 | 收敛 Agent 运行时 | 4 处循环 → 1 套 `AgentRuntime` + 声明式 Plan（**已落地**：research 与 chat 已迁移，subagent 待办） |
 | 2 | 存储端口化 | `foundation/storage/page_store.py` 定义 `PageStore`；95 处直连收敛；`InMemoryStore` 落地 |
 | 3 | 抽取共享内核 | `apps/knowledge/` 解除 chat↔research 循环 |
 | 4 | 契约即代码 | `events.schema.json` 单一源 → 生成前端 TS → CI 校验漂移 |

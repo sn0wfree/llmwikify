@@ -415,13 +415,16 @@
   <h3>P0 — 架构承诺与实现不符（4 项）</h3>
 
   <div class="issue p0">
-    <div class="hd"><span class="tag p0">P0-01</span><strong>5 套 Agent 循环并存</strong>
-      <span class="loc">runner_v2.py · research_runner.py · base.py:283 · subagent_worker.py:81 · research/engine.py</span></div>
+    <div class="hd"><span class="tag p0">P0-01</span><strong>多套 Agent 循环并存</strong>
+      <span class="loc">runner_v2.py · research_runner.py · base.py:283 · subagent_worker.py:81</span></div>
     <p>同一套 ReAct 语义（PRECHECK→REASON→ACT→OBSERVE→FINALIZE）、同一套 hook 点、同一套事件，各写一遍。
       <code>runner_v2.py</code> 与 <code>subagent_worker.py</code> 的文本解析 + 工具循环逻辑同构；
       <code>harness/quality_gate.py</code> 与 <code>research/gates.py</code> 各有一套质量门。</p>
-    <p class="fix"><b>影响</b> 任何 hook 语义变更、compact 策略、确认流程改动都要同步 5 处——这是最可能产生「改了 A 忘了 B」的根源。
-      <span class="to">→ 方案 P1：收敛为单一 <code>AgentRuntime</code>，其余降级为声明式 Plan。</span></p>
+    <p><b>2026-11-02 实测更正</b>：原判断「5 套」有误——<code>apps/research/engine.py</code> 是<b>接线层</b>不是循环；
+      <code>apps/chat/base.py::aask_with_tools</code> <b>生产零调用者</b>（事实死代码）。实为 <b>4 处</b>循环，
+      其中 <code>runner_v2</code> 与 <code>research_runner</code> 结构完全同源（后者 docstring 自陈 mirrors runner_v2）。</p>
+    <p class="fix"><b>影响</b> 任何 hook 语义变更、compact 策略、确认流程改动都要同步多处——这是最可能产生「改了 A 忘了 B」的根源。
+      <span class="to">→ 方案 P1：收敛为单一 <code>AgentRuntime</code> + 声明式 Plan（已落地：research 与 chat 已迁移）。</span></p>
   </div>
 
   <div class="issue p0">
@@ -752,7 +755,7 @@
   <table>
     <thead><tr><th style="width:26%">决策</th><th style="width:37%">内容</th><th style="width:37%">对标</th></tr></thead>
     <tbody>
-      <tr><td class="name">D1 单一运行时</td><td>5 套循环 → 1 套 <code>AgentRuntime</code> + 4 份声明式 Plan。执行语义只写一次。</td><td>LangGraph Pregel 图 / Temporal Operator</td></tr>
+      <tr><td class="name">D1 单一运行时</td><td>4 处循环 → 1 套 <code>AgentRuntime</code> + 声明式 Plan（<b>已落地</b>：research 与 chat 已迁移）</td><td>LangGraph Pregel 图 / Temporal Operator</td></tr>
       <tr><td class="name">D2 状态外置</td><td><code>Checkpointer</code> 抽象，SQLite 为默认实现。进程内 dict 降级为缓存层。</td><td>LangGraph Checkpointer / Temporal 事件溯源</td></tr>
       <tr><td class="name">D3 契约即代码</td><td>后端单一 <code>events.schema.json</code>；前端类型由其生成；CI 校验漂移。</td><td>K8s CRD / protobuf / OpenAPI codegen</td></tr>
       <tr><td class="name">D4 存储端口化</td><td><code>PageStore</code> Protocol 置于 foundation；<code>Wiki</code> 与 mixin 只经端口访问页面。</td><td>六边形架构 / LlamaIndex Connector</td></tr>
