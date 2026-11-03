@@ -21,7 +21,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-from llmwikify.apps.research.base import BaseResearchConfig
+from llmwikify.apps.knowledge.base import BaseResearchConfig
 
 _DEFAULTS_FILE = Path(__file__).parent / "config_defaults.yaml"
 

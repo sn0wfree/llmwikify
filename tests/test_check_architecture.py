@@ -182,3 +182,90 @@ def test_forbidden_table_matches_architecture_doc() -> None:
     assert mod.FORBIDDEN["kernel"] == ("apps", "interfaces")
     assert mod.FORBIDDEN["apps"] == ("interfaces",)
     assert mod.FORBIDDEN["interfaces"] == ()
+
+
+# ─── sibling packages inside apps ─────────────────────────────────────
+
+
+def test_detects_chat_to_research_violation(tmp_path, monkeypatch) -> None:
+    """``apps.chat`` importing ``apps.research`` closes a cycle.
+
+    The layer rule cannot see it — both are in the ``apps`` layer — so
+    the sibling rule has to.
+    """
+    mod = _load()
+    _write(
+        tmp_path,
+        "src/llmwikify/apps/chat/bad.py",
+        "from llmwikify.apps.research.web_search import WebSearch\n",
+    )
+    rc, out = _run_on_fake_tree(mod, tmp_path, monkeypatch)
+    assert rc == 1
+    assert "sibling-package violation" in out
+    assert "apps.chat → apps.research" in out
+
+
+def test_research_to_chat_is_allowed(tmp_path, monkeypatch) -> None:
+    """``apps.research`` is built on the chat agent machinery — legal.
+
+    The cycle was closed by the *other* direction (chat importing
+    research); research importing chat is the intended layering.
+    """
+    mod = _load()
+    _write(
+        tmp_path,
+        "src/llmwikify/apps/research/ok.py",
+        "from llmwikify.apps.chat.gatherer import SourceGatherer\n",
+    )
+    rc, out = _run_on_fake_tree(mod, tmp_path, monkeypatch)
+    assert rc == 0, out
+    assert "0 sibling-package violations" in out
+
+
+def test_detects_knowledge_importing_a_sibling(tmp_path, monkeypatch) -> None:
+    """``apps.knowledge`` is below both — it may import neither."""
+    mod = _load()
+    _write(
+        tmp_path,
+        "src/llmwikify/apps/knowledge/bad.py",
+        "from llmwikify.apps.chat.db import ChatDatabase\n",
+    )
+    rc, out = _run_on_fake_tree(mod, tmp_path, monkeypatch)
+    assert rc == 1
+    assert "apps.knowledge → apps.chat" in out
+
+
+def test_allows_chat_and_research_through_knowledge(tmp_path, monkeypatch) -> None:
+    """Both sides may use the shared substrate."""
+    mod = _load()
+    _write(
+        tmp_path,
+        "src/llmwikify/apps/chat/ok.py",
+        "from llmwikify.apps.knowledge.web_search import WebSearch\n",
+    )
+    _write(
+        tmp_path,
+        "src/llmwikify/apps/research/ok.py",
+        "from llmwikify.apps.knowledge.base import BaseResearchConfig\n",
+    )
+    rc, out = _run_on_fake_tree(mod, tmp_path, monkeypatch)
+    assert rc == 0, out
+    assert "0 sibling-package violations" in out
+
+
+def test_backcompat_shims_are_allowed(tmp_path, monkeypatch) -> None:
+    """The documented shim paths may still import the research package."""
+    mod = _load()
+    _write(
+        tmp_path,
+        "src/llmwikify/apps/chat/research_agent.py",
+        "from llmwikify.apps.research.agent import ResearchAgent\n",
+    )
+    rc, out = _run_on_fake_tree(mod, tmp_path, monkeypatch)
+    assert rc == 0, out
+
+
+def test_current_repo_has_no_sibling_violations() -> None:
+    """The committed tree must not have re-introduced the cycle."""
+    mod = _load()
+    assert mod.check_sibling_packages() == []

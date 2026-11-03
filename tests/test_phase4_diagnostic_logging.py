@@ -34,7 +34,9 @@ class TestFallbackSearchProviderLogsChain:
         )
 
         chain = [SearXNGProvider("http://x"), DuckDuckGoProvider()]
-        with caplog.at_level(logging.INFO, logger="llmwikify.apps.research.web_search"):
+        # The module moved to apps/knowledge/ (the shared substrate);
+        # the logger name follows the module path.
+        with caplog.at_level(logging.INFO, logger="llmwikify.apps.knowledge.web_search"):
             FallbackSearchProvider(chain)
         messages = [r.message for r in caplog.records]
         chain_log = [m for m in messages if "fallback chain" in m]

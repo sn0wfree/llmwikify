@@ -50,7 +50,7 @@ class ResearchDelegate:
     def _research(self) -> Any:
         """Lazy ResearchDatabase instance."""
         if not hasattr(self, "_research_db"):
-            from llmwikify.apps.research.db import ResearchDatabase
+            from llmwikify.apps.knowledge.db import ResearchDatabase
 
             self._research_db = ResearchDatabase(self._data_dir)
         return self._research_db

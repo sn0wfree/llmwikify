@@ -39,7 +39,7 @@ async def _get_config_data() -> dict:
         _research_yaml = (
             Path(__file__).parent.parent.parent.parent.parent
             / "apps"
-            / "research"
+            / "knowledge"
             / "config_defaults.yaml"
         )
         if _research_yaml.exists():

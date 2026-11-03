@@ -258,7 +258,7 @@ llmwikify = [ "py.typed",]
 "llmwikify.foundation.prompts._defaults" = [ "*.yaml",]
 "llmwikify.foundation.llm" = [ "providers.yaml",]  # v0.41: Provider 元数据唯一来源
 "llmwikify.apps.chat" = [ "config_defaults.yaml",]  # v0.41: Chat 业务默认值
-"llmwikify.apps.research" = [ "config_defaults.yaml",]  # v0.41: Research 业务默认值
+"llmwikify.apps.knowledge" = [ "config_defaults.yaml",]  # v0.41: Research 业务默认值（chat/research 共用）
 "llmwikify.webui" = [ "dist/**/*",]  # v0.41: 随 wheel 发布的 WebUI 构建产物
 "llmwikify.apps.chat.skills.workflows.builtins" = [ "*.yaml", "actor_prompts/*.md",]
 

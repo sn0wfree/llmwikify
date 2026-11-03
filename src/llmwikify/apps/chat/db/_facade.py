@@ -733,7 +733,7 @@ class AutoResearchDatabase(ChatDatabase):
 
     def __init__(self, data_dir) -> None:
         super().__init__(data_dir)
-        from llmwikify.apps.research.db import ResearchDatabase
+        from llmwikify.apps.knowledge.db import ResearchDatabase
         from llmwikify.apps.wiki.db import WikiDatabase
 
         ResearchDatabase(data_dir)

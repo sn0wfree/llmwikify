@@ -24,7 +24,7 @@ import time
 from datetime import datetime, timezone
 from typing import Any
 
-from llmwikify.apps.research.base import BaseResearchTaskManager
+from llmwikify.apps.knowledge.base import BaseResearchTaskManager
 
 logger = logging.getLogger(__name__)
 

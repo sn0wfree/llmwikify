@@ -55,6 +55,93 @@ WHITELIST: dict[str, set[tuple[str, str, str]]] = {
     # layer → {(from_path, to_layer, to_module)}
 }
 
+# ── Sibling-package rule (inside ``apps``) ─────────────────────────
+#
+# The four layers check the *direction* between layers, but inside
+# ``apps`` the sibling packages ``chat`` and ``research`` used to
+# import **each other** — a cycle the layer rule cannot see (same
+# layer). The shared substrate now lives in ``apps/knowledge``, so
+# neither imports the other any more.
+#
+# The only permitted ``chat → research`` imports are the back-compat
+# shims: they re-export the research implementation under its old
+# path, they point one way only, and they cannot close a cycle.
+#
+# ``apps/knowledge`` is below both, so it may not import either.
+SIBLING_RULES: tuple[tuple[str, str, frozenset[str]], ...] = (
+    (
+        "chat",
+        "research",
+        frozenset(
+            {
+                "actions.py",
+                "engine.py",
+                "report.py",
+                "research_agent.py",
+                "research_engine/actions.py",
+                "research_engine/engine.py",
+                "research_engine/gates.py",
+                "research_engine/llm_step.py",
+                "research_engine/observer.py",
+                "research_engine/reasoner.py",
+                "research_engine/report.py",
+                "research_engine/resume.py",
+                "research_engine/routes.py",
+            }
+        ),
+    ),
+    ("knowledge", "chat", frozenset()),
+    ("knowledge", "research", frozenset()),
+)
+
+
+def _sibling_of(path: Path) -> tuple[str, str] | None:
+    """Return ``(package, relative_path)`` for a file under ``apps``."""
+    rel = path.relative_to(SRC).parts
+    if len(rel) < 3 or rel[0] != "apps":
+        return None
+    return rel[1], "/".join(rel[2:])
+
+
+def check_sibling_packages() -> list[tuple[Path, int, str, str]]:
+    """Find imports between sibling packages that are not allowed.
+
+    A violation is (file, lineno, source_package, forbidden_package).
+
+    Note the asymmetry: ``apps.research → apps.chat`` is the **legal**
+    direction (the research pipeline is built on the chat agent
+    machinery). Only the reverse direction — and any import out of
+    ``apps.knowledge`` — closes a cycle.
+    """
+    violations: list[tuple[Path, int, str, str]] = []
+    allowed_by_pair = {
+        (src, dst): allowed for src, dst, allowed in SIBLING_RULES
+    }
+
+    for py_file in sorted(SRC.rglob("*.py")):
+        where = _sibling_of(py_file)
+        if where is None:
+            continue
+        package, rel_path = where
+        for (src_pkg, target_package), allowed in allowed_by_pair.items():
+            if src_pkg != package:
+                continue
+            if rel_path in allowed:
+                continue
+            try:
+                text = py_file.read_text(encoding="utf-8")
+            except UnicodeDecodeError:
+                continue
+            prefix = f"llmwikify.apps.{target_package}"
+            for lineno, line in enumerate(text.splitlines(), start=1):
+                for m in re.finditer(r"^\s*(?:from|import)\s+([\w.]+)", line):
+                    mod = m.group(1)
+                    if mod != prefix and not mod.startswith(prefix + "."):
+                        continue
+                    violations.append((py_file, lineno, package, target_package))
+    return violations
+
+
 
 def _layer_of(path: Path) -> str | None:
     """Return the layer name for a file path, or None if not in a layer."""
@@ -135,7 +222,28 @@ def main() -> int:
 
     if not violations:
         print("✅ 0 architecture violations across 4 layers")
-        return 0
+        sibling_violations = check_sibling_packages()
+        if not sibling_violations:
+            print("✅ 0 sibling-package violations inside apps")
+            return 0
+        print(
+            f"❌ {len(sibling_violations)} sibling-package violation(s) "
+            "inside apps:\n"
+        )
+        grouped: dict[tuple[str, str], list[tuple[Path, int]]] = defaultdict(list)
+        for f, n, sp, tp in sibling_violations:
+            grouped[(sp, tp)].append((f, n))
+        for (sp, tp), items in sorted(grouped.items()):
+            print(f"  apps.{sp} → apps.{tp}  ({len(items)} hit(s))")
+            for f, n in items[:5]:
+                print(f"    {f.relative_to(REPO_ROOT)}:{n}")
+            if len(items) > 5:
+                print(f"    ... and {len(items) - 5} more")
+        print(
+            "\nThe shared substrate lives in apps/knowledge/ — import from\n"
+            "there instead of from the sibling package."
+        )
+        return 1
 
     # Group by (from_layer, to_layer)
     grouped: dict[tuple[str, str], list[tuple[Path, int]]] = defaultdict(list)

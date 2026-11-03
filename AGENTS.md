@@ -175,14 +175,37 @@ foundation  →  (self only)
 - `foundation/ → kernel/apps/reproduction/`
 - `reproduction/ → apps/` 任何 import
 - `kernel/quant/` 业务命名（已删）
+- `apps/chat/ → apps/research/` 任何 import（**例外**：back-compat shim 白名单）
+- `apps/knowledge/ → apps/chat/` 或 `apps/research/` 任何 import
+
+### apps 内的同层包规则 (2026-11-02)
+
+层规则看不到**层内**循环。`apps.chat` 与 `apps.research` 曾互相 import：
+research 建在 chat agent 机制上（`research → chat`，合法），
+但 chat 侧还拉了几个 research 模块（web_search / base / db）→ 成环。
+
+共享部分下沉到 `apps/knowledge/`（位于两者之下）：
+
+```
+apps/chat ─────┐
+               ├──► apps/knowledge ──► foundation / kernel
+apps/research ─┘
+```
+
+- `apps/knowledge/` — web_search.py / base.py / db.py / config_defaults.yaml
+- `apps/research/{web_search,base,db}.py` — back-compat shim（同一模块对象，
+  `mock.patch` 旧路径仍生效）
+- `apps/chat/research_agent.py` — shim → `apps/research/agent.py`
 
 backward-compat shim 保留:
-- `apps/chat/agent/unified/` — 通用框架已迁 kernel/agent/, 此处为 shim
+- `apps/chat/research_engine/` — research 实现的旧 import 路径
+- `apps/chat/{actions,engine,report,research_agent}.py` — 同上
+- `apps/research/{web_search,base,db}.py` — 已迁 apps/knowledge/
 - `apps/chat/agent/execution_context.py` — AgentExecutionContext 已迁 kernel/agent/
 - `kernel/quant/llm_client.py` — build_llm_client 已下沉 foundation/llm/client.py
 
 验证:
-- `python scripts/check_architecture.py` 必须 0 violation
+- `python scripts/check_architecture.py` 必须 0 violation（**含同层包规则**）
 - 反向依赖 grep 必须为空
 - 422+ tests 通过
 

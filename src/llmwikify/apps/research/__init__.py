@@ -1,23 +1,31 @@
 """Research engine for llmwikify v0.40.
 
-Replaces the legacy split between ``apps.research`` (DB helpers only) and
-``apps.chat.research_engine`` (engine/actions/gates/etc). v0.40 collapses
-both into a single ``apps.research`` package so the public surface is:
+The 6-step research pipeline (clarify → plan → gather → analyze →
+synthesize → review) lives here. It is built on the chat agent
+machinery (``apps.chat``), so the dependency runs **research → chat** —
+one way only.
 
-  - ``ResearchDatabase`` (db.py) — 4-table schema backing sessions,
-    sub-queries, sources, and the research_steps log.
-  - ``ResearchEngine`` / ``ResearchSessionManager`` (engine.py) — adaptive
-    ReAct orchestrator. Note: due to a circular import (engine imports
-    chat.config which imports chat.__init__ which imports
-    chat.research_engine), this module is NOT eagerly imported here —
-    callers must use ``from llmwikify.apps.research.engine import
-    ResearchEngine`` directly. Also accessible via the PEP 562 lazy
-    attribute on ``apps.chat`` (``from llmwikify.apps.chat import
-    ResearchEngine``).
-  - ``WebSearch`` (web_search.py) — unified web-search facade.
-  - ``BaseResearchConfig`` (base.py) — shared default config keys
-    + merge helper. ``BaseQualityGate`` is planned (see base.py
-    Future batches note) but not yet exported.
+The parts that the chat side also needs (the web-search facade, the
+shared research base classes, the research artifact store) live in
+``llmwikify.apps.knowledge``, below both packages, so that
+``apps.chat`` never has to import ``apps.research``.
+
+Public surface:
+
+  - ``ResearchEngine`` / ``ResearchSessionManager`` (``engine.py``) —
+    adaptive ReAct orchestrator. Note: due to a circular import (engine
+    imports chat.config which imports chat.__init__), this module is
+    NOT eagerly imported here — callers must use
+    ``from llmwikify.apps.research.engine import ResearchEngine``
+    directly. Also accessible via the PEP 562 lazy attribute on
+    ``apps.chat`` (``from llmwikify.apps.chat import ResearchEngine``).
+  - ``ResearchAgent`` (``agent.py``) — the chat-style wrapper around the
+    engine. It moved here from ``apps.chat.research_agent`` (which keeps
+    a back-compat shim).
+  - ``WebSearch`` / ``ResearchDatabase`` — re-exported from
+    ``llmwikify.apps.knowledge``; the old paths
+    ``apps.research.web_search`` / ``apps.research.db`` remain as
+    back-compat shims.
 
 To avoid eager import cycles, only the leaf-level (non-cyclic) modules
 are exposed at the package top level. Submodules with chat dependencies
@@ -26,7 +34,7 @@ are exposed at the package top level. Submodules with chat dependencies
 their explicit submodule path.
 """
 
-from .db import ResearchDatabase
-from .web_search import WebSearch
+from llmwikify.apps.knowledge.db import ResearchDatabase
+from llmwikify.apps.knowledge.web_search import WebSearch
 
 __all__ = ["ResearchDatabase", "WebSearch"]

@@ -6,7 +6,9 @@ three pillars:
 - **ResearchAgent** (``research_agent.py``) — thin ChatBase wrapper
   around the 6-step research engine (``apps.research.engine``). It
   exposes a chat-style API (``await agent.aresearch(query)``) and
-  preserves the legacy sync ``.research()`` signature.
+  preserves the legacy sync ``.research()`` signature. The
+  implementation moved to ``apps/research/agent.py`` (the research
+  agent is research-specific); this path is a back-compat shim.
 - **ChatBase** (``base.py``) — generic chat framework: session and
   message management, streaming output, tool registration, LLM
   provider abstraction. Designed for reuse across chat-driven apps.
@@ -45,6 +47,10 @@ Legacy import path ``apps.chat.research_engine.*`` is preserved as
 a thin PEP 562 / back-compat shim that re-exports from
 ``apps.research.*``.
 
+The substrate both packages need (web search, the shared research base
+classes, the research artifact store) lives in ``apps/knowledge/`` —
+that is what keeps this package from importing ``apps.research``.
+
 For **L1 primitives** (LLM client, prompt registry, callback hooks),
 see ``llmwikify.foundation.*``.
 
@@ -73,8 +79,8 @@ from .research_agent import ResearchAgent
 
 _LAZY_ATTRS = {
     "ResearchEngine": "llmwikify.apps.research.engine",
-    "ResearchDatabase": "llmwikify.apps.research.db",
-    "WebSearch": "llmwikify.apps.research.web_search",
+    "ResearchDatabase": "llmwikify.apps.knowledge.db",
+    "WebSearch": "llmwikify.apps.knowledge.web_search",
     "research_router": "llmwikify.apps.research.routes",
     "ResearchGates": "llmwikify.apps.research.gates",
     "LLMCallMetrics": "llmwikify.apps.research.llm_step",

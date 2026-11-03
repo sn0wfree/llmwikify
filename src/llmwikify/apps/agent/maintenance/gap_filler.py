@@ -343,7 +343,7 @@ class GapFiller:
     async def _web_search(self, concept: str) -> list[str]:
         """Search the web for entity context. Returns formatted snippets."""
         try:
-            from llmwikify.apps.research.web_search import WebSearch
+            from llmwikify.apps.knowledge.web_search import WebSearch
 
             ws = WebSearch(self._search_config())
             results = await ws.search(concept, num_results=3)

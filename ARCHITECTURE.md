@@ -117,7 +117,8 @@ src/llmwikify/
 │   │   ├── db_migrations.py / engine_helpers.py
 │   │   ├── analyzer.py / reasoning_checker.py / retry_managers.py
 │   │   ├── clarifier.py / gatherer.py / synthesizer.py
-│   │   ├── eval_harness.py / task_manager.py / research_agent.py / report.py
+│   │   ├── eval_harness.py / task_manager.py / report.py
+│   │   ├── research_agent.py       # back-compat shim → apps/research/agent.py
 │   │   ├── providers/            # base / minimax / xiaomi / registry
 │   │   ├── memory/               # facts / consolidation / dream + config
 │   │   ├── harness/              # service / quality_gate / review / source_*
@@ -149,14 +150,22 @@ src/llmwikify/
 │   │       ├── workflows/        # dynamic workflow DSL + builtins/*.yaml
 │   │       └── crud/
 │   │
+│   ├── knowledge/                 # Shared substrate — below chat AND research
+│   │   ├── web_search.py         # provider switching (minimax / tavily / ...)
+│   │   ├── base.py               # BaseResearchConfig / BaseQualityGate /
+│   │   │                         # BaseResearchTaskManager / BaseGateResult
+│   │   ├── db.py                 # ResearchDatabase (research artifact store)
+│   │   └── config_defaults.yaml  # Research business defaults
+│   │
 │   ├── research/                 # Research engine (canonical home since v0.40)
 │   │   ├── engine.py             # plan → gather → analyze → synthesize →
 │   │   │                         # report → review (ReAct + quality gates)
+│   │   ├── agent.py              # ResearchAgent (chat-style wrapper)
 │   │   ├── reasoner.py / observer.py / gates.py / report.py / resume.py
 │   │   ├── actions.py / llm_step.py / routes.py
-│   │   ├── web_search.py         # provider switching (minimax / tavily / ...)
-│   │   ├── db.py
-│   │   └── config_defaults.yaml  # Research business defaults
+│   │   ├── web_search.py         # back-compat shim → apps/knowledge/web_search.py
+│   │   ├── base.py               # back-compat shim → apps/knowledge/base.py
+│   │   └── db.py                 # back-compat shim → apps/knowledge/db.py
 │   │
 │   ├── agent/                    # Agent runtime + self-maintenance
 │   │   ├── maintenance/          # MaintenanceManager: auto_ingest / gap_filler /
@@ -251,6 +260,29 @@ Dependency direction is strictly one-way (`interfaces → apps/kernel/foundation
 `python scripts/check_architecture.py`. See
 [docs/architecture/overview.md](docs/architecture/overview.md) for the
 request-level sequence diagrams and data-flow charts.
+
+### Inside `apps/` — the sibling-package rule
+
+The layer rule cannot see cycles *within* a layer. `apps.chat` and
+`apps.research` used to import **each other**: the research pipeline is
+built on the chat agent machinery (`research → chat`, legal), but the
+chat side also pulled a handful of research modules (web search, the
+shared base classes, the research store) — which closed the cycle.
+
+The shared parts now live in `apps/knowledge/`, below both:
+
+```
+apps/chat ─────┐
+               ├──► apps/knowledge ──► foundation / kernel
+apps/research ─┘
+```
+
+`apps/knowledge` may import neither sibling. The only remaining
+`chat → research` imports are the documented back-compat shims
+(`chat/research_engine/*`, `chat/{actions,engine,report,research_agent}.py`),
+which point one way and re-export the same module objects. The rule is
+enforced by the same script and covered by
+`tests/test_check_architecture.py` and `tests/test_apps_knowledge_package.py`.
 
 ---
 
