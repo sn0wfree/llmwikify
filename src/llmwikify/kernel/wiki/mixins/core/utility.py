@@ -112,7 +112,7 @@ class WikiUtilityMixin(WikiProtocol):
 
     def _get_index_summary(self) -> str:
         """Return a condensed wiki index (max 500 chars)."""
-        if not self.index_file.exists():
+        if not self._backend.file_exists("wiki/index.md"):
             return "(no index)"
         content = self._get_index_content()
         if len(content) <= 500:
@@ -121,14 +121,15 @@ class WikiUtilityMixin(WikiProtocol):
 
     def _get_recent_log(self, limit: int = 3) -> str:
         """Return recent log entries."""
-        if not self.log_file.exists():
+        log = self._backend.read_file("wiki/log.md")
+        if log is None:
             return "(no log)"
-        lines = self.log_file.read_text(encoding="utf-8").strip().split("\n")
+        lines = log.strip().split("\n")
         return "\n".join(lines[-limit:])
 
     def _get_page_count(self) -> int:
         """Return number of wiki pages."""
-        if not self.wiki_dir.exists():
+        if not self._backend.dir_exists("wiki"):
             return 0
         return len(
             [
@@ -142,7 +143,7 @@ class WikiUtilityMixin(WikiProtocol):
 
     def _get_existing_page_names(self) -> list[str]:
         """Return list of existing wiki page names (relative to wiki_dir)."""
-        if not self.wiki_dir.exists():
+        if not self._backend.dir_exists("wiki"):
             return []
         return [
             str(p.relative_to(self.wiki_dir))
@@ -154,7 +155,7 @@ class WikiUtilityMixin(WikiProtocol):
 
     def _wiki_pages(self) -> list[Path]:
         """Return all wiki pages recursively, excluding index, log, and .sink/."""
-        if not self.wiki_dir.exists():
+        if not self._backend.dir_exists("wiki"):
             return []
         return [
             p
@@ -163,6 +164,31 @@ class WikiUtilityMixin(WikiProtocol):
             and ".sink" not in str(p)
             and not is_path_excluded(p)
         ]
+
+    def _logical(self, path: Path) -> str:
+        """The logical path of a file, relative to the wiki root.
+
+        The logical path is what the storage port speaks: POSIX
+        separators, relative to the root (``"wiki.md"``,
+        ``"raw/report.pdf"``, ``"wiki/.sink/notes.sink.md"``). It is
+        pure path arithmetic — no filesystem access.
+        """
+        try:
+            return path.relative_to(self.root).as_posix()
+        except ValueError:
+            return path.name
+
+    def _logical_page(self, path: Path) -> str:
+        """The logical page name of a page path.
+
+        Relative to ``wiki_dir``, without the ``.md`` suffix — the same
+        spelling :meth:`WikiBackend.get_page` expects.
+        """
+        try:
+            rel = path.relative_to(self.wiki_dir)
+        except ValueError:
+            rel = path
+        return rel.with_suffix("").as_posix()
 
     def _page_display_name(self, page: Path) -> str:
         """Return display name for a page (relative path without .md)."""

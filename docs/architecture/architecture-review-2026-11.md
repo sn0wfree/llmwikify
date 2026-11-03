@@ -44,7 +44,7 @@ llmwikify 在这三条上均落后一代；优势在本地优先、零代码技�
 | # | 方案 | 产出 |
 |---|------|------|
 | 1 | 收敛 Agent 运行时 | 4 处循环 → 1 套 `AgentRuntime` + 声明式 Plan（**已落地**：research 与 chat 已迁移，subagent 待办） |
-| 2 | 存储端口化 | `foundation/storage/page_store.py` 定义 `PageStore`；95 处直连收敛；`InMemoryStore` 落地 |
+| 2 | 存储端口化 | `WikiBackend` 端口补齐 + 内容 I/O 收敛（**已落地第一阶段**：10 个新原语、3 个核心文件迁移、棘轮守卫；枚举端口化待做） |
 | 3 | 抽取共享内核 | `apps/knowledge/` 解除 chat↔research 循环 |
 | 4 | 契约即代码 | `events.schema.json` 单一源 → 生成前端 TS → CI 校验漂移 |
 | 5 | 状态外置 | `Checkpointer` + SQLite，进程内 dict 降级为 LRU 缓存，修内存泄漏（**已落地**：`SessionStateStore` + 租约 + `ToolRegistryCache`） |

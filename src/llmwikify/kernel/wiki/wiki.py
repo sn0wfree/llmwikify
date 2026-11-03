@@ -28,6 +28,17 @@ logger = logging.getLogger(__name__)
 VALID_AGENTS = ("opencode", "claude", "codex", "generic")
 
 
+#: The logical paths of the expected layout, keyed by their display name.
+#: The backend speaks logical paths; the Wiki keeps the Path objects for
+#: the callers that want them.
+_LAYOUT_LOGICAL: dict[str, str] = {
+    "raw/": "raw",
+    "wiki/": "wiki",
+    ".llmwikify.db": ".llmwikify.db",
+    "wiki.md": "wiki.md",
+}
+
+
 class Wiki(
     WikiUtilityMixin,
     WikiLinkMixin,
@@ -213,14 +224,11 @@ class Wiki(
 
     def _get_log_content(self) -> str:
         """Read log.md content (empty string if missing)."""
-        log_path = self.wiki_dir / "log.md"
-        if not log_path.exists():
-            return ""
-        return log_path.read_text(encoding="utf-8")
+        return self._backend.read_file("wiki/log.md") or ""
 
     def _ensure_raw_dir(self) -> None:
         """Create raw/ directory if missing."""
-        self.raw_dir.mkdir(parents=True, exist_ok=True)
+        self._backend.ensure_dir("raw")
 
     # ───────────────────────────────────────────────────────────
     # Layout introspection (for `llmwikify doctor`).
@@ -247,11 +255,8 @@ class Wiki(
         """
         import re
 
-        if not self.wiki_md_file.exists():
-            return []
-        try:
-            content = self.wiki_md_file.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError):
+        content = self._backend.get_wiki_md()
+        if content is None:
             return []
 
         subdirs: set[str] = set()
@@ -333,13 +338,22 @@ class Wiki(
             (".llmwikify.db", self.db_path),
             ("wiki.md", self.wiki_md_file),
         ]:
-            if path.exists():
+            logical = _LAYOUT_LOGICAL.get(name)
+            if logical is None:
+                if path.exists():
+                    actual[name] = path
+                continue
+            if (
+                self._backend.dir_exists(logical)
+                if logical.endswith("/")
+                else self._backend.file_exists(logical)
+            ):
                 actual[name] = path
         # Subdirs under wiki/
-        if self.wiki_dir.exists():
-            for child in self.wiki_dir.iterdir():
-                if child.is_dir() and child.name != ".ipynb_checkpoints":
-                    actual[f"wiki/{child.name}/"] = child
+        for child in self._backend.list_dirs("wiki"):
+            name = child.rsplit("/", 1)[-1]
+            if name != ".ipynb_checkpoints":
+                actual[f"wiki/{name}/"] = self.wiki_dir / name
         return actual
 
     def check_layout(self) -> dict[str, bool]:
@@ -349,7 +363,16 @@ class Wiki(
         produce a one-line-per-path status without re-implementing
         the convention.
         """
-        return {name: path.exists() for name, path in self.expected_layout.items()}
+        result: dict[str, bool] = {}
+        for name, path in self.expected_layout.items():
+            logical = _LAYOUT_LOGICAL.get(name)
+            if logical is None:
+                result[name] = path.exists()
+            elif logical.endswith("/"):
+                result[name] = self._backend.dir_exists(logical.rstrip("/"))
+            else:
+                result[name] = self._backend.file_exists(logical)
+        return result
 
     def layout_diff(self) -> dict[str, list[str]]:
         """Compare declared (wiki.md) vs actual (disk) layout.

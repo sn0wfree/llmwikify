@@ -78,7 +78,7 @@ class WikiPageIOMixin(WikiProtocol):
                 f"Page path escapes wiki/ directory: {full_path!r}"
             ) from None
 
-        action = "Updated" if page_path.exists() else "Created"
+        action = "Updated" if self._backend.page_exists(full_path) else "Created"
         self._backend.put_page(full_path, content)
 
         # Index uses logical names so wikilinks ([[Query: X]]) resolve;
@@ -107,9 +107,13 @@ class WikiPageIOMixin(WikiProtocol):
 
             sink_name = page_name.rsplit("/", 1)[-1]
             sink_file = self.sink_dir / to_fs_name(sink_name)
-            if not sink_file.exists() and not sink_name.endswith(".md"):
+            sink_logical = self._logical(sink_file)
+            if not self._backend.file_exists(sink_logical) and not sink_name.endswith(
+                ".md"
+            ):
                 sink_file = self.sink_dir / f"{to_fs_name(sink_name)}.md"
-            if not sink_file.exists():
+                sink_logical = self._logical(sink_file)
+            if not self._backend.file_exists(sink_logical):
                 return {"error": f"Sink file not found: {page_name}"}
             raw_name = from_fs_name(sink_file.name)
             if raw_name.endswith(".sink.md"):
@@ -119,7 +123,7 @@ class WikiPageIOMixin(WikiProtocol):
 
             return {
                 "page_name": page_name_from_file,
-                "content": sink_file.read_text(encoding="utf-8"),
+                "content": self._backend.read_file(sink_logical) or "",
                 "file": str(sink_file),
                 "is_sink": True,
             }
@@ -143,7 +147,7 @@ class WikiPageIOMixin(WikiProtocol):
 
         page_path = self.wiki_dir / f"{to_fs_name(full_path)}.md"
 
-        if not page_path.exists():
+        if not self._backend.page_exists(full_path):
             return {"error": f"Page not found: {full_path}"}
 
         content = self._backend.get_page(full_path)
@@ -258,9 +262,8 @@ class WikiPageIOMixin(WikiProtocol):
         3. First paragraph after title/frontmatter
         4. Fallback: page title
         """
-        try:
-            content = page_path.read_text(encoding="utf-8")
-        except OSError:
+        content = self._backend.get_page(self._logical_page(page_path))
+        if content is None:
             return ""
 
         fm_match = re.match(r"^---\s*\n(.*?)\n---\s*\n", content, re.DOTALL)
@@ -364,7 +367,7 @@ class WikiPageIOMixin(WikiProtocol):
 
             if page_path.parts[0] == ".sink":
                 try:
-                    sink_content = page.read_text(encoding="utf-8")
+                    sink_content = self._backend.read_file(self._logical(page)) or ""
                     entries = len(
                         re.findall(
                             r"^## \[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]",

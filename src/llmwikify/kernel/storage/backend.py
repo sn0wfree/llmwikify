@@ -31,7 +31,7 @@ import logging
 import re
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 from ...foundation.config import get_db_path, get_directory, load_config
 
@@ -65,6 +65,7 @@ def is_path_excluded(path: Path) -> bool:
     return any(part in EXCLUDED_DIR_NAMES for part in path.parts)
 
 
+@runtime_checkable
 class WikiBackend(Protocol):
     """Storage layer — only data persistence, no business logic.
 
@@ -119,6 +120,63 @@ class WikiBackend(Protocol):
 
     # === Page type mapping (1 method) ===
     def get_page_type_mapping(self) -> dict[str, str]: ...
+
+    # === Page level extras (2 methods) ===
+    def page_exists(self, name: str) -> bool:
+        """True when the page ``name`` exists."""
+        ...
+
+    def list_page_names(self) -> list[str]:
+        """The wiki page names, relative to ``wiki_dir``.
+
+        The swappable counterpart of :meth:`list_page_paths`: a
+        virtual backend has no ``Path`` objects to hand out.
+        """
+        ...
+
+    # === Generic files (6 methods) ===
+    #
+    # Everything that is not a wiki page: ``wiki.md``, the index and
+    # log files, the raw sources, the sink buffers. ``path`` is a
+    # *logical* path relative to the wiki root, with POSIX separators
+    # (e.g. ``"wiki.md"``, ``"raw/report.pdf"``,
+    # ``"wiki/.sink/notes.sink.md"``).
+
+    def read_file(self, path: str) -> str | None:
+        """The content of the file, or None when it does not exist."""
+        ...
+
+    def write_file(self, path: str, content: str) -> None:
+        """Write the file (creating the parent directory)."""
+        ...
+
+    def delete_file(self, path: str) -> bool:
+        """Delete the file; True when it existed."""
+        ...
+
+    def file_exists(self, path: str) -> bool:
+        """True when the file exists."""
+        ...
+
+    def list_files(self, prefix: str = "") -> list[str]:
+        """Every file under ``prefix``, as logical paths.
+
+        ``prefix`` is a logical directory (e.g. ``"raw"``); an empty
+        prefix means the whole wiki root.
+        """
+        ...
+
+    def ensure_dir(self, path: str) -> None:
+        """Create the directory (and its parents) if it is missing."""
+        ...
+
+    def dir_exists(self, path: str) -> bool:
+        """True when the directory exists."""
+        ...
+
+    def list_dirs(self, prefix: str = "") -> list[str]:
+        """Every directory under ``prefix``, as logical paths."""
+        ...
 
 
 class LocalFileBackend:
@@ -309,6 +367,94 @@ class LocalFileBackend:
         except OSError as e:
             logger.warning("Failed to cache source analysis for %s: %s", key, e)
 
+    # === Page level extras (2 methods) ===
+    def page_exists(self, name: str) -> bool:
+        return self._page_path(name).exists()
+
+    def list_page_names(self) -> list[str]:
+        """The wiki page names, relative to ``wiki_dir``.
+
+        The logical counterpart of :meth:`list_page_paths` — the names
+        use the on-disk spelling (so the Windows path codec is
+        already applied); the callers that want the *logical* name
+        run it through ``from_fs_name``.
+        """
+        out: list[str] = []
+        for path in self.list_page_paths():
+            try:
+                out.append(path.relative_to(self.wiki_dir).as_posix())
+            except ValueError:
+                continue
+        return out
+
+    # === Generic files (6 methods) ===
+    def read_file(self, path: str) -> str | None:
+        target = self._logical_path(path)
+        if not target.exists():
+            return None
+        try:
+            return target.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as e:
+            logger.warning("Failed to read %s: %s", path, e)
+            return None
+
+    def write_file(self, path: str, content: str) -> None:
+        target = self._logical_path(path)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(content, encoding="utf-8")
+
+    def delete_file(self, path: str) -> bool:
+        target = self._logical_path(path)
+        if not target.exists():
+            return False
+        try:
+            target.unlink()
+        except OSError as e:
+            logger.warning("Failed to delete %s: %s", path, e)
+            return False
+        return True
+
+    def file_exists(self, path: str) -> bool:
+        return self._logical_path(path).exists()
+
+    def list_files(self, prefix: str = "") -> list[str]:
+        base = self._logical_path(prefix) if prefix else self.root
+        if not base.exists():
+            return []
+        out: list[str] = []
+        for item in base.rglob("*"):
+            if not item.is_file():
+                continue
+            if is_path_excluded(item):
+                continue
+            try:
+                out.append(item.relative_to(self.root).as_posix())
+            except ValueError:
+                continue
+        return sorted(out)
+
+    def ensure_dir(self, path: str) -> None:
+        self._logical_path(path).mkdir(parents=True, exist_ok=True)
+
+    def dir_exists(self, path: str) -> bool:
+        return self._logical_path(path).is_dir()
+
+    def list_dirs(self, prefix: str = "") -> list[str]:
+        base = self._logical_path(prefix) if prefix else self.root
+        if not base.is_dir():
+            return []
+        out: list[str] = []
+        for item in base.rglob("*"):
+            if not item.is_dir():
+                continue
+            if is_path_excluded(item):
+                continue
+            try:
+                out.append(item.relative_to(self.root).as_posix())
+            except ValueError:
+                continue
+        return sorted(out)
+
     # === Page type mapping (1 method) ===
     def get_page_type_mapping(self) -> dict[str, str]:
         """Parse wiki.md for the Page Types table.
@@ -356,6 +502,23 @@ class LocalFileBackend:
         return type_to_dir
 
     # === Helpers (private) ===
+
+    def _logical_path(self, path: str) -> Path:
+        """Resolve a logical path (relative to the wiki root) to a file path.
+
+        The logical path uses POSIX separators (``"wiki/index.md"``);
+        the result is resolved under the wiki root and may not escape
+        it.
+        """
+        candidate = (self.root / path).resolve()
+        try:
+            candidate.relative_to(self.root)
+        except ValueError:
+            raise ValueError(
+                f"Path escapes the wiki root: {path!r}"
+            ) from None
+        return candidate
+
     def _page_path(self, name: str) -> Path:
         """Resolve a logical page name to a file path under wiki_dir.
 

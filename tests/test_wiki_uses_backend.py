@@ -111,6 +111,31 @@ def test_wiki_accepts_custom_backend(wiki_root):
         def get_page_type_mapping(self) -> dict[str, str]:
             return {}
 
+        # ── the port grew (generic file primitives) ──
+        def page_exists(self, name: str) -> bool:
+            return name in self._store
+
+        def list_page_names(self) -> list[str]:
+            return list(self._store)
+
+        def read_file(self, path: str) -> str | None:
+            return None
+
+        def write_file(self, path: str, content: str) -> None:
+            pass
+
+        def delete_file(self, path: str) -> bool:
+            return False
+
+        def file_exists(self, path: str) -> bool:
+            return False
+
+        def list_files(self, prefix: str = "") -> list[str]:
+            return []
+
+        def ensure_dir(self, path: str) -> None:
+            pass
+
     backend = MockBackend(wiki_root)
     wiki = Wiki(wiki_root, backend=backend)
     assert wiki._backend is backend

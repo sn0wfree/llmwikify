@@ -95,6 +95,101 @@ SIBLING_RULES: tuple[tuple[str, str, frozenset[str]], ...] = (
 )
 
 
+# ── the storage port rule (inside kernel/wiki) ──────────────────────
+#
+# The wiki layer stores its pages through ``WikiBackend`` — the port
+# that makes a non-filesystem backend possible. 186 filesystem calls
+# used to go around it; they are being migrated one module at a time.
+#
+# This rule is a **ratchet**: a module that has been migrated may not
+# do direct content I/O any more, and the list of modules that still
+# may may only get shorter. An entry that no longer has a violation is
+# itself reported — the list has to be trimmed.
+#
+# Only *content* operations are covered (read / write / delete). The
+# enumeration still hands out ``Path`` objects, which a virtual backend
+# cannot provide — that is the remaining gap of the port.
+
+#: The content operations the storage port owns.
+_PORT_CONTENT_OPS = ("read_text", "write_text", "unlink")
+
+#: The modules that still do direct content I/O (relative to
+#: ``src/llmwikify``). Every entry is work in progress.
+_STORAGE_PORT_PENDING: frozenset[str] = frozenset(
+    {
+        "kernel/wiki/engines/analyzer.py",
+        "kernel/wiki/engines/relation.py",
+        "kernel/wiki/engines/synthesis.py",
+        "kernel/wiki/lint/__init__.py",
+        "kernel/wiki/lint/rules/dated_claims.py",
+        "kernel/wiki/lint/rules/knowledge_gaps.py",
+        "kernel/wiki/mixins/analysis/llm.py",
+        "kernel/wiki/mixins/analysis/query.py",
+        "kernel/wiki/mixins/analysis/relation.py",
+        "kernel/wiki/mixins/analysis/status.py",
+        "kernel/wiki/mixins/core/init.py",
+        "kernel/wiki/mixins/core/utility.py",
+        "kernel/wiki/mixins/io/ingest.py",
+        "kernel/wiki/mixins/io/link.py",
+        "kernel/wiki/mixins/io/source_analysis.py",
+        "kernel/wiki/snapshot.py",
+    }
+)
+
+
+def check_storage_port() -> list[str]:
+    """Find the direct content I/O that bypasses the storage port.
+
+    Returns a list of human-readable violations.
+    """
+    import ast
+
+    violations: list[str] = []
+    still_pending: set[str] = set()
+    existing_pending: set[str] = set()
+
+    for py_file in sorted(SRC.rglob("*.py")):
+        rel = str(py_file.relative_to(SRC)).replace("\\", "/")
+        if not rel.startswith("kernel/wiki"):
+            continue
+        if rel in _STORAGE_PORT_PENDING:
+            existing_pending.add(rel)
+        try:
+            tree = ast.parse(py_file.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, SyntaxError):
+            continue
+
+        hits: list[str] = []
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and node.func.attr in _PORT_CONTENT_OPS
+            ):
+                hits.append(f"{rel}:{node.lineno}  {ast.unparse(node.func)}()")
+
+        if not hits:
+            continue
+        if rel in _STORAGE_PORT_PENDING:
+            still_pending.add(rel)
+            continue
+        violations.extend(
+            f"content I/O bypasses the storage port: {hit}" for hit in hits
+        )
+
+    # The ratchet: a module that no longer needs the exemption must
+    # be removed from the list. Only the modules that exist are
+    # considered — a synthetic tree (the tests build one) has neither.
+    stale = sorted(existing_pending - still_pending)
+    for rel in stale:
+        violations.append(
+            f"{rel} no longer does direct content I/O — remove it from "
+            "_STORAGE_PORT_PENDING"
+        )
+
+    return violations
+
+
 def _sibling_of(path: Path) -> tuple[str, str] | None:
     """Return ``(package, relative_path)`` for a file under ``apps``."""
     rel = path.relative_to(SRC).parts
@@ -222,6 +317,22 @@ def main() -> int:
 
     if not violations:
         print("✅ 0 architecture violations across 4 layers")
+        port_violations = check_storage_port()
+        if port_violations:
+            print(
+                f"❌ {len(port_violations)} storage-port violation(s) "
+                "in kernel/wiki:\n"
+            )
+            for line in port_violations[:20]:
+                print(f"    {line}")
+            if len(port_violations) > 20:
+                print(f"    ... and {len(port_violations) - 20} more")
+            print(
+                "\nContent I/O in kernel/wiki must go through WikiBackend "
+                "(kernel/storage/backend.py)."
+            )
+            return 1
+        print("✅ 0 storage-port violations in kernel/wiki")
         sibling_violations = check_sibling_packages()
         if not sibling_violations:
             print("✅ 0 sibling-package violations inside apps")
