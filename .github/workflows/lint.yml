@@ -7,6 +7,25 @@ on:
     branches: [ main ]
 
 jobs:
+  contract:
+    # The two contracts that are not covered by any other check:
+    # the layer dependency direction and the SSE event vocabulary.
+    # Both scripts are stdlib-only, so this job needs no install.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Check the layer dependency direction
+        run: python scripts/check_architecture.py
+
+      - name: Check the generated SSE types are in sync
+        run: python scripts/gen_webui_types.py --check
+
   lint:
     runs-on: ubuntu-latest
     steps:
@@ -27,6 +46,9 @@ jobs:
 
       - name: Lint with Ruff
         run: ruff check src/llmwikify tests
+
+      - name: Check the scripts
+        run: ruff check scripts
 
   type-check:
     runs-on: ubuntu-latest

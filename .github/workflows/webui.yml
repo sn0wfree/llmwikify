@@ -1,0 +1,47 @@
+name: WebUI
+
+# The WebUI had no CI at all: a broken type or a failing component test
+# was only found by a user. This workflow runs the same three steps a
+# developer runs locally: type check, unit tests, build.
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  webui:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: ui/webui/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ui/webui
+        run: npm ci
+
+      - name: Type check
+        working-directory: ui/webui
+        run: npx tsc --noEmit
+
+      - name: Unit tests
+        working-directory: ui/webui
+        run: npx vitest run
+
+      - name: Build
+        working-directory: ui/webui
+        run: npm run build
+
+      - name: Upload the built bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: webui-dist
+          path: ui/webui/dist
+          retention-days: 7
