@@ -33,6 +33,15 @@ def mock_wiki(tmp_path):
     wiki._log_page_name = "Log"
     wiki._should_exclude_orphan.return_value = False
     wiki._resolve_wikilink_target.return_value = None
+    # The storage port: a real backend over the same temp root, so
+    # the mocked wiki still serves the files the test writes.
+    from llmwikify.kernel.storage.backend import LocalFileBackend
+
+    wiki._backend = LocalFileBackend(tmp_path)
+    wiki._logical.side_effect = lambda p: p.relative_to(tmp_path).as_posix()
+    wiki._logical_page.side_effect = lambda p: (
+        p.relative_to(wiki.wiki_dir).with_suffix('').as_posix()
+    )
     wiki._parse_wikilink_target.side_effect = (
         lambda link: link.split("|")[0].split("#")[0].strip()
     )

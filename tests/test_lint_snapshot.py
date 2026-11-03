@@ -613,7 +613,7 @@ def test_pages_from_snapshot_matches_load_pages(small_wiki, snapshot):
     """The cross page input is the input of ``_load_pages``."""
     rule = MissingCrossRefsRule()
 
-    assert rule._pages_from_snapshot(snapshot) == rule._load_pages(small_wiki)
+    assert rule._pages_from_snapshot(small_wiki, snapshot) == rule._load_pages(small_wiki)
 
 
 def test_pages_from_snapshot_uses_the_same_query_filter(small_wiki, snapshot):
@@ -630,7 +630,7 @@ def test_pages_from_snapshot_uses_the_same_query_filter(small_wiki, snapshot):
         },
         relative_names=("Query: probe.md",) + snapshot.relative_names,
     )
-    filtered = rule._pages_from_snapshot(probe)
+    filtered = rule._pages_from_snapshot(small_wiki, probe)
 
     assert "Query: probe" not in filtered
     assert set(filtered) == set(legacy)

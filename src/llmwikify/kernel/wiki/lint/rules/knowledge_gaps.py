@@ -131,7 +131,7 @@ class KnowledgeGapsRule(Rule):
             if not source_page.is_relative_to(sources_dir):
                 continue
             page_name = wiki._page_display_name(source_page)
-            yield page_name, source_page.read_text(encoding="utf-8", errors="replace")
+            yield page_name, wiki._backend.get_page(page_name) or ""
 
     def _source_pages_from_snapshot(self, wiki: Wiki, snapshot: PageSnapshot):
         """Yield ``(page_name, content)`` of the source pages, from the snapshot.
@@ -148,9 +148,7 @@ class KnowledgeGapsRule(Rule):
             if content is None:
                 # Degraded page: it did not fit into the snapshot, read
                 # it back from disk (same read as the legacy path).
-                content = snapshot.path_of(name).read_text(
-                    encoding="utf-8", errors="replace"
-                )
+                content = wiki._backend.get_page(name) or ""
             yield name, content
 
     def _collect_isolated_source(

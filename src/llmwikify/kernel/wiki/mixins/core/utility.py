@@ -86,10 +86,11 @@ class WikiUtilityMixin(WikiProtocol):
         """Render a template file with Jinja2 variable substitution."""
         from jinja2 import BaseLoader, Environment
 
-        template_path = TEMPLATES_DIR / name
-        if not template_path.exists():
+        from llmwikify.foundation.templates import read_text as _read_template
+
+        content = _read_template(name)
+        if content is None:
             return ""
-        content = template_path.read_text(encoding="utf-8")
         env = Environment(loader=BaseLoader(), trim_blocks=True, lstrip_blocks=True)
         return env.from_string(content).render(**variables)
 

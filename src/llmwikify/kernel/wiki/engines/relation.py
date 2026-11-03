@@ -38,9 +38,15 @@ class RelationEngine:
         relations = engine.get_neighbors("Attention")
     """
 
-    def __init__(self, index: WikiIndex, wiki_root: Path | None = None) -> None:
+    def __init__(
+        self,
+        index: WikiIndex,
+        wiki_root: Path | None = None,
+        backend: Any = None,
+    ) -> None:
         self.index = index
         self.wiki_root = wiki_root
+        self._backend = backend
         self._relation_types = self._load_relation_types()
         self._ensure_table()
 
@@ -57,12 +63,15 @@ class RelationEngine:
                 logger.warning("Failed to infer wiki root from index.db: %s", e)
                 return DEFAULT_RELATION_TYPES.copy()
 
-        wiki_md = self.wiki_root / "wiki.md"
-        if not wiki_md.exists():
+        if self._backend is None:
+            # No storage port (a bare RelationEngine(index)) — the
+            # schema cannot be read, so fall back to the defaults.
+            return DEFAULT_RELATION_TYPES.copy()
+        content = self._backend.get_wiki_md()
+        if content is None:
             return DEFAULT_RELATION_TYPES.copy()
 
         try:
-            content = wiki_md.read_text(encoding="utf-8")
             # Look for relation types in the schema
             # Pattern 1: bullet list under "Relation Types" section
             types = set()

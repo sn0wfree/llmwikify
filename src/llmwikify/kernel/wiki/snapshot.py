@@ -145,8 +145,10 @@ class WikiPageSource:
                 omitted.append(name)
                 continue
             try:
-                content = page.read_text(encoding="utf-8", errors="replace")
+                content = self.wiki._backend.get_page(name)
             except OSError:
+                content = None
+            if content is None:
                 omitted.append(name)
                 continue
             contents[name] = content

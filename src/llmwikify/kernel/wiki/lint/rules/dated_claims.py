@@ -77,7 +77,7 @@ class DatedClaimsRule(Rule):
             for src in wiki.raw_dir.rglob("*"):
                 if not src.is_file():
                     continue
-                content = src.read_text(errors="ignore", encoding="utf-8")
+                content = wiki._backend.read_file(wiki._logical(src)) or ""
                 years = re.findall(r"\b(20\d{2})\b", content)
                 if years:
                     latest_source_year = max(
@@ -103,9 +103,7 @@ class DatedClaimsRule(Rule):
             if content is None:
                 # Degraded page: it did not fit into the snapshot, read
                 # it back from disk (same read as the legacy path).
-                content = snapshot.path_of(name).read_text(
-                    encoding="utf-8", errors="replace"
-                )
+                content = wiki._backend.get_page(name) or ""
             self.detect(name, content, wiki, results)
             if len(results) >= self.max_results:
                 break

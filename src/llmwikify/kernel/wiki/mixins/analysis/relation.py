@@ -32,7 +32,9 @@ class WikiRelationMixin(WikiProtocol):
 
         from ...engines.relation import RelationEngine
 
-        engine = RelationEngine(self.index, wiki_root=self.root)
+        engine = RelationEngine(
+            self.index, wiki_root=self.root, backend=self._backend
+        )
 
         for r in relations:
             if "source_file" not in r and source_file:
@@ -58,7 +60,9 @@ class WikiRelationMixin(WikiProtocol):
         """Get the relation engine instance."""
         from ...engines.relation import RelationEngine
 
-        return RelationEngine(self.index, wiki_root=self.root)
+        return RelationEngine(
+            self.index, wiki_root=self.root, backend=self._backend
+        )
 
     def graph_analyze(self, force: bool = False) -> dict:
         """Run full knowledge graph analysis.
@@ -108,7 +112,7 @@ class WikiRelationMixin(WikiProtocol):
 
         # Take snapshot of existing pages for rollback
         snapshot_dir = self.root / ".wiki_snapshot"
-        snapshot_dir.mkdir(exist_ok=True)
+        self._backend.ensure_dir(self._logical(snapshot_dir))
         page_snapshots = {}
 
         try:
@@ -120,7 +124,7 @@ class WikiRelationMixin(WikiProtocol):
                     page_path = self.wiki_dir / f"{page_name}.md"
                     if page_path.exists():
                         snapshot_path = snapshot_dir / f"{page_name}.md"
-                        snapshot_path.parent.mkdir(parents=True, exist_ok=True)
+                        self._backend.ensure_dir(self._logical(snapshot_path.parent))
                         shutil.copy2(page_path, snapshot_path)
                         page_snapshots[page_name] = snapshot_path
 
@@ -191,7 +195,7 @@ class WikiRelationMixin(WikiProtocol):
                     if snapshot_path.exists():
                         shutil.copy2(snapshot_path, page_path)
                     elif page_path.exists():
-                        page_path.unlink()
+                        self._backend.delete_file(self._logical(page_path))
                 except Exception as rollback_error:
                     logger.error(
                         "Rollback failed for %s: %s", page_name, rollback_error

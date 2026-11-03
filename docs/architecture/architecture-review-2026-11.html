@@ -758,7 +758,7 @@
       <tr><td class="name">D1 单一运行时</td><td>4 处循环 → 1 套 <code>AgentRuntime</code> + 声明式 Plan（<b>已落地</b>：research 与 chat 已迁移）</td><td>LangGraph Pregel 图 / Temporal Operator</td></tr>
       <tr><td class="name">D2 状态外置</td><td><code>SessionStateStore</code> 抽象（SQLite 实现带租约），进程内 dict 降级为 LRU 缓存。<b>已落地</b></td><td>LangGraph Checkpointer / Temporal 事件溯源</td></tr>
       <tr><td class="name">D3 契约即代码</td><td>后端单一 <code>events.schema.json</code>；前端类型由其生成；CI 校验漂移。</td><td>K8s CRD / protobuf / OpenAPI codegen</td></tr>
-      <tr><td class="name">D4 存储端口化</td><td><code>WikiBackend</code> 端口补齐（10 个原语）+ 内容 I/O 收敛 + 棘轮守卫。<b>已落地第一阶段</b>；枚举仍返回 Path，待第二阶段</td><td>六边形架构 / LlamaIndex Connector</td></tr>
+      <tr><td class="name">D4 存储端口化</td><td><code>WikiBackend</code> 端口补齐 + 内容 I/O 全部收敛（16 个模块迁移、名单清零、棘轮守卫）。<b>已落地</b>；枚举仍返回 Path（表现层缺口）</td><td>六边形架构 / LlamaIndex Connector</td></tr>
       <tr><td class="name">D5 共享内核</td><td>抽 <code>apps/knowledge/</code>，chat 与 research 均单向依赖它，不互相依赖。</td><td>模块化单体（Martin Fowler）</td></tr>
       <tr><td class="name">D6 单一 Hook 集</td><td>16 钩子定义在 foundation；kernel 与 apps 共用，删除桥接层。</td><td>LangSmith callback / OpenTelemetry span</td></tr>
       <tr><td class="name">D7 显式能力声明</td><td>Skill 自带 <code>exposed</code> / <code>snapshot_capable</code> 等能力标记，取代反射与白名单。</td><td>Kubernetes capability / OpenAI tool schema</td></tr>

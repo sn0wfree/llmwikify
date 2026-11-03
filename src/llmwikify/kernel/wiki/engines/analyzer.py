@@ -114,8 +114,8 @@ class WikiAnalyzer:
             content = None if snapshot is None else snapshot.content_of(name)
             if content is None:
                 # No snapshot, or the page did not fit into it (memory
-                # budget) → read it back from disk.
-                content = page.read_text(encoding="utf-8", errors="replace")
+                # budget) → read it back through the storage port.
+                content = self.wiki._backend.get_page(name) or ""
             contents.append((name, content))
 
         # Fast existence set — full display names only (stems can false-match).
@@ -283,10 +283,12 @@ class WikiAnalyzer:
         """Build minimal context for LLM lint analysis."""
         parts = []
 
-        if self.wiki.wiki_md_file.exists():
-            wiki_md = self.wiki.wiki_md_file.read_text(
-                encoding="utf-8", errors="replace"
-            )
+        if self.wiki._backend.file_exists("wiki.md"):
+            try:
+                wiki_md = self.wiki._backend.get_wiki_md() or ""
+            except (OSError, UnicodeDecodeError):
+                wiki_md = ""
+            parts.append(f"=== WIKI SCHEMA (wiki.md) ===\n{wiki_md}")
             parts.append(f"=== WIKI SCHEMA (wiki.md) ===\n{wiki_md}")
 
         # The snapshot knows the same page names as

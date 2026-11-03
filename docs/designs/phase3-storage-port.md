@@ -111,12 +111,35 @@ ruff → clean
 scripts/check_architecture.py → 3 条规则全绿
 ```
 
-## 未做（方案 2 第二阶段）
+## 第二阶段：内容 I/O 全部端口化（已完成）
 
-- **枚举端口化**：`_wiki_pages()` / `_get_existing_page_names()` / `_get_page_count()`
-  仍返回 `Path` —— 虚拟后端给不出来。要改完需连带改 analyzer / lint rules / snapshot /
-  relation engine 的路径运算。
-- 名单里剩下的 16 个模块：`lint/__init__.py`、`engines/{analyzer,relation,synthesis}.py`、
-  `mixins/{analysis/*,io/*,core/*}`、`lint/rules/*`、`snapshot.py`。
-- `InMemoryBackend`：端口已可实现，但 Wiki 类自身仍用 `Path` 运算，
-  等枚举端口化之后才真正可用。
+把名单里剩下的 16 个模块的内容 I/O 全部接到端口——**名单从 16 降到 0**。
+
+| 批次 | 模块 | 内容 |
+|------|------|------|
+| Batch 1 | analyzer / lint / synthesis / status / llm / query / knowledge_gaps / dated_claims | 页面读取 → `backend.get_page(name)`；wiki.md → `get_wiki_md`；快照降级 → `get_page(name)`；raw 源 → `read_file(logical)` |
+| Batch 2 | snapshot（快照构建读页） / link / source_analysis / ingest / query（写） / relation mixin（删+建目录） | 快照构建改走 `get_page`（虚拟后端也能建快照）；读写删 → 端口原语 |
+| Batch 3 | init（创建工作区） / utility（模板读取） | 建目录 → `ensure_dir`；建文件 → `write_file`；**模板读取搬到 `foundation.templates.read_text()`**（打包资源归 foundation 自己） |
+| relation.py | 注入 `backend` 参数 | `RelationEngine(..., backend=...)`，3 个构造点都传 |
+
+### 途中抓到的行为差异
+
+**`get_page()` 必须容忍坏字节**。旧 mixin 全部用 `errors="replace"`（非 UTF-8 页面不能杀掉一次 lint run），而我一开始的 `get_page` 是严格 UTF-8 → `test_lint_handles_non_utf8_page` 立刻抓到。修法：`LocalFileBackend.get_page` 改 `errors="replace"`。
+
+### 棘轮收尾
+
+```
+✅ 0 architecture violations across 4 layers
+✅ 0 storage-port violations in kernel/wiki   ← 名单已空
+✅ 0 sibling-package violations inside apps
+```
+
+`_STORAGE_PORT_PENDING` 现在是**空集合**——kernel/wiki 的内容 I/O 全部走 `WikiBackend`。
+
+## 剩余缺口（诚实标注）
+
+枚举仍然返回 `Path` 对象：`_wiki_pages()` / `_get_page_count()` / `_get_existing_page_names()`
+仍 rglob（`list_page_paths()` 排序导致顺序变化，回退保序）。对虚拟后端需要改成返回逻辑名——
+
+但那只是**表现层**；**内容 I/O 已经全部端口化**，所以 `InMemoryBackend` 现在只需实现：
+get/put/delete page + read/write/delete file + list + ensure_dir —— 就能备份一个能读写页面的 Wiki。

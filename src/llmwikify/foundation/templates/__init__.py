@@ -35,10 +35,27 @@ _gitignore = _PACKAGE_DIR / "_gitignore"
 skill_llmwikify = _PACKAGE_DIR / "skill_llmwikify"
 
 
+def read_text(name: str) -> str | None:
+    """The content of a template file, or None when it is missing.
+
+    The templates are *packaged resources*, not wiki data — this module
+    owns the read so the wiki layer never has to touch the filesystem
+    for them (the storage port is about the wiki's own files).
+    """
+    path = _PACKAGE_DIR / name
+    if not path.exists():
+        return None
+    try:
+        return path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return None
+
+
 __all__ = [
     "opencode_json",
     "claude_mcp_json",
     "codex_mcp_json",
     "_gitignore",
     "skill_llmwikify",
+    "read_text",
 ]

@@ -119,8 +119,8 @@ class WikiInitMixin(WikiProtocol):
     def _create_directories(self, created: list, skipped: list) -> None:
         """Create wiki directory structure."""
         for dir_path, name in [(self.raw_dir, "raw/"), (self.wiki_dir, "wiki/")]:
-            if not dir_path.exists():
-                dir_path.mkdir(parents=True, exist_ok=True)
+            if not self._backend.dir_exists(self._logical(dir_path)):
+                self._backend.ensure_dir(self._logical(dir_path))
                 created.append(name)
             else:
                 skipped.append(name)
@@ -134,14 +134,14 @@ class WikiInitMixin(WikiProtocol):
             "claims",
         ]:
             sub_path = self.wiki_dir / subdir
-            if not sub_path.exists():
-                sub_path.mkdir(parents=True, exist_ok=True)
+            if not self._backend.dir_exists(self._logical(sub_path)):
+                self._backend.ensure_dir(self._logical(sub_path))
                 created.append(f"wiki/{subdir}/")
             else:
                 skipped.append(f"wiki/{subdir}/")
 
-        if not self.sink_dir.exists():
-            self.sink_dir.mkdir(parents=True, exist_ok=True)
+        if not self._backend.dir_exists(self._logical(self.sink_dir)):
+            self._backend.ensure_dir(self._logical(self.sink_dir))
             created.append("wiki/.sink/")
         else:
             skipped.append("wiki/.sink/")
@@ -166,15 +166,17 @@ class WikiInitMixin(WikiProtocol):
                 self._generate_overview_content,
             ),
         ]:
-            if not file_path.exists() or overwrite:
-                file_path.write_text(generator(), encoding="utf-8")
+            if not self._backend.file_exists(self._logical(file_path)) or overwrite:
+                self._backend.write_file(self._logical(file_path), generator())
                 created.append(name)
             else:
                 skipped.append(name)
 
         config_example = self.root / ".wiki-config.yaml.example"
-        if not config_example.exists():
-            config_example.write_text(self._generate_config_example(), encoding="utf-8")
+        if not self._backend.file_exists(self._logical(config_example)):
+            self._backend.write_file(
+                self._logical(config_example), self._generate_config_example()
+            )
             created.append(".wiki-config.yaml.example")
         else:
             skipped.append(".wiki-config.yaml.example")
@@ -233,10 +235,10 @@ class WikiInitMixin(WikiProtocol):
             else ("opencode.json" if agent == "opencode" else ".opencode.json")
         )
         mcp_path = self.root / mcp_filename
-        if not mcp_path.exists() or force or merge:
+        if not self._backend.file_exists(self._logical(mcp_path)) or force or merge:
             content = self._generate_mcp_config(agent)
             if content:
-                mcp_path.write_text(content, encoding="utf-8")
+                self._backend.write_file(self._logical(mcp_path), content)
                 created.append(mcp_filename)
             else:
                 skipped.append(mcp_filename)
@@ -249,10 +251,10 @@ class WikiInitMixin(WikiProtocol):
     def _generate_gitignore_if_needed(self, created: list) -> None:
         """Generate .gitignore if it doesn't exist."""
         gitignore_path = self.root / ".gitignore"
-        if not gitignore_path.exists():
+        if not self._backend.file_exists(self._logical(gitignore_path)):
             content = self._generate_gitignore()
             if content:
-                gitignore_path.write_text(content, encoding="utf-8")
+                self._backend.write_file(self._logical(gitignore_path), content)
                 created.append(".gitignore")
 
     def _generate_skill_files_if_needed(self, created: list) -> None:
@@ -403,8 +405,8 @@ class WikiInitMixin(WikiProtocol):
                 continue
             content = self._render_template(template_name)
             if content:
-                dest.parent.mkdir(parents=True, exist_ok=True)
-                dest.write_text(content, encoding="utf-8")
+                self._backend.ensure_dir(self._logical(dest.parent))
+                self._backend.write_file(self._logical(dest), content)
                 created.append(rel_path)
 
         return created

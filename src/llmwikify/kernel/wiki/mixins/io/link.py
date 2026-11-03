@@ -53,7 +53,7 @@ class WikiLinkMixin(WikiProtocol):
         stats: dict[str, int] = {"fixed": 0, "skipped": 0, "ambiguous": 0}
 
         for page in self._wiki_pages():
-            content = page.read_text(encoding="utf-8")
+            content = self._backend.get_page(self._page_display_name(page)) or ""
             links = re.findall(r"\[\[(.*?)\]\]", content)
             new_content = content
             page_modified = False
@@ -117,7 +117,7 @@ class WikiLinkMixin(WikiProtocol):
                 )
 
             if page_modified and not dry_run:
-                page.write_text(new_content, encoding="utf-8")
+                self._backend.write_file(self._logical(page), new_content)
                 rel_path = page.relative_to(self.wiki_dir).as_posix()
                 self.index.upsert_page(rel_path[:-3], new_content, rel_path)
 
@@ -184,11 +184,9 @@ class WikiLinkMixin(WikiProtocol):
         if not source_path.exists():
             return ""
 
-        try:
-            content = source_path.read_text(encoding="utf-8")
-        except OSError:
+        content = self._backend.read_file(self._logical(source_path))
+        if content is None:
             return ""
-
         if section:
             section_name = section.lstrip("#")
             pattern = rf"^#+\s*{re.escape(section_name)}"

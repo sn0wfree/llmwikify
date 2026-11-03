@@ -95,7 +95,7 @@ class Rule:
         results: list[dict[str, Any]] = []
         for page in self._iter_pages(wiki):
             page_name = wiki._page_display_name(page)
-            content = page.read_text(encoding="utf-8", errors="replace")
+            content = wiki._backend.get_page(page_name) or ""
             self.detect(page_name, content, wiki, results)
             if len(results) >= self.max_results:
                 break
@@ -131,9 +131,7 @@ class Rule:
             if content is None:
                 # Degraded page: it did not fit into the snapshot, read
                 # it back from disk (same read as the legacy path).
-                content = snapshot.path_of(name).read_text(
-                    encoding="utf-8", errors="replace"
-                )
+                content = wiki._backend.get_page(name) or ""
             self.detect(name, content, wiki, results)
             if len(results) >= self.max_results:
                 break
@@ -191,9 +189,9 @@ class CrossPageRule(Rule):
             # The rule overrides run(): the generic template must not
             # bypass it.
             return self.run(wiki)
-        if not wiki.wiki_dir.exists():
+        if not wiki._backend.dir_exists("wiki"):
             return []
-        pages = self._pages_from_snapshot(snapshot)
+        pages = self._pages_from_snapshot(wiki, snapshot)
         results: list[dict[str, Any]] = []
         self.detect_all(pages, wiki, results)
         return results[: self.max_results]
@@ -204,10 +202,12 @@ class CrossPageRule(Rule):
         for page in wiki._wiki_pages():
             name = wiki._page_display_name(page)
             if not name.startswith("Query:"):
-                pages[name] = page.read_text(encoding="utf-8", errors="replace")
+                pages[name] = wiki._backend.get_page(name) or ""
         return pages
 
-    def _pages_from_snapshot(self, snapshot: PageSnapshot) -> dict[str, str]:
+    def _pages_from_snapshot(
+        self, wiki: Wiki, snapshot: PageSnapshot
+    ) -> dict[str, str]:
         """Snapshot -> ``{display_name: content}``, the shape of ``_load_pages``.
 
         The filter is the one of ``_load_pages``, verbatim: a display
@@ -220,9 +220,7 @@ class CrossPageRule(Rule):
                 continue
             content = snapshot.content_of(name)
             if content is None:
-                content = snapshot.path_of(name).read_text(
-                    encoding="utf-8", errors="replace"
-                )
+                content = wiki._backend.get_page(name) or ""
             pages[name] = content
         return pages
 

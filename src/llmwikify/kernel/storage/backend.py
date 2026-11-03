@@ -206,7 +206,10 @@ class LocalFileBackend:
         path = self._page_path(name)
         if not path.exists():
             return None
-        return path.read_text(encoding="utf-8")
+        # Lossy on bad bytes, on purpose: the wiki has always read its
+        # pages with ``errors="replace"`` (a non-UTF-8 page must not
+        # kill a lint run), and every mixin call site did the same.
+        return path.read_text(encoding="utf-8", errors="replace")
 
     def put_page(self, name: str, content: str) -> None:
         path = self._page_path(name)

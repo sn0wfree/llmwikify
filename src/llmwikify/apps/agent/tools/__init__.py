@@ -545,7 +545,11 @@ class WikiToolRegistry:
     def _graph_action(self, args: dict) -> dict:
         from ...kernel.wiki.engines.relation import RelationEngine
 
-        engine = RelationEngine(self.wiki.index, wiki_root=self.wiki.root)
+        engine = RelationEngine(
+                self.wiki.index,
+                wiki_root=self.wiki.root,
+                backend=self.wiki._backend,
+            )
         action = args.get("action", "query")
         if action == "query":
             return engine.get_neighbors(

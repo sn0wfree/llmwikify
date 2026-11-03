@@ -115,26 +115,11 @@ _PORT_CONTENT_OPS = ("read_text", "write_text", "unlink")
 
 #: The modules that still do direct content I/O (relative to
 #: ``src/llmwikify``). Every entry is work in progress.
-_STORAGE_PORT_PENDING: frozenset[str] = frozenset(
-    {
-        "kernel/wiki/engines/analyzer.py",
-        "kernel/wiki/engines/relation.py",
-        "kernel/wiki/engines/synthesis.py",
-        "kernel/wiki/lint/__init__.py",
-        "kernel/wiki/lint/rules/dated_claims.py",
-        "kernel/wiki/lint/rules/knowledge_gaps.py",
-        "kernel/wiki/mixins/analysis/llm.py",
-        "kernel/wiki/mixins/analysis/query.py",
-        "kernel/wiki/mixins/analysis/relation.py",
-        "kernel/wiki/mixins/analysis/status.py",
-        "kernel/wiki/mixins/core/init.py",
-        "kernel/wiki/mixins/core/utility.py",
-        "kernel/wiki/mixins/io/ingest.py",
-        "kernel/wiki/mixins/io/link.py",
-        "kernel/wiki/mixins/io/source_analysis.py",
-        "kernel/wiki/snapshot.py",
-    }
-)
+_STORAGE_PORT_PENDING: frozenset[str] = frozenset()
+# Empty as of 2026-11-02: every module in kernel/wiki routes its
+# content I/O through WikiBackend. New entries may only be added with
+# a documented reason — the list has to stay short, and an entry that
+# no longer needs the exemption is reported by check_storage_port().
 
 
 def check_storage_port() -> list[str]:
