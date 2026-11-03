@@ -46,17 +46,20 @@
    优先级 20 < 默认阈值 30，实际从不处理。
 3. 没有「针对刚 ingest 的这一篇文档」的**增量**完善能力。
 
-## 顺带发现并修复的既存缺陷
+## 顺带修复的既存缺陷
+
+### A. `missing_cross_ref` lint 规则在分层 wiki 上从不触发
 
 写方案时复现验证发现：**`missing_cross_ref` lint 规则在分层 wiki 上完全失效**。
 
-复现（`wiki/concepts/Foo.md` + `wiki/sources/Bar.md`，Bar 正文纯文本提及 Foo）：
+复现（`wiki/concepts/Foo.md` + `wiki/sources/Bar.md` + `wiki/sources/Baz.md`，
+后两页正文纯文本提及 Foo）：
 
 ```
 MissingCrossRefsRule.run(wiki)  →  []        # 期望至少 1 条
 ```
 
-根因（`kernel/wiki/lint/rules/missing_cross_refs.py:35-70`）：
+根因（`kernel/wiki/lint/rules/missing_cross_refs.py`）：
 
 - `candidate` 取自 `pages` 的键，而 `_page_display_name()`
   （`kernel/wiki/mixins/core/utility.py:167`）返回**带目录前缀**的路径
@@ -65,11 +68,43 @@ MissingCrossRefsRule.run(wiki)  →  []        # 期望至少 1 条
 - 反向也错：正文若写 `[[Foo]]`，`_parse_wikilink_target()` 返回 `Foo`，
   与 candidate `concepts/Foo` 不等 → **已链接的页面也被误报**
 
-现有 54 处测试全部用**根目录页面**（`write_page("Machine Learning", ...)`），
+现有测试全部用**根目录页面**（`write_page("Machine Learning", ...)`），
 标题名恰好等于页面名，所以测试全绿而真实分层 wiki 失效 —— 典型测试盲区。
 
 这条规则是轨 B 补交叉引用的**唯一候选来源**，它失效意味着
 「自动补交叉引用」这个核心能力一直是死的。因此本方案先修它。
+
+修复后行为（场景矩阵 6/6 符合预期）：
+
+| 场景 | 结果 |
+|------|------|
+| 正文写标题名 `Foo` | 命中（修复前失效） |
+| 正文写完整路径 `concepts/Foo` | 命中（原有行为） |
+| 正文写 `[[Foo]]` | 不误报 |
+| 正文写 `[[concepts/Foo]]` | 不误报 |
+| `concepts/Foo` 与 `entities/Foo` 同名 | 标题名不参与匹配，全路径仍可 |
+| 根目录页面 | 行为不变 |
+
+### B. `extract` skill action 引用了不存在的模块
+
+`apps/chat/skills/actions/extract_action.py` 引用了两个不存在的东西：
+
+| 原引用 | 实际 |
+|--------|------|
+| `foundation.extractors.file.extract_file` | 该模块**不存在**（本地文件由 `base.extract()` 分派） |
+| `foundation.extractors.web.extract_web` | 实际名字是 `extract_url` |
+
+→ **任何走 skill 路径的 ingest 都会 ImportError**。
+
+修法：改用统一入口 `foundation.extractors.base.extract()`——它已封装
+YouTube / HTTP URL / 本地文件（含 markitdown、pdf、text、html）的全部分派，
+与 `wiki.ingest_source()` 走同一条路径。相对路径按 wiki root 解析，
+返回结构对齐 action 的 docstring 契约（`content` / `metadata`）。
+
+### C. `analyzer.py` 缺 `Any` import（既存 F821）
+
+`kernel/wiki/engines/analyzer.py` 从 v0.40.5 起缺 `from typing import Any`，
+ruff 报 F821，会让 ruff 门禁红。它就在 lint 引擎宿主路径上，一行补齐。
 
 ## 方案
 
@@ -176,6 +211,7 @@ raw/ 新文件
 |------|------|------|
 | `kernel/wiki/lint/rules/missing_cross_refs.py` | edit | 修规则：标题名/全路径双向匹配 + 两种 wikilink 形式都识别 + 歧义排除；输出加 `concept_title` |
 | `kernel/wiki/engines/analyzer.py` | edit | 补 `Any` import（既存 F821，ruff 门禁红） |
+| `apps/chat/skills/actions/extract_action.py` | edit | 修两个不存在的 import（`extractors.file` / `extract_web`），改走 `base.extract()` 统一入口 |
 | `apps/agent/maintenance/wikilink.py` | NEW | 公共补链插入器（从 gap_filler 抽出） |
 | `apps/agent/maintenance/enricher.py` | NEW | `KnowledgeEnricher` + `EnrichResult` + `collect_units` |
 | `apps/agent/maintenance/gap_filler.py` | edit | 改用公共插入器 + 用 `concept_title` 匹配正文（行为不变） |
@@ -269,8 +305,7 @@ Risk Parity 与 Monte Carlo Simulation。
 ## 验证
 
 ```bash
-ruff check src/llmwikify/ tests/test_lint_missing_cross_refs.py \
-           tests/test_maintenance_enricher.py tests/test_cli_enrich.py
+ruff check src/llmwikify/ tests/
 # → All checks passed!
 
 mypy src/llmwikify/apps/agent/maintenance/enricher.py \
@@ -280,11 +315,11 @@ mypy src/llmwikify/apps/agent/maintenance/enricher.py \
 # → exit 0
 
 pytest tests/test_lint_missing_cross_refs.py tests/test_maintenance_enricher.py \
-       tests/test_cli_enrich.py \
+       tests/test_cli_enrich.py tests/test_apps_chat_skills_actions.py \
        tests/test_v015_features.py tests/test_v026_wikilink_fix.py \
        tests/test_maintenance_gap_filler.py tests/test_maintenance_auto_ingest.py \
        tests/test_maintenance_comprehensive.py tests/test_lint_engine.py
-# → 325 passed, 2 failed（均为既存失败，见下）
+# → 329 passed, 2 failed（均为既存失败，见下）
 
 python scripts/check_architecture.py
 # → ✅ 0 architecture violations across 4 layers

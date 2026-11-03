@@ -22,6 +22,8 @@ Target: 80+ tests, no I/O, no real LLM calls.
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 
 from llmwikify.apps.chat.skills import (
@@ -48,6 +50,7 @@ from llmwikify.apps.chat.skills.actions.detect import (
     detect_query_page_overlap_skill,
     detect_redundancy_skill,
 )
+from llmwikify.apps.chat.skills.actions.extract_action import extract_skill
 from llmwikify.apps.chat.skills.actions.observe_action import _observe_research_state
 from llmwikify.apps.chat.skills.actions.reason_action import _rule_based_reason
 
@@ -688,3 +691,60 @@ class TestClarifyFallback:
         # the function should still return valid shape
         assert "context" in d
         assert d["scope_check"] is True
+
+
+# ─── extract action (regression: broken imports) ────────────────────
+
+
+class TestExtractAction:
+    """The extract action used to import two modules that do not exist
+    (``foundation.extractors.file`` / ``extract_web``), so every local-file
+    extraction raised ImportError. It now goes through the single
+    ``foundation.extractors.base.extract()`` entry point.
+    """
+
+    @pytest.mark.asyncio
+    async def test_extract_local_file(self, tmp_path, ctx: SkillContext) -> None:
+        f = tmp_path / "note.md"
+        f.write_text("# Title\n\nHello content.", encoding="utf-8")
+
+        r = await extract_skill.actions["extract"].handler(
+            {"url_or_path": str(f)}, ctx
+        )
+
+        assert r.status == "ok"
+        assert "Hello content." in r.data["content"]
+        assert r.data["title"] == "Title"
+        assert r.data["source_type"] == "markdown"
+
+    @pytest.mark.asyncio
+    async def test_extract_missing_file_fails_cleanly(
+        self, tmp_path, ctx: SkillContext
+    ) -> None:
+        r = await extract_skill.actions["extract"].handler(
+            {"url_or_path": str(tmp_path / "nope.md")}, ctx
+        )
+
+        assert r.status == "error"
+        assert "not found" in r.error.lower()
+
+    @pytest.mark.asyncio
+    async def test_extract_requires_argument(self, ctx: SkillContext) -> None:
+        r = await extract_skill.actions["extract"].handler({}, ctx)
+
+        assert r.status == "error"
+        assert "url_or_path" in r.error
+
+    @pytest.mark.asyncio
+    async def test_extract_resolves_relative_path_against_wiki(
+        self, tmp_path, ctx: SkillContext
+    ) -> None:
+        (tmp_path / "rel.md").write_text("Relative body.", encoding="utf-8")
+        ctx.wiki = SimpleNamespace(root=tmp_path)
+
+        r = await extract_skill.actions["extract"].handler(
+            {"url_or_path": "rel.md"}, ctx
+        )
+
+        assert r.status == "ok"
+        assert "Relative body." in r.data["content"]

@@ -13,7 +13,8 @@ called via a simple dispatch (URL vs file path vs YouTube).
 
 from __future__ import annotations
 
-from llmwikify.apps.chat.skills.actions._helpers import safe_call
+import logging
+
 from llmwikify.apps.chat.skills.base import (
     Skill,
     SkillAction,
@@ -21,37 +22,43 @@ from llmwikify.apps.chat.skills.base import (
     SkillResult,
 )
 
+logger = logging.getLogger(__name__)
+
 
 async def _extract(args: dict, ctx: SkillContext) -> SkillResult:
     """Extract content from a file/URL/YouTube.
 
-    Dispatches to the appropriate L1 extractor:
-      - YouTube URL → foundation.extractors.youtube
-      - HTTP(S) URL → foundation.extractors.web
-      - Local file path → foundation.extractors.file
+    Dispatches through ``foundation.extractors.base.extract()``, the single
+    entry point that auto-detects the source type (YouTube / HTTP URL /
+    local file) and picks the right extractor. Relative file paths are
+    resolved against the wiki root, matching ``wiki.ingest_source()``.
     """
     url_or_path = args.get("url_or_path", "")
     if not url_or_path:
         return SkillResult.fail("url_or_path is required")
 
-    # YouTube
-    if "youtube.com" in url_or_path or "youtu.be" in url_or_path:
-        from llmwikify.foundation.extractors.youtube import extract_youtube
+    from llmwikify.foundation.extractors.base import extract
 
-        return safe_call(
-            extract_youtube, url_or_path, error_prefix="youtube extract failed"
+    wiki_root = getattr(getattr(ctx, "wiki", None), "root", None)
+    try:
+        result = extract(url_or_path, wiki_root=wiki_root)
+    except Exception as e:
+        logger.warning("extract failed: %s", e, exc_info=True)
+        return SkillResult.fail(f"extract failed: {e!r}")
+
+    if result.source_type == "error":
+        return SkillResult.fail(
+            str(result.metadata.get("error", "extract failed")),
         )
 
-    # HTTP(S) URL
-    if url_or_path.startswith(("http://", "https://")):
-        from llmwikify.foundation.extractors.web import extract_web
-
-        return safe_call(extract_web, url_or_path, error_prefix="web extract failed")
-
-    # Local file
-    from llmwikify.foundation.extractors.file import extract_file
-
-    return safe_call(extract_file, url_or_path, error_prefix="file extract failed")
+    return SkillResult.ok(
+        {
+            "content": result.text,
+            "title": result.title,
+            "source_type": result.source_type,
+            "metadata": result.metadata,
+        }
+    )
 
 
 class ExtractSkill(Skill):
