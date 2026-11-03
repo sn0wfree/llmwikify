@@ -54,6 +54,11 @@ from llmwikify.apps.chat.skills.base import (
 from llmwikify.foundation.llm.errors import LLMError
 from llmwikify.foundation.llm.streamable import LLMRequestError
 from llmwikify.foundation.utils import maybe_await as _maybe_await
+from llmwikify.kernel.agent.runtime import (
+    PHASE_AFTER_REASON,
+    RUNTIME,
+    AgentPlan,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -214,221 +219,10 @@ class ReactLoop:
 
         self._start_time = time.monotonic()
 
-        async def _emit(ev: dict) -> None:
-            if emit is not None:
-                await _maybe_await(emit(ev))
-
-        for round_idx in range(self._config.max_rounds):
-            self._round = round_idx
-            _state_update(self._state, {"round": round_idx})
-
-            # 1. PRECHECK: done_condition + timeout
-            if self._check_timeout():
-                yield {"type": EVENT_PHASE, "phase": "timeout"}
-                return
-            if self._check_done():
-                yield {"type": EVENT_PHASE, "phase": "done"}
-                return
-
-            # 2. REASON: decide next action
-            try:
-                reason_fn = self._config.reason
-                if reason_fn is None:
-                    decision = {"action": "done", "thought": "no reason fn"}
-                else:
-                    # Wrap reason to accept (state, ctx) or (state, ctx, emit)
-                    # by inspecting the signature.
-                    sig = inspect.signature(reason_fn)
-                    n_params = sum(
-                        1
-                        for p in sig.parameters.values()
-                        if p.kind
-                        not in (
-                            inspect.Parameter.VAR_POSITIONAL,
-                            inspect.Parameter.VAR_KEYWORD,
-                        )
-                    )
-                    if n_params <= 2:
-                        decision = await _maybe_await(reason_fn(self._state, ctx))
-                    else:
-                        decision = await _maybe_await(
-                            reason_fn(self._state, ctx, lambda e: None)
-                        )
-            except (LLMError, TypeError, ValueError, KeyError, AttributeError) as e:
-                logger.exception("reason failed")
-                yield {
-                    "type": EVENT_ACTION_ERROR,
-                    "action": "<reason>",
-                    "error": str(e),
-                }
-                return
-            except Exception as e:
-                logger.exception("reason failed with unexpected error")
-                yield {
-                    "type": EVENT_ACTION_ERROR,
-                    "action": "<reason>",
-                    "error": str(e),
-                }
-                return
-
-            action_name = decision.get("action", "done")
-            thought = decision.get("thought", "")
-            reasoning_event = {
-                "type": EVENT_REASONING,
-                "thought": thought,
-                "action": action_name,
-                "round": round_idx,
-            }
-            await _emit(reasoning_event)
-            yield reasoning_event
-
-            # Honour forced next action from on_after_act
-            forced = _state_get(self._state, "_forced_next_action")
-            if forced is not None:
-                if isinstance(self._state, dict):
-                    self._state.pop("_forced_next_action", None)
-                else:
-                    try:
-                        delattr(self._state, "_forced_next_action")
-                    except AttributeError:
-                        pass
-                action_name = forced
-
-            if action_name == "done":
-                yield {
-                    "type": EVENT_PHASE,
-                    "phase": "done",
-                    "round": round_idx,
-                    "reason": "reason_returned_done",
-                }
-                return
-            if _state_get(self._state, "cancelled", False):
-                yield {"type": EVENT_PHASE, "phase": "cancelled"}
-                return
-            if _state_get(self._state, "paused", False):
-                yield {"type": EVENT_PHASE, "phase": "paused"}
-                return
-
-            # 3. ACT: invoke the action handler
-            action = self._action_map.get(action_name)
-            if action is None:
-                yield {
-                    "type": EVENT_ACTION_ERROR,
-                    "action": action_name,
-                    "error": f"Unknown action: {action_name}",
-                }
-                continue
-
-            # on_before_act hook
-            if self._config.on_before_act is not None:
-                await _maybe_await(
-                    self._config.on_before_act(self._state, action_name),
-                )
-
-            try:
-                if hasattr(action, "handler"):
-                    result = await _maybe_await(action.handler(self._state, ctx))
-                else:
-                    result = await _maybe_await(action(self._state, ctx))
-            except (LLMError, LLMRequestError, OSError, ValueError, TypeError) as e:
-                logger.warning("Action %s raised: %s", action_name, e, exc_info=True)
-                yield {
-                    "type": EVENT_ACTION_ERROR,
-                    "action": action_name,
-                    "error": str(e),
-                }
-                continue
-            except Exception as e:
-                logger.exception(
-                    "Action %s raised unexpected error: %s", action_name, e
-                )
-                yield {
-                    "type": EVENT_ACTION_ERROR,
-                    "action": action_name,
-                    "error": str(e),
-                }
-                continue
-
-            # on_after_act hook
-            if self._config.on_after_act is not None:
-                await _maybe_await(
-                    self._config.on_after_act(self._state, action_name, result),
-                )
-
-            # Forward nested events from action handlers (v0.50 compat).
-            # v0.41 engine's _make_action_handler collects dispatch
-            # events into result.data["_events"]; we yield them
-            # inline so the caller sees them.
-            if result is not None and getattr(result, "status", None) == "ok":
-                data = getattr(result, "data", None) or {}
-                if isinstance(data, dict):
-                    nested = data.pop("_events", None)
-                    if nested:
-                        for ne in nested:
-                            yield ne
-
-            # 4. OBSERVE: fold result.data + observe() output into state (per v0.50)
-            if self._config.on_before_observe is not None:
-                try:
-                    await _maybe_await(
-                        self._config.on_before_observe(self._state, result)
-                    )
-                except Exception as e:
-                    yield {
-                        "type": EVENT_OBSERVATION_ERROR,
-                        "error": str(e),
-                    }
-            if result is not None and getattr(result, "data", None):
-                data = result.data
-                if isinstance(data, dict):
-                    _state_update(self._state, data)
-
-            # v0.50 observe callable (separate from on_*_observe hooks)
-            if self._config.observe is not None:
-                try:
-                    observe_output = await _maybe_await(
-                        self._config.observe(self._state, ctx)
-                    )
-                    if observe_output:
-                        _state_update(self._state, dict(observe_output))
-                except Exception as e:
-                    yield {
-                        "type": EVENT_OBSERVATION_ERROR,
-                        "error": str(e),
-                    }
-
-            if self._config.on_after_observe is not None:
-                try:
-                    await _maybe_await(
-                        self._config.on_after_observe(self._state, result)
-                    )
-                except Exception as e:
-                    yield {
-                        "type": EVENT_OBSERVATION_ERROR,
-                        "error": str(e),
-                    }
-
-            # 5. PERSIST: save state via hook
-            if self._config.persist_state is not None:
-                try:
-                    await _maybe_await(
-                        self._config.persist_state(self._state, round_idx),
-                    )
-                except Exception as e:
-                    logger.debug("persist_state failed: %s", e)
-
-            yield {
-                "type": EVENT_ROUND_COMPLETE,
-                "round": round_idx,
-                "action": action_name,
-            }
-
-        # Terminal phase event (always emitted, per v0.50 compatibility)
-        yield {
-            "type": EVENT_PHASE,
-            "phase": "done",
-            "final_state": _state_snapshot(self._state),
-        }
+        plan = _ResearchPlan(self, ctx, emit)
+        runtime_ctx = _RuntimeContext(ctx)
+        async for event in RUNTIME.run_stream(runtime_ctx, plan):
+            yield event
 
     def _check_timeout(self) -> bool:
         if not self._config.timeout_seconds:
@@ -446,6 +240,325 @@ class ReactLoop:
         except Exception:
             logger.exception("done_condition raised unexpected error")
             return False
+
+
+# ─── The plan ───────────────────────────────────────────────────────
+
+
+class _RuntimeContext:
+    """The runtime's own context — it does not touch the caller's ctx.
+
+    The research pipeline passes an arbitrary ``ctx`` to the reason
+    and action handlers; the runtime's bookkeeping (iteration number,
+    decision, result, stop flag) must not leak into it.
+    """
+
+    def __init__(self, user_ctx: Any) -> None:
+        self.user_ctx = user_ctx
+        self.iteration: int = -1
+        self.decision: Any = None
+        self.result: Any = None
+        self.stop: bool = False
+        self.stop_reason: str = ""
+
+
+class _ResearchPlan(AgentPlan):
+    """The research pipeline as a plan on the shared runtime.
+
+    The stages are the old loop body, moved one for one — the event
+    order, the error semantics and the hook calls are unchanged. Only
+    the driver is shared now.
+    """
+
+    def __init__(
+        self,
+        loop: ReactLoop,
+        ctx: Any,
+        emit: Callable[[dict], Awaitable[None] | None] | None,
+    ) -> None:
+        self._loop = loop
+        self._ctx = ctx
+        self._emit = emit
+        self.max_iterations = loop._config.max_rounds
+        # The loop ended before it ran out of rounds — a terminal phase
+        # event was emitted, or the reasoner failed. The old loop
+        # returned in both cases without the closing "done" event, so
+        # ``finalize`` must not add one.
+        self._ended_early = False
+
+    @property
+    def _config(self) -> ReactConfig:
+        return self._loop._config
+
+    @property
+    def _state(self) -> Any:
+        return self._loop._state
+
+    async def _emit_event(self, ev: dict) -> None:
+        if self._emit is not None:
+            await _maybe_await(self._emit(ev))
+
+    # ── ROUND SETUP ───────────────────────────────────────────────
+
+    async def before_iteration(self, ctx: Any) -> None:
+        """Number the round and mirror it into the state."""
+        self._loop._round = ctx.iteration
+        _state_update(self._state, {"round": ctx.iteration})
+
+    # ── PRECHECK ──────────────────────────────────────────────────
+
+    async def precheck(self, ctx: Any) -> AsyncIterator[dict[str, Any]]:
+        """Timeout and done condition — both end the loop."""
+        if self._loop._check_timeout():
+            yield {"type": EVENT_PHASE, "phase": "timeout"}
+            ctx.stop = True
+            self._ended_early = True
+            return
+        if self._loop._check_done():
+            yield {"type": EVENT_PHASE, "phase": "done"}
+            ctx.stop = True
+            self._ended_early = True
+            return
+
+    # ── REASON ────────────────────────────────────────────────────
+
+    async def reason(self, ctx: Any) -> AsyncIterator[dict[str, Any]]:
+        """Ask the reasoner for the next action."""
+        try:
+            reason_fn = self._config.reason
+            if reason_fn is None:
+                decision = {"action": "done", "thought": "no reason fn"}
+            else:
+                # Wrap reason to accept (state, ctx) or (state, ctx, emit)
+                # by inspecting the signature.
+                sig = inspect.signature(reason_fn)
+                n_params = sum(
+                    1
+                    for p in sig.parameters.values()
+                    if p.kind
+                    not in (
+                        inspect.Parameter.VAR_POSITIONAL,
+                        inspect.Parameter.VAR_KEYWORD,
+                    )
+                )
+                if n_params <= 2:
+                    decision = await _maybe_await(reason_fn(self._state, self._ctx))
+                else:
+                    decision = await _maybe_await(
+                        reason_fn(self._state, self._ctx, lambda e: None)
+                    )
+        except (LLMError, TypeError, ValueError, KeyError, AttributeError) as e:
+            logger.exception("reason failed")
+            yield {
+                "type": EVENT_ACTION_ERROR,
+                "action": "<reason>",
+                "error": str(e),
+            }
+            # The old loop returned here — no closing "done" event.
+            self._ended_early = True
+            return
+        except Exception as e:
+            logger.exception("reason failed with unexpected error")
+            yield {
+                "type": EVENT_ACTION_ERROR,
+                "action": "<reason>",
+                "error": str(e),
+            }
+            # The old loop returned here — no closing "done" event.
+            self._ended_early = True
+            return
+
+        action_name = decision.get("action", "done")
+        thought = decision.get("thought", "")
+        reasoning_event = {
+            "type": EVENT_REASONING,
+            "thought": thought,
+            "action": action_name,
+            "round": ctx.iteration,
+        }
+        await self._emit_event(reasoning_event)
+        yield reasoning_event
+
+        # Honour forced next action from on_after_act
+        forced = _state_get(self._state, "_forced_next_action")
+        if forced is not None:
+            if isinstance(self._state, dict):
+                self._state.pop("_forced_next_action", None)
+            else:
+                try:
+                    delattr(self._state, "_forced_next_action")
+                except AttributeError:
+                    pass
+            action_name = forced
+
+        ctx.decision = {"action": action_name, "thought": thought}
+
+    # ── DECIDE after REASON ───────────────────────────────────────
+
+    async def decide(
+        self, ctx: Any, phase: str, payload: Any
+    ) -> AsyncIterator[dict[str, Any]]:
+        """The reasoner may end the pipeline by itself."""
+        if phase != PHASE_AFTER_REASON:
+            return
+        action_name = payload.get("action", "done")
+        if action_name == "done":
+            yield {
+                "type": EVENT_PHASE,
+                "phase": "done",
+                "round": ctx.iteration,
+                "reason": "reason_returned_done",
+            }
+            ctx.stop = True
+            self._ended_early = True
+            return
+        if _state_get(self._state, "cancelled", False):
+            yield {"type": EVENT_PHASE, "phase": "cancelled"}
+            ctx.stop = True
+            self._ended_early = True
+            return
+        if _state_get(self._state, "paused", False):
+            yield {"type": EVENT_PHASE, "phase": "paused"}
+            ctx.stop = True
+            self._ended_early = True
+            return
+
+    # ── ACT ───────────────────────────────────────────────────────
+
+    async def act(self, ctx: Any, decision: Any) -> AsyncIterator[dict[str, Any]]:
+        """Run the action handler."""
+        action_name = decision.get("action", "done")
+        action = self._loop._action_map.get(action_name)
+        if action is None:
+            yield {
+                "type": EVENT_ACTION_ERROR,
+                "action": action_name,
+                "error": f"Unknown action: {action_name}",
+            }
+            return
+
+        # on_before_act hook
+        if self._config.on_before_act is not None:
+            await _maybe_await(
+                self._config.on_before_act(self._state, action_name),
+            )
+
+        try:
+            if hasattr(action, "handler"):
+                result = await _maybe_await(action.handler(self._state, self._ctx))
+            else:
+                result = await _maybe_await(action(self._state, self._ctx))
+        except (LLMError, LLMRequestError, OSError, ValueError, TypeError) as e:
+            logger.warning("Action %s raised: %s", action_name, e, exc_info=True)
+            yield {
+                "type": EVENT_ACTION_ERROR,
+                "action": action_name,
+                "error": str(e),
+            }
+            return
+        except Exception as e:
+            logger.exception("Action %s raised unexpected error: %s", action_name, e)
+            yield {
+                "type": EVENT_ACTION_ERROR,
+                "action": action_name,
+                "error": str(e),
+            }
+            return
+
+        # on_after_act hook
+        if self._config.on_after_act is not None:
+            await _maybe_await(
+                self._config.on_after_act(self._state, action_name, result),
+            )
+
+        # Forward nested events from action handlers (v0.50 compat).
+        # v0.41 engine's _make_action_handler collects dispatch
+        # events into result.data["_events"]; we yield them
+        # inline so the caller sees them.
+        if result is not None and getattr(result, "status", None) == "ok":
+            data = getattr(result, "data", None) or {}
+            if isinstance(data, dict):
+                nested = data.pop("_events", None)
+                if nested:
+                    for ne in nested:
+                        yield ne
+
+        ctx.result = result
+
+    # ── OBSERVE ───────────────────────────────────────────────────
+
+    async def observe(
+        self, ctx: Any, result: Any
+    ) -> AsyncIterator[dict[str, Any]]:
+        """Fold the result into the state."""
+        if self._config.on_before_observe is not None:
+            try:
+                await _maybe_await(
+                    self._config.on_before_observe(self._state, result)
+                )
+            except Exception as e:
+                yield {
+                    "type": EVENT_OBSERVATION_ERROR,
+                    "error": str(e),
+                }
+        if result is not None and getattr(result, "data", None):
+            data = result.data
+            if isinstance(data, dict):
+                _state_update(self._state, data)
+
+        # v0.50 observe callable (separate from on_*_observe hooks)
+        if self._config.observe is not None:
+            try:
+                observe_output = await _maybe_await(
+                    self._config.observe(self._state, self._ctx)
+                )
+                if observe_output:
+                    _state_update(self._state, dict(observe_output))
+            except Exception as e:
+                yield {
+                    "type": EVENT_OBSERVATION_ERROR,
+                    "error": str(e),
+                }
+
+        if self._config.on_after_observe is not None:
+            try:
+                await _maybe_await(
+                    self._config.on_after_observe(self._state, result)
+                )
+            except Exception as e:
+                yield {
+                    "type": EVENT_OBSERVATION_ERROR,
+                    "error": str(e),
+                }
+
+    # ── PERSIST + round_complete ─────────────────────────────────
+
+    async def after_iteration(self, ctx: Any) -> AsyncIterator[dict[str, Any]]:
+        """Save the state, then close the round."""
+        if self._config.persist_state is not None:
+            try:
+                await _maybe_await(
+                    self._config.persist_state(self._state, ctx.iteration),
+                )
+            except Exception as e:
+                logger.debug("persist_state failed: %s", e)
+
+        yield {
+            "type": EVENT_ROUND_COMPLETE,
+            "round": ctx.iteration,
+            "action": (ctx.decision or {}).get("action", ""),
+        }
+
+    # ── FINALIZE ──────────────────────────────────────────────────
+
+    async def finalize(self, ctx: Any) -> AsyncIterator[dict[str, Any]]:
+        """The terminal phase event (unless one was already emitted)."""
+        if not self._ended_early:
+            yield {
+                "type": EVENT_PHASE,
+                "phase": "done",
+                "final_state": _state_snapshot(self._state),
+            }
 
 
 __all__ = [
