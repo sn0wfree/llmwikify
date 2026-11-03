@@ -792,3 +792,139 @@ class TestExtractAction:
 
         # The loop kept running while the three extractions were in flight.
         assert ticks > 20, f"event loop was starved (ticks={ticks})"
+
+
+# ─── async handlers must not block the event loop ────────────────────
+
+
+class TestAsyncHandlersDoNotBlock:
+    """A handler that reaches the LLM (or rebuilds the wiki index) must
+    not run on the event loop thread: one slow completion used to stall
+    every concurrent task (SSE streams included) for its whole duration.
+    """
+
+    @staticmethod
+    def _slow_wiki(delay: float = 0.4):
+        from types import SimpleNamespace
+
+        def analyze_source(path, force=False):
+            import time
+
+            time.sleep(delay)
+            return {"entities": []}
+
+        def lint(**kwargs):
+            import time
+
+            time.sleep(delay)
+            return {"issue_count": 0}
+
+        return SimpleNamespace(analyze_source=analyze_source, lint=lint)
+
+    @staticmethod
+    async def _ticks_while(runs) -> int:
+        """Run ``runs`` concurrently and count event-loop ticks."""
+        import asyncio
+
+        ticks = 0
+        stop = False
+
+        async def heartbeat():
+            nonlocal ticks
+            while not stop:
+                ticks += 1
+                await asyncio.sleep(0.01)
+
+        hb = asyncio.create_task(heartbeat())
+        try:
+            await asyncio.gather(*runs)
+        finally:
+            stop = True
+            await hb
+        return ticks
+
+    @pytest.mark.asyncio
+    async def test_analyze_does_not_block_the_loop(self) -> None:
+        from llmwikify.apps.chat.skills.actions.analyze_action import analyze_skill
+
+        ctx = SkillContext(wiki=self._slow_wiki())
+        handler = analyze_skill.actions["analyze"].handler
+        ticks = await self._ticks_while(
+            [handler({"source_path": "x"}, ctx) for _ in range(3)]
+        )
+
+        assert ticks > 20, f"event loop was starved (ticks={ticks})"
+
+    @pytest.mark.asyncio
+    async def test_lint_does_not_block_the_loop(self) -> None:
+        from llmwikify.apps.chat.skills.actions.lint_action import lint_skill
+
+        ctx = SkillContext(wiki=self._slow_wiki())
+        handler = lint_skill.actions["lint"].handler
+        ticks = await self._ticks_while([handler({}, ctx) for _ in range(3)])
+
+        assert ticks > 20, f"event loop was starved (ticks={ticks})"
+
+    @pytest.mark.asyncio
+    async def test_write_does_not_block_the_loop(self) -> None:
+        """write_page rebuilds the wiki index — slow on a large wiki."""
+        import time
+
+        from llmwikify.apps.chat.skills.actions.write_action import write_skill
+
+        def slow_write(page_name, content):
+            time.sleep(0.4)
+            return "Created page"
+
+        ctx = SkillContext(wiki=SimpleNamespace(write_page=slow_write))
+        handler = write_skill.actions["write"].handler
+        ticks = await self._ticks_while(
+            [handler({"page_name": "p", "content": "c"}, ctx) for _ in range(3)]
+        )
+
+        assert ticks > 20, f"event loop was starved (ticks={ticks})"
+
+
+class TestSafeCallAsync:
+    """The async helper behind those handlers."""
+
+    @pytest.mark.asyncio
+    async def test_wraps_dict_result(self) -> None:
+        from llmwikify.apps.chat.skills.actions._helpers import safe_call_async
+
+        r = await safe_call_async(lambda: {"a": 1})
+        assert r.status == "ok"
+        assert r.data == {"a": 1}
+
+    @pytest.mark.asyncio
+    async def test_wraps_list_result(self) -> None:
+        from llmwikify.apps.chat.skills.actions._helpers import safe_call_async
+
+        r = await safe_call_async(lambda: [1, 2])
+        assert r.status == "ok"
+        assert r.data["result"] == [1, 2]
+
+    @pytest.mark.asyncio
+    async def test_converts_exception_to_failure(self) -> None:
+        from llmwikify.apps.chat.skills.actions._helpers import safe_call_async
+
+        def boom():
+            raise ValueError("kaboom")
+
+        r = await safe_call_async(boom, error_prefix="boom failed")
+        assert r.status == "error"
+        assert "kaboom" in r.error
+
+    @pytest.mark.asyncio
+    async def test_timeout_fails_the_action(self) -> None:
+        import time
+
+        from llmwikify.apps.chat.skills.actions._helpers import safe_call_async
+
+        def slow():
+            time.sleep(5)
+            return "never"
+
+        r = await safe_call_async(slow, error_prefix="slow failed", timeout=0.2)
+        assert r.status == "error"
+        assert "timed out" in r.error

@@ -11,13 +11,16 @@ One of the 14 base actions per
 
 from __future__ import annotations
 
-from llmwikify.apps.chat.skills.actions._helpers import safe_call, wiki_from_ctx
+from llmwikify.apps.chat.skills.actions._helpers import safe_call_async, wiki_from_ctx
 from llmwikify.apps.chat.skills.base import (
     Skill,
     SkillAction,
     SkillContext,
     SkillResult,
 )
+
+#: Ceiling for the whole analysis chain (several LLM calls in sequence).
+ANALYZE_TIMEOUT_SECONDS = 600.0
 
 
 async def _analyze(args: dict, ctx: SkillContext) -> SkillResult:
@@ -26,11 +29,14 @@ async def _analyze(args: dict, ctx: SkillContext) -> SkillResult:
         return SkillResult.fail("No wiki in context")
     source_path = args.get("source_path", "")
     force = args.get("force", False)
-    return safe_call(
+    # analyze_source drives the LLM synchronously; run it in a worker
+    # thread so a slow completion cannot stall the event loop.
+    return await safe_call_async(
         wiki.analyze_source,
         source_path,
         force=force,
         error_prefix="analyze failed",
+        timeout=ANALYZE_TIMEOUT_SECONDS,
     )
 
 

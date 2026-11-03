@@ -18,7 +18,7 @@ actions.
 
 from __future__ import annotations
 
-from llmwikify.apps.chat.skills.actions._helpers import safe_call, wiki_from_ctx
+from llmwikify.apps.chat.skills.actions._helpers import safe_call_async, wiki_from_ctx
 from llmwikify.apps.chat.skills.base import (
     Skill,
     SkillAction,
@@ -26,18 +26,24 @@ from llmwikify.apps.chat.skills.base import (
     SkillResult,
 )
 
+#: Ceiling for the lint pass (gap detection may call the LLM).
+LINT_TIMEOUT_SECONDS = 600.0
+
 
 async def _lint(args: dict, ctx: SkillContext) -> SkillResult:
     wiki = wiki_from_ctx(ctx)
     if wiki is None:
         return SkillResult.fail("No wiki in context")
-    return safe_call(
+    # lint can reach the LLM for gap detection; run it in a worker thread
+    # so a slow completion cannot stall the event loop.
+    return await safe_call_async(
         wiki.lint,
         mode=args.get("mode", "check"),
         limit=args.get("limit", 10),
         force=args.get("force", False),
         generate_investigations=args.get("generate_investigations", False),
         error_prefix="lint failed",
+        timeout=LINT_TIMEOUT_SECONDS,
     )
 
 

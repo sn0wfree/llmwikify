@@ -12,7 +12,7 @@ One of the 14 base actions per
 
 from __future__ import annotations
 
-from llmwikify.apps.chat.skills.actions._helpers import safe_call, wiki_from_ctx
+from llmwikify.apps.chat.skills.actions._helpers import safe_call_async, wiki_from_ctx
 from llmwikify.apps.chat.skills.base import (
     Skill,
     SkillAction,
@@ -31,7 +31,7 @@ async def _graph(args: dict, ctx: SkillContext) -> SkillResult:
     graph_fn = getattr(wiki, "graph", None)
     if graph_fn is None:
         return SkillResult.fail("wiki has no graph method")
-    return safe_call(graph_fn, args, error_prefix="graph failed")
+    return await safe_call_async(graph_fn, args, error_prefix="graph failed")
 
 
 class GraphSkill(Skill):

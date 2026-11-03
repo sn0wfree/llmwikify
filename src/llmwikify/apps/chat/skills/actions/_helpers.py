@@ -10,6 +10,9 @@ Helpers:
     a SkillContext.
   - ``safe_call(fn, *args, **kwargs)`` — call a method,
     catch exceptions, return SkillResult.fail(...) on error.
+  - ``safe_call_async(fn, *args, **kwargs)`` — same, but runs the
+    callable in a worker thread so a blocking call cannot stall the
+    event loop. Use it from every ``async`` handler.
   - ``load_registry_or_default(registry)`` — return the
     provided registry or the default singleton.
 
@@ -25,6 +28,7 @@ Why these helpers exist:
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import Callable
 from typing import Any
@@ -62,20 +66,56 @@ def safe_call(
     """
     try:
         result = fn(*args, **kwargs)
-        if isinstance(result, SkillResult):
-            return result
-        if isinstance(result, dict):
-            return SkillResult.ok(result)
-        if result is None:
-            return SkillResult.ok({})
-        # Some wiki methods return raw strings (search
-        # results, page content) — wrap them.
-        return SkillResult.ok({"result": result})
+        return _as_skill_result(result)
     except Exception as e:
         logger.warning("%s: %s", error_prefix, e, exc_info=True)
         return SkillResult.fail(
             f"{error_prefix}: {e!r}",
         )
+
+
+def _as_skill_result(result: Any) -> SkillResult:
+    """Convert a raw handler return value into a SkillResult."""
+    if isinstance(result, SkillResult):
+        return result
+    if isinstance(result, dict):
+        return SkillResult.ok(result)
+    if result is None:
+        return SkillResult.ok({})
+    # Some wiki methods return raw strings (search
+    # results, page content) — wrap them.
+    return SkillResult.ok({"result": result})
+
+
+async def safe_call_async(
+    fn: Callable[..., Any],
+    *args: Any,
+    error_prefix: str = "Action failed",
+    timeout: float | None = None,
+    **kwargs: Any,
+) -> SkillResult:
+    """Async counterpart of :func:`safe_call` for blocking handlers.
+
+    The callable runs in a worker thread, so a slow call cannot stall
+    the event loop. That matters for handlers reaching the LLM (one chat
+    completion can take tens of seconds) and for ones that rebuild the
+    wiki index (hundreds of milliseconds on a large wiki).
+
+    Args:
+        fn: The blocking callable.
+        timeout: Optional ceiling in seconds. On expiry the action
+            fails instead of hanging forever.
+    """
+    try:
+        call = asyncio.to_thread(fn, *args, **kwargs)
+        result = await (asyncio.wait_for(call, timeout) if timeout else call)
+        return _as_skill_result(result)
+    except asyncio.TimeoutError:
+        logger.warning("%s: timed out after %ss", error_prefix, timeout)
+        return SkillResult.fail(f"{error_prefix}: timed out after {timeout}s")
+    except Exception as e:
+        logger.warning("%s: %s", error_prefix, e, exc_info=True)
+        return SkillResult.fail(f"{error_prefix}: {e!r}")
 
 
 def load_registry_or_default(registry: SkillRegistry | None) -> SkillRegistry:
@@ -86,5 +126,6 @@ def load_registry_or_default(registry: SkillRegistry | None) -> SkillRegistry:
 __all__ = [
     "wiki_from_ctx",
     "safe_call",
+    "safe_call_async",
     "load_registry_or_default",
 ]

@@ -323,13 +323,14 @@ skill/ingest 链路），以下问题已修复。其中 **#1 和 #4 是本次改
 | 14 | 版本号常量取错 | wiki.md 合并通知永远写 `0.11.0` | `from llmwikify import __version__` |
 | 15 | 二进制文件解码未兜底 | 未知扩展名 + 二进制 → 未捕获异常 | `errors="replace"` |
 | 16 | 提案闭环是断的 | maintenance 写的提案，WebUI 的实例**既看不到也批不了** | 有 DB 时读写一律以 DB 为真源（`_load_proposals`）；状态变更同步内存缓存 |
+| 17 | async handler 里同步跑 LLM / 重 IO | `analyze`、`lint` 一次调用可阻塞数十秒；`write` 重建 index.md（400 页 359ms） | 新增 `safe_call_async`（`asyncio.to_thread` + 可选超时），6 个 action 与 8 个 detect 全部改用 |
 
 ### 测试
 
-新增 30 项回归测试，覆盖上述每一类：坏链形态、重复链接、解析失败、
+新增 38 项回归测试，覆盖上述每一类：坏链形态、重复链接、解析失败、
 标题行保护、跨 `PYTHONHASHSEED` 确定性（8 个 seed）、性能护栏
 （1400 页 < 5s）、ingest pipeline 真实写入、event loop 不被饿死、
-stats 累加、`wiki_graph` 导入、jieba 编码、版本号、跨实例提案可见与可审批（5 项）。
+stats 累加、`wiki_graph` 导入、jieba 编码、版本号、跨实例提案可见与可审批（5 项）、action 不阻塞 event loop（8 项）。
 
 其中 `tests/test_apps_chat_skills_pipelines.py` 原先用 `MagicMock`
 伪造了 `write_page`/`read_page` 两个 key，正好与代码里的错误 key
@@ -339,8 +340,6 @@ stats 累加、`wiki_graph` 导入、jieba 编码、版本号、跨实例提案�
 
 - `KnowledgeEnricher` 的 `llm_semaphore` / `rate_limiter` 参数目前
   未被使用（enricher 不做 LLM 调用），保留以与其它轨道接口对称。
-- `analyze_action` / `lint_action` 在 async handler 里同步跑 LLM，
-  与 #11 同类问题，尚未修。
 - `wiki.write_page` 每次重建整个 `index.md`（400 页约 359ms），
   批量补链的写入代价与此成正比；`max_links_per_unit` 兜住上限。
 

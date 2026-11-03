@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import logging
 
-from llmwikify.apps.chat.skills.actions._helpers import safe_call, wiki_from_ctx
+from llmwikify.apps.chat.skills.actions._helpers import safe_call_async, wiki_from_ctx
 from llmwikify.apps.chat.skills.base import (
     Skill,
     SkillAction,
@@ -62,7 +62,9 @@ class DetectActionSkill(Skill):
             method = getattr(wiki, cls.DETECT_METHOD, None)
             if method is None:
                 return SkillResult.fail(f"wiki has no {cls.DETECT_METHOD} method")
-            result = safe_call(method, error_prefix=f"{cls.name} failed")
+            result = await safe_call_async(
+                method, error_prefix=f"{cls.name} failed"
+            )
             # Wrap the raw list into a dict for consistency with
             # the other actions' output shape.
             if result.status == "ok" and isinstance(result.data, dict):

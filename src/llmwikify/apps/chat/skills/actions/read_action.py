@@ -11,7 +11,7 @@ One of the 14 base actions per
 
 from __future__ import annotations
 
-from llmwikify.apps.chat.skills.actions._helpers import safe_call, wiki_from_ctx
+from llmwikify.apps.chat.skills.actions._helpers import safe_call_async, wiki_from_ctx
 from llmwikify.apps.chat.skills.base import (
     Skill,
     SkillAction,
@@ -25,7 +25,9 @@ async def _read(args: dict, ctx: SkillContext) -> SkillResult:
     if wiki is None:
         return SkillResult.fail("No wiki in context")
     page_name = args.get("page_name", "")
-    return safe_call(wiki.read_page, page_name, error_prefix="read failed")
+    return await safe_call_async(
+        wiki.read_page, page_name, error_prefix="read failed"
+    )
 
 
 class ReadSkill(Skill):

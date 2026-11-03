@@ -12,7 +12,7 @@ This is one of the 14 base actions per
 
 from __future__ import annotations
 
-from llmwikify.apps.chat.skills.actions._helpers import safe_call, wiki_from_ctx
+from llmwikify.apps.chat.skills.actions._helpers import safe_call_async, wiki_from_ctx
 from llmwikify.apps.chat.skills.base import (
     Skill,
     SkillAction,
@@ -27,7 +27,9 @@ async def _search(args: dict, ctx: SkillContext) -> SkillResult:
         return SkillResult.fail("No wiki in context")
     query = args.get("query", "")
     limit = args.get("limit", 10)
-    return safe_call(wiki.search, query, limit, error_prefix="search failed")
+    return await safe_call_async(
+        wiki.search, query, limit, error_prefix="search failed"
+    )
 
 
 class SearchSkill(Skill):

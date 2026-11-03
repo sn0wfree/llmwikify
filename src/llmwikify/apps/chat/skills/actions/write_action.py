@@ -16,7 +16,7 @@ One of the 14 base actions per
 
 from __future__ import annotations
 
-from llmwikify.apps.chat.skills.actions._helpers import safe_call, wiki_from_ctx
+from llmwikify.apps.chat.skills.actions._helpers import safe_call_async, wiki_from_ctx
 from llmwikify.apps.chat.skills.base import (
     Skill,
     SkillAction,
@@ -31,7 +31,9 @@ async def _write(args: dict, ctx: SkillContext) -> SkillResult:
         return SkillResult.fail("No wiki in context")
     page_name = args.get("page_name", "")
     content = args.get("content", "")
-    return safe_call(
+    # write_page rebuilds the wiki index — hundreds of milliseconds on a
+    # large wiki — so it runs off the event loop.
+    return await safe_call_async(
         wiki.write_page,
         page_name,
         content,
