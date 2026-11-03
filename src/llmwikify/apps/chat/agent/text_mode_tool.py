@@ -166,7 +166,7 @@ class TextModeParser:
 
     Mirrors the behavior of ``ChatService._stream_preprocess`` /
     ``_reset_text_mode_buffer`` so the bridge produces the same
-    event sequence as ``aask_with_tools``.
+    event sequence as the chat tool loop.
 
     Usage::
 

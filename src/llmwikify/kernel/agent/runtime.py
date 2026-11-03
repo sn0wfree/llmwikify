@@ -4,7 +4,9 @@ The project used to drive its agent loops from four different places:
 
 - ``apps/chat/agent/runner_v2.py`` — the chat ReAct loop (LLM driven)
 - ``apps/chat/agent/research_runner.py`` — the research pipeline (rule driven)
-- ``apps/chat/base.py::aask_with_tools`` — a plain OpenAI tool loop
+- ``apps/chat/base.py::aask_with_tools`` — a plain OpenAI tool loop. It had
+  **no production caller** and was removed; the three loops above are
+  the ones that ran.
 - ``apps/chat/skills/workflows/subagent_worker.py`` — the subagent tool loop
 
 They all had the same shape — *for each round: check, decide, act,
@@ -230,11 +232,32 @@ class AgentRuntime:
 RUNTIME = AgentRuntime()
 
 
+def run_sync(coro: Any) -> Any:
+    """Run a coroutine from synchronous code.
+
+    The subagent worker runs in a child process — a synchronous context —
+    but the shared runtime is async. When no loop is running, this is a
+    plain ``asyncio.run``; when one is already running, the coroutine
+    goes to a worker thread (a nested ``asyncio.run`` would fail).
+    """
+    import asyncio
+    from concurrent.futures import ThreadPoolExecutor
+
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coro)
+
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(asyncio.run, coro).result()
+
+
 __all__ = [
     "AgentPlan",
     "AgentRuntime",
     "RuntimeContext",
     "RUNTIME",
+    "run_sync",
     "PHASE_AFTER_REASON",
     "PHASE_AFTER_ACT",
     "PHASE_AFTER_OBSERVE",

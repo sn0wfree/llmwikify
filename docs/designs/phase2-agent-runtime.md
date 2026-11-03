@@ -154,10 +154,68 @@ ruff check → clean
 > 经 stash 对照确认为**预存的时间戳精度 flaky**（两次 append 落在同一毫秒 →
 > 游标不前进），与本次改动无关：改动前后单跑都是 3/3 失败。
 
-## 未做（Stage 4）
+## Stage 4：subagent 迁移 + 删死代码（已完成）
 
-- **SubagentPlan**：`subagent_worker` 的工具循环（跨进程边界，收益小于 chat/research）
-- 删除死代码 `base.aask_with_tools`（生产零调用者）
-- `kernel/agent/loop.py` 的 `UnifiedAgentLoop` 与新运行时二者的关系（前者只有
-  codegen 一条腿在用，且那条腿自身无生产入口）
+### SubagentPlan
+
+`subagent_worker` 的工具循环也搬到共享运行时。它的**上下文是同步的**（跑在子进程里），
+所以加了一个同步桥接：
+
+```python
+# kernel/agent/runtime.py
+def run_sync(coro):
+    """Run a coroutine from synchronous code."""
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coro)
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(asyncio.run, coro).result()
+```
+
+`SubagentPlan` 保持旧循环的契约：迭代上限 5、非致命错误退回普通 chat、
+致命状态码（401/403/429/5xx）直接抛、消息记账（assistant + tool）不变。
+
+### 删死代码：`apps/chat/base.py::aask_with_tools`
+
+**生产零调用者**（只有 `tests/test_apps_chat_base.py` 引用）——180 行死代码
++ 169 行测试一并删除。
+
+删掉后，生产里跑的循环从 4 处降到 **3 处**（chat / research / subagent），
+而这 3 处现在共用同一个骨架。
+
+## 收敛结果
+
+| 循环 | 位置 | 状态 |
+|------|------|------|
+| chat ReAct | `runner_v2.py` | ✅ `ChatPlan` |
+| research 管线 | `research_runner.py` | ✅ `_ResearchPlan` |
+| subagent 工具循环 | `subagent_worker.py` | ✅ `SubagentPlan` |
+| `base.py::aask_with_tools` | — | 🗑️ 已删（生产零调用） |
+
+**「改一处语义」的改动点：从 4 处降到 1 处**（`AgentRuntime`）。
+
+## 回归网（累计 66 项）
+
+| 文件 | 项 | 内容 |
+|------|----|------|
+| `tests/kernel/agent/test_runtime.py` | 17 | 骨架契约 |
+| `tests/test_research_runner_plan.py` | 19 | research 差分守卫 |
+| `tests/test_chat_plan.py` | 13 | chat plan↔runtime 边界 |
+| `tests/test_subagent_plan.py` | 8 | subagent plan 边界 |
+
+## 验证
+
+```
+pytest 四份守卫 + chat runner + subagent       → 全部通过
+pytest -k "chat or agent or runner or ..."     → 失败项均为基线已有
+全量 pytest → 58 failed（基线 58，逐条一致）
+ruff check src/llmwikify                        → clean
+```
+
+## 未做
+
+- `kernel/agent/loop.py` 的 `UnifiedAgentLoop` 与新运行时的关系：它只有 codegen
+  一条腿在用，而那条腿自身没有生产入口。待确认是「并入新运行时」还是「删」。
+
 

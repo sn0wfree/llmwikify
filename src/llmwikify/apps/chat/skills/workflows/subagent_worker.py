@@ -50,6 +50,9 @@ from llmwikify.apps.chat.skills.workflows.subagent_runner import (
 )
 from llmwikify.foundation.llm.errors import LLMError
 from llmwikify.foundation.llm.streamable import LLMRequestError
+from llmwikify.kernel.agent.runtime import RUNTIME, RuntimeContext, run_sync
+
+from .subagent_plan import SubagentPlan
 
 logger = logging.getLogger(__name__)
 
@@ -290,7 +293,9 @@ class LlmClientDriver(AgentDriver):
             result = client.chat(messages=messages)
             return _normalize_chat_result(result)
 
-        return self._complete_with_tools(client, messages, tools_def, handlers)
+        return self._complete_with_tools(
+            client, messages, tools_def, handlers
+        )
 
     def _complete_with_tools(
         self,
@@ -312,71 +317,30 @@ class LlmClientDriver(AgentDriver):
         Bounded by ``_MAX_TOOL_ITER`` to prevent runaway loops. On
         hitting the cap we log a warning and return whatever content
         the last iteration produced.
+
+        The loop itself now lives in the shared runtime (see
+        :class:`SubagentPlan`) — this method only wires the plan up.
         """
-        total_tokens = 0
-        content = ""
-        for _ in range(_MAX_TOOL_ITER):
-            try:
-                result = client.chat_with_tools(messages, tools=tools_def)
-            except LLMRequestError as e:
-                logger.error("subagent tool loop: chat_with_tools failed: %s", e)
-                # Only fall back to plain chat for non-fatal errors
-                # (e.g., tool-not-supported). For API/auth/rate-limit
-                # errors, propagate immediately.
-                if getattr(e, "status_code", 0) in (401, 403, 429, 500, 502, 503):
-                    raise
-                result = client.chat(messages=messages)
-                content, total_tokens = _normalize_chat_result(result)
-                return content, total_tokens
-            except Exception as e:
-                logger.error("subagent tool loop: chat_with_tools failed: %s", e)
-                # Fall back to plain chat to recover.
-                result = client.chat(messages=messages)
-                content, total_tokens = _normalize_chat_result(result)
-                return content, total_tokens
-
-            content, tokens_inc = _extract_content_and_tokens(result)
-            total_tokens += tokens_inc
-            tool_calls = _extract_tool_calls(result)
-
-            if not tool_calls:
-                return content, total_tokens
-
-            # Append the assistant message with tool_calls (OpenAI schema).
-            messages.append(
-                {
-                    "role": "assistant",
-                    "content": content,
-                    "tool_calls": [
-                        {
-                            "id": tc.get("id", ""),
-                            "type": "function",
-                            "function": {
-                                "name": tc.get("name", ""),
-                                "arguments": tc.get("args", ""),
-                            },
-                        }
-                        for tc in tool_calls
-                    ],
-                }
-            )
-
-            # Execute each tool and append a tool-role message.
-            for tc in tool_calls:
-                output = _dispatch_tool_call(tc, handlers)
-                messages.append(
-                    {
-                        "role": "tool",
-                        "tool_call_id": tc.get("id", ""),
-                        "content": json.dumps(output, ensure_ascii=False),
-                    }
-                )
-
-        logger.warning(
-            "subagent tool loop hit MAX_TOOL_ITER=%d; returning last content",
-            _MAX_TOOL_ITER,
+        plan = SubagentPlan(
+            client,
+            messages,
+            tools_def,
+            handlers,
+            max_iterations=_MAX_TOOL_ITER,
+            extract_content_and_tokens=_extract_content_and_tokens,
+            extract_tool_calls=_extract_tool_calls,
+            normalize_chat_result=_normalize_chat_result,
+            dispatch_tool_call=_dispatch_tool_call,
         )
-        return content, total_tokens
+        runtime_ctx = RuntimeContext()
+
+        async def _drive() -> None:
+            async for _event in RUNTIME.run_stream(runtime_ctx, plan):
+                pass
+
+        # The worker runs in a child process — a synchronous context.
+        run_sync(_drive())
+        return plan.content, plan.total_tokens
 
     def _build_client(self, request: SubagentRequest | None, model: str) -> Any:
         """Build the LLM client honoring LAL contract.
