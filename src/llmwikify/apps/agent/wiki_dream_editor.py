@@ -42,6 +42,21 @@ class WikiDreamProposalManager:
             proposal["wiki_id"] = self.wiki_id
             self.db.save_dream_proposal(proposal)
 
+    def _load_proposals(self) -> list[dict[str, Any]]:
+        """Return the proposals this manager can see.
+
+        When a database is attached it is the source of truth: the
+        maintenance subsystem (auto-ingest, gap filler, enricher) writes
+        proposals through its own manager instance into the same table,
+        so a snapshot of this instance's in-memory list would miss them.
+        The in-memory list is only a cache for the no-DB case.
+        """
+        if self.db and self.wiki_id:
+            return self.db.get_dream_proposals(
+                self.wiki_id, status=None, limit=self._max_size
+            )
+        return list(self._proposals)
+
     def _add_proposal(self, proposal: dict) -> dict:
         self._proposals.append(proposal)
         if len(self._proposals) > self._max_size:
@@ -74,7 +89,7 @@ class WikiDreamProposalManager:
 
     def auto_approve_pending(self) -> list[dict]:
         auto_approved = []
-        for p in self._proposals:
+        for p in self._load_proposals():
             if p["status"] != "pending":
                 continue
             if (
@@ -84,26 +99,42 @@ class WikiDreamProposalManager:
                 p["status"] = "auto_approved"
                 p["reviewed_at"] = datetime.now(timezone.utc).isoformat()
                 self._sync_to_db(p)
+                self._cache_proposal(p)
                 auto_approved.append(p)
         return auto_approved
 
+    def _cache_proposal(self, proposal: dict) -> None:
+        """Keep the in-memory cache in step with the database row.
+
+        Reads go to the database (see ``_load_proposals``) but the cache
+        is still handed out to callers that poke at ``_proposals``
+        directly, so it must not go stale after a status change.
+        """
+        for cached in self._proposals:
+            if cached["id"] == proposal["id"]:
+                cached.update(proposal)
+                return
+        self._add_proposal(proposal)
+
     def approve(self, proposal_id: str) -> dict | None:
-        for p in self._proposals:
-            if p["id"] == proposal_id:
-                p["status"] = "approved"
-                p["reviewed_at"] = datetime.now(timezone.utc).isoformat()
-                self._sync_to_db(p)
-                return p
-        return None
+        p = self.get_proposal(proposal_id)
+        if p is None:
+            return None
+        p["status"] = "approved"
+        p["reviewed_at"] = datetime.now(timezone.utc).isoformat()
+        self._sync_to_db(p)
+        self._cache_proposal(p)
+        return p
 
     def reject(self, proposal_id: str) -> dict | None:
-        for p in self._proposals:
-            if p["id"] == proposal_id:
-                p["status"] = "rejected"
-                p["reviewed_at"] = datetime.now(timezone.utc).isoformat()
-                self._sync_to_db(p)
-                return p
-        return None
+        p = self.get_proposal(proposal_id)
+        if p is None:
+            return None
+        p["status"] = "rejected"
+        p["reviewed_at"] = datetime.now(timezone.utc).isoformat()
+        self._sync_to_db(p)
+        self._cache_proposal(p)
+        return p
 
     def batch_approve(self, proposal_ids: list[str]) -> list[dict]:
         results = []
@@ -114,11 +145,11 @@ class WikiDreamProposalManager:
         return results
 
     def get_pending(self) -> list[dict]:
-        return [p for p in self._proposals if p["status"] == "pending"]
+        return [p for p in self._load_proposals() if p["status"] == "pending"]
 
     def get_pending_by_page(self) -> dict[str, list[dict]]:
         groups: dict[str, list[dict]] = {}
-        for p in self._proposals:
+        for p in self._load_proposals():
             if p["status"] != "pending":
                 continue
             page = p["page_name"]
@@ -144,12 +175,18 @@ class WikiDreamProposalManager:
         return stats
 
     def get_proposal(self, proposal_id: str) -> dict | None:
-        for p in self._proposals:
+        for p in self._load_proposals():
             if p["id"] == proposal_id:
                 return p
         return None
 
     def clear_applied(self) -> int:
+        """Drop applied proposals from the local in-memory cache.
+
+        Only the cache is cleared — the database keeps its rows as an
+        audit trail, and a later read (see ``_load_proposals``) will
+        surface them again when a database is attached.
+        """
         before = len(self._proposals)
         self._proposals = [p for p in self._proposals if p["status"] != "applied"]
         return before - len(self._proposals)

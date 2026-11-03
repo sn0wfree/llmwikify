@@ -322,13 +322,14 @@ skill/ingest 链路），以下问题已修复。其中 **#1 和 #4 是本次改
 | 13 | `wiki_graph` 工具相对导入层级错 | `ModuleNotFoundError`，调用即炸 | `...kernel` → `....kernel` |
 | 14 | 版本号常量取错 | wiki.md 合并通知永远写 `0.11.0` | `from llmwikify import __version__` |
 | 15 | 二进制文件解码未兜底 | 未知扩展名 + 二进制 → 未捕获异常 | `errors="replace"` |
+| 16 | 提案闭环是断的 | maintenance 写的提案，WebUI 的实例**既看不到也批不了** | 有 DB 时读写一律以 DB 为真源（`_load_proposals`）；状态变更同步内存缓存 |
 
 ### 测试
 
-新增 25 项回归测试，覆盖上述每一类：坏链形态、重复链接、解析失败、
+新增 30 项回归测试，覆盖上述每一类：坏链形态、重复链接、解析失败、
 标题行保护、跨 `PYTHONHASHSEED` 确定性（8 个 seed）、性能护栏
 （1400 页 < 5s）、ingest pipeline 真实写入、event loop 不被饿死、
-stats 累加、`wiki_graph` 导入、jieba 编码、版本号。
+stats 累加、`wiki_graph` 导入、jieba 编码、版本号、跨实例提案可见与可审批（5 项）。
 
 其中 `tests/test_apps_chat_skills_pipelines.py` 原先用 `MagicMock`
 伪造了 `write_page`/`read_page` 两个 key，正好与代码里的错误 key
@@ -336,9 +337,6 @@ stats 累加、`wiki_graph` 导入、jieba 编码、版本号。
 
 ### 已知限制（不在本次范围）
 
-- `WikiDreamProposalManager` 是实例级内存池，而 WebUI 读的是
-  `WikiService` 自己的实例 → 运行期新建的提案在重启前可能不显示。
-  这是审核闭环的既有架构问题。
 - `KnowledgeEnricher` 的 `llm_semaphore` / `rate_limiter` 参数目前
   未被使用（enricher 不做 LLM 调用），保留以与其它轨道接口对称。
 - `analyze_action` / `lint_action` 在 async handler 里同步跑 LLM，
@@ -360,13 +358,15 @@ mypy src/llmwikify/apps/agent/maintenance/enricher.py \
 # → exit 0
 
 pytest tests/test_lint_missing_cross_refs.py tests/test_maintenance_enricher.py \
-       tests/test_maintenance_wikilink.py tests/test_cli_enrich.py \
+       tests/test_maintenance_wikilink.py tests/test_maintenance_extended.py \
+       tests/test_cli_enrich.py \
        tests/test_apps_chat_skills_actions.py tests/test_apps_chat_skills_pipelines.py \
+       tests/test_apps_wiki_service.py tests/test_apps_chat_skills_crud.py \
        tests/test_kernel_latent_defects.py \
        tests/test_v015_features.py tests/test_v026_wikilink_fix.py \
        tests/test_maintenance_gap_filler.py tests/test_maintenance_auto_ingest.py \
        tests/test_maintenance_comprehensive.py tests/test_lint_engine.py
-# → 403 passed, 2 failed（均为既存失败，见下）
+# → 420 passed, 2 failed（均为既存失败，见下）
 
 python scripts/check_architecture.py
 # → ✅ 0 architecture violations across 4 layers

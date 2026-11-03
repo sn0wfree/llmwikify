@@ -554,3 +554,95 @@ def test_reddit_not_low_quality_and_not_pinterest():
 # integration tests with real Wiki instances (test_v019_wiki_synthesize.py
 # etc.). Direct unit testing of _llm_process_source requires mocking the
 # full LLM client chain which is fragile.
+
+
+# ==========================================================================
+# proposal loop: cross-instance visibility (Track C review fix)
+# ==========================================================================
+
+
+def test_proposal_visible_across_manager_instances(tmp_path):
+    """A proposal written by one manager must be readable by another.
+
+    The maintenance subsystem writes through its own WikiDreamProposalManager
+    while the WebUI reads through WikiService's; they share only the database,
+    so reads must go to the database or half the proposals stay invisible
+    (and unapprovable) until a restart.
+    """
+    from llmwikify.apps.agent.wiki_dream_editor import WikiDreamProposalManager
+
+    db = _make_dream_db(tmp_path)
+    maintenance = WikiDreamProposalManager(db=db, wiki_id="w1")
+    webui = WikiDreamProposalManager(db=db, wiki_id="w1")
+
+    created = maintenance.create_proposal(
+        page_name="Monte Carlo Simulation",
+        edit_type="create",
+        content="x",
+        reason="enricher",
+    )
+
+    assert any(p["id"] == created["id"] for p in webui.get_pending())
+    assert any(
+        created["id"] in [q["id"] for q in items]
+        for items in webui.get_pending_by_page().values()
+    )
+
+
+def test_proposal_approvable_across_instances(tmp_path):
+    """A proposal created by one manager must be approvable by another."""
+    from llmwikify.apps.agent.wiki_dream_editor import WikiDreamProposalManager
+
+    db = _make_dream_db(tmp_path)
+    maintenance = WikiDreamProposalManager(db=db, wiki_id="w1")
+    webui = WikiDreamProposalManager(db=db, wiki_id="w1")
+
+    created = maintenance.create_proposal(
+        page_name="P", edit_type="create", content="x", reason="r"
+    )
+
+    approved = webui.approve(created["id"])
+    assert approved is not None
+    assert approved["status"] == "approved"
+    assert maintenance.get_proposal(created["id"])["status"] == "approved"
+
+
+def test_proposal_rejectable_across_instances(tmp_path):
+    from llmwikify.apps.agent.wiki_dream_editor import WikiDreamProposalManager
+
+    db = _make_dream_db(tmp_path)
+    maintenance = WikiDreamProposalManager(db=db, wiki_id="w1")
+    webui = WikiDreamProposalManager(db=db, wiki_id="w1")
+
+    created = maintenance.create_proposal(
+        page_name="P", edit_type="create", content="x", reason="r"
+    )
+    rejected = webui.reject(created["id"])
+
+    assert rejected["status"] == "rejected"
+    assert maintenance.get_proposal(created["id"])["status"] == "rejected"
+
+
+def test_proposal_no_db_fallback_still_works():
+    """Without a database the in-memory pool is the only store."""
+    from llmwikify.apps.agent.wiki_dream_editor import WikiDreamProposalManager
+
+    mgr = WikiDreamProposalManager(wiki_id="w2")
+    p = mgr.create_proposal(page_name="X", edit_type="create", content="y", reason="r")
+
+    assert mgr.get_pending()[0]["id"] == p["id"]
+    assert mgr.approve(p["id"])["status"] == "approved"
+
+
+def test_proposal_status_change_updates_cache(tmp_path):
+    """The in-memory cache must not go stale after a status change."""
+    from llmwikify.apps.agent.wiki_dream_editor import WikiDreamProposalManager
+
+    db = _make_dream_db(tmp_path)
+    mgr = WikiDreamProposalManager(db=db, wiki_id="w1")
+
+    p = mgr.create_proposal(page_name="P", edit_type="create", content="x", reason="r")
+    mgr.approve(p["id"])
+
+    cached = next(q for q in mgr._proposals if q["id"] == p["id"])
+    assert cached["status"] == "approved"
