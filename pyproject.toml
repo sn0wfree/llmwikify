@@ -29,7 +29,7 @@ web = [ "fastapi>=0.104.0", "starlette>=0.45,<1", "uvicorn>=0.23.0", "httpx>=0.2
 agent = [ "croniter>=2.0.0", "filelock>=3.13.0", "duckduckgo-search>=4.0", "tavily-python>=0.3.0", "apscheduler>=3.10.0,<4",]
 llm = [ "tiktoken>=0.7.0",]
 extractors = [ "markitdown[all]>=0.1.0", "pymupdf>=1.23.0", "trafilatura>=1.7.0", "youtube-transcript-api>=0.6.0",]
-all = [ "llmwikify[extractors,mcp,config,watch,graph,web,agent]",]
+all = [ "llmwikify[extractors,mcp,config,watch,graph,web,agent,llm]",]
 # ─── 临时 jaraco 生态 pin (2026-07) ──────────────────────────────
 # 原因: PyPI 上 jaraco.context 6.x / keyring 24+ / twine 5+ 反向要求
 #       jaraco.functools 1.x,而 1.x 有 metadata-version 错配 bug
@@ -259,6 +259,7 @@ llmwikify = [ "py.typed",]
 "llmwikify.foundation.llm" = [ "providers.yaml",]  # v0.41: Provider 元数据唯一来源
 "llmwikify.apps.chat" = [ "config_defaults.yaml",]  # v0.41: Chat 业务默认值
 "llmwikify.apps.research" = [ "config_defaults.yaml",]  # v0.41: Research 业务默认值
+"llmwikify.webui" = [ "dist/**/*",]  # v0.41: 随 wheel 发布的 WebUI 构建产物
 "llmwikify.apps.chat.skills.workflows.builtins" = [ "*.yaml", "actor_prompts/*.md",]
 
 [tool.ruff.lint]
@@ -290,10 +291,16 @@ branch = true
 source = [ "src/llmwikify",]
 
 [tool.coverage.report]
-# fail_under 渐进提升: 15% (mock-only) → 50% (mock + 集成) → 80% (refactor 完成后)
-# 当前 16.27% (mock-only 测试 112 个), 已通过 15% 门槛
-# 真实代码覆盖率需 behavior + 集成测试, refactor Phase 14 后达到 80%
-fail_under = 15
+# fail_under 棘轮（ratchet）：每次提覆盖率都把门槛同步抬高，防止回退。
+#
+#   15%  →  mock-only 时期（2026-10，全量仅 16.27%）
+#   78%  →  全量 80.26%（2026-11，24302/30279 语句），留 ~2pp 余量给
+#           平台 / Python 版本差异（CI 跑 Linux py3.10-3.12）
+#   80%  →  覆盖补齐后（目标 95%，见 docs/architecture/architecture-review-2026-11.md）
+#
+# 余量说明：门槛必须**低于**实测值，否则跨平台 / 跨版本的正常波动会让 CI
+# 随机变红，久了就没人看 CI 了。宁可门槛低一点，也要它真的能拦住回退。
+fail_under = 78
 show_missing = true
 exclude_lines = [ "pragma: no cover", "def __repr__", "raise AssertionError", "raise NotImplementedError", "if __name__ == .__main__.:", "if TYPE_CHECKING:",]
 

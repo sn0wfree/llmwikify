@@ -24,7 +24,7 @@ from llmwikify.interfaces.server.utils.webui import (
 def client():
     dist = find_webui_dist()
     if dist is None:
-        pytest.skip("ui/webui/dist not built; skipping webui cache tests")
+        pytest.skip("WebUI dist not built; skipping webui cache tests")
     app = FastAPI()
     mount_webui(app)
     return TestClient(app)
@@ -73,9 +73,17 @@ class TestFindWebuiDist:
             assert (dist / "index.html").is_file()
 
     def test_returns_repo_relative_path(self):
-        """dist must be at the top-level ui/webui/dist."""
+        """The dist lives in the package (or the legacy repo layout).
+
+        The Vite build writes into ``llmwikify/webui/dist`` so the wheel
+        ships the UI; a source checkout that was built before the move
+        may still have it at ``ui/webui/dist``.
+        """
         dist = find_webui_dist()
         if dist is not None:
             assert dist.name == "dist"
             assert dist.parent.name == "webui"
-            assert dist.parent.parent.name == "ui"
+            layout = {dist.parent.parent.name, dist.parent.parent.parent.name}
+            assert layout & {"llmwikify", "ui"}, (
+                f"unexpected WebUI dist location: {dist}"
+            )

@@ -6,7 +6,10 @@ import path from 'path'
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   build: {
-    outDir: 'dist',
+    // Build into the Python package so the wheel ships a working UI.
+    // `pip install llmwikify` then has `serve --web` serve real files
+    // instead of 404ing (see llmwikify.interfaces.server.utils.webui).
+    outDir: '../../src/llmwikify/webui/dist',
     emptyOutDir: true,
   },
   server: {

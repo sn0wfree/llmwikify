@@ -129,7 +129,7 @@ quantnodes-mysql、caddy、redis 等），全部被 `-f` 强删。容器配置�
 
 **服务器**：不用 `--reload`；启动 `llmwikify serve --web --port 8765 --host 0.0.0.0`；健康检查 `curl http://localhost:8765/api/health`。
 
-**WebUI 构建**：改 `ui/webui/src/**` 后必须 `cd ui/webui && npm run build`（或 `pnpm build`），仅 `tsc --noEmit` 类型检查不会更新 `ui/webui/dist/assets/AgentChat-*.js` 等 bundle；浏览器会继续加载旧 hash 的 chunk，源码修复"看不见"。dist/ 在 `.gitignore` 里不入仓，但 serve 时被 FastAPI 静态挂载到 `/assets/*`。验证：`grep -c "final_response" ui/webui/dist/assets/AgentChat-*.js` 应返回 0。
+**WebUI 构建**：改 `ui/webui/src/**` 后必须 `cd ui/webui && npm run build`（或 `pnpm build`），仅 `tsc --noEmit` 类型检查不会更新 bundle；浏览器会继续加载旧 hash 的 chunk，源码修复"看不见"。**构建产物输出到 `src/llmwikify/webui/dist/`**（Vite `outDir`）——放在 Python 包内，这样 wheel 才带得走 UI（`pip install llmwikify` 后 `serve --web` 才有界面）。该目录在 `.gitignore` 里不入仓，serve 时被 FastAPI 静态挂载到 `/assets/*`。验证：`grep -c "final_response" src/llmwikify/webui/dist/assets/AgentChat-*.js` 应返回 0；`find_webui_dist()` 优先找包内路径，再退回仓库旧路径 `ui/webui/dist`。
 
 **Skills & Subagents**：Skills 路径 `~/.llmwikify/skills/`；Subagent `.claude/agents/<name>.md` 默认 `isolation: worktree`；prompt 必备 角色 + 输入契约 + 输出契约 + 边界。
 

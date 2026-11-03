@@ -79,6 +79,8 @@ raw/**/*.pdf
 .DS_Store
 
 # React WebUI build output
+# The Vite build writes into the Python package so the wheel ships the UI.
+src/llmwikify/webui/dist/
 src/llmwikify/web/webui/dist/
 src/llmwikify/web/webui/node_modules/
 src/llmwikify/web/webui-agent/node_modules/
@@ -101,7 +103,7 @@ scripts/downgrade_to_v11513.sh
 scripts/install_opencode_fast.sh
 scripts/install_opencode_manual.sh
 ui/webui/node_modules/
-ui/webui/dist/
+ui/webui/dist/   # legacy output dir (the build now writes to src/llmwikify/webui/dist)
 .opencode/node_modules/
 
 # TypeScript build cache

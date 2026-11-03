@@ -25,16 +25,29 @@ HASHED_ASSET_CACHE_CONTROL = "public, max-age=31536000, immutable"
 
 
 def find_webui_dist() -> Path | None:
-    """Find the WebUI dist directory at the top-level ``ui/webui/dist``.
+    """Find the WebUI dist directory.
+
+    Two places, in order:
+
+    1. **inside the package** (``llmwikify/webui/dist``) — this is where
+       the Vite build writes, so an installed wheel ships a working UI;
+    2. the repository checkout (``ui/webui/dist``) — the dev layout,
+       kept for a source tree that was built before the output moved.
 
     Returns:
         Path to dist directory, or None if not found.
     """
+    from llmwikify.webui import DIST_DIR
+
+    if (DIST_DIR / "index.html").exists():
+        return DIST_DIR
+
     repo_root = Path(__file__).resolve().parent.parent.parent.parent.parent.parent
     candidate = repo_root / "ui" / "webui" / "dist"
     if candidate.exists() and (candidate / "index.html").exists():
         return candidate
-    logger.warning("WebUI dist not found at %s; / will return 404", candidate)
+
+    logger.warning("WebUI dist not found at %s; / will return 404", DIST_DIR)
     return None
 
 

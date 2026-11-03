@@ -63,11 +63,26 @@ jobs:
           echo "new_version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
           echo "Bumping to: $NEW_VERSION"
 
-      - name: Update version in pyproject.toml
+      - name: Update the version in pyproject.toml and the version module
         run: |
           NEW_VERSION="${{ steps.version.outputs.new_version }}"
           sed -i "s/^version = \".*\"/version = \"${NEW_VERSION}\"/" pyproject.toml
+          # The runtime version lives in a leaf module (foundation/version.py),
+          # not in __init__.py — see the module docstring. Both must move
+          # together or llmwikify.__version__ reports a stale value.
+          sed -i "s/^__version__ = \".*\"/__version__ = \"${NEW_VERSION}\"/" \
+            src/llmwikify/foundation/version.py
           grep '^version = ' pyproject.toml
+          grep '^__version__ = ' src/llmwikify/foundation/version.py
+
+      - name: Verify the two version strings agree
+        run: |
+          PYPROJECT=$(grep -E '^version = ' pyproject.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
+          RUNTIME=$(grep -E '^__version__ = ' src/llmwikify/foundation/version.py | head -1 | sed 's/__version__ = "\(.*\)"/\1/')
+          if [ "$PYPROJECT" != "$RUNTIME" ]; then
+            echo "version mismatch: pyproject=$PYPROJECT runtime=$RUNTIME" >&2
+            exit 1
+          fi
 
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v6
@@ -103,5 +118,4 @@ jobs:
           delete-branch: true
           add-paths: |
             pyproject.toml
-            src/llmwikify/__init__.py
-            src/llmwikify/_version.py
+            src/llmwikify/foundation/version.py
