@@ -160,3 +160,6 @@ plan/
 
 # TopicResearch (已迁移至 ~/Public/temp/TopicResearch)
 TopicResearch/
+
+# Perf benchmark scratch dirs (A/B synth fixtures, regenerable)
+.analysis_tmp/
