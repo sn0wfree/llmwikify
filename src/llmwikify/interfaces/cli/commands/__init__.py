@@ -27,6 +27,7 @@ from .community_detect import CommunityDetectCommand, run_community_detect
 from .db import DbCommand, run_db
 from .dict_cmd import DictCommand
 from .doctor_cmd import DoctorCommand, run_doctor
+from .enrich import EnrichCommand, run_enrich
 from .export_graph import ExportGraphCommand, run_export_graph
 from .fix_wikilinks import FixWikilinksCommand, run_fix_wikilinks
 from .graph_analyze import GraphAnalyzeCommand, run_graph_analyze
@@ -95,6 +96,7 @@ register_command(DoctorCommand())
 register_command(HelpCommand())
 register_command(AuthCommand())
 register_command(MigrateConfigCommand())
+register_command(EnrichCommand())
 
 
 # C3 backward-compat re-exports — when ``commands.py`` was
@@ -193,5 +195,7 @@ __all__ = [
     "run_db",
     "DoctorCommand",
     "run_doctor",
+    "EnrichCommand",
+    "run_enrich",
     "HelpCommand",  # Phase 3 #6
 ]

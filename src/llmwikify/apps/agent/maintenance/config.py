@@ -43,6 +43,19 @@ class GapFillerConfig:
 
 
 @dataclass
+class EnricherConfig:
+    """Track C: incremental enrichment right after an ingest."""
+
+    enabled: bool = True
+    # How many knowledge units (concepts + sources) one ingest may enrich.
+    max_units_per_doc: int = 10
+    # How many pages one unit may get a wikilink added to.
+    max_links_per_unit: int = 5
+    # Queue a proposal when a concept from the new source has no page.
+    propose_missing_pages: bool = True
+
+
+@dataclass
 class LLMRateLimitConfig:
     """Background LLM rate limit: N units per sliding window.
 
@@ -62,6 +75,7 @@ class MaintenanceConfig:
     enabled: bool = True
     auto_ingest: AutoIngestConfig = field(default_factory=AutoIngestConfig)
     gap_filler: GapFillerConfig = field(default_factory=GapFillerConfig)
+    enricher: EnricherConfig = field(default_factory=EnricherConfig)
     llm_rate_limit: LLMRateLimitConfig = field(default_factory=LLMRateLimitConfig)
     lint_interval_seconds: float = 86400.0
     gaps_interval_seconds: float = 604800.0
@@ -140,6 +154,19 @@ def load_maintenance_config(config_path: Path | None = None) -> MaintenanceConfi
             gf.get("web_search_enabled", cfg.gap_filler.web_search_enabled),
         )
 
+    en = section.get("enricher", {})
+    if isinstance(en, dict):
+        cfg.enricher.enabled = bool(en.get("enabled", cfg.enricher.enabled))
+        cfg.enricher.max_units_per_doc = int(
+            en.get("max_units_per_doc", cfg.enricher.max_units_per_doc),
+        )
+        cfg.enricher.max_links_per_unit = int(
+            en.get("max_links_per_unit", cfg.enricher.max_links_per_unit),
+        )
+        cfg.enricher.propose_missing_pages = bool(
+            en.get("propose_missing_pages", cfg.enricher.propose_missing_pages),
+        )
+
     rl = section.get("llm_rate_limit", {})
     if isinstance(rl, dict):
         cfg.llm_rate_limit.enabled = bool(
@@ -179,6 +206,12 @@ def to_dict(cfg: MaintenanceConfig) -> dict[str, Any]:
             "enabled": cfg.llm_rate_limit.enabled,
             "max_requests": cfg.llm_rate_limit.max_requests,
             "window_seconds": cfg.llm_rate_limit.window_seconds,
+        },
+        "enricher": {
+            "enabled": cfg.enricher.enabled,
+            "max_units_per_doc": cfg.enricher.max_units_per_doc,
+            "max_links_per_unit": cfg.enricher.max_links_per_unit,
+            "propose_missing_pages": cfg.enricher.propose_missing_pages,
         },
         "lint_interval_seconds": cfg.lint_interval_seconds,
         "gaps_interval_seconds": cfg.gaps_interval_seconds,

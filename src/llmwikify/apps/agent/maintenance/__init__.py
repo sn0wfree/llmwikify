@@ -24,6 +24,7 @@ from llmwikify.kernel.multi_wiki.instance import WikiType
 
 from .auto_ingest import AutoIngestService
 from .config import MaintenanceConfig, load_maintenance_config, to_dict
+from .enricher import KnowledgeEnricher
 from .gap_filler import GapFiller
 from .rate_limit import SlidingWindowRateLimiter
 
@@ -56,6 +57,7 @@ class MaintenanceManager:
         )
         self.auto_ingest_services: dict[str, AutoIngestService] = {}
         self.gap_fillers: dict[str, GapFiller] = {}
+        self.enrichers: dict[str, KnowledgeEnricher] = {}
         self._tasks: list[asyncio.Task] = []
         self._running = False
         self._health_history: list[dict[str, Any]] = []
@@ -194,8 +196,19 @@ class MaintenanceManager:
     # ── per-wiki helpers ───────────────────────────────────────────────
 
     async def _start_for_wiki(self, wiki_id: str, wiki: Any, loop: Any) -> None:
-        """Create and start per-wiki components (watcher + filler)."""
+        """Create and start per-wiki components (watcher + filler + enricher)."""
         try:
+            enricher = None
+            if self.config.enricher.enabled:
+                enricher = KnowledgeEnricher(
+                    wiki=wiki,
+                    wiki_id=wiki_id,
+                    config=self.config.enricher,
+                    llm_semaphore=self.llm_semaphore,
+                    proposal_manager=self._make_proposal_manager(wiki_id),
+                    rate_limiter=self.llm_rate_limiter,
+                )
+                self.enrichers[wiki_id] = enricher
             if self.config.auto_ingest.enabled:
                 service = AutoIngestService(
                     wiki=wiki,
@@ -205,6 +218,7 @@ class MaintenanceManager:
                     loop=loop,
                     proposal_manager=self._make_proposal_manager(wiki_id),
                     rate_limiter=self.llm_rate_limiter,
+                    enricher=enricher,
                 )
                 if await service.start():
                     self.auto_ingest_services[wiki_id] = service
@@ -233,6 +247,7 @@ class MaintenanceManager:
                     exc_info=True,
                 )
         self.gap_fillers.pop(wiki_id, None)
+        self.enrichers.pop(wiki_id, None)
 
     async def _sync_wikis(self) -> None:
         """Detect newly-registered or disappeared wikis and adjust components.
@@ -468,6 +483,9 @@ class MaintenanceManager:
             },
             "gap_filler": {
                 wid: filler.status() for wid, filler in self.gap_fillers.items()
+            },
+            "enricher": {
+                wid: enricher.status() for wid, enricher in self.enrichers.items()
             },
             "last_db_maintenance_at": self._last_db_maintenance_at,
         }

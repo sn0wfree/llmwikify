@@ -55,6 +55,7 @@ class AutoIngestService:
         loop: asyncio.AbstractEventLoop | None = None,
         proposal_manager: WikiDreamProposalManager | None = None,
         rate_limiter: SlidingWindowRateLimiter | None = None,
+        enricher: Any = None,
     ) -> None:
         self.wiki = wiki
         self.wiki_id = wiki_id
@@ -70,6 +71,10 @@ class AutoIngestService:
         self._proposal_manager = proposal_manager or WikiDreamProposalManager(
             wiki_id=wiki_id,
         )
+        # Track C: incremental enrichment applied to the pages this ingest
+        # just wrote. Duck-typed to keep this module free of a hard
+        # dependency on the enricher implementation.
+        self._enricher = enricher
         # path → (deadline, size_at_last_event); own debounce on top of
         # watchdog events because on_event fires BEFORE the watcher's
         # internal debounce timer.
@@ -95,6 +100,8 @@ class AutoIngestService:
             "skipped": 0,
             "backlog_replayed": 0,
             "backlog_deferred": 0,
+            "enriched": 0,
+            "enrich_proposals": 0,
             "last_ingest_at": None,
             "last_error": None,
         }
@@ -414,6 +421,7 @@ class AutoIngestService:
                 executed,
                 path.name,
             )
+            await self._run_enricher(ops_result, exec_result)
         except Exception as exc:
             self.stats["last_error"] = f"llm_write: {exc}"
             logger.warning(
@@ -432,6 +440,31 @@ class AutoIngestService:
                 # else: leave unprocessed so next start retries
                 return
             self._mark_processed(path)
+
+    async def _run_enricher(
+        self, llm_result: dict, exec_result: dict
+    ) -> None:
+        """Track C: enrich the knowledge base around the pages just written.
+
+        Failures here must never undo a successful ingest, so they are
+        logged and counted instead of raised.
+        """
+        if self._enricher is None:
+            return
+        try:
+            result = await self._enricher.enrich(
+                llm_result=llm_result, exec_result=exec_result
+            )
+            self.stats["enriched"] = getattr(result, "links_added", 0)
+            self.stats["enrich_proposals"] = getattr(result, "proposals_created", 0)
+        except Exception as exc:
+            self.stats["last_error"] = f"enrich: {exc}"
+            logger.warning(
+                "[%s] auto_ingest enrichment failed %s: %s",
+                self.wiki_id,
+                llm_result.get("source_title", ""),
+                exc,
+            )
 
     async def _fallback_to_proposal(self, ingest_result: dict, reason: str) -> bool:
         """Content is not lost: file stays archived in raw/, a proposal is queued.

@@ -23,6 +23,7 @@ from llmwikify.apps.agent.wiki_dream_editor import WikiDreamProposalManager
 from .config import GapFillerConfig
 from .llm_support import ensure_global_llm_fallback
 from .rate_limit import SlidingWindowRateLimiter
+from .wikilink import build_pattern, link_first_occurrence
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +36,7 @@ class GapItem:
     priority: int
     data: dict[str, Any]
     concept: str = ""
+    title: str = ""
 
 
 @dataclass
@@ -65,6 +67,18 @@ def calc_priority(gap: dict[str, Any]) -> int:
     return 0
 
 
+def _concept_title(item: dict[str, Any], concept: str) -> str:
+    """Title form of a concept ("concepts/Foo" -> "Foo").
+
+    Prose usually mentions the bare title while the page is addressed by
+    its qualified name, so matching needs both.
+    """
+    title = str(item.get("concept_title", "") or "")
+    if title:
+        return title
+    return concept.rsplit("/", 1)[-1]
+
+
 def extract_gaps(lint_result: dict[str, Any]) -> list[GapItem]:
     """Extract gap items from ``wiki.lint()`` result (hints + investigations)."""
     found: list[GapItem] = []
@@ -85,6 +99,7 @@ def extract_gaps(lint_result: dict[str, Any]) -> list[GapItem]:
                 priority=calc_priority(item),
                 data=item,
                 concept=concept,
+                title=_concept_title(item, concept),
             )
         )
 
@@ -103,6 +118,7 @@ def extract_gaps(lint_result: dict[str, Any]) -> list[GapItem]:
                 priority=calc_priority(item),
                 data=item,
                 concept=concept,
+                title=_concept_title(item, concept),
             )
         )
 
@@ -201,15 +217,17 @@ class GapFiller:
         """Insert ``[[concept]]`` at first plain-text occurrence per mentioning page.
 
         Returns number of pages actually modified. Mirrors the rule's own
-        word-boundary detection (missing_cross_refs.py:52-53) so a fixed
-        page no longer triggers the rule.
+        word-boundary detection (missing_cross_refs.py) so a fixed page
+        no longer triggers the rule.
         """
         if not self.config.auto_approve_mechanical:
             return 0
         concept = gap.concept
         if not concept:
             return 0
-        pattern = re.compile(r"\b" + re.escape(concept) + r"\b", re.IGNORECASE)
+        # Prose says "Foo", the page is addressed as "concepts/Foo".
+        title = getattr(gap, "title", "") or concept.rsplit("/", 1)[-1]
+        pattern = build_pattern(title)
         fixed = 0
         for page_name in gap.data.get("mentioning_pages", []):
             page = await asyncio.to_thread(self.wiki.read_page, page_name)
@@ -220,7 +238,7 @@ class GapFiller:
             if not pattern.search(stripped):
                 continue
             # replace first occurrence OUTSIDE any existing wikilink
-            new_content = self._link_first_occurrence(content, pattern, concept)
+            new_content = link_first_occurrence(content, pattern, concept)
             if new_content == content:
                 continue
             await asyncio.to_thread(self.wiki.write_page, page_name, new_content)
@@ -230,28 +248,7 @@ class GapFiller:
     @staticmethod
     def _link_first_occurrence(content: str, pattern: re.Pattern, concept: str) -> str:
         """Replace the first non-wikilink word-boundary match with ``[[concept]]``."""
-        out: list[str] = []
-        pos = 0
-        for m in re.finditer(r"\[\[.*?\]\]", content):
-            before = content[pos : m.start()]
-            hit = pattern.search(before)
-            if hit:
-                out.append(before[: hit.start()])
-                out.append(f"[[{concept}]]")
-                out.append(before[hit.end() :])
-                out.append(content[m.start() :])
-                return "".join(out)
-            out.append(before)
-            out.append(m.group(0))
-            pos = m.end()
-        tail = content[pos:]
-        hit = pattern.search(tail)
-        if hit:
-            out.append(tail[: hit.start()])
-            out.append(f"[[{concept}]]")
-            out.append(tail[hit.end() :])
-            return "".join(out)
-        return content
+        return link_first_occurrence(content, pattern, concept)
 
     # ── content generation: unreferenced_entity ────────────────────────
 
