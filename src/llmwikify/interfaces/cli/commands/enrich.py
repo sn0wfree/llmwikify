@@ -82,9 +82,8 @@ def run_enrich(wiki: Any, args: Any) -> int:
 
     enricher = KnowledgeEnricher(
         wiki=wiki,
-        wiki_id=getattr(wiki, "root", None) and str(wiki.root) or "cli",
+        wiki_id=str(getattr(wiki, "root", "") or "cli"),
         config=config,
-        llm_semaphore=asyncio.Semaphore(1),
     )
     enrich_result = asyncio.run(
         enricher.enrich(llm_result=ops_result, exec_result=execution)

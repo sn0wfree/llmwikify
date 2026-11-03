@@ -23,7 +23,6 @@ def _enricher(wiki, **overrides) -> KnowledgeEnricher:
         wiki=wiki,
         wiki_id="test",
         config=config,
-        llm_semaphore=asyncio.Semaphore(1),
     )
 
 
@@ -433,7 +432,6 @@ def test_search_failure_is_isolated(wiki_instance):
         wiki=_BrokenWiki(),
         wiki_id="test",
         config=EnricherConfig(),
-        llm_semaphore=asyncio.Semaphore(1),
     )
 
     result = asyncio.run(enricher.enrich(exec_result=_ops("concepts/Foo")))

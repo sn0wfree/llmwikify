@@ -208,9 +208,7 @@ class MaintenanceManager:
                     wiki=wiki,
                     wiki_id=wiki_id,
                     config=self.config.enricher,
-                    llm_semaphore=self.llm_semaphore,
                     proposal_manager=proposal_manager,
-                    rate_limiter=self.llm_rate_limiter,
                 )
                 self.enrichers[wiki_id] = enricher
             if self.config.auto_ingest.enabled:

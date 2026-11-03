@@ -39,8 +39,6 @@ from typing import Any
 from llmwikify.apps.agent.wiki_dream_editor import WikiDreamProposalManager
 
 from .config import EnricherConfig
-from .llm_support import ensure_global_llm_fallback
-from .rate_limit import SlidingWindowRateLimiter
 from .wikilink import build_pattern, is_linked, link_first_occurrence
 
 logger = logging.getLogger(__name__)
@@ -150,6 +148,12 @@ class KnowledgeEnricher:
     """Per-wiki incremental enrichment (Track C).
 
     All blocking wiki calls go through ``asyncio.to_thread``.
+
+    The enricher makes no LLM calls: cross-reference repair is pure text
+    work and missing pages become proposals with a stub body. It
+    therefore carries neither an LLM semaphore nor a rate limiter — the
+    wiki reads and writes are bounded by the caller's own concurrency
+    instead.
     """
 
     def __init__(
@@ -157,18 +161,11 @@ class KnowledgeEnricher:
         wiki: Any,
         wiki_id: str,
         config: EnricherConfig,
-        llm_semaphore: asyncio.Semaphore,
         proposal_manager: WikiDreamProposalManager | None = None,
-        rate_limiter: SlidingWindowRateLimiter | None = None,
     ) -> None:
         self.wiki = wiki
         self.wiki_id = wiki_id
         self.config = config
-        self.llm_semaphore = llm_semaphore
-        self.rate_limiter = rate_limiter or SlidingWindowRateLimiter(
-            enabled=False,
-            name=f"enricher_{wiki_id}",
-        )
         self._proposal_manager = proposal_manager or WikiDreamProposalManager(
             wiki_id=wiki_id,
         )
@@ -195,8 +192,6 @@ class KnowledgeEnricher:
             result.skipped = True
             self.last_result = result
             return result
-
-        ensure_global_llm_fallback(self.wiki, self.wiki_id)
 
         analysis = (llm_result or {}).get("analysis") or {}
         concepts, sources, suggested = collect_units(exec_result, analysis)

@@ -324,6 +324,7 @@ skill/ingest 链路），以下问题已修复。其中 **#1 和 #4 是本次改
 | 15 | 二进制文件解码未兜底 | 未知扩展名 + 二进制 → 未捕获异常 | `errors="replace"` |
 | 16 | 提案闭环是断的 | maintenance 写的提案，WebUI 的实例**既看不到也批不了** | 有 DB 时读写一律以 DB 为真源（`_load_proposals`）；状态变更同步内存缓存 |
 | 17 | async handler 里同步跑 LLM / 重 IO | `analyze`、`lint` 一次调用可阻塞数十秒；`write` 重建 index.md（400 页 359ms） | 新增 `safe_call_async`（`asyncio.to_thread` + 可选超时），6 个 action 与 8 个 detect 全部改用 |
+| 18 | enricher 持有从未使用的 LLM 信号量与限流器 | 让人误以为它的读写受并发约束 | 删除两个参数与 `ensure_global_llm_fallback` 调用（enricher 不调 LLM，该调用只会改动全局配置） |
 
 ### 测试
 
@@ -338,8 +339,6 @@ stats 累加、`wiki_graph` 导入、jieba 编码、版本号、跨实例提案�
 
 ### 已知限制（不在本次范围）
 
-- `KnowledgeEnricher` 的 `llm_semaphore` / `rate_limiter` 参数目前
-  未被使用（enricher 不做 LLM 调用），保留以与其它轨道接口对称。
 - `wiki.write_page` 每次重建整个 `index.md`（400 页约 359ms），
   批量补链的写入代价与此成正比；`max_links_per_unit` 兜住上限。
 
