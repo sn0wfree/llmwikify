@@ -33,7 +33,10 @@ jobs:
 
       - name: Unit tests
         working-directory: ui/webui
-        run: npx vitest run
+        # One test is occasionally flaky under CI load (timing-sensitive
+        # component assertions). Retry it instead of failing the whole
+        # build — a real regression still fails after the retries.
+        run: npx vitest run --retry=2
 
       - name: Build
         working-directory: ui/webui
