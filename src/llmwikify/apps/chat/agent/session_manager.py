@@ -11,11 +11,13 @@ in-memory state tracking dictionary:
 
 Dependencies are injected at construction time so the manager is
 unit-testable without spinning up a full ChatOrchestrator. The
-state dicts (``_session_status``, ``_abort_events``) are passed
+abort events are passed
 by reference — both sides observe the same state.
 
 Public API mirrors the previous ChatOrchestrator methods 1:1 so
 external callers (``chat_sse.py`` HTTP routes) do not need to
+status now lives in a store, so it can be bounded or externalised.
+
 change. ChatOrchestrator delegates to the manager.
 """
 
@@ -23,7 +25,14 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import MutableMapping
 from typing import Any
+
+from llmwikify.apps.chat.agent.state_store import (
+    DictSessionStateStore,
+    SessionStateStore,
+    SessionStateView,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -35,13 +44,25 @@ class SessionManager:
         self,
         db: Any,
         context_manager: Any,
-        session_status: dict[str, str],
+        session_status: Any,
         abort_events: dict[str, asyncio.Event],
+        state_store: Any = None,
     ) -> None:
         self._db = db
         self._context_manager = context_manager
-        self._session_status = session_status
         self._abort_events = abort_events
+        if state_store is not None:
+            self._state_store = state_store
+        elif isinstance(session_status, SessionStateStore):
+            self._state_store = session_status
+        else:
+            # A plain dict - keep it as the source of truth.
+            self._state_store = DictSessionStateStore(session_status)
+
+    @property
+    def _session_status(self) -> MutableMapping[str, str]:
+        """A dict-like view over the state store (the legacy surface)."""
+        return SessionStateView(self._state_store)
 
     def delete_session(self, session_id: str) -> bool:
         """Delete a session from DB and evict its in-memory context."""
@@ -64,7 +85,7 @@ class SessionManager:
         Returns False if the session is not currently busy or has
         no abort event registered.
         """
-        if self._session_status.get(session_id) != "busy":
+        if not self._state_store.get(session_id).busy:
             return False
         event = self._abort_events.get(session_id)
         if event:
@@ -74,8 +95,10 @@ class SessionManager:
 
     def get_session_status(self, session_id: str) -> str:
         """Return ``"busy"`` / ``"idle"`` for ``session_id`` (default idle)."""
-        return self._session_status.get(session_id, "idle")
+        return self._state_store.get(session_id).status
 
     def get_all_session_status(self) -> dict[str, str]:
         """Snapshot of every tracked session's status."""
-        return dict(self._session_status)
+        return {
+            sid: state.status for sid, state in self._state_store.list_all().items()
+        }

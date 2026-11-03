@@ -47,7 +47,7 @@ llmwikify 在这三条上均落后一代；优势在本地优先、零代码技�
 | 2 | 存储端口化 | `foundation/storage/page_store.py` 定义 `PageStore`；95 处直连收敛；`InMemoryStore` 落地 |
 | 3 | 抽取共享内核 | `apps/knowledge/` 解除 chat↔research 循环 |
 | 4 | 契约即代码 | `events.schema.json` 单一源 → 生成前端 TS → CI 校验漂移 |
-| 5 | 状态外置 | `Checkpointer` + SQLite，进程内 dict 降级为 LRU 缓存，修内存泄漏 |
+| 5 | 状态外置 | `Checkpointer` + SQLite，进程内 dict 降级为 LRU 缓存，修内存泄漏（**已落地**：`SessionStateStore` + 租约 + `ToolRegistryCache`） |
 | 6 | 显式能力声明 | `Rule.snapshot_capable` / `Skill.exposed`，取代反射与白名单 |
 | 7 | 拆分 God Object | `orchestrator.py` 1016 行 → 5 个单一职责模块；chat 单包 33.5k → 三包 |
 | 8 | 工程门禁 | 架构/契约/类型/覆盖率四道门禁进 CI；e2e 可跑；发布产物含 UI |

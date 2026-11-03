@@ -22,7 +22,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, MutableMapping
 from typing import Any
 
 from llmwikify.apps.chat.agent import events
@@ -211,6 +211,7 @@ class ChatOrchestrator:
         memory_manager: Any = None,
         config: dict | None = None,
         skill_service: Any = None,
+        state_store: Any = None,
     ):
         from llmwikify.apps.chat.agent.confirmation_manager import (
             ConfirmationManager,
@@ -218,7 +219,12 @@ class ChatOrchestrator:
         from llmwikify.apps.chat.agent.context_manager import ContextManager
         from llmwikify.apps.chat.agent.event_log import EventLog
         from llmwikify.apps.chat.agent.prompt_builder import PromptBuilder
+        from llmwikify.apps.chat.agent.registry_cache import ToolRegistryCache
         from llmwikify.apps.chat.agent.session_manager import SessionManager
+        from llmwikify.apps.chat.agent.state_store import (
+            InMemorySessionStateStore,
+            SessionStateView,
+        )
         from llmwikify.apps.chat.agent.tool_executor import ToolExecutor
         from llmwikify.apps.chat.config import merge_six_step_config
 
@@ -241,9 +247,15 @@ class ChatOrchestrator:
         )
         self.event_log = EventLog(chat_db)
 
-        self._session_status: dict[str, str] = {}
+        # The session state lives in a store: bounded by default, and
+        # externalisable (a SQLite store with a lease) for multi-instance
+        # deployments.
+        self._state_store = state_store or InMemorySessionStateStore()
+        self._session_status = SessionStateView(self._state_store)
         self._abort_events: dict[str, asyncio.Event] = {}
-        self._tool_registries: dict[tuple[str, str], Any] = {}
+        # The tool registry cache is bounded - it used to grow one entry
+        # per (session, wiki) pair for the lifetime of the process.
+        self._tool_registries: MutableMapping[Any, Any] = ToolRegistryCache()
 
         # Phase 5: extract confirmation + session management into
         # dedicated classes. Both managers observe the dicts above by
@@ -254,6 +266,7 @@ class ChatOrchestrator:
             context_manager=self.context_manager,
             session_status=self._session_status,
             abort_events=self._abort_events,
+            state_store=self._state_store,
         )
 
         # P1-2 (vendored from nanobot command/router.py): slash command

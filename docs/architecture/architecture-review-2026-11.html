@@ -756,7 +756,7 @@
     <thead><tr><th style="width:26%">决策</th><th style="width:37%">内容</th><th style="width:37%">对标</th></tr></thead>
     <tbody>
       <tr><td class="name">D1 单一运行时</td><td>4 处循环 → 1 套 <code>AgentRuntime</code> + 声明式 Plan（<b>已落地</b>：research 与 chat 已迁移）</td><td>LangGraph Pregel 图 / Temporal Operator</td></tr>
-      <tr><td class="name">D2 状态外置</td><td><code>Checkpointer</code> 抽象，SQLite 为默认实现。进程内 dict 降级为缓存层。</td><td>LangGraph Checkpointer / Temporal 事件溯源</td></tr>
+      <tr><td class="name">D2 状态外置</td><td><code>SessionStateStore</code> 抽象（SQLite 实现带租约），进程内 dict 降级为 LRU 缓存。<b>已落地</b></td><td>LangGraph Checkpointer / Temporal 事件溯源</td></tr>
       <tr><td class="name">D3 契约即代码</td><td>后端单一 <code>events.schema.json</code>；前端类型由其生成；CI 校验漂移。</td><td>K8s CRD / protobuf / OpenAPI codegen</td></tr>
       <tr><td class="name">D4 存储端口化</td><td><code>PageStore</code> Protocol 置于 foundation；<code>Wiki</code> 与 mixin 只经端口访问页面。</td><td>六边形架构 / LlamaIndex Connector</td></tr>
       <tr><td class="name">D5 共享内核</td><td>抽 <code>apps/knowledge/</code>，chat 与 research 均单向依赖它，不互相依赖。</td><td>模块化单体（Martin Fowler）</td></tr>
@@ -851,11 +851,11 @@
     <div class="trans">
       <div class="box now"><div class="lbl">现状</div><div class="val">会话状态在 <code>orchestrator.py:244-246</code> 的进程内 dict；<code>_tool_registries</code> 只增不减，长跑进程泄漏；多实例不可共享。</div></div>
       <div class="arrow">→</div>
-      <div class="box next"><div class="lbl">目标</div><div class="val"><code>Checkpointer</code> 抽象 + SQLite 实现；进程内只做 LRU 缓存。崩溃可恢复，水平扩容解锁。</div></div>
+      <div class="box next"><div class="lbl">目标</div><div class="val"><code>SessionStateStore</code> 抽象 + SQLite 实现（租约防多实例冲突）；进程内只做 LRU 缓存。崩溃可恢复，水平扩容解锁。</div></div>
     </div>
     <ol class="steps">
-      <li>定义 <code>Checkpointer</code> Protocol：<code>load(session_id) / save(state) / list_sessions() / delete(id)</code></li>
-      <li><code>SQLiteCheckpointer</code> 存到既有 <code>chat_sessions</code> 表（加一列 JSON 状态）</li>
+      <li>定义 <code>SessionStateStore</code> Protocol：<code>get / set / clear / list_all</code></li>
+      <li><code>SqliteSessionStateStore</code> 存到既有 <code>chat_sessions.metadata</code> blob（<code>session_state</code> 键，<b>无需加列</b>）</li>
       <li>把 <code>_session_status</code> / <code>_abort_events</code> 迁入；进程内 dict 改为 LRU 缓存（带 TTL 与上限）</li>
       <li><code>_tool_registries</code> 改为按 wiki_id 缓存 + 引用计数或 TTL，修复泄漏</li>
       <li>补一个「重启后可恢复会话」的集成测试</li>
@@ -950,7 +950,7 @@
       <ul>
         <li><b>收敛 Agent 运行时</b>（方案 1）— 5 套循环 → 1 套 + 4 份 Plan</li>
         <li><b>抽取共享内核</b>（方案 3）— <code>apps/knowledge/</code>，解除 chat↔research 循环</li>
-        <li><b>状态外置</b>（方案 5）— Checkpointer + SQLite</li>
+        <li><b>状态外置</b>（方案 5）— SessionStateStore + SQLite 租约（<b>已落地</b>）</li>
         <li>钩子统一到 foundation 16 点，删除桥接层</li>
         <li>新增「同层包不得互相 import」架构规则</li>
       </ul>
