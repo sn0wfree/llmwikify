@@ -325,6 +325,36 @@ class WikiPageIOMixin(WikiProtocol):
 
         return {"topics": topics, "entities": entities}
 
+    def _cached_page_summary(
+        self,
+        page: Path,
+        cache: dict[str, tuple[float, int, str]],
+    ) -> str:
+        """Page summary, cached until the page changes.
+
+        Extracting a summary means reading the page and running a regex
+        over it — the most expensive part of rebuilding the index. The
+        summary only changes when the page does, so the cache is keyed by
+        the page's (mtime, size).
+
+        The cache key is the logical page name (forward slashes) so it
+        does not depend on the platform's path separator.
+        """
+        key_name = self._page_display_name(page)
+        try:
+            st = page.stat()
+            key = (st.st_mtime, st.st_size)
+        except OSError:
+            key = (0.0, 0)
+
+        cached = cache.get(key_name)
+        if cached is not None and cached[0] == key[0] and cached[1] == key[1]:
+            return cached[2]
+
+        summary = self._extract_page_summary(page)
+        cache[key_name] = (key[0], key[1], summary)
+        return summary
+
     def _update_index_file(self) -> None:
         # TODO(refactor): C901=24 — too complex, consider splitting
         """Update index.md with current wiki contents, summaries, and sink status.
@@ -348,6 +378,26 @@ class WikiPageIOMixin(WikiProtocol):
         groups: dict[str, list[str]] = {}
         sink_entries = []
         type_counts: dict[str, int] = {}
+
+        # Statistics for every page come from one query each instead of
+        # three per page — rebuilding the index is O(pages) either way,
+        # but the per-page queries dominated the cost.
+        try:
+            word_counts = self.index.word_counts_all()
+        except Exception as e:
+            logger.warning("Failed to get word counts: %s", e)
+            word_counts = {}
+        try:
+            inbound_counts = self.index.count_inbound_all()
+            outbound_counts = self.index.count_outbound_all()
+        except Exception as e:
+            logger.warning("Failed to get link counts: %s", e)
+            inbound_counts = {}
+            outbound_counts = {}
+
+        # Summaries only change when the page changes, so they are cached
+        # per page and revalidated by (mtime, size).
+        summary_cache = self.__dict__.setdefault("_summary_cache", {})
 
         for page in sorted(self._backend.list_page_paths()):
             page_path = page.relative_to(self.wiki_dir)
@@ -393,7 +443,7 @@ class WikiPageIOMixin(WikiProtocol):
                 type_counts[label] = 0
             type_counts[label] += 1
 
-            summary = self._extract_page_summary(page)
+            summary = self._cached_page_summary(page, summary_cache)
 
             analysis_extra = ""
             if subdir == "sources":
@@ -408,28 +458,18 @@ class WikiPageIOMixin(WikiProtocol):
                         analysis_extra = "\n  " + " | ".join(parts)
 
             stats_extra = ""
-            try:
-                cursor = self.index.conn.execute(
-                    "SELECT word_count FROM pages WHERE page_name = ?", (page_name,)
-                )
-                row = cursor.fetchone()
-                if row and row["word_count"]:
-                    wc = row["word_count"]
-                    wc_str = f"{wc / 1000:.1f}k" if wc >= 1000 else str(wc)
-                    stats_extra = f" | 📝 {wc_str} words"
-            except Exception as e:
-                logger.warning("Failed to get word count for %s: %s", page_name, e)
+            wc = word_counts.get(page_name)
+            if wc:
+                wc_str = f"{wc / 1000:.1f}k" if wc >= 1000 else str(wc)
+                stats_extra = f" | 📝 {wc_str} words"
 
-            try:
-                in_count = len(self.index.get_inbound_links(page_name))
-                out_count = len(self.index.get_outbound_links(page_name))
-                if in_count > 0 or out_count > 0:
-                    link_str = f"🔗 {out_count} out"
-                    if in_count > 0:
-                        link_str += f" | {in_count} in"
-                    stats_extra = f" | {link_str}" + stats_extra
-            except Exception as e:
-                logger.warning("Failed to get link counts for %s: %s", page_name, e)
+            in_count = inbound_counts.get(page_name, 0)
+            out_count = outbound_counts.get(page_name, 0)
+            if in_count > 0 or out_count > 0:
+                link_str = f"🔗 {out_count} out"
+                if in_count > 0:
+                    link_str += f" | {in_count} in"
+                stats_extra = f" | {link_str}" + stats_extra
 
             sink_marker = ""
             try:

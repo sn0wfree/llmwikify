@@ -483,6 +483,29 @@ class WikiIndex:
         )
         return {row[0]: row[1] for row in cursor.fetchall()}
 
+    def count_inbound_all(self) -> dict[str, int]:
+        """Count inbound links for every page in one parameterless query.
+
+        Used when the caller wants all pages anyway (e.g. rebuilding the
+        wiki index): no ``IN (...)`` list, so no SQLite variable limit.
+        """
+        cursor = self.conn.execute(
+            "SELECT target_page, COUNT(*) FROM page_links GROUP BY target_page"
+        )
+        return {row[0]: row[1] for row in cursor.fetchall()}
+
+    def count_outbound_all(self) -> dict[str, int]:
+        """Count outbound links for every page in one parameterless query."""
+        cursor = self.conn.execute(
+            "SELECT source_page, COUNT(*) FROM page_links GROUP BY source_page"
+        )
+        return {row[0]: row[1] for row in cursor.fetchall()}
+
+    def word_counts_all(self) -> dict[str, int]:
+        """Word count for every indexed page in one query."""
+        cursor = self.conn.execute("SELECT page_name, word_count FROM pages")
+        return {row[0]: row[1] for row in cursor.fetchall()}
+
     def get_outbound_links(self, page_name: str) -> list[dict]:
         """Get pages that this page links to."""
         cursor = self.conn.execute(
