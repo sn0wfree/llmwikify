@@ -205,6 +205,32 @@ raw/ 新文件
 单页补链失败只记错误计数，不影响其余页、不影响轨 A 的写页结果
 （轨 A 已写完才触发轨 C）。
 
+## 端到端测试
+
+功能写完后缺一条自动化证据链：「放文档进 raw/ → 知识库被完善」。
+`tests/e2e/` 目录是 **Playwright UI E2E**（起真实服务器 + 浏览器，
+`conftest.py` 里有 session 级 uvicorn fixture），链路测试不需要服务器与
+浏览器，因此放在顶层 `tests/test_auto_doc_ingest_flow.py`，随 CI 默认跑。
+
+### 测试矩阵
+
+| # | 路径 | 断言 |
+|---|------|------|
+| 1 | 正常：raw/ 文档 → ingest → LLM 写页 → enricher 织网 | 页面落盘、`stats["pages_written"]`、补链写入、index 更新 |
+| 2 | LLM 失败 → 提案兜底 | `stats["fallback_proposals"] >= 1`，内容进提案队列不丢失 |
+| 3 | enricher 失败 → 不影响已写页 | 页面已写入、`stats["last_error"]` 含 enrich 前缀 |
+| 4 | 重复处理同一文件 | 第二次跳过（`_is_processed`），不重复写页 |
+
+### 设计取舍
+
+- **不 mock `ingest_source`**：走真实 `extract()`（本地 markdown），
+  才能覆盖「解析 → 归档 → 写页」全链
+- **mock `_llm_process_source`**：LLM 不可调用，且本测试要验证的是
+  「编排是否正确」而非「LLM 输出质量」。返回固定的 `write_page` operations
+- **直接调 `_process_file`**：绕开 watchdog（CI 环境常未装），
+  与 `test_fallback_proposal_persists_to_db` 的既存失败无关
+- **enricher 注入失败桩**：验证隔离性，不让 enricher 的异常吃掉写页结果
+
 ## 配置
 
 轨 C 的开关与预算在 `~/.llmwikify/llmwikify.json` 的 `maintenance.enricher` 段：
