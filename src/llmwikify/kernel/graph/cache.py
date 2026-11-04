@@ -40,7 +40,9 @@ def graph_fingerprint(conn: Any) -> str:
             ).fetchone()
             return int(row[0]), int(row[1])
         except sqlite3.Error:
-            return 0, 0
+            # Distinct from the empty-DB "0:0" so a transient DB error
+            # never caches an empty-analysis result as if it were real.
+            return -1, -1
 
     pages = _count_max("pages")
     links = _count_max("page_links")
@@ -118,6 +120,16 @@ def combined_fingerprint(conn: Any, wiki_dir: Any) -> str:
 
 
 def wiki_cache_key(wiki: Any) -> str:
+    """Cache key for a wiki instance.
+
+    Must match what ``cache_invalidate`` receives. Callers invalidate
+    with ``str(wiki.wiki_dir)`` (backend write/delete paths), so prefer
+    ``wiki_dir`` over ``root`` — using ``root`` made explicit invalidation
+    a permanent miss (root != root/wiki).
+    """
+    wd = getattr(wiki, "wiki_dir", None)
+    if wd is not None:
+        return str(wd)
     return str(getattr(wiki, "root", "") or id(wiki))
 
 

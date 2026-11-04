@@ -48,6 +48,28 @@ class TestFingerprint:
     def test_none_conn(self):
         assert graph_fingerprint(None) == "no-index"
 
+    def test_sqlite_error_distinct_from_empty_db(self):
+        """DB error must not fingerprint as empty DB (would cache空结果)."""
+
+        class _BrokenConn:
+            def execute(self, *_a, **_k):
+                import sqlite3
+
+                raise sqlite3.OperationalError("database is locked")
+
+        empty = sqlite3.connect(":memory:")
+        empty.executescript(
+            """
+            CREATE TABLE pages (id INTEGER PRIMARY KEY);
+            CREATE TABLE page_links (id INTEGER PRIMARY KEY);
+            CREATE TABLE relations (id INTEGER PRIMARY KEY);
+            """
+        )
+        empty_fp = graph_fingerprint(empty)
+        empty.close()
+        assert graph_fingerprint(_BrokenConn()) != empty_fp
+        assert "-1:-1" in graph_fingerprint(_BrokenConn())
+
 
 class TestCache:
     def test_put_get_roundtrip(self, mem_conn):
@@ -104,9 +126,51 @@ class TestWriteInvalidates:
         backend.put_page("concepts/Alpha", "# Alpha\n")
         assert cache_get("lint", key, "fp-old", ttl_s=600) is None
 
+    def test_wiki_cache_key_matches_invalidation(self, tmp_path):
+        """wiki_cache_key(wiki) must equal what cache_invalidate receives.
+
+        Regression: key used root while invalidation passed wiki_dir,
+        so explicit invalidation never hit _STORE.
+        """
+        from llmwikify.kernel.graph.cache import (
+            cache_get,
+            cache_put,
+            wiki_cache_key,
+        )
+        from llmwikify.kernel.storage.backend import LocalFileBackend
+
+        backend = LocalFileBackend(tmp_path)
+
+        class _Wiki:
+            def __init__(self, b):
+                self.root = b.root
+                self.wiki_dir = b.wiki_dir
+
+        wiki = _Wiki(backend)
+        key = wiki_cache_key(wiki)
+        assert key == str(backend.wiki_dir)
+
+        cache_put("lint", key, "fp", {"issues": [1]})
+        assert cache_get("lint", key, "fp", ttl_s=600) == {"issues": [1]}
+
+        # Same call the backend makes on put_page/delete_page
+        from llmwikify.kernel.graph.cache import cache_invalidate
+
+        cache_invalidate(str(backend.wiki_dir))
+        assert cache_get("lint", key, "fp", ttl_s=600) is None
+
 
 class TestWikiCacheKey:
-    def test_prefers_root(self):
+    def test_prefers_wiki_dir(self):
+        """Must align with cache_invalidate(str(wiki_dir)) — not root."""
+
+        class W:
+            root = "/tmp/w"
+            wiki_dir = "/tmp/w/wiki"
+
+        assert wiki_cache_key(W()) == "/tmp/w/wiki"
+
+    def test_falls_back_to_root(self):
         class W:
             root = "/tmp/w"
 
