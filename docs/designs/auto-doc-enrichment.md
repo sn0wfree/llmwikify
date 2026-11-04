@@ -205,6 +205,47 @@ raw/ 新文件
 单页补链失败只记错误计数，不影响其余页、不影响轨 A 的写页结果
 （轨 A 已写完才触发轨 C）。
 
+## 健壮性（阶段 4）
+
+### 缺陷：watchdog 缺失时 backlog 也被跳过
+
+`AutoIngestService.start()`（`auto_ingest.py:119`）在 watchdog 未安装时
+`return False`（line 140），而 `_load_processed()` / `_scan_backlog()`
+写在 return **之后**（line 142-149）——于是：
+
+- 不监听新文件（预期）
+- **也不重放历史文件**（非预期）：raw/ 里已有的文档永远不会被处理
+- service 不注册进 `auto_ingest_services` → `stop()` 无法 cancel
+  backlog task（若已启动会泄漏）
+
+「实时监听」与「历史重放」是两件独立的事，watchdog 缺失不应阻止后者。
+
+**修法**：把 `_ensure_llm_config()` / `_load_processed()` /
+`_scan_backlog()` 移到 watchdog 尝试**之前**；watchdog 失败只禁用
+watcher，backlog 照常启动，返回 `True`（表示服务可用，含仅 backlog 模式）。
+`raw/` 不存在仍返回 `False`（无事可做）。
+
+顺带修掉既存失败 `test_fallback_proposal_persists_to_db`——它正是因
+watchdog 未装导致 `auto_ingest_services["w1"]` KeyError。
+
+### 并发隔离
+
+`_process_file` 有 per-file `asyncio.Lock`（`_file_locks`），且拿锁后
+再次检查 `_is_processed`。需要测试钉住两件事：
+
+1. **同一文件并发两次** → 只处理一次（第二次跳过）
+2. **不同文件并发** → 各自独立处理，互不干扰
+
+### 测试矩阵
+
+| # | 场景 | 期望 |
+|---|------|------|
+| 1 | watchdog 未装（mock `FileSystemWatcher.start` 抛 `ImportError`） | `start()` 返回 `True`，backlog task 启动 |
+| 2 | watchdog 未装 + raw/ 有历史文件 | 历史文件被重放（`ingest_source` 被调用） |
+| 3 | watchdog 未装 + service.stop() | backlog task 被 cancel，无泄漏 |
+| 4 | 同一文件并发 `_process_file` ×2 | 只处理一次 |
+| 5 | 不同文件并发 ×2 | 各处理一次，互不影响 |
+
 ## 端到端测试
 
 功能写完后缺一条自动化证据链：「放文档进 raw/ → 知识库被完善」。

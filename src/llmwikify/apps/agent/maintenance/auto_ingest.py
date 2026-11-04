@@ -117,7 +117,13 @@ class AutoIngestService:
         return base / ".llmwikify" / "maintenance" / "processed.json"
 
     async def start(self) -> bool:
-        """Start watching raw/. Returns False if raw/ missing or watchdog absent."""
+        """Start the service. Returns False only when raw/ is missing.
+
+        Replay of historical files is independent of watchdog: without
+        it the live watcher is disabled, but files that landed in raw/
+        while the server was down must still be processed (otherwise
+        they never would be).
+        """
         raw = self.raw_dir
         if not raw.exists():
             logger.info(
@@ -125,6 +131,17 @@ class AutoIngestService:
             )
             return False
         self._loop = self._loop or asyncio.get_running_loop()
+
+        # Historical files first — this must run even when watchdog is
+        # unavailable, and the task must be registered so stop() can
+        # cancel it.
+        self._ensure_llm_config()
+        self._load_processed()
+        self._backlog_task = asyncio.create_task(
+            self._scan_backlog(),
+            name=f"auto_ingest_backlog_{self.wiki_id}",
+        )
+
         self._watcher = FileSystemWatcher(
             watch_dir=raw,
             auto_ingest=False,  # we consume via on_event, not the stub path
@@ -134,19 +151,12 @@ class AutoIngestService:
             self._watcher.start(on_event=self._on_watch_event)
         except ImportError:
             logger.warning(
-                "[%s] auto_ingest: watchdog not installed, disabled", self.wiki_id
+                "[%s] auto_ingest: watchdog not installed, backlog replay only",
+                self.wiki_id,
             )
             self._watcher = None
-            return False
+            return True
         logger.info("[%s] auto_ingest: watching %s", self.wiki_id, raw)
-        self._ensure_llm_config()
-        self._load_processed()
-        # Background the replay: 20 files × LLM analysis can take minutes;
-        # awaiting it inline would block FastAPI's lifespan startup.
-        self._backlog_task = asyncio.create_task(
-            self._scan_backlog(),
-            name=f"auto_ingest_backlog_{self.wiki_id}",
-        )
         return True
 
     def _ensure_llm_config(self) -> None:
