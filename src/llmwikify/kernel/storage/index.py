@@ -60,8 +60,28 @@ class WikiIndex:
                         str(self.db_path), check_same_thread=False
                     )
                     self._conn.row_factory = sqlite3.Row
+                    self._apply_pragmas()
                     self.initialize()
         return self._conn
+
+    def _apply_pragmas(self) -> None:
+        """Tune the connection for an index that is written in bulk.
+
+        The defaults are the slowest possible combination: ``journal_mode=delete``
+        (rollback journal) plus ``synchronous=FULL`` (fsync per commit).
+        The main database already uses WAL + NORMAL
+        (``foundation/db.py``) — the wiki index now matches it.
+        """
+        cur = self._conn
+        if cur is None:
+            return
+        try:
+            cur.execute("PRAGMA journal_mode=WAL")
+            cur.execute("PRAGMA synchronous=NORMAL")
+            cur.execute("PRAGMA busy_timeout=5000")
+            cur.execute("PRAGMA cache_size=-8000")
+        except sqlite3.Error as e:
+            logger.warning("Failed to apply index PRAGMAs: %s", e)
 
     def initialize(self) -> None:
         """Create all tables if they don't exist.
@@ -271,8 +291,19 @@ class WikiIndex:
 
     # ── Core operations ─────────────────────────────────────────────
 
-    def upsert_page(self, page_name: str, content: str, file_path: str = "") -> None:
-        """Insert or update a page in all indexes."""
+    def upsert_page(
+        self, page_name: str, content: str, file_path: str = "", commit: bool = True
+    ) -> None:
+        """Insert or update a page in all indexes.
+
+        Args:
+            page_name: Logical page name.
+            content: Page content.
+            file_path: On-disk path (relative).
+            commit: Commit immediately. Pass False to batch many pages
+                into one transaction — committing per page costs one
+                fsync each (1400 pages took 19 s of the 37 s build).
+        """
         self._ensure_dict()
 
         # 1. Update FTS5 — raw in content, segmented in content_seg
@@ -319,7 +350,8 @@ class WikiIndex:
             (page_name, file_path, len(content), len(content.split()), len(links)),
         )
 
-        self._commit()
+        if commit:
+            self._commit()
 
     def delete_page(self, page_name: str) -> None:
         """Remove a page from all indexes."""
@@ -596,6 +628,8 @@ class WikiIndex:
         md_files = [p for p in wiki_dir.rglob("*.md") if not is_path_excluded(p)]
         total = len(md_files)
 
+        # One transaction for the whole build: committing per page means
+        # one fsync per page (1400 pages x ~13 ms on Windows = 19 s).
         for i, md_file in enumerate(md_files):
             if (i + 1) % batch_size == 0 or (i + 1) == total:
                 elapsed = time.time() - start_time
@@ -610,7 +644,9 @@ class WikiIndex:
             rel_path = md_file.relative_to(wiki_dir).as_posix()
             page_name = rel_path[:-3]  # e.g., "concepts/Factor Investing"
 
-            self.upsert_page(page_name, content, rel_path)
+            self.upsert_page(page_name, content, rel_path, commit=False)
+
+        self._commit()
 
         print()  # New line after progress
 

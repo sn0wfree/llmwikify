@@ -233,7 +233,12 @@ class RelationEngine:
 
         return best_match
 
-    def resolve_entity(self, name: str, fuzzy_threshold: float = 0.85) -> str:
+    def resolve_entity(
+        self,
+        name: str,
+        fuzzy_threshold: float = 0.85,
+        known_pages: list[str] | None = None,
+    ) -> str:
         # TODO(refactor): C901=14 — too complex, consider splitting
         """Resolve entity name to canonical form.
 
@@ -246,6 +251,8 @@ class RelationEngine:
         Args:
             name: Entity name to resolve
             fuzzy_threshold: Threshold for fuzzy matching (0-1)
+            known_pages: Pre-fetched wiki page names, reused instead of
+                walking the wiki tree again.
 
         Returns:
             Canonical entity name
@@ -256,7 +263,7 @@ class RelationEngine:
         normalized_name = self._normalize_name(name)
 
         # 1. Exact match in wiki pages
-        wiki_pages = self._get_wiki_pages()
+        wiki_pages = known_pages if known_pages is not None else self._get_wiki_pages()
         for page in wiki_pages:
             if self._normalize_name(page) == normalized_name:
                 return page
@@ -382,6 +389,7 @@ class RelationEngine:
         context: str | None = None,
         wiki_pages: list[str] | None = None,
         resolve: bool = True,
+        known_pages: list[str] | None = None,
     ) -> int:
         """Add a single relation. Skip if duplicate exists.
 
@@ -394,6 +402,8 @@ class RelationEngine:
             context: Relation context
             wiki_pages: Related wiki pages
             resolve: Whether to resolve entity names (default: True)
+            known_pages: Pre-fetched wiki page names, reused instead of
+                walking the tree again while resolving entities.
 
         Returns:
             Row id of the inserted relation, or existing id if duplicate.
@@ -408,8 +418,12 @@ class RelationEngine:
             )
 
         # Resolve entity names if enabled
-        canonical_source = self.resolve_entity(source) if resolve else source
-        canonical_target = self.resolve_entity(target) if resolve else target
+        canonical_source = (
+            self.resolve_entity(source, known_pages=known_pages) if resolve else source
+        )
+        canonical_target = (
+            self.resolve_entity(target, known_pages=known_pages) if resolve else target
+        )
 
         # Check for duplicate (same source, target, relation, source_file)
         # Use IS NULL comparison for source_file since NULL != NULL in SQL
@@ -454,6 +468,10 @@ class RelationEngine:
             Number of relations added.
         """
         count = 0
+        # One tree walk for the whole batch. Resolving each entity
+        # scanned the wiki tree again, so M relations cost 2M walks
+        # (60 relations on a 1400-page wiki took 18 s).
+        page_list = self._get_wiki_pages()
         for r in relations:
             try:
                 self.add_relation(
@@ -464,6 +482,7 @@ class RelationEngine:
                     source_file=r.get("source_file"),
                     context=r.get("context"),
                     wiki_pages=r.get("wiki_pages"),
+                    known_pages=page_list,
                 )
                 count += 1
             except (ValueError, KeyError):
