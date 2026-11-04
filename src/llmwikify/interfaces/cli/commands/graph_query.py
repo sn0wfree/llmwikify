@@ -46,12 +46,18 @@ def run_graph_query(wiki: Any, args: Any) -> int:
 
     elif subcommand == "path":
         if len(cmd_args) < 2:
-            raise CommandError("Usage: llmwikify graph-query path <A> <B>")
-        result = engine.get_path(cmd_args[0], cmd_args[1])
+            raise CommandError(
+                "Usage: llmwikify graph-query path <A> <B> [--direction out|both]"
+            )
+        direction = getattr(args, "direction", None) or "out"
+        result = engine.get_path(cmd_args[0], cmd_args[1], direction=direction)
         if result is None:
             print(f"No path found between {cmd_args[0]} and {cmd_args[1]}")
             return 0
-        print(f"Path: {' → '.join(result['path'])}")
+        if direction == "both":
+            print(f"Path (undirected): {' → '.join(result['path'])}")
+        else:
+            print(f"Path: {' → '.join(result['path'])}")
         for e in result["edges"]:
             print(
                 f"  {e['source']} -[{e['relation']}]-> {e['target']} ({e['confidence']})"
@@ -108,6 +114,16 @@ class GraphQueryCommand(Command):
             "args",
             nargs="*",
             help="Arguments (concept name, path endpoints, relation id)",
+        )
+        p.add_argument(
+            "--direction",
+            choices=["out", "both"],
+            default="out",
+            help=(
+                "For 'path': 'out' follows edge direction (default), "
+                "'both' searches the undirected graph so reverse "
+                "paths are found too"
+            ),
         )
 
     def run(self, args: Any, wiki: Any, config: dict) -> int:

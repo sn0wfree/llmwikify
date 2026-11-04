@@ -529,17 +529,27 @@ class RelationEngine:
         cursor = self.index.conn.execute(query, params)
         return [dict(row) for row in cursor.fetchall()]
 
-    def get_path(self, source: str, target: str, max_length: int = 5) -> dict | None:
+    def get_path(
+        self,
+        source: str,
+        target: str,
+        max_length: int = 5,
+        direction: str = "out",
+    ) -> dict | None:
         """Find shortest path between two concepts.
 
         Args:
             source: Start concept.
             target: End concept.
             max_length: Maximum path length.
+            direction: ``"out"`` follows edge direction (default, matches
+                the historical behaviour); ``"both"`` solves on the
+                undirected graph, so a path exists regardless of edge
+                orientation.
 
         Returns:
-            Dict with 'path' (list of concepts) and 'edges' (relation details),
-            or None if no path found.
+            Dict with 'path' (list of concepts) and 'edges' (relation
+            details, oriented as stored), or None if no path found.
         """
         try:
             import networkx as nx
@@ -547,6 +557,10 @@ class RelationEngine:
             return None
 
         G = self._build_networkx_graph()
+        if direction == "both":
+            G = G.to_undirected()
+        elif direction != "out":
+            raise ValueError(f"direction must be 'out' or 'both', got {direction!r}")
 
         try:
             path = nx.shortest_path(G, source, target)
@@ -555,22 +569,28 @@ class RelationEngine:
 
             edges = []
             for i in range(len(path) - 1):
+                # The path may traverse an edge backwards (direction="both"),
+                # so look up the stored edge in either orientation and report
+                # its real endpoints.
                 rels = self.index.conn.execute(
-                    "SELECT relation, confidence FROM relations WHERE source=? AND target=?",
-                    (path[i], path[i + 1]),
+                    "SELECT source, target, relation, confidence FROM relations "
+                    "WHERE (source=? AND target=?) OR (source=? AND target=?)",
+                    (path[i], path[i + 1], path[i + 1], path[i]),
                 ).fetchall()
                 for r in rels:
                     edges.append(
                         {
-                            "source": path[i],
-                            "target": path[i + 1],
+                            "source": r["source"],
+                            "target": r["target"],
                             "relation": r["relation"],
                             "confidence": r["confidence"],
                         }
                     )
 
             return {"path": path, "edges": edges}
-        except nx.NetworkXNoPath:
+        except (nx.NetworkXNoPath, nx.NodeNotFound):
+            # No path, or an endpoint is not in the graph at all — both
+            # mean "no path found" for the caller.
             return None
 
     def get_stats(self) -> dict:
