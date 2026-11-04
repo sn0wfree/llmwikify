@@ -285,7 +285,7 @@ class WikiDreamEditor:
         self, page_name: str, page_path: Path, entries: list[dict]
     ) -> None:
         """Generate proposals for updating an existing wiki page."""
-        content = page_path.read_text()
+        content = page_path.read_text(encoding="utf-8")
 
         for entry in entries:
             if entry.get("note") == "duplicate":
@@ -424,7 +424,7 @@ class WikiDreamEditor:
         """Create a new wiki page."""
         page_path = self.wiki.wiki_dir / f"{page_name}.md"
         page_path.parent.mkdir(parents=True, exist_ok=True)
-        page_path.write_text(content)
+        page_path.write_text(content, encoding="utf-8")
         self.wiki.index.upsert_page(
             page_name, content, str(page_path.relative_to(self.wiki.wiki_dir))
         )
@@ -436,9 +436,9 @@ class WikiDreamEditor:
         if not page_path.exists():
             raise FileNotFoundError(f"Page not found: {page_name}")
 
-        existing = page_path.read_text()
+        existing = page_path.read_text(encoding="utf-8")
         new_content = existing.rstrip() + "\n\n" + content + "\n"
-        page_path.write_text(new_content)
+        page_path.write_text(new_content, encoding="utf-8")
         self.wiki.index.upsert_page(
             page_name, new_content, str(page_path.relative_to(self.wiki.wiki_dir))
         )
@@ -454,7 +454,7 @@ class WikiDreamEditor:
         if not page_path.exists():
             raise FileNotFoundError(f"Page not found: {page_name}")
 
-        existing = page_path.read_text()
+        existing = page_path.read_text(encoding="utf-8")
         if marker not in existing:
             raise ValueError(f"Marker not found in page: {marker}")
 
@@ -463,7 +463,7 @@ class WikiDreamEditor:
         else:
             new_content = existing.replace(marker, marker + "\n\n" + content, 1)
 
-        page_path.write_text(new_content)
+        page_path.write_text(new_content, encoding="utf-8")
         self.wiki.index.upsert_page(
             page_name, new_content, str(page_path.relative_to(self.wiki.wiki_dir))
         )
@@ -479,7 +479,7 @@ class WikiDreamEditor:
         if not page_path.exists():
             raise FileNotFoundError(f"Page not found: {page_name}")
 
-        existing = page_path.read_text()
+        existing = page_path.read_text(encoding="utf-8")
         if start_marker not in existing or end_marker not in existing:
             raise ValueError(f"Markers not found in page: {start_marker}, {end_marker}")
 
@@ -487,7 +487,7 @@ class WikiDreamEditor:
         end_idx = existing.index(end_marker) + len(end_marker)
         new_content = existing[:start_idx] + content + existing[end_idx:]
 
-        page_path.write_text(new_content)
+        page_path.write_text(new_content, encoding="utf-8")
         self.wiki.index.upsert_page(
             page_name, new_content, str(page_path.relative_to(self.wiki.wiki_dir))
         )
@@ -501,7 +501,7 @@ class WikiDreamEditor:
         if not page_path.exists():
             return False
 
-        content = page_path.read_text()
+        content = page_path.read_text(encoding="utf-8")
         edit_type = edit.get("type", "append")
 
         if edit_type == "append":
@@ -536,7 +536,7 @@ class WikiDreamEditor:
         else:
             return False
 
-        page_path.write_text(new_content)
+        page_path.write_text(new_content, encoding="utf-8")
         return True
 
     def restore_edit(self, timestamp: str) -> bool:

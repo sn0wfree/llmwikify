@@ -16,7 +16,7 @@ class WikiSourceAnalysisMixin(WikiProtocol):
 
     def _compute_content_hash(self, source_path: str) -> str:
         """Compute SHA-256 hash of a source file's content."""
-        content = (self.root / source_path).read_text()
+        content = (self.root / source_path).read_text(encoding="utf-8")
         return hashlib.sha256(content.encode()).hexdigest()[:16]
 
     def _find_source_summary_page(self, source_path: str) -> Path | None:
@@ -39,7 +39,7 @@ class WikiSourceAnalysisMixin(WikiProtocol):
         for page in sources_dir.rglob("*.md"):
             if is_path_excluded(page):
                 continue
-            content = page.read_text()
+            content = page.read_text(encoding="utf-8")
             if source_ref in content or source_path in content:
                 return page
 
@@ -115,7 +115,7 @@ class WikiSourceAnalysisMixin(WikiProtocol):
         if not full_path.exists():
             return {"status": "error", "reason": f"Source not found: {source_path}"}
 
-        content = full_path.read_text()
+        content = full_path.read_text(encoding="utf-8")
         content_hash = self._compute_content_hash(source_path)
 
         if section_metadata is None:

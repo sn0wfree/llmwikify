@@ -384,7 +384,7 @@ def _check_permissions(wiki_root: Path, silent: bool = False) -> bool:
     if CONFIG_DIR.exists():
         test_file = CONFIG_DIR / ".doctor_test"
         try:
-            test_file.write_text("test")
+            test_file.write_text("test", encoding="utf-8")
             test_file.unlink()
             _check("~/.llmwikify/", True, "writable", silent=silent)
         except OSError:
@@ -397,7 +397,7 @@ def _check_permissions(wiki_root: Path, silent: bool = False) -> bool:
     if wiki_root.exists():
         test_file = wiki_root / ".doctor_test"
         try:
-            test_file.write_text("test")
+            test_file.write_text("test", encoding="utf-8")
             test_file.unlink()
             _check(f"{wiki_root}", True, "writable", silent=silent)
         except OSError:

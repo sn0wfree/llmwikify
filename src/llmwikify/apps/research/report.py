@@ -118,7 +118,7 @@ class ReportGenerator:
         """
         wiki_index = ""
         if self.wiki.index_file.exists():
-            wiki_index = self.wiki.index_file.read_text()[:5000]
+            wiki_index = self.wiki.index_file.read_text(encoding="utf-8")[:5000]
         return {
             "six_step_context": six_step_context,
             "query": query,
@@ -152,7 +152,7 @@ class ReportGenerator:
 
         wiki_index = ""
         if self.wiki.index_file.exists():
-            wiki_index = self.wiki.index_file.read_text()[:5000]
+            wiki_index = self.wiki.index_file.read_text(encoding="utf-8")[:5000]
 
         messages = registry.get_messages(
             "research_report",

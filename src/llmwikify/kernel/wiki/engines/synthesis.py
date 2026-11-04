@@ -84,7 +84,7 @@ class SynthesisEngine:
         for source_page in sources_dir.rglob("*.md"):
             if is_path_excluded(source_page):
                 continue
-            content = source_page.read_text()
+            content = source_page.read_text(encoding="utf-8")
             analysis = self._extract_analysis_from_page(content)
             if analysis:
                 analysis["_source_file"] = str(
@@ -148,7 +148,7 @@ class SynthesisEngine:
             entities.add(page_name)
 
             # Also extract entities from content
-            content = page.read_text()
+            content = page.read_text(encoding="utf-8")
             for match in re.findall(r"\*\*(.+?)\*\*\s+\(\w+\)", content):
                 entities.add(match)
 
@@ -158,7 +158,7 @@ class SynthesisEngine:
         """Get all topics covered in existing wiki pages."""
         topics = set()
         for page in self.wiki._wiki_pages():
-            content = page.read_text()
+            content = page.read_text(encoding="utf-8")
             # Extract from headings
             for match in re.findall(r"^#+\s+(.+)$", content, re.MULTILINE):
                 if len(match) > 3:

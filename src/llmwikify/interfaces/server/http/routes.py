@@ -104,7 +104,7 @@ def _load_research_config() -> dict[str, Any] | None:
     if not config_file.exists():
         return None
     try:
-        data = _json.loads(config_file.read_text())
+        data = _json.loads(config_file.read_text(encoding="utf-8"))
         return data.get("research")
     except Exception:
         return None

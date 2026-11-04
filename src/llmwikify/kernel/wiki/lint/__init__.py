@@ -79,7 +79,7 @@ class Rule:
             return results[: self.max_results]
         for page in self._iter_pages(wiki):
             page_name = wiki._page_display_name(page)
-            content = page.read_text()
+            content = page.read_text(encoding="utf-8")
             self.detect(page_name, content, wiki, results)
             if len(results) >= self.max_results:
                 break
@@ -103,7 +103,7 @@ class Rule:
                 try:
                     pages[name] = page.read_text(encoding="utf-8")
                 except TypeError:
-                    pages[name] = page.read_text()
+                    pages[name] = page.read_text(encoding="utf-8")
         return pages
 
     def detect(

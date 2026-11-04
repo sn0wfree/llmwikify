@@ -160,7 +160,7 @@ class Dream:
         """Read the dream cursor timestamp. Returns 0.0 if no cursor."""
         try:
             if self._cursor_path.exists():
-                return float(self._cursor_path.read_text().strip())
+                return float(self._cursor_path.read_text(encoding="utf-8").strip())
         except (ValueError, OSError):
             logger.warning("Dream: failed to read cursor", exc_info=True)
         return 0.0

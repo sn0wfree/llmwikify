@@ -262,7 +262,7 @@ class LocalFileBackend:
         line = f"## [{timestamp}] {operation} | {details}\n"
         log_path = self.wiki_dir / "log.md"
         log_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(log_path, "a") as f:
+        with open(log_path, "a", encoding="utf-8") as f:
             f.write(line)
         return {
             "timestamp": timestamp,

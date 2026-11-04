@@ -62,7 +62,7 @@ class RelationEngine:
             return DEFAULT_RELATION_TYPES.copy()
 
         try:
-            content = wiki_md.read_text()
+            content = wiki_md.read_text(encoding="utf-8")
             # Look for relation types in the schema
             # Pattern 1: bullet list under "Relation Types" section
             types = set()

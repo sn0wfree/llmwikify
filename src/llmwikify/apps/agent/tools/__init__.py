@@ -710,7 +710,7 @@ class WikiToolRegistry:
                     continue
                 raw_path = self.wiki.raw_dir / f"{slug}.md"
                 raw_path.parent.mkdir(parents=True, exist_ok=True)
-                raw_path.write_text(content)
+                raw_path.write_text(content, encoding="utf-8")
                 self.wiki.index.upsert_page(slug, content, f"raw/{slug}.md")
                 sources_saved += 1
 

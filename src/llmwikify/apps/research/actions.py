@@ -142,7 +142,7 @@ async def _plan_sub_queries(ctx: ActionContext, query: str) -> list[dict[str, An
 
     wiki_index = ""
     if ctx.wiki.index_file.exists():
-        wiki_index = ctx.wiki.index_file.read_text()[:3000]
+        wiki_index = ctx.wiki.index_file.read_text(encoding="utf-8")[:3000]
 
     try:
         result = await run_prompt(

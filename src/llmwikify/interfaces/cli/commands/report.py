@@ -27,7 +27,7 @@ def run_report(wiki: Any, args: Any) -> int:
 
     if args.output:
         output_path = Path(args.output)
-        output_path.write_text(report_text)
+        output_path.write_text(report_text, encoding="utf-8")
         print(f"Report written to: {output_path}")
     else:
         print(report_text)

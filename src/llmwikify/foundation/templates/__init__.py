@@ -23,7 +23,7 @@ _PACKAGE_DIR = Path(__file__).resolve().parent
 # Expose each data file as a module attribute so callers can do
 # ``templates.opencode_json`` etc. The values are Path objects
 # (not file contents) — the init mixin reads them with
-# ``Path.read_text()`` because the files may contain user-editable
+# ``Path.read_text(encoding="utf-8")`` because the files may contain user-editable
 # content that we want to copy verbatim.
 opencode_json = _PACKAGE_DIR / "opencode.json"
 claude_mcp_json = _PACKAGE_DIR / "claude_mcp.json"
