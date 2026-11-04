@@ -177,6 +177,20 @@ complexity warrants deep analysis.
 
 ---
 
+## 🦆 Side Projects (`docs/teardown/`)
+
+Reusable playbook for the `teardown` method — building any machine as a take-apart
+interactive 3D simulator (single offline HTML page, model-driven live panels,
+frame-by-frame tour, video export). Independent of the llmwikify runtime; kept as
+a local working document.
+
+| Doc | Topic |
+|-----|-------|
+| [teardown/CHECKLIST.md](teardown/CHECKLIST.md) | Executable 10-step checklist, troubleshooting table, local toolchain status |
+| [teardown/AGENTS-teardown.md](teardown/AGENTS-teardown.md) | Compressed rule file — drop-in as workspace `AGENTS.md`, plus local adaptation |
+
+---
+
 ## 🗂 Layout Summary
 
 ```
@@ -193,6 +207,7 @@ docs/
 │
 ├── api/                               # API reference (1 doc)
 ├── diagnostics/                       # Architecture diagnostics (1 doc)
+├── teardown/                          # teardown method playbook (checklist + AGENTS.md)
 │
 ├── designs/                           # Active/recent feature designs
 ├── releases/                          # Per-version notes (v0.32 → v0.40)
