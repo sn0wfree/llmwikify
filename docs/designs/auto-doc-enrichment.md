@@ -257,6 +257,14 @@ watchdog 未装导致 `auto_ingest_services["w1"]` KeyError。
 provider / model / api_key 都已正确注入（请求确实打到了 minimax 而非
 openai 默认），所以是 **key 失效或鉴权方式变化**，不是链路问题。
 
+> 2026-11 更新：复查确认 `llm.api_key` 仍是 7 字符占位符（`sk-tes...`）。
+> 复跑入口已固化为脚本 —— 见
+> [`acceptance-script-and-page-type-fix.md`](./acceptance-script-and-page-type-fix.md)：
+> ```bash
+> python scripts/acceptance_real_llm.py
+> ```
+> 脚本的 LLM 环节**不做降级模拟**，key 无效即 exit 2。
+
 因此 LLM 分析环节用一份**基于该文档内容的模拟计划**（3 个 write_page +
 1 条 log，实体与关系与文档主题相符），其余链路全部真实：
 
@@ -331,6 +339,12 @@ missing_cross_ref 剩余: []
 | 增量补链 | ✅ 补 1 条 |
 | lint 无残留缺口 | ✅ |
 | **真实 LLM 端到端** | ❌ **待 key 恢复后复跑** |
+
+> 2026-11 复查补充：本次复跑准备时发现 `execute_operations` 丢弃
+> `page_type`，真实 LLM 下页面会落到 wiki 根目录、导致补链识别出
+> 0 个单元（模拟 operation 带目录前缀，恰好绕过了该缺陷）。
+> 已修复，见
+> [`acceptance-script-and-page-type-fix.md`](./acceptance-script-and-page-type-fix.md)。
 
 **待办**：minimax key 恢复后，用同一脚本去掉模拟分支复跑一次，
 确认真实 LLM 产出的 operations 同样能被完整落地。
