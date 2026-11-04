@@ -353,3 +353,47 @@ def test_lint_tick_records_to_health_history():
     assert lint_entries[-1]["wiki_id"] == "x"
     assert lint_entries[-1]["issue_count"] == 2
     assert lint_entries[-1]["hint_count"] == 2
+
+
+# ── status: enricher 指标 ────────────────────────────────────────────
+
+
+def test_status_includes_enricher_metrics(tmp_path: Path):
+    """start() 后 status() 必须暴露每个 wiki 的 enricher 状态。"""
+    registry = _make_registry(["w1"])
+    cfg = MaintenanceConfig()
+    cfg.auto_ingest.enabled = False
+    cfg.gap_filler.enabled = False
+    cfg.enricher.enabled = True
+    mgr = MaintenanceManager(registry=registry, config=cfg, data_dir=tmp_path)
+
+    asyncio.run(mgr.start())
+    try:
+        status = mgr.status()
+        assert "enricher" in status, "status() 缺少 enricher 字段"
+        assert "w1" in status["enricher"], "enricher 未按 wiki 注册"
+
+        e = status["enricher"]["w1"]
+        assert e["wiki_id"] == "w1"
+        assert e["enabled"] is True
+        # 尚未跑过任何 enrich 周期
+        assert e["last_run"] is None
+    finally:
+        asyncio.run(mgr.stop())
+
+
+def test_status_enricher_disabled_when_config_off(tmp_path: Path):
+    """enricher.enabled=false 时不该出现在 status 里。"""
+    registry = _make_registry(["w1"])
+    cfg = MaintenanceConfig()
+    cfg.auto_ingest.enabled = False
+    cfg.gap_filler.enabled = False
+    cfg.enricher.enabled = False
+    mgr = MaintenanceManager(registry=registry, config=cfg, data_dir=tmp_path)
+
+    asyncio.run(mgr.start())
+    try:
+        status = mgr.status()
+        assert status["enricher"] == {}
+    finally:
+        asyncio.run(mgr.stop())

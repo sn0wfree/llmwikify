@@ -927,3 +927,37 @@ def test_health_history_survives_restart(tmp_path):
     data = json.loads(state_file.read_text())
     assert len(data) >= 1
     assert data[0]["type"] == "lint"
+
+
+def test_status_api_includes_enricher(tmp_path):
+    """GET /api/maintenance/status must surface the enricher block."""
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from llmwikify.apps.agent.maintenance import MaintenanceConfig, MaintenanceManager
+    from llmwikify.interfaces.server.http.maintenance_routes import (
+        register_maintenance_routes,
+    )
+
+    app = FastAPI()
+    cfg = MaintenanceConfig()
+    cfg.auto_ingest.enabled = False
+    cfg.gap_filler.enabled = False
+    cfg.enricher.enabled = True
+    mgr = MaintenanceManager(
+        registry=SimpleNamespace(list_wikis=lambda: [], get_wiki=lambda w: None),
+        config=cfg,
+        data_dir=tmp_path,
+    )
+    mgr._running = True
+    app.state.maintenance_manager = mgr
+    register_maintenance_routes(app)
+
+    with TestClient(app) as client:
+        resp = client.get("/api/maintenance/status")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert "enricher" in body
+        assert isinstance(body["enricher"], dict)
+        # config 段也应带出 enricher 的开关，便于运维核对
+        assert body["config"]["enricher"]["enabled"] is True
