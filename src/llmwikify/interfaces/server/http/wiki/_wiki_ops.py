@@ -15,7 +15,6 @@ import logging
 import time
 from collections.abc import Iterator
 from contextlib import contextmanager
-from pathlib import Path
 from urllib.parse import urlparse
 
 from fastapi import HTTPException

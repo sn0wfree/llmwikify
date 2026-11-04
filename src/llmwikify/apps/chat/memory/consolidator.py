@@ -281,7 +281,7 @@ class Consolidator:
             f"- tokens_after: {tokens_after}\n\n"
             f"## Summary\n\n{summary}\n"
         )
-        md_path.write_text(body, encoding="utf-8")
+        md_path.write_text(body, encoding="utf-8", newline="\n")
         return md_path
 
 

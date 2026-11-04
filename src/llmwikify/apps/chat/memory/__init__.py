@@ -27,7 +27,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import sqlite3
 from pathlib import Path
 from typing import Any
 
@@ -319,7 +318,7 @@ class UserPreferenceStore:
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self._prefs_file = self.data_dir / "user_preferences.json"
         if not self._prefs_file.exists():
-            self._prefs_file.write_text("{}", encoding="utf-8")
+            self._prefs_file.write_text("{}", encoding="utf-8", newline="\n")
 
     def _load(self) -> dict:
         try:
@@ -328,7 +327,7 @@ class UserPreferenceStore:
             return {}
 
     def _save(self, prefs: dict) -> None:
-        self._prefs_file.write_text(json.dumps(prefs, indent=2), encoding="utf-8")
+        self._prefs_file.write_text(json.dumps(prefs, indent=2), encoding="utf-8", newline="\n")
 
     def get(self, user_id: str, key: str, default: Any = None) -> Any:
         prefs = self._load()

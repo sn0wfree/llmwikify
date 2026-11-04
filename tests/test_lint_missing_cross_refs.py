@@ -228,5 +228,9 @@ def test_large_wiki_scan_stays_fast(wiki_instance):
     results = _detect(pages, wiki_instance)
     elapsed = time.monotonic() - t0
 
-    assert elapsed < 5.0, f"scan took {elapsed:.2f}s"
+    # Wall-clock guard against an O(N²) scan regressing. Budget is
+    # deliberately generous: the scan takes ~1.3s on 1400 pages here,
+    # while a quadratic scan would take minutes — 30s still catches the
+    # regression without failing on a slow or loaded CI machine.
+    assert elapsed < 30.0, f"scan took {elapsed:.2f}s"
     assert [r["concept"] for r in results] == ["concepts/Foo"]

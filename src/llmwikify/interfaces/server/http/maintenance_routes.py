@@ -67,7 +67,6 @@ async def maintenance_proposals(
 @router.post("/proposals/approve")
 async def maintenance_approve_proposals(request: Request) -> dict:
     """Batch approve proposals by IDs."""
-    from starlette.requests import Request as StarletteRequest
 
     body = await request.json()
     proposal_ids = body.get("ids", [])

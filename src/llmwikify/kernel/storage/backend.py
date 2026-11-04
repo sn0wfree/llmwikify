@@ -157,7 +157,7 @@ class LocalFileBackend:
         except ValueError:
             raise ValueError(f"Page path escapes wiki/ directory: {name!r}") from None
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(content, encoding="utf-8")
+        path.write_text(content, encoding="utf-8", newline="\n")
         from llmwikify.kernel.graph.cache import cache_invalidate
 
         cache_invalidate(str(self.wiki_dir))
@@ -187,7 +187,7 @@ class LocalFileBackend:
     def put_index(self, content: str) -> None:
         path = self.wiki_dir / "index.md"
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(content, encoding="utf-8")
+        path.write_text(content, encoding="utf-8", newline="\n")
 
     # === wiki.md (3 methods) ===
     def get_wiki_md(self) -> str | None:
@@ -198,7 +198,7 @@ class LocalFileBackend:
 
     def put_wiki_md(self, content: str) -> None:
         path = self.root / "wiki.md"
-        path.write_text(content, encoding="utf-8")
+        path.write_text(content, encoding="utf-8", newline="\n")
 
     def merge_wiki_md(self, existing: str, new: str) -> str:
         """Merge new schema sections into existing wiki.md.
@@ -262,7 +262,7 @@ class LocalFileBackend:
         line = f"## [{timestamp}] {operation} | {details}\n"
         log_path = self.wiki_dir / "log.md"
         log_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(log_path, "a", encoding="utf-8") as f:
+        with open(log_path, "a", encoding="utf-8", newline="\n") as f:
             f.write(line)
         return {
             "timestamp": timestamp,
@@ -305,7 +305,7 @@ class LocalFileBackend:
                 )
             else:
                 content += f"\n{comment}"
-            path.write_text(content, encoding="utf-8")
+            path.write_text(content, encoding="utf-8", newline="\n")
         except OSError as e:
             logger.warning("Failed to cache source analysis for %s: %s", key, e)
 

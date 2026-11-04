@@ -5,8 +5,6 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
-import pytest
-
 from llmwikify.foundation.db import connect, row_to_dict, rows_to_dicts
 
 

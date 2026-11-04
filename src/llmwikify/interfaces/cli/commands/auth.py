@@ -103,7 +103,7 @@ def run_auth_init(wiki: Any, config: dict, args: Any) -> int:
     # Write to local_token with chmod 600.
     token_path = _local_token_path()
     ensure_dir_700(token_path.parent)
-    token_path.write_text(token + "\n", encoding="utf-8")
+    token_path.write_text(token + "\n", encoding="utf-8", newline="\n")
     _chmod_600(token_path)
 
     print("✓ JWT secret saved to OS keyring (llmwikify/jwt_secret)")
@@ -182,7 +182,7 @@ def run_auth_create_token(wiki: Any, config: dict, args: Any) -> int:
     token = encode(claims, require_secret())
     token_path = _local_token_path()
     ensure_dir_700(token_path.parent)
-    token_path.write_text(token + "\n", encoding="utf-8")
+    token_path.write_text(token + "\n", encoding="utf-8", newline="\n")
     _chmod_600(token_path)
 
     print(f"✓ PAT created: {ak.key_prefix}... ({name})")
@@ -326,7 +326,7 @@ def run_auth_token(wiki: Any, config: dict, args: Any) -> int:
     token = encode(claims, require_secret())
     token_path = _local_token_path()
     ensure_dir_700(token_path.parent)
-    token_path.write_text(token + "\n", encoding="utf-8")
+    token_path.write_text(token + "\n", encoding="utf-8", newline="\n")
     _chmod_600(token_path)
     print(token)
     return 0

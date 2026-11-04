@@ -6,11 +6,14 @@ response shape that ``apps/research/web_search.py::MiniMaxSearchProvider``
 expects.
 
 Skip policy:
-- Skipped if ``MINIMAX_SEARCH_KEY`` env var is unset
-- Skipped if the API returns non-2xx (e.g. token expired)
-- Run explicitly with::
+- Skipped unless ``MINIMAX_SEARCH_KEY`` is set — the search endpoint
+  takes a coding-plan key (``sk-cp-...``), not the chat key, so
+  ``LLM_API_KEY`` must not be accepted here
+- Tagged ``integration_live``; the default pytest run excludes that marker
 
-      MINIMAX_SEARCH_KEY="sk-cp-..." pytest tests/integration_minimax_web_search.py -v
+Run explicitly with::
+
+      MINIMAX_SEARCH_KEY="sk-cp-..." pytest -m integration_live -v
 
 This is the minimum-viable live test we wanted per the 2026-07-03 audit.
 A passing run here proves the upstream contract that the code depends on.
@@ -27,14 +30,17 @@ API_URL = "https://api.minimaxi.com/v1/coding_plan/search"
 
 
 def _has_key() -> bool:
-    """Return True iff we have a MiniMax key to test against."""
-    return bool(os.environ.get("MINIMAX_SEARCH_KEY") or os.environ.get("LLM_API_KEY"))
+    """Return True iff a MiniMax *search* key is available."""
+    return bool(os.environ.get("MINIMAX_SEARCH_KEY"))
 
 
-pytestmark = pytest.mark.skipif(
-    not _has_key(),
-    reason="MINIMAX_SEARCH_KEY (or LLM_API_KEY) env var required for live test",
-)
+pytestmark = [
+    pytest.mark.integration_live,
+    pytest.mark.skipif(
+        not _has_key(),
+        reason="MINIMAX_SEARCH_KEY env var required for live test",
+    ),
+]
 
 
 def _post(query: str, key: str) -> dict:
@@ -54,7 +60,7 @@ def _post(query: str, key: str) -> dict:
 
 
 def _key() -> str:
-    return os.environ.get("MINIMAX_SEARCH_KEY") or os.environ["LLM_API_KEY"]
+    return os.environ["MINIMAX_SEARCH_KEY"]
 
 
 class TestMiniMaxWebSearchContract:
@@ -84,21 +90,3 @@ class TestMiniMaxWebSearchContract:
         assert body["base_resp"]["status_code"] == 0, body
         # Chinese results may be sparser; just check the call succeeded
         assert isinstance(body.get("organic"), list)
-
-
-# ─── marker for CI / explicit opt-in ────────────────────────────
-
-
-def pytest_collection_modifyitems(config, items):
-    """Tag every test in this file with ``integration_live`` so CI can split them.
-
-    Run only the fast subset by default::
-
-        pytest -m "not integration_live"
-
-    Run also the live web tests with the key::
-
-        MINIMAX_SEARCH_KEY=... pytest -m integration_live
-    """
-    for item in items:
-        item.add_marker(pytest.mark.integration_live)

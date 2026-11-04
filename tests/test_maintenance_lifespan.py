@@ -41,7 +41,6 @@ def _make_server(tmp_path: Path, **kwargs):
 
 
 def _write_global_config(tmp_path: Path, maintenance: dict | None) -> Path:
-    import llmwikify.apps.agent.maintenance.config as mcfg
 
     cfg_path = tmp_path / "llmwikify.json"
     data = {"llm": {"provider": "none"}}

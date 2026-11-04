@@ -12,8 +12,6 @@ import asyncio
 from pathlib import Path
 from types import SimpleNamespace
 
-import pytest
-
 from llmwikify.apps.agent.maintenance import auto_ingest as ai_module
 from llmwikify.apps.agent.maintenance.auto_ingest import AutoIngestService
 from llmwikify.apps.agent.maintenance.config import AutoIngestConfig

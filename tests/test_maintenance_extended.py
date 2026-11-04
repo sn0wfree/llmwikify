@@ -4,14 +4,9 @@ WikiDreamEditor proposals, and concurrent processing."""
 from __future__ import annotations
 
 import asyncio
-import sqlite3
-import tempfile
 import time
-from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
-
-import pytest
 
 # ═══════════════════════════════════════════════════════════════════════
 # Jina extractor edge cases
@@ -217,8 +212,6 @@ def test_create_provider_jina_only_mode():
 def test_create_provider_no_config_uses_default_chain():
     """Empty config → Jina + DuckDuckGo (always-on providers)."""
     from llmwikify.apps.research.web_search import (
-        DuckDuckGoProvider,
-        JinaSearchProvider,
         create_search_provider,
     )
 

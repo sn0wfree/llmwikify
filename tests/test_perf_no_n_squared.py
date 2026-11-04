@@ -9,8 +9,6 @@ speed-up and — more importantly — that the results did not change.
 from __future__ import annotations
 
 import os
-import shutil
-import tempfile
 import time
 from pathlib import Path
 
@@ -112,8 +110,9 @@ def test_fix_wikilinks_scales(wiki_root: Path):
     elapsed = time.monotonic() - t0
 
     # Before the fix each link walked the tree: this took well over a
-    # minute on 400 pages.
-    assert elapsed < 10.0, f"fix_wikilinks took {elapsed:.1f}s"
+    # minute on 400 pages. The budget is generous (the fix takes ~0.3s
+    # here) so a slow CI machine does not produce a false failure.
+    assert elapsed < 30.0, f"fix_wikilinks took {elapsed:.1f}s"
 
 
 # ── #2 add_relations ────────────────────────────────────────────────
@@ -193,8 +192,10 @@ def test_add_relations_scales(wiki_root: Path):
     elapsed = time.monotonic() - t0
 
     assert added == 60
-    # Before the fix this took 18 s (each entity walked the tree twice).
-    assert elapsed < 3.0, f"add_relations took {elapsed:.1f}s"
+    # Before the fix this took 18 s (each entity walked the tree twice);
+    # the fix takes ~0.15 s here, so 10s leaves ample headroom while
+    # still catching the quadratic regression.
+    assert elapsed < 10.0, f"add_relations took {elapsed:.1f}s"
 
 
 # ── #3 batch commit ─────────────────────────────────────────────────

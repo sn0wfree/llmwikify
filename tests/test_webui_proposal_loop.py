@@ -184,10 +184,16 @@ def client(tmp_path):
         }
     )
 
-    _common.set_agent_service(stub)  # type: ignore[arg-type]
-    with TestClient(app) as c:
-        yield c, stub
-    _common.set_agent_service(None)  # type: ignore[arg-type]
+    # Restore the *previous* global, not None — another test may have
+    # installed a service. try/finally so a setup failure (before the
+    # yield) cannot leak the stub into the rest of the session.
+    original = _common.AGENT_SERVICE
+    try:
+        _common.set_agent_service(stub)  # type: ignore[arg-type]
+        with TestClient(app) as c:
+            yield c, stub
+    finally:
+        _common.set_agent_service(original)  # type: ignore[arg-type]
 
 
 def test_http_proposals_endpoint_returns_maintenance_proposal(client):

@@ -133,6 +133,7 @@ def write_default_memory_config(data_dir: Path | str) -> Path:
     config_path.write_text(
         json.dumps(asdict(cfg), indent=2),
         encoding="utf-8",
+        newline="\n",
     )
     logger.info("memory_config: wrote default to %s", config_path)
     return config_path

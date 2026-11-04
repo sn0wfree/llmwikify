@@ -138,8 +138,9 @@ def export_html(
             for n in node_list:
                 node_community[n] = cid
 
-    # Track which nodes have entity pages
+    # Track which nodes have entity pages, and their resolved hrefs.
     nodes_with_pages = set()
+    entity_hrefs: dict[str, str] = {}
 
     for node, data in G.nodes(data=True):
         cid = node_community.get(node, -1)
@@ -150,16 +151,16 @@ def export_html(
         # Check if entity page exists
         href = None
         if source_type == "wiki_page":
-            # Strip directory prefix before slugifying (e.g., "entities/Gold" → "Gold")
+            # Strip directory prefix before looking the file up
+            # (e.g., "entities/Gold" → "Gold")
             base_name = node.rsplit("/", 1)[-1] if "/" in node else node
-            entity_path = (
-                output_path.parent.parent
-                / "wiki"
-                / "entities"
-                / f"{_slugify(base_name)}.md"
-            )
-            if entity_path.exists():
-                href = f"../wiki/entities/{_slugify(base_name)}.md"
+            entity_dir = output_path.parent.parent / "wiki" / "entities"
+            for candidate in _entity_page_names(base_name):
+                if (entity_dir / f"{candidate}.md").exists():
+                    href = _entity_href(candidate)
+                    entity_hrefs[node] = href
+                    break
+            if href:
                 nodes_with_pages.add(node)
                 color = "#59A14F"  # Green for entities with pages
 
@@ -186,7 +187,7 @@ def export_html(
 
     # Post-process HTML to add click handlers for entity nodes
     if nodes_with_pages:
-        _add_entity_click_handlers(output_path, nodes_with_pages)
+        _add_entity_click_handlers(output_path, entity_hrefs)
 
     return {
         "status": "success",
@@ -198,7 +199,7 @@ def export_html(
 
 
 def _slugify(name: str) -> str:
-    """Convert a name to a filename-safe slug."""
+    """Convert a name to a filename-safe slug (ASCII only)."""
     import re
 
     name = name.lower().strip()
@@ -207,19 +208,39 @@ def _slugify(name: str) -> str:
     return name.strip("-")
 
 
-def _add_entity_click_handlers(html_path: Path, entity_nodes: set) -> None:
+def _entity_page_names(base_name: str) -> list[str]:
+    """Candidate file stems for an entity page, most likely first.
+
+    Entity pages are written with the page name verbatim
+    (``entities/Machine Learning.md``), so the slug must not be used as
+    the primary name — it would not match the file on disk and the link
+    would silently never resolve. The slug is kept as a fallback for
+    wikis whose pages were created by slugifying tools.
+    """
+    names = [base_name]
+    slug = _slugify(base_name)
+    if slug and slug not in names:
+        names.append(slug)
+    return names
+
+
+def _entity_href(base_name: str) -> str:
+    """HTML href of an entity page relative to the exported graph."""
+    from urllib.parse import quote
+
+    return f"../wiki/entities/{quote(base_name)}.md"
+
+
+def _add_entity_click_handlers(html_path: Path, entity_hrefs: dict[str, str]) -> None:
     """Add JavaScript click handlers to make entity nodes clickable in the HTML graph."""
     if not html_path.exists():
         return
 
     html_content = html_path.read_text(encoding="utf-8")
 
-    # Build a map of node labels to their hrefs
-    entity_map = {}
-    for node in entity_nodes:
-        base_name = node.rsplit("/", 1)[-1] if "/" in node else node
-        slug = _slugify(base_name)
-        entity_map[node] = f"../wiki/entities/{slug}.md"
+    # Node label → page href, resolved against the files on disk by the
+    # caller (the name is used verbatim, not slugified).
+    entity_map = dict(entity_hrefs)
 
     # Inject JavaScript before </body>
     js_code = """
@@ -253,7 +274,7 @@ def _add_entity_click_handlers(html_path: Path, entity_nodes: set) -> None:
 
     if "</body>" in html_content:
         html_content = html_content.replace("</body>", js_code + "\n</body>")
-        html_path.write_text(html_content, encoding="utf-8")
+        html_path.write_text(html_content, encoding="utf-8", newline="\n")
 
 
 def export_graphml(graph: dict, output_path: Path) -> dict:

@@ -166,7 +166,7 @@ class QuerySink:
                 f"## Entry Log\n\n"
                 f"*(No entries yet)*\n"
             )
-            sink_file.write_text(content, encoding="utf-8")
+            sink_file.write_text(content, encoding="utf-8", newline="\n")
             formal_path = self.wiki_dir / f"{page_name}.md"
             if formal_path.exists():
                 self._update_page_sink_meta(formal_path, sink_file)
@@ -205,7 +205,7 @@ class QuerySink:
                             f"sink_path: {str(sink_file.relative_to(self.root))}"
                         )
                     new_frontmatter = "\n".join(new_lines)
-                    page_path.write_text(f"---\n{new_frontmatter}\n---{body}", encoding="utf-8")
+                    page_path.write_text(f"---\n{new_frontmatter}\n---{body}", encoding="utf-8", newline="\n")
             else:
                 sink_path = str(sink_file.relative_to(self.root))
                 new_content = (
@@ -215,7 +215,7 @@ class QuerySink:
                     f"---\n\n"
                     f"{content}"
                 )
-                page_path.write_text(new_content, encoding="utf-8")
+                page_path.write_text(new_content, encoding="utf-8", newline="\n")
         except OSError:
             pass
 
@@ -258,7 +258,7 @@ class QuerySink:
                     f"## Entry Log\n\n"
                     f"*(No entries yet)*\n"
                 )
-                sink_file.write_text(new_content, encoding="utf-8")
+                sink_file.write_text(new_content, encoding="utf-8", newline="\n")
             return
 
         content_store = {}
@@ -336,7 +336,7 @@ class QuerySink:
                 )
 
             lines.append("")
-            sink_file.write_text("\n".join(lines), encoding="utf-8")
+            sink_file.write_text("\n".join(lines), encoding="utf-8", newline="\n")
 
     @staticmethod
     def _extract_topics(text: str) -> set:
@@ -592,7 +592,7 @@ class QuerySink:
         new_content = self._rebuild_sink_file(
             content, content_store, entry_log, page_name
         )
-        sink_file.write_text(new_content, encoding="utf-8")
+        sink_file.write_text(new_content, encoding="utf-8", newline="\n")
 
         formal_path = self.wiki_dir / f"{page_name}.md"
         if formal_path.exists():

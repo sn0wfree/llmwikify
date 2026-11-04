@@ -49,6 +49,9 @@ class GapCycleResult:
     proposals_created: int = 0
     skipped_low_priority: int = 0
     errors: int = 0
+    #: Web-search failures — the gap was still filled, but without the
+    #: external context the enrichment was supposed to bring.
+    web_search_failures: int = 0
     ran_at: float = field(default_factory=time.time)
 
 
@@ -149,11 +152,14 @@ class GapFiller:
             wiki_id=wiki_id,
         )
         self.last_result: GapCycleResult | None = None
+        #: Web-search failures seen in this cycle.
+        self.web_search_failures: int = 0
 
     async def run_cycle(self) -> GapCycleResult:
         """Detect gaps once, then fill high-priority ones (mechanical or proposal)."""
         ensure_global_llm_fallback(self.wiki, self.wiki_id)
         result = GapCycleResult()
+        self.web_search_failures = 0
         try:
             # lint(mode="check") makes one LLM call (_llm_detect_gaps)
             # → one rate-limit unit per cycle.
@@ -199,15 +205,17 @@ class GapFiller:
                 )
 
         self.last_result = result
+        result.web_search_failures = self.web_search_failures
         logger.info(
             "[%s] gap_filler: %d detected, %d processed "
-            "(%d mechanical, %d proposals, %d errors)",
+            "(%d mechanical, %d proposals, %d errors, %d web-search failures)",
             self.wiki_id,
             result.detected,
             result.processed,
             result.mechanical_fixes,
             result.proposals_created,
             result.errors,
+            self.web_search_failures,
         )
         return result
 
@@ -338,7 +346,12 @@ class GapFiller:
             return {}
 
     async def _web_search(self, concept: str) -> list[str]:
-        """Search the web for entity context. Returns formatted snippets."""
+        """Search the web for entity context. Returns formatted snippets.
+
+        A failed search degrades the cycle (the gap is still filled, but
+        without external context) — so the failure is logged at warning
+        level and counted, not swallowed at debug level.
+        """
         try:
             from llmwikify.apps.research.web_search import WebSearch
 
@@ -350,7 +363,13 @@ class GapFiller:
                 if r.snippet
             ]
         except Exception as exc:
-            logger.debug("[%s] gap_filler web search failed: %s", self.wiki_id, exc)
+            logger.warning(
+                "[%s] gap_filler web search failed for %r: %s",
+                self.wiki_id,
+                concept,
+                exc,
+            )
+            self.web_search_failures += 1
             return []
 
     def _llm_synthesize_draft(

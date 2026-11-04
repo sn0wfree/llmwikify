@@ -197,7 +197,7 @@ def run_serve(wiki: Any, config: dict, args: Any) -> int:
             # (auth token, etc.) have a baseline.
             token_path = local_token_path()
             ensure_dir_700(token_path.parent)
-            token_path.write_text(result.token + "\n", encoding="utf-8")
+            token_path.write_text(result.token + "\n", encoding="utf-8", newline="\n")
             chmod_600(token_path)
             print()
             print("✓ First admin created:", result.user_email)

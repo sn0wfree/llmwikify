@@ -126,7 +126,7 @@ class MaintenanceManager:
             payload = json.dumps(self._health_history[-HEALTH_HISTORY_LIMIT:])
             fd, tmp = tempfile.mkstemp(dir=f.parent, suffix=".tmp")
             try:
-                with open(fd, "w", encoding="utf-8") as fh:
+                with open(fd, "w", encoding="utf-8", newline="\n") as fh:
                     fh.write(payload)
                 Path(tmp).replace(f)
             finally:

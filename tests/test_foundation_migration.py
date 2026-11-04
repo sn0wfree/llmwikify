@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
@@ -12,9 +11,6 @@ import yaml
 
 from llmwikify.foundation.migration import (
     CURRENT_VERSION,
-    MIGRATABLE_SECTIONS,
-    MigrationConflict,
-    MigrationResult,
     WikiDiscoveryProvider,
     auto_migrate_wiki_config,
     detect_config_version,
@@ -581,7 +577,7 @@ class TestWikiRegistryDiscovery:
 
     def test_returns_roots_from_instances(self, tmp_path: Path) -> None:
         """Returns root paths from registry instances."""
-        from llmwikify.kernel.multi_wiki.instance import WikiInstance, WikiType
+        from llmwikify.kernel.multi_wiki.instance import WikiInstance
         from llmwikify.kernel.multi_wiki.registry import WikiRegistryDiscovery
 
         wiki_root = tmp_path / "wiki1"

@@ -424,7 +424,7 @@ class WikiDreamEditor:
         """Create a new wiki page."""
         page_path = self.wiki.wiki_dir / f"{page_name}.md"
         page_path.parent.mkdir(parents=True, exist_ok=True)
-        page_path.write_text(content, encoding="utf-8")
+        page_path.write_text(content, encoding="utf-8", newline="\n")
         self.wiki.index.upsert_page(
             page_name, content, str(page_path.relative_to(self.wiki.wiki_dir))
         )
@@ -438,7 +438,7 @@ class WikiDreamEditor:
 
         existing = page_path.read_text(encoding="utf-8")
         new_content = existing.rstrip() + "\n\n" + content + "\n"
-        page_path.write_text(new_content, encoding="utf-8")
+        page_path.write_text(new_content, encoding="utf-8", newline="\n")
         self.wiki.index.upsert_page(
             page_name, new_content, str(page_path.relative_to(self.wiki.wiki_dir))
         )
@@ -463,7 +463,7 @@ class WikiDreamEditor:
         else:
             new_content = existing.replace(marker, marker + "\n\n" + content, 1)
 
-        page_path.write_text(new_content, encoding="utf-8")
+        page_path.write_text(new_content, encoding="utf-8", newline="\n")
         self.wiki.index.upsert_page(
             page_name, new_content, str(page_path.relative_to(self.wiki.wiki_dir))
         )
@@ -487,7 +487,7 @@ class WikiDreamEditor:
         end_idx = existing.index(end_marker) + len(end_marker)
         new_content = existing[:start_idx] + content + existing[end_idx:]
 
-        page_path.write_text(new_content, encoding="utf-8")
+        page_path.write_text(new_content, encoding="utf-8", newline="\n")
         self.wiki.index.upsert_page(
             page_name, new_content, str(page_path.relative_to(self.wiki.wiki_dir))
         )
@@ -536,7 +536,7 @@ class WikiDreamEditor:
         else:
             return False
 
-        page_path.write_text(new_content, encoding="utf-8")
+        page_path.write_text(new_content, encoding="utf-8", newline="\n")
         return True
 
     def restore_edit(self, timestamp: str) -> bool:
@@ -551,7 +551,7 @@ class WikiDreamEditor:
         return False
 
     def _log_wiki_dream_run(self, results: dict) -> None:
-        with open(self.edits_file, "a", encoding="utf-8") as f:
+        with open(self.edits_file, "a", encoding="utf-8", newline="\n") as f:
             f.write(json.dumps(results, ensure_ascii=False) + "\n")
 
     def get_wiki_dream_edit_log(self, limit: int = 20) -> list[dict]:

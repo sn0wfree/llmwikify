@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import quote, unquote
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import HTTPException
 from fastapi.responses import FileResponse
 
 from llmwikify.kernel import Wiki

@@ -1,0 +1,32 @@
+# Normalize line endings: store LF in the repository, check out LF on
+# every platform. Without this, a Windows clone (core.autocrlf=true)
+# gets CRLF working-tree files and shows whole-file diffs for every
+# cross-platform change.
+* text=auto eol=lf
+
+# Windows batch files are executed by cmd.exe, which needs CRLF.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Shell scripts need LF — a shebang with CRLF is not executable.
+*.sh text eol=lf
+
+# Binary assets must never be line-ending translated.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.pdf binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary
+*.mp4 binary
+*.mp3 binary
+*.wav binary
+*.zip binary
+*.gz binary
+*.sqlite binary
+*.db binary

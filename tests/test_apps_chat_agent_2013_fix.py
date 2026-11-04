@@ -14,8 +14,6 @@ Covers the new defenses against MiniMax-side error 2013:
 
 from __future__ import annotations
 
-import pytest
-
 from llmwikify.foundation.llm.streamable import (
     _enforce_role_alternation,
     _normalize_tool_call_ids,

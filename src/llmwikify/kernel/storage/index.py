@@ -725,7 +725,7 @@ class WikiIndex:
         data["summary"]["pages_with_inbound"] = len(data["inbound_links"])
 
         # Write JSON
-        output_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        output_path.write_text(json.dumps(data, indent=2), encoding="utf-8", newline="\n")
 
         data["json_export"] = str(output_path)
         return data

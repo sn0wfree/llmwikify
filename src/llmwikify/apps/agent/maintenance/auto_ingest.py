@@ -91,6 +91,10 @@ class AutoIngestService:
         # (e.g. backlog replay + watcher event) while allowing different
         # files to run in parallel for 3-5x throughput improvement.
         self._file_locks: dict[str, asyncio.Lock] = {}
+        # Reference count per lock — a lock is dropped once nobody holds
+        # or waits for it, so the dict does not grow with every file
+        # ever seen.
+        self._lock_refs: dict[str, int] = {}
         self.stats: dict[str, Any] = {
             "events": 0,
             "ingested": 0,
@@ -230,7 +234,7 @@ class AutoIngestService:
             payload = json.dumps({"version": _STATE_VERSION, "files": self._processed})
             fd, tmp = tempfile.mkstemp(dir=f.parent, suffix=".tmp")
             try:
-                with open(fd, "w", encoding="utf-8") as fh:
+                with open(fd, "w", encoding="utf-8", newline="\n") as fh:
                     fh.write(payload)
                 Path(tmp).replace(f)
             finally:
@@ -348,48 +352,61 @@ class AutoIngestService:
             return
         # Per-file lock: different files run in parallel, same file serialized
         lock = self._file_locks.setdefault(path.name, asyncio.Lock())
-        async with lock:
-            # re-check after acquiring lock (another coroutine may have processed it)
-            if self._is_processed(path):
-                return
-            # Check extraction cache (avoids re-extracting same file)
-            cache_key = self._cache_key(path)
-            result = self._extraction_cache.get(cache_key)
-            if result is None:
-                try:
-                    result = await asyncio.to_thread(self.wiki.ingest_source, str(path))
-                except Exception as exc:
-                    self.stats["failed"] += 1
-                    self.stats["last_error"] = f"ingest: {exc}"
-                    logger.warning(
-                        "[%s] auto_ingest ingest failed %s: %s",
-                        self.wiki_id,
-                        path.name,
-                        exc,
-                    )
+        self._lock_refs[path.name] = self._lock_refs.get(path.name, 0) + 1
+        try:
+            async with lock:
+                # re-check after acquiring lock (another coroutine may have processed it)
+                if self._is_processed(path):
                     return
-                # Cache successful extractions (skip error results)
-                if not result.get("error"):
-                    self._extraction_cache[cache_key] = result
-                    # Evict old cache entries (keep last 50)
-                    if len(self._extraction_cache) > 50:
-                        oldest = sorted(self._extraction_cache.keys())[:25]
-                        for k in oldest:
-                            self._extraction_cache.pop(k, None)
-            self.stats["ingested"] += 1
-            self.stats["last_ingest_at"] = time.time()
+                # Check extraction cache (avoids re-extracting same file)
+                cache_key = self._cache_key(path)
+                result = self._extraction_cache.get(cache_key)
+                if result is None:
+                    try:
+                        result = await asyncio.to_thread(
+                            self.wiki.ingest_source, str(path)
+                        )
+                    except Exception as exc:
+                        self.stats["failed"] += 1
+                        self.stats["last_error"] = f"ingest: {exc}"
+                        logger.warning(
+                            "[%s] auto_ingest ingest failed %s: %s",
+                            self.wiki_id,
+                            path.name,
+                            exc,
+                        )
+                        return
+                    # Cache successful extractions (skip error results)
+                    if not result.get("error"):
+                        self._extraction_cache[cache_key] = result
+                        # Evict old cache entries (keep last 50)
+                        if len(self._extraction_cache) > 50:
+                            oldest = sorted(self._extraction_cache.keys())[:25]
+                            for k in oldest:
+                                self._extraction_cache.pop(k, None)
+                self.stats["ingested"] += 1
+                self.stats["last_ingest_at"] = time.time()
 
-            if result.get("error"):
-                self.stats["failed"] += 1
-                self.stats["last_error"] = result["error"]
-                return
+                if result.get("error"):
+                    self.stats["failed"] += 1
+                    self.stats["last_error"] = result["error"]
+                    return
 
-            if self.config.write_mode == "proposal":
-                await self._fallback_to_proposal(result, reason="write_mode=proposal")
-                self._mark_processed(path)
-                return
+                if self.config.write_mode == "proposal":
+                    await self._fallback_to_proposal(
+                        result, reason="write_mode=proposal"
+                    )
+                    self._mark_processed(path)
+                    return
 
-            await self._llm_write_pages(path, result)
+                await self._llm_write_pages(path, result)
+        finally:
+            remaining = self._lock_refs.get(path.name, 1) - 1
+            if remaining <= 0:
+                self._lock_refs.pop(path.name, None)
+                self._file_locks.pop(path.name, None)
+            else:
+                self._lock_refs[path.name] = remaining
 
     @staticmethod
     def _cache_key(path: Path) -> tuple:

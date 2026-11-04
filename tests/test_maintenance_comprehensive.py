@@ -13,12 +13,8 @@ from __future__ import annotations
 
 import asyncio
 import json
-import sqlite3
-import tempfile
-import time
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -247,7 +243,7 @@ def test_run_cycle_lint_failure_recorded(wiki_instance):
 
 def test_run_cycle_budget_exhausted(wiki_instance):
     from llmwikify.apps.agent.maintenance.config import GapFillerConfig
-    from llmwikify.apps.agent.maintenance.gap_filler import GapFiller, GapItem
+    from llmwikify.apps.agent.maintenance.gap_filler import GapFiller
 
     lint_result = {
         "hints": {
@@ -581,7 +577,6 @@ def test_on_watch_event_no_loop(tmp_path):
 
 def test_to_dict_roundtrip(tmp_path):
     from llmwikify.apps.agent.maintenance.config import (
-        MaintenanceConfig,
         load_maintenance_config,
         to_dict,
     )

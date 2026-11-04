@@ -120,7 +120,7 @@ def save_pat(pat: str) -> None:
     """Save a PAT to file (chmod 600). Called after PAT creation."""
     path = pat_file_path()
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(pat + "\n", encoding="utf-8")
+    path.write_text(pat + "\n", encoding="utf-8", newline="\n")
     chmod_600(path)
 
 

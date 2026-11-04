@@ -5,13 +5,11 @@ from __future__ import annotations
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
-
 # ── JinaSearchProvider ────────────────────────────────────────────────
 
 
 def test_jina_search_returns_results():
-    from llmwikify.apps.research.web_search import JinaSearchProvider, SearchResult
+    from llmwikify.apps.research.web_search import JinaSearchProvider
 
     provider = JinaSearchProvider()
 

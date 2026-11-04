@@ -170,7 +170,7 @@ class Dream:
         try:
             self._memory_dir.mkdir(parents=True, exist_ok=True)
             tmp_path = self._cursor_path.with_suffix(".tmp")
-            tmp_path.write_text(str(value), encoding="utf-8")
+            tmp_path.write_text(str(value), encoding="utf-8", newline="\n")
             tmp_path.replace(self._cursor_path)
         except OSError:
             logger.warning("Dream: failed to write cursor", exc_info=True)
@@ -367,11 +367,11 @@ class Dream:
                 f"- confidence: {fact.get('confidence', 1.0)}\n\n"
                 f"## Content\n\n{fact['content']}\n"
             )
-            md_path.write_text(body, encoding="utf-8")
+            md_path.write_text(body, encoding="utf-8", newline="\n")
 
             # Append to index
             index_path = self._facts_dir / "index.md"
-            with index_path.open("a", encoding="utf-8") as f:
+            with index_path.open("a", encoding="utf-8", newline="\n") as f:
                 f.write(f"- [{timestamp}] [{fact_id[:8]}] {fact['content']}\n")
         except OSError:
             logger.warning("Dream: markdown write failed", exc_info=True)

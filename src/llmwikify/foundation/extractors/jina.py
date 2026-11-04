@@ -11,7 +11,6 @@ Falls back to None on failure (caller should try trafilatura).
 from __future__ import annotations
 
 import logging
-from pathlib import Path
 
 from .base import ExtractedContent
 

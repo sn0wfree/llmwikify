@@ -74,7 +74,7 @@ class WikiQueryMixin(WikiProtocol):
                     answer, query, source_pages, raw_sources
                 )
 
-            page_path.write_text(answer, encoding="utf-8")
+            page_path.write_text(answer, encoding="utf-8", newline="\n")
 
             rel_path = str(page_path.relative_to(self.wiki_dir))
             self.index.upsert_page(rel_path[:-3], answer, rel_path)
@@ -286,7 +286,7 @@ class WikiQueryMixin(WikiProtocol):
                 content, query, source_pages, raw_sources
             )
 
-        page_path.write_text(content, encoding="utf-8")
+        page_path.write_text(content, encoding="utf-8", newline="\n")
 
         rel_path = str(page_path.relative_to(self.wiki_dir))
         self.index.upsert_page(rel_path[:-3], content, rel_path)

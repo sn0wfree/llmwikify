@@ -7,8 +7,6 @@ the research loop to appear stuck with no terminal event.
 
 from __future__ import annotations
 
-import asyncio
-
 import pytest
 
 from llmwikify.apps.chat.agent.research_bridge import translate_react_events

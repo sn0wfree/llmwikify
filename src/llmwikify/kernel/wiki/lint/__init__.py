@@ -172,6 +172,10 @@ class LintEngine:
             if rule.name in self._rules:
                 raise ValueError(f"duplicate rule name: {rule.name}")
             self._rules[rule.name] = rule
+        #: Rules that raised during the last :meth:`run_all`, mapped to
+        #: the error message. A rule that fails silently would make the
+        #: report look healthy while a whole check never ran.
+        self.failed_rules: dict[str, str] = {}
 
     @property
     def rule_names(self) -> list[str]:
@@ -184,6 +188,10 @@ class LintEngine:
         Rules run in name-sorted order (deterministic for tests).
         All rules share one ``{name: content}`` load so each does not
         re-read the whole wiki.
+
+        A rule that raises is logged and recorded in
+        :attr:`failed_rules` — the caller can tell a clean wiki from a
+        wiki whose checks never ran.
         """
         import logging
 
@@ -192,6 +200,7 @@ class LintEngine:
         all_issues: list[dict[str, Any]] = []
         shared_pages: dict[str, str] | None = None
         load_failed = False
+        self.failed_rules = {}
         for name in self.rule_names:
             rule = self._rules[name]
             try:
@@ -214,6 +223,7 @@ class LintEngine:
                     all_issues.extend(rule.run(self.wiki))
             except Exception as e:
                 logger.warning("lint rule %r failed: %s", name, e)
+                self.failed_rules[name] = str(e)
         return all_issues
 
     def run_rule(self, name: str) -> list[dict[str, Any]]:

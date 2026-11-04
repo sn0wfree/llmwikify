@@ -5,8 +5,6 @@ from __future__ import annotations
 import asyncio
 import time
 
-import pytest
-
 from llmwikify.apps.agent.maintenance.rate_limit import SlidingWindowRateLimiter
 
 

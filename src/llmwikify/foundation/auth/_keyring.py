@@ -141,7 +141,7 @@ def _read_file_secret() -> bytes:
 def _write_file_secret(secret: bytes) -> None:
     """Write secret to fallback file with chmod 600 + parent dir 700."""
     _SECRET_FILE.parent.mkdir(parents=True, exist_ok=True)
-    _SECRET_FILE.write_text(secret.hex(), encoding="utf-8")
+    _SECRET_FILE.write_text(secret.hex(), encoding="utf-8", newline="\n")
     try:
         os.chmod(_SECRET_FILE, 0o600)
     except OSError:

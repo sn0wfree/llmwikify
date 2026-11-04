@@ -669,7 +669,6 @@ class WikiToolRegistry:
     def _handle_research_save(self, args: dict) -> str:
         """Handle saving research results to wiki."""
         import json
-        import sqlite3
 
         session_id = args["session_id"]
         page_name = args.get("page_name")
@@ -710,7 +709,7 @@ class WikiToolRegistry:
                     continue
                 raw_path = self.wiki.raw_dir / f"{slug}.md"
                 raw_path.parent.mkdir(parents=True, exist_ok=True)
-                raw_path.write_text(content, encoding="utf-8")
+                raw_path.write_text(content, encoding="utf-8", newline="\n")
                 self.wiki.index.upsert_page(slug, content, f"raw/{slug}.md")
                 sources_saved += 1
 

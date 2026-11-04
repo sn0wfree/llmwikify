@@ -187,6 +187,7 @@ def _save_global_config(config: dict[str, Any]) -> None:
     global_path.write_text(
         json.dumps(config, indent=2, ensure_ascii=False),
         encoding="utf-8",
+        newline="\n",
     )
 
 
@@ -363,6 +364,7 @@ def _write_migrated_config(
     config_path.write_text(
         yaml.safe_dump(new_config, default_flow_style=False, allow_unicode=True),
         encoding="utf-8",
+        newline="\n",
     )
 
 
@@ -420,9 +422,10 @@ def auto_migrate_wiki_config(
 
             config_path.write_text(
                 yaml.safe_dump(
-                    new_config, default_flow_style=False, allow_unicode=True
+                    new_config, default_flow_style=False, allow_unicode=True,
                 ),
                 encoding="utf-8",
+                newline="\n",
             )
         result.migrated = True
         result.reason = "version_bump_only"

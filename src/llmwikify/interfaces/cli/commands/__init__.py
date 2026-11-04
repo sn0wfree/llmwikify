@@ -198,4 +198,6 @@ __all__ = [
     "EnrichCommand",
     "run_enrich",
     "HelpCommand",  # Phase 3 #6
+    "MigrateConfigCommand",
+    "run_migrate_config",
 ]

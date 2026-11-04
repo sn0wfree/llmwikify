@@ -263,7 +263,7 @@ llmwikify = [ "py.typed",]
 
 [tool.ruff.lint]
 select = [ "E", "F", "I", "W", "B", "C4", "UP",]
-ignore = [ "E501", "B904", "F401",]
+ignore = [ "E501", "B904",]
 
 [tool.ruff.lint.flake8-bugbear]
 # FastAPI 的 Depends() 在参数默认值中是官方惯例 (wiki_routes.py 等)
@@ -274,12 +274,13 @@ minversion = "7.0"
 testpaths = [ "tests",]
 python_files = [ "test_*.py",]
 python_functions = [ "test_*",]
-addopts = "-v --tb=short --strict-markers --ignore=tests/ab_testing --ignore=tests/e2e -m 'not llm'"
+addopts = "-v --tb=short --strict-markers --ignore=tests/ab_testing --ignore=tests/e2e -m 'not llm and not integration_live'"
 asyncio_mode = "auto"
 markers = [
   "e2e: end-to-end tests that start a real server (run with `pytest -m e2e`)",
   "mock: unit tests using mocks only, no real I/O (default, always run)",
   "integration: integration tests with real DB/H5 (run on push to main)",
+  "integration_live: tests hitting a live third-party API (need a key; excluded by default)",
   "llm: tests requiring real LLM API (gated by GHA secret, only main + nightly)",
   "slow: tests taking >10s (excluded from quick runs)",
   "requires_server: tests requiring a running llmwikify server (auto-skipped when SERVER_URL unreachable)",

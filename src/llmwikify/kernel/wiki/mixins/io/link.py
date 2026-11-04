@@ -138,7 +138,7 @@ class WikiLinkMixin(WikiProtocol):
                 )
 
             if page_modified and not dry_run:
-                page.write_text(new_content, encoding="utf-8")
+                page.write_text(new_content, encoding="utf-8", newline="\n")
                 rel_path = page.relative_to(self.wiki_dir).as_posix()
                 self.index.upsert_page(rel_path[:-3], new_content, rel_path)
 

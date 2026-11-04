@@ -433,6 +433,7 @@ class WikiAnalyzer:
 
             # Rules once; reuse for hints + fallback gaps (was 3× missing_cross_ref).
             all_rule_results = self._run_all_rules()
+            failed_rules = dict(getattr(self._lint_engine, "failed_rules", {}) or {})
             by_type: dict[str, list[dict]] = {}
             for r in all_rule_results:
                 by_type.setdefault(r.get("type") or "", []).append(r)
@@ -487,6 +488,9 @@ class WikiAnalyzer:
                 "missing_cross_refs": by_type.get("missing_cross_ref", []),
                 "contradictions": contradictions,
                 "data_gaps": data_gaps,
+                # Rules that raised — the report would otherwise look
+                # clean even though those checks never ran.
+                "failed_rules": failed_rules,
             }
             if cacheable:
                 cache_put("lint", wkey, fp, core, extra=extra)
@@ -543,6 +547,7 @@ class WikiAnalyzer:
             "investigations": investigations,
             "sink_status": core.get("sink_status"),
             "sink_warnings": core.get("sink_warnings") or [],
+            "failed_rules": core.get("failed_rules") or {},
         }
 
         if mode == "fix":

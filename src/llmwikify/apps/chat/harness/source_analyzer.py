@@ -89,6 +89,7 @@ class SourceAnalyzer:
         raw_path.write_text(
             content[: self.config.get("max_source_content_length", 500000)],
             encoding="utf-8",
+            newline="\n",
         )
 
         rel_path = f"raw/research/{content_hash}.txt"

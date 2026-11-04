@@ -95,7 +95,7 @@ def _write_dict(path: Path, candidates: list[tuple[str, int]]) -> int:
     """Write jieba-format dict ``word\\tfreq\\tn``."""
     path.parent.mkdir(parents=True, exist_ok=True)
     count = 0
-    with open(path, "w", encoding="utf-8") as f:
+    with open(path, "w", encoding="utf-8", newline="\n") as f:
         for word, freq in candidates:
             if freq < 1:
                 continue
@@ -114,7 +114,7 @@ def _append_dict(path: Path, candidates: list[tuple[str, int]]) -> int:
             if line.strip():
                 existing.add(line.split("\t", 1)[0])
     count = 0
-    with open(path, "a", encoding="utf-8") as f:
+    with open(path, "a", encoding="utf-8", newline="\n") as f:
         for word, freq in candidates:
             if word not in existing and freq >= 1:
                 f.write(f"{word}\t{freq}\tn\n")
@@ -131,7 +131,7 @@ def _write_meta(path: Path, fast_count: int, slow_count: int, page_count: int) -
         "slow_terms": slow_count,
         "page_count": page_count,
     }
-    path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
+    path.write_text(json.dumps(meta, indent=2), encoding="utf-8", newline="\n")
 
 
 def _should_run_slow(meta_path: Path, days: int = 7) -> bool:

@@ -6,8 +6,6 @@ done carelessly — so every one is pinned against the pre-fix semantics.
 
 from __future__ import annotations
 
-import shutil
-import tempfile
 from pathlib import Path
 
 import pytest
