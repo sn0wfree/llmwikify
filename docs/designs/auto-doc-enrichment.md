@@ -246,6 +246,95 @@ watchdog 未装导致 `auto_ingest_services["w1"]` KeyError。
 | 4 | 同一文件并发 `_process_file` ×2 | 只处理一次 |
 | 5 | 不同文件并发 ×2 | 各处理一次，互不影响 |
 
+## 真实场景验收（阶段 2）
+
+素材：`examples/01_personal_reading_notes/fixtures/andrew-ng-ai-notes.md`
+（555 字符 / 68 词的真实笔记）。临时 wiki，走完整链路。
+
+### 阻塞点：真实 LLM 不可用
+
+配置的 minimax key 返回 **401 Unauthorized**（`api.minimaxi.com`）。
+provider / model / api_key 都已正确注入（请求确实打到了 minimax 而非
+openai 默认），所以是 **key 失效或鉴权方式变化**，不是链路问题。
+
+因此 LLM 分析环节用一份**基于该文档内容的模拟计划**（3 个 write_page +
+1 条 log，实体与关系与文档主题相符），其余链路全部真实：
+
+| 环节 | 真实性 |
+|------|--------|
+| `ingest_source` 解析 + 归档 | ✅ 真实 |
+| LLM 分析产出 operations | ⚠️ 模拟（key 401） |
+| `execute_operations` 写页 | ✅ 真实 |
+| `KnowledgeEnricher` 补链 | ✅ 真实 |
+| index.md 生成 | ✅ 真实 |
+| lint 复查 | ✅ 真实 |
+
+### 执行结果
+
+```
+[1] ingest_source: markdown → raw/bidirectional-references.md
+    提取 555 字符, 耗时 0.0s
+
+[2] LLM 分析（模拟，真实 key 401）: 0.0s
+    实体 2 个, 关系 1 条, 主张 0 条
+    产出 operations 4 条:
+      write_page → concepts/Artificial Intelligence
+      write_page → concepts/Machine Learning
+      write_page → sources/Bidirectional References
+      log
+
+[3] 执行写页: 4 条, 0.4s
+    wiki 页面数: 5
+
+[4] 增量完善: 0.0s
+    概念 2 / 源页 1 → 补链 1, 提案 0, 跳过 0, 错误 0
+```
+
+### 知识库前后状态
+
+| 文件 | 大小 |
+|------|------|
+| `concepts/Artificial Intelligence.md` | 152 bytes |
+| `concepts/Machine Learning.md` | 116 bytes |
+| `sources/Bidirectional References.md` | 138 bytes |
+| `index.md` | 394 bytes |
+| `log.md` | 192 bytes |
+
+`index.md` 生成正确：
+
+```
+Total pages: 3 — Concepts: 2 | Sources: 1
+
+## Sources (1)
+
+- [[sources/Bidirectional References]] - Source: andrew-ng-ai-notes.md
+```
+
+> index 里出现 `sources\Bidirectional References`（反斜杠）是 **Windows
+> 路径分隔符的既存问题**——v0.41-dev 的 `path_codec` 已修，main 未合入。
+
+### lint 复查
+
+```
+missing_cross_ref 剩余: []
+```
+
+补链是彻底的：知识库里没有「被提及却未链接」的概念残留。
+
+### 验收结论
+
+| 项 | 结果 |
+|----|------|
+| 文档解析 → 归档 | ✅ |
+| LLM 计划 → 写页 | ✅（LLM 环节因 key 401 用模拟计划） |
+| 写页 → index 更新 | ✅ |
+| 增量补链 | ✅ 补 1 条 |
+| lint 无残留缺口 | ✅ |
+| **真实 LLM 端到端** | ❌ **待 key 恢复后复跑** |
+
+**待办**：minimax key 恢复后，用同一脚本去掉模拟分支复跑一次，
+确认真实 LLM 产出的 operations 同样能被完整落地。
+
 ## 端到端测试
 
 功能写完后缺一条自动化证据链：「放文档进 raw/ → 知识库被完善」。
