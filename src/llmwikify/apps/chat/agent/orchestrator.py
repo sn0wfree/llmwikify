@@ -850,11 +850,13 @@ class ChatOrchestrator:
                     if "autoresearch_compound" in tool and "run" in tool:
                         result = event.get("result", {})
                         if isinstance(result, dict):
-                            data = (
-                                result.get("data", {})
-                                if result.get("status") == "ok"
-                                else result
+                            from llmwikify.apps.chat.agent.chat_persistence import (
+                                _unwrap_skill_payload,
                             )
+
+                            data = _unwrap_skill_payload(result)
+                            if not isinstance(data, dict):
+                                data = {}
                             run_id = data.get("run_id", "")
                             if run_id:
                                 yield {

@@ -12,6 +12,7 @@ from llmwikify.interfaces.server.http._helpers import get_wiki_id
 from llmwikify.interfaces.server.http._models import (
     ApprovalRequest,
     BatchApproveRequest,
+    ConfirmApproveRequest,
 )
 from llmwikify.interfaces.server.http.agent._common import (
     JsonBodyHelper,
@@ -35,19 +36,20 @@ async def list_confirmations(request: Request) -> Any:
 async def approve_confirmation(confirmation_id: str, request: Request) -> Any:
     wiki_id = get_wiki_id(request)
     service = get_agent_service()
-    body = {}
+    # Empty body is valid (all defaults); non-empty must be a JSON object.
     raw = await request.body()
     if raw:
-        body = json.loads(raw)
-    arguments = body.get("arguments")
+        req = ConfirmApproveRequest.model_validate_json(raw)
+    else:
+        req = ConfirmApproveRequest()
     # v0.40: response can be "once", "always", or default "once"
-    response = body.get("response", "once")
+    response = req.response
     if response not in ("once", "always", "reject"):
         response = "once"
     return await service.approve_confirmation(
         confirmation_id,
         wiki_id,
-        arguments=arguments,
+        arguments=req.arguments,
         response=response,
     )
 

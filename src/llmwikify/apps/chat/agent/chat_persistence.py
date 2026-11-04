@@ -74,7 +74,7 @@ def extract_research_run_id_from_tools(
         result = tc.get("result")
         if not isinstance(result, dict):
             continue
-        data = result.get("data") if result.get("status") == "ok" else result
+        data = _unwrap_skill_payload(result)
         if not isinstance(data, dict):
             continue
         run_id = data.get("run_id")
@@ -83,7 +83,30 @@ def extract_research_run_id_from_tools(
     return None
 
 
+def _unwrap_skill_payload(result: dict) -> Any:
+    """Unwrap SkillResult / confirmation envelopes to the inner payload.
+
+    Handles three shapes:
+    - ``{"status": "ok", "data": {...}}`` — SkillResult.to_dict()
+    - ``{"status": "executed", "result": {"status": "ok", "data": {...}}}``
+      — posthoc / confirmed execution (skill_adapter)
+    - bare payload dict — returned as-is
+    """
+    status = result.get("status")
+    if status == "ok":
+        return result.get("data")
+    if status == "executed":
+        inner = result.get("result")
+        if isinstance(inner, dict):
+            if inner.get("status") == "ok":
+                return inner.get("data")
+            return inner
+        return None
+    return result
+
+
 __all__ = [
     "save_assistant_done_message",
     "extract_research_run_id_from_tools",
+    "_unwrap_skill_payload",
 ]

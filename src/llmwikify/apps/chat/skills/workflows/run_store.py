@@ -110,9 +110,14 @@ class RunStore:
         status: str | None = None,
         limit: int = 50,
     ) -> list[RunState]:
-        """List runs newest-first, optionally filtered."""
+        """List runs newest-first, optionally filtered.
+
+        Globs ``*.json`` (not ``wf_*.json``) so custom-prefixed run_ids
+        saved via :meth:`save` are also listed. Temp files from atomic
+        write end in ``.tmp`` and never match.
+        """
         out: list[RunState] = []
-        for p in sorted(self.root.glob("wf_*.json"), reverse=True):
+        for p in sorted(self.root.glob("*.json"), reverse=True):
             state = self.load(p.stem)
             if state is None:
                 continue

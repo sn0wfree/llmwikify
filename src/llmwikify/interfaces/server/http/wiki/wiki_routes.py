@@ -7,6 +7,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
+from llmwikify.interfaces.server.http._models import WikiWritePageRequest
 from llmwikify.interfaces.server.http.wiki._common import (
     _serve_wiki_file,
     create_wiki_dependency,
@@ -77,13 +78,13 @@ def register_wiki_routes(app, registry: WikiRegistry) -> None:
         request: Request, wiki: Wiki = Depends(get_wiki)
     ):  # noqa -> Any: B008
         """Write a wiki page."""
-        body = await request.json()
+        body = WikiWritePageRequest.model_validate(await request.json())
         # v0.40: confirm_token resolution — query string > POST body.
         # Query string is the PRIMARY mechanism (highest priority when
         # both are present); POST body is a back-compat shim for older
         # v0.40 callers. NOTE: query string transport leaks the token to
         # HTTP access logs; body remains recommended for new callers.
-        body_token = body.get("confirm_token")
+        body_token = body.confirm_token
         query_token = request.query_params.get("confirm_token")
         if query_token and body_token and query_token != body_token:
             logger.info(
@@ -97,8 +98,8 @@ def register_wiki_routes(app, registry: WikiRegistry) -> None:
         db, wiki_id = _get_wiki_db_and_id(registry)
         return write_page(
             wiki,
-            body.get("page_name", ""),
-            body.get("content", ""),
+            body.page_name,
+            body.content,
             confirm_token,
             db,
             wiki_id,
@@ -201,10 +202,10 @@ def register_wiki_routes(app, registry: WikiRegistry) -> None:
     async def wiki_write_page_by_id(wiki_id: str, request: Request) -> Any:
         """Write a page to a specific wiki."""
         with wiki_or_404(registry, wiki_id) as wiki:
-            body = await request.json()
+            body = WikiWritePageRequest.model_validate(await request.json())
             # v0.40: confirm_token resolution — query string > POST body
             # (see default route for full comment).
-            body_token = body.get("confirm_token")
+            body_token = body.confirm_token
             query_token = request.query_params.get("confirm_token")
             if query_token and body_token and query_token != body_token:
                 logger.info(
@@ -218,8 +219,8 @@ def register_wiki_routes(app, registry: WikiRegistry) -> None:
             db, _ = _get_wiki_db_and_id(registry, wiki_id)
             return write_page(
                 wiki,
-                body.get("page_name", ""),
-                body.get("content", ""),
+                body.page_name,
+                body.content,
                 confirm_token,
                 db,
                 wiki_id,

@@ -33,6 +33,17 @@ class ApprovalRequest(BaseModel):
     arguments: dict | None = None
 
 
+class ConfirmApproveRequest(BaseModel):
+    """POST /api/agent/confirmations/{id} (simple approve).
+
+    ``response`` accepts any string; the route coerces unknown values
+    to ``"once"`` (back-compat with the pre-pydantic handler).
+    """
+
+    arguments: dict | None = None
+    response: str = "once"
+
+
 class BatchApproveRequest(BaseModel):
     """POST /api/agent/confirmations/batch"""
 
@@ -74,3 +85,11 @@ class EditMessageRequest(BaseModel):
     """PUT /api/agent/sessions/{id}/messages/{msg_id}"""
 
     content: str
+
+
+class WikiWritePageRequest(BaseModel):
+    """POST /api/wiki/page and /api/wiki/{wiki_id}/page"""
+
+    page_name: str = Field(min_length=1, max_length=500)
+    content: str = Field(default="", max_length=5_000_000)
+    confirm_token: str | None = None
