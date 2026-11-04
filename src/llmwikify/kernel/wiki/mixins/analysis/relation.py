@@ -132,12 +132,18 @@ class WikiRelationMixin(WikiProtocol):
                 if action == "write_page":
                     page_name = op.get("page_name", "")
                     content = op.get("content", "")
+                    # The LLM emits a bare name plus a page_type
+                    # ("Risk Parity" + "Concept"). Dropping page_type
+                    # would land every page at the wiki root instead of
+                    # concepts/ — and the enricher classifies units by
+                    # directory prefix, so it would find nothing to do.
+                    page_type = op.get("page_type") or None
                     if page_name and content:
-                        self.write_page(page_name, content)
+                        self.write_page(page_name, content, page_type=page_type)
                         results.append(
                             {
                                 "action": "write_page",
-                                "page": page_name,
+                                "page": self._resolve_page_path(page_name, page_type),
                                 "status": "done",
                                 "ms": int((time.monotonic() - t0) * 1000),
                             }

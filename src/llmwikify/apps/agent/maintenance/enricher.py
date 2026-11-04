@@ -53,6 +53,10 @@ _SOURCE_DIR = "sources"
 #: name a page by its bare title, so all of them are search roots.
 _PAGE_DIRS = _CONCEPT_DIRS + (_SOURCE_DIR,)
 
+#: The wiki's own structural pages. They live at the wiki root and are
+#: never knowledge units to enrich.
+_STRUCTURAL_PAGES = frozenset({"index", "log", "overview"})
+
 
 @dataclass
 class EnrichResult:
@@ -102,13 +106,15 @@ def collect_units(
     sources: list[str] = []
     suggested: list[str] = []
 
-    def add(name: str, written: bool) -> None:
+    def add(name: str) -> None:
         """Classify a page name into concept / source buckets.
 
-        ``written`` pages always carry a directory prefix (``write_page``
-        stores them as ``concepts/Foo``). Cross-references may be a bare
-        title ("Risk Parity") — those default to the concept bucket and
-        are resolved to a real path later.
+        Pages written by the ingest normally carry a directory prefix
+        (``concepts/Foo``). A bare name means the page landed at the
+        wiki root — the LLM omitted ``page_type`` — and it is still a
+        knowledge unit worth enriching, so everything that is not a
+        source page goes to the concept bucket. The wiki's own
+        structural pages (index/log/overview) are excluded.
         """
         name = (name or "").strip().strip("/")
         if not name:
@@ -116,24 +122,22 @@ def collect_units(
         if name.startswith(f"{_SOURCE_DIR}/"):
             if name not in sources:
                 sources.append(name)
-        elif name.startswith(_CONCEPT_DIRS):
-            if name not in concepts:
-                concepts.append(name)
-        elif not written:
-            if name not in concepts:
-                concepts.append(name)
+        elif name in _STRUCTURAL_PAGES:
+            return
+        elif name not in concepts:
+            concepts.append(name)
 
     if exec_result:
         for item in exec_result.get("results", []) or []:
             if item.get("action") == "write_page" and item.get("status") == "done":
-                add(str(item.get("page", "")), written=True)
+                add(str(item.get("page", "")))
 
     if analysis:
         # cross_refs name existing pages — the LLM may use the bare title
         # ("Risk Parity") or the qualified path ("concepts/Risk Parity").
         for name in analysis.get("cross_refs", []) or []:
             if isinstance(name, str) and name.strip():
-                add(name, written=False)
+                add(name)
         for item in analysis.get("suggested_pages", []) or []:
             name = item.get("name") if isinstance(item, dict) else item
             if isinstance(name, str) and name.strip():

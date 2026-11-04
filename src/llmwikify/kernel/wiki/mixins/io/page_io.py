@@ -12,6 +12,32 @@ logger = logging.getLogger(__name__)
 class WikiPageIOMixin(WikiProtocol):
     """Page read/write, search, log, and index file update."""
 
+    def _resolve_page_path(self, page_name: str, page_type: str | None = None) -> str:
+        """Resolve a page name (+ optional type) to its wiki-relative path.
+
+        Mirrors the directory mapping used by :meth:`write_page`: a bare
+        name plus a ``page_type`` is placed under that type's directory;
+        a name that already contains "/" is used as-is.
+
+        Exposed so callers that write pages (e.g. the ingest operation
+        executor) can report where the page actually landed.
+        """
+        if page_name.endswith(".md"):
+            page_name = page_name[:-3]
+        if page_type and "/" not in page_name:
+            type_to_dir = self._load_page_type_mapping()
+
+            directory = type_to_dir.get(page_type)
+            if directory is None:
+                lower_map = {k.lower(): v for k, v in type_to_dir.items()}
+                directory = lower_map.get(page_type.lower())
+
+            if directory is None:
+                directory = page_type.lower()
+
+            return f"{directory}/{page_name}"
+        return page_name
+
     def write_page(
         self, page_name: str, content: str, page_type: str | None = None
     ) -> str:
@@ -47,20 +73,7 @@ class WikiPageIOMixin(WikiProtocol):
                 f"The 'wiki/' directory is added automatically."
             )
 
-        if page_type and "/" not in page_name:
-            type_to_dir = self._load_page_type_mapping()
-
-            directory = type_to_dir.get(page_type)
-            if directory is None:
-                lower_map = {k.lower(): v for k, v in type_to_dir.items()}
-                directory = lower_map.get(page_type.lower())
-
-            if directory is None:
-                directory = page_type.lower()
-
-            full_path = f"{directory}/{page_name}"
-        else:
-            full_path = page_name
+        full_path = self._resolve_page_path(page_name, page_type)
 
         if "\\n" in content:
             content = content.replace("\\n", "\n")

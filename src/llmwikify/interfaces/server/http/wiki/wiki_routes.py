@@ -46,6 +46,21 @@ def _get_wiki_db_and_id(registry: WikiRegistry, wiki_id: str | None = None):
         ) from None
 
 
+def _parse_write_page_body(raw: Any) -> WikiWritePageRequest:
+    """Validate the write-page request body.
+
+    Raises HTTPException(400) on invalid input — the route's long-standing
+    error contract (a missing/blank ``page_name`` used to be accepted and
+    wrote an empty page name).
+    """
+    from pydantic import ValidationError
+
+    try:
+        return WikiWritePageRequest.model_validate(raw)
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from None
+
+
 def register_wiki_routes(app, registry: WikiRegistry) -> None:
     """注册默认 wiki + Wiki-ID 路由。"""
     get_wiki, get_wiki_by_id = create_wiki_dependency(registry)
@@ -78,7 +93,7 @@ def register_wiki_routes(app, registry: WikiRegistry) -> None:
         request: Request, wiki: Wiki = Depends(get_wiki)
     ):  # noqa -> Any: B008
         """Write a wiki page."""
-        body = WikiWritePageRequest.model_validate(await request.json())
+        body = _parse_write_page_body(await request.json())
         # v0.40: confirm_token resolution — query string > POST body.
         # Query string is the PRIMARY mechanism (highest priority when
         # both are present); POST body is a back-compat shim for older
@@ -202,7 +217,7 @@ def register_wiki_routes(app, registry: WikiRegistry) -> None:
     async def wiki_write_page_by_id(wiki_id: str, request: Request) -> Any:
         """Write a page to a specific wiki."""
         with wiki_or_404(registry, wiki_id) as wiki:
-            body = WikiWritePageRequest.model_validate(await request.json())
+            body = _parse_write_page_body(await request.json())
             # v0.40: confirm_token resolution — query string > POST body
             # (see default route for full comment).
             body_token = body.confirm_token
