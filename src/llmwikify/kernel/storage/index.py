@@ -733,6 +733,11 @@ class WikiIndex:
     def resolve_by_name(self, page_name: str) -> str | None:
         """Resolve page name to file_path via exact match in SQLite index.
 
+        Falls back to a case-insensitive match when the exact lookup
+        misses: on case-insensitive filesystems (Windows/macOS) a page
+        stored as "Concepts/Foo" is reachable as "concepts/foo", but
+        the SQL index compares byte-for-byte.
+
         Args:
             page_name: Full relative path (e.g., "concepts/Factor Investing").
                        Bare names (e.g., "Factor Investing") will NOT match
@@ -743,6 +748,13 @@ class WikiIndex:
         """
         cursor = self.conn.execute(
             "SELECT file_path FROM pages WHERE page_name = ? LIMIT 1", (page_name,)
+        )
+        row = cursor.fetchone()
+        if row:
+            return row["file_path"]
+        cursor = self.conn.execute(
+            "SELECT file_path FROM pages WHERE page_name = ? COLLATE NOCASE LIMIT 1",
+            (page_name,),
         )
         row = cursor.fetchone()
         return row["file_path"] if row else None

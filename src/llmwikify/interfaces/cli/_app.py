@@ -26,6 +26,7 @@ subpackage now owns the name.
 
 import argparse
 import logging
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -299,6 +300,18 @@ def main() -> int:
     from ._base import CommandError, get_command
     from ._config import load_cli_config
     from ._output import print_error
+
+    # Windows consoles default to a legacy code page (GBK/cp936) that
+    # cannot encode the emoji / box-drawing characters the CLI prints.
+    # Force UTF-8 with a lossy fallback so output never raises
+    # UnicodeEncodeError mid-command.
+    for _stream in (sys.stdout, sys.stderr):
+        _reconfigure = getattr(_stream, "reconfigure", None)
+        if _reconfigure is not None:
+            try:
+                _reconfigure(encoding="utf-8", errors="replace")
+            except (ValueError, OSError):
+                pass
 
     # CLI logs to the console only (no server.log pollution).
     setup_logging(log_file=None, console=True)

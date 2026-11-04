@@ -46,6 +46,39 @@ ICON_CLIPBOARD = "📋"
 ICON_BULB = "💡"
 ICON_PENDING = "⏳"
 
+# ASCII fallbacks for consoles whose code page cannot encode the emoji
+# (Windows GBK/cp936 by default). Without these, printing raises
+# UnicodeEncodeError and aborts the command.
+_ASCII_FALLBACK: dict[str, str] = {
+    ICON_SUCCESS: "[OK]",
+    ICON_WARNING: "[!]",
+    ICON_ERROR: "[X]",
+    ICON_INFO: "[i]",
+    ICON_SEARCH: "[/]",
+    ICON_BRAIN: "[*]",
+    ICON_CLIPBOARD: "[#]",
+    ICON_BULB: "[T]",
+    ICON_PENDING: "[~]",
+}
+
+
+def _emit(prefix: str, message: str, file: Any = None) -> None:
+    """Print ``prefix message``, degrading the prefix if unencodable."""
+    stream = file if file is not None else sys.stdout
+    enc = getattr(stream, "encoding", None)
+    line = f"{prefix} {message}"
+    if enc:
+        try:
+            line.encode(enc)
+        except (LookupError, UnicodeEncodeError):
+            ascii_prefix = _ASCII_FALLBACK.get(prefix, "*")
+            line = f"{ascii_prefix} {message}"
+            try:
+                line.encode(enc)
+            except (LookupError, UnicodeEncodeError):
+                line = ascii_prefix
+    print(line, file=file)
+
 
 def print_success(message: str, file: Any = None) -> None:
     """Print a success message with ✅ prefix.
@@ -54,22 +87,22 @@ def print_success(message: str, file: Any = None) -> None:
         message: The text to print (without the emoji prefix)
         file: Stream to write to (default: stdout)
     """
-    print(f"{ICON_SUCCESS} {message}", file=file)
+    _emit(ICON_SUCCESS, message, file)
 
 
 def print_warning(message: str, file: Any = None) -> None:
     """Print a warning message with ⚠️ prefix."""
-    print(f"{ICON_WARNING} {message}", file=file)
+    _emit(ICON_WARNING, message, file)
 
 
 def print_error(message: str, file: Any = None) -> None:
     """Print an error message with ❌ prefix."""
-    print(f"{ICON_ERROR} {message}", file=file)
+    _emit(ICON_ERROR, message, file)
 
 
 def print_info(message: str, file: Any = None) -> None:
     """Print an info message with 📊 prefix."""
-    print(f"{ICON_INFO} {message}", file=file)
+    _emit(ICON_INFO, message, file)
 
 
 def print_json(payload: Any, file: Any = None) -> None:
@@ -150,12 +183,12 @@ def stderr_print(message: str) -> None:
 
 def print_error_stderr(message: str) -> None:
     """Print an error message to stderr (with ❌ prefix)."""
-    print(f"{ICON_ERROR} {message}", file=sys.stderr)
+    _emit(ICON_ERROR, message, sys.stderr)
 
 
 def print_warning_stderr(message: str) -> None:
     """Print a warning message to stderr (with ⚠️ prefix)."""
-    print(f"{ICON_WARNING} {message}", file=sys.stderr)
+    _emit(ICON_WARNING, message, sys.stderr)
 
 
 def print_success_stderr(message: str) -> None:
@@ -165,9 +198,9 @@ def print_success_stderr(message: str) -> None:
     user wants progress feedback on stderr while the
     structured result goes to stdout.
     """
-    print(f"{ICON_SUCCESS} {message}", file=sys.stderr)
+    _emit(ICON_SUCCESS, message, sys.stderr)
 
 
 def print_info_stderr(message: str) -> None:
     """Print an info message to stderr (with 📊 prefix)."""
-    print(f"{ICON_INFO} {message}", file=sys.stderr)
+    _emit(ICON_INFO, message, sys.stderr)

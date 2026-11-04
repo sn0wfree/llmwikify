@@ -26,6 +26,14 @@ TEMPLATES_DIR = (
     Path(__file__).parent.parent.parent.parent.parent / "foundation" / "templates"
 )
 
+# Windows reserved device names — a file named "con.md" (or "CON", "com1")
+# cannot be opened on Windows. Slugs matching these get a "-" suffix.
+_WINDOWS_RESERVED_NAMES = frozenset(
+    {"con", "prn", "aux", "nul"}
+    | {f"com{i}" for i in range(1, 10)}
+    | {f"lpt{i}" for i in range(1, 10)}
+)
+
 
 class WikiUtilityMixin(WikiProtocol):
     """Utility methods shared across Wiki operations."""
@@ -41,10 +49,20 @@ class WikiUtilityMixin(WikiProtocol):
 
     @staticmethod
     def _slugify(text: str) -> str:
-        """Convert text to URL-friendly slug."""
+        """Convert text to URL-friendly slug.
+
+        Also guards against Windows-illegal filenames: reserved device
+        names (CON/PRN/AUX/NUL/COM1-9/LPT1-9) and trailing dots or
+        spaces, which make the resulting file unopenable on Windows.
+        """
         text = text.lower().strip()
         text = re.sub(r"[^\w\s-]", "", text)
         text = re.sub(r"[-\s]+", "-", text)
+        # Windows: no trailing dot / space in filenames
+        text = text.rstrip(". ")
+        # Windows: reserved device names (with or without extension)
+        if text.split(".", 1)[0].lower() in _WINDOWS_RESERVED_NAMES:
+            text = f"{text}-"
         return text
 
     @staticmethod

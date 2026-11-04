@@ -67,6 +67,21 @@ _GREP_MAX_LINES = 50
 _GLOB_MAX_FILES = 100
 
 
+def _is_within(root: Path, target: Path) -> bool:
+    """True when ``target`` is ``root`` itself or lives under it.
+
+    Uses ``os.path.normcase`` so the comparison matches the host
+    filesystem's case sensitivity (Windows/macOS: case-insensitive,
+    Linux: case-sensitive). A plain ``str.startswith`` would reject
+    legitimate paths on case-insensitive filesystems.
+    """
+    root_s = os.path.normcase(str(root))
+    target_s = os.path.normcase(str(target))
+    if target_s == root_s:
+        return True
+    return target_s.startswith(root_s.rstrip(os.sep) + os.sep)
+
+
 # Context var so LlmClientDriver (called from within the
 # run_subagent request) can access the current request without
 # changing the AgentDriver.complete signature.
@@ -775,10 +790,7 @@ def _handle_read(
     try:
         worktree_root = Path(worktree_path).resolve()
         target = (worktree_root / path).resolve()
-        if (
-            not str(target).startswith(str(worktree_root) + os.sep)
-            and target != worktree_root
-        ):
+        if not _is_within(worktree_root, target):
             return {"error": f"path outside worktree: {path}"}
         if not target.exists():
             return {"error": f"file not found: {path}"}
@@ -808,10 +820,7 @@ def _handle_grep(
     try:
         worktree_root = Path(worktree_path).resolve()
         target = (worktree_root / path).resolve()
-        if (
-            not str(target).startswith(str(worktree_root) + os.sep)
-            and target != worktree_root
-        ):
+        if not _is_within(worktree_root, target):
             return {"error": f"path outside worktree: {path}"}
     except Exception as e:  # noqa: BLE001
         return {"error": f"path resolve failed: {e!r}"}
@@ -821,10 +830,14 @@ def _handle_grep(
             ["rg", "--no-heading", "-n", "--", pattern, str(target)],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=15,
         )
     except FileNotFoundError:
-        return {"error": "ripgrep (rg) not installed"}
+        # ripgrep is not installed (common on Windows) — fall back to a
+        # pure-Python scan so Grep still works.
+        return _grep_fallback(pattern, target, max_results, worktree_root)
     except subprocess.TimeoutExpired:
         return {"error": "Grep timed out after 15s"}
     except Exception as e:  # noqa: BLE001
@@ -842,6 +855,48 @@ def _handle_grep(
     }
 
 
+def _grep_fallback(
+    pattern: str, target: Path, max_results: int, worktree_root: Path | None = None
+) -> dict[str, Any]:
+    """Pure-Python grep used when ripgrep is unavailable.
+
+    Same output shape as the ripgrep path: ``matches`` (newline-joined
+    ``path:line:text``), ``match_count``, ``truncated``.
+    """
+    try:
+        rx = re.compile(pattern)
+    except re.error as e:
+        return {"error": f"invalid pattern: {e!r}"}
+
+    candidates = [target] if target.is_file() else sorted(target.rglob("*"))
+    lines: list[str] = []
+    for path in candidates:
+        if not path.is_file():
+            continue
+        try:
+            content = path.read_text(errors="replace", encoding="utf-8")
+        except OSError:
+            continue
+        for lineno, line in enumerate(content.splitlines(), 1):
+            if rx.search(line):
+                lines.append(f"{path}:{lineno}:{line}")
+                if len(lines) > max_results:
+                    break
+        if len(lines) > max_results:
+            break
+
+    truncated = len(lines) > max_results
+    kept = lines[:max_results]
+    if worktree_root is not None:
+        prefix = str(worktree_root) + os.sep
+        kept = [line.replace(prefix, "", 1) for line in kept]
+    return {
+        "matches": "\n".join(kept),
+        "match_count": len(kept),
+        "truncated": truncated,
+    }
+
+
 def _handle_glob(
     pattern: str,
     *,
@@ -854,17 +909,16 @@ def _handle_glob(
     try:
         worktree_root = Path(worktree_path).resolve()
         # Path traversal guard: refuse patterns that escape the worktree
-        # before running the glob (defence in depth).
-        if ".." in pattern.split("/"):
+        # before running the glob (defence in depth). Split on both
+        # separators — a Windows pattern may use "\".
+        if ".." in re.split(r"[\\/]", pattern):
             return {"error": f"path outside worktree: {pattern}"}
         candidates = worktree_root.glob(pattern)
         # Filter to paths actually inside the worktree (covers any
         # symlink / absolute path tricks that bypass the simple
         # textual check).
         files = sorted(
-            p
-            for p in candidates
-            if p.is_file() and str(p.resolve()).startswith(str(worktree_root) + os.sep)
+            p for p in candidates if p.is_file() and _is_within(worktree_root, p.resolve())
         )[:_GLOB_MAX_FILES]
         return {
             "files": [str(p.relative_to(worktree_root)) for p in files],
