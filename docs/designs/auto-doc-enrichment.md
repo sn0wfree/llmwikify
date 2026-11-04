@@ -205,6 +205,34 @@ raw/ 新文件
 单页补链失败只记错误计数，不影响其余页、不影响轨 A 的写页结果
 （轨 A 已写完才触发轨 C）。
 
+## 配置
+
+轨 C 的开关与预算在 `~/.llmwikify/llmwikify.json` 的 `maintenance.enricher` 段：
+
+```json
+{
+  "maintenance": {
+    "enricher": {
+      "enabled": true,
+      "max_units_per_doc": 10,
+      "max_links_per_unit": 5,
+      "propose_missing_pages": true
+    }
+  }
+}
+```
+
+| 键 | 默认 | 含义 |
+|----|------|------|
+| `enabled` | `true` | ingest 后是否运行增量完善 |
+| `max_units_per_doc` | `10` | 单篇文档最多处理的知识单元数 |
+| `max_links_per_unit` | `5` | 单个单元最多补多少条 `[[链接]]` |
+| `propose_missing_pages` | `true` | LLM 建议建页但库里没有时是否进提案队列 |
+
+补链接是纯文本操作，不消耗 LLM 配额；提案需人工在 WebUI 审核。
+完整的字段说明、调优建议与三轨对比见
+[`self-maintenance.md` 的 Config 章节](self-maintenance.md#config)。
+
 ## 修改清单
 
 | 文件 | 类型 | 说明 |

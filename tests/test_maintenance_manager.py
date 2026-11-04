@@ -89,6 +89,58 @@ def test_config_survives_garbage_section(tmp_path: Path):
     assert cfg.enabled is True
 
 
+def test_enricher_config_defaults(tmp_path: Path):
+    """Track C has its own knobs with documented defaults."""
+    cfg = load_maintenance_config(tmp_path / "nonexistent.json")
+    assert cfg.enricher.enabled is True
+    assert cfg.enricher.max_units_per_doc == 10
+    assert cfg.enricher.max_links_per_unit == 5
+    assert cfg.enricher.propose_missing_pages is True
+
+
+def test_enricher_config_parses_section(tmp_path: Path):
+    path = tmp_path / "llmwikify.json"
+    path.write_text(
+        json.dumps(
+            {
+                "maintenance": {
+                    "enricher": {
+                        "enabled": False,
+                        "max_units_per_doc": 25,
+                        "max_links_per_unit": 3,
+                        "propose_missing_pages": False,
+                    }
+                }
+            }
+        )
+    )
+    cfg = load_maintenance_config(path)
+    assert cfg.enricher.enabled is False
+    assert cfg.enricher.max_units_per_doc == 25
+    assert cfg.enricher.max_links_per_unit == 3
+    assert cfg.enricher.propose_missing_pages is False
+
+
+def test_enricher_config_round_trips(tmp_path: Path):
+    """to_dict must expose every enricher key the loader understands."""
+    from llmwikify.apps.agent.maintenance.config import to_dict
+
+    path = tmp_path / "llmwikify.json"
+    path.write_text(
+        json.dumps({"maintenance": {"enricher": {"max_units_per_doc": 7}}})
+    )
+    cfg = load_maintenance_config(path)
+    data = to_dict(cfg)
+
+    assert data["enricher"]["max_units_per_doc"] == 7
+    assert set(data["enricher"]) == {
+        "enabled",
+        "max_units_per_doc",
+        "max_links_per_unit",
+        "propose_missing_pages",
+    }
+
+
 # ── manager ──────────────────────────────────────────────────────────
 
 

@@ -59,6 +59,10 @@ lifespan (core.py)
 
 ### Config
 
+配置在 `~/.llmwikify/llmwikify.json` 的 `maintenance` 段。缺失的文件、
+缺失的段、缺失的单个键都回落到默认值（见 `apps/agent/maintenance/config.py`
+的 `load_maintenance_config()`）。
+
 ```json
 {
   "maintenance": {
@@ -76,6 +80,12 @@ lifespan (core.py)
       "min_priority": 30,
       "auto_approve_mechanical": true
     },
+    "enricher": {
+      "enabled": true,
+      "max_units_per_doc": 10,
+      "max_links_per_unit": 5,
+      "propose_missing_pages": true
+    },
     "llm_rate_limit": {
       "enabled": true,
       "max_requests": 5,
@@ -87,6 +97,31 @@ lifespan (core.py)
   }
 }
 ```
+
+#### `enricher` 段（Track C）
+
+轨 A 写完页后触发，对**该篇文档涉及的知识单元**做增量完善（补交叉引用、
+补孤立源页、缺失页面进提案）。轨 C 不做全库扫描——那是轨 B（`gap_filler`）
+的职责，两者互补。
+
+| 键 | 类型 | 默认 | 含义 | 调优建议 |
+|----|------|------|------|----------|
+| `enabled` | bool | `true` | 是否在 ingest 后运行增量完善 | 关掉后轨 A 仍会写页，只是不再织网 |
+| `max_units_per_doc` | int | `10` | 单篇文档最多处理多少知识单元（概念 + 源页 + 建议页） | 一篇文档若涉及很多实体可调大；每单元约 1 次搜索 + 若干次读写 |
+| `max_links_per_unit` | int | `5` | 单个单元最多给多少页补 `[[链接]]` | 防止热门概念（如 "Python"）一次性改几十页 |
+| `propose_missing_pages` | bool | `true` | LLM 建议建页但库里没有时，是否进提案队列 | 关掉则只补链接，不产生待审提案 |
+
+> 补链接是纯文本操作，**不消耗 LLM 配额**；只有 `propose_missing_pages`
+> 生成的提案需要人工在 WebUI 审核。轨 C 不持有 LLM 信号量与限流器
+> （它不调 LLM），因此这两个键与 `llm_rate_limit` 无关。
+
+#### 与其它段的关系
+
+| 段 | 触发时机 | 是否调 LLM | 是否写盘 |
+|----|----------|-----------|----------|
+| `auto_ingest` | raw/ 新文件（watchdog + 启动 backlog） | 是（`_llm_process_source`） | 是（直接写页，失败降级提案） |
+| `enricher` | **紧随** `auto_ingest` 写页成功后 | **否** | 是（补链直接写，缺失页进提案） |
+| `gap_filler` | 周期（`gaps_interval_seconds`，默认 7 天） | 是（lint gap 检测） | 机械修复直接写，内容生成进提案 |
 
 ### Gap priority
 
