@@ -399,7 +399,18 @@ class WikiPageIOMixin(WikiProtocol):
         # per page and revalidated by (mtime, size).
         summary_cache = self.__dict__.setdefault("_summary_cache", {})
 
-        for page in sorted(self._backend.list_page_paths()):
+        page_list = sorted(self._backend.list_page_paths())
+        page_names = [
+            str(p.relative_to(self.wiki_dir).with_suffix("")) for p in page_list
+        ]
+        # One directory listing for the whole wiki instead of a stat per page.
+        try:
+            sink_infos = self.query_sink.get_info_for_pages(page_names)
+        except Exception as e:
+            logger.warning("Failed to get sink info: %s", e)
+            sink_infos = {}
+
+        for page, page_name in zip(page_list, page_names, strict=True):
             page_path = page.relative_to(self.wiki_dir)
 
             if page_path.parts[0] == ".sink":
@@ -429,8 +440,6 @@ class WikiPageIOMixin(WikiProtocol):
 
             if page.name in ("index.md", "log.md"):
                 continue
-
-            page_name = str(page_path.with_suffix(""))
 
             subdir = page_path.parts[0] if len(page_path.parts) > 1 else ""
             if len(page_path.parts) > 1:
@@ -472,12 +481,9 @@ class WikiPageIOMixin(WikiProtocol):
                 stats_extra = f" | {link_str}" + stats_extra
 
             sink_marker = ""
-            try:
-                sink_info = self.query_sink.get_info_for_page(page_name)
-                if sink_info["has_sink"]:
-                    sink_marker = f" 📥 {sink_info['sink_entries']} pending"
-            except Exception as e:
-                logger.warning("Failed to get sink info for %s: %s", page_name, e)
+            sink_info = sink_infos.get(page_name)
+            if sink_info and sink_info.get("has_sink"):
+                sink_marker = f" 📥 {sink_info['sink_entries']} pending"
 
             entry = f"- [[{page_name}]] - {summary}{sink_marker}"
             if analysis_extra or stats_extra:

@@ -28,7 +28,9 @@ class DatedClaimsRule(Rule):
     name = "dated_claim"
     max_results = MAX_DATED_CLAIM_HINTS
 
-    def run(self, wiki: Wiki) -> list[dict[str, Any]]:
+    def run(
+        self, wiki: Wiki, pages: dict[str, str] | None = None
+    ) -> list[dict[str, Any]]:
         now = datetime.now(timezone.utc)
         current_year = now.year
 
@@ -49,7 +51,7 @@ class DatedClaimsRule(Rule):
 
         self._latest_source_year = latest_source_year
         self._current_year = current_year
-        return super().run(wiki)
+        return super().run(wiki, pages=pages)
 
     def detect(
         self,

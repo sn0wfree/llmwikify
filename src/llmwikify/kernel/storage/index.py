@@ -663,6 +663,28 @@ class WikiIndex:
             "files_per_second": round(speed, 1),
         }
 
+    def get_all_links(self) -> list[dict]:
+        """All links in one query.
+
+        Lets callers build a full export without one query per page
+        (1400 pages issued 2804 queries that way).
+        """
+        cursor = self.conn.execute(
+            """SELECT source_page, target_page, section, display_text, file_path
+               FROM page_links
+               ORDER BY created_at DESC"""
+        )
+        return [
+            {
+                "source": row["source_page"],
+                "target": row["target_page"],
+                "section": row["section"],
+                "display": row["display_text"],
+                "file": row["file_path"],
+            }
+            for row in cursor.fetchall()
+        ]
+
     def export_json(self, output_path: Path) -> dict[str, Any]:
         """Export reference index to JSON."""
         # Build data structure
@@ -678,21 +700,26 @@ class WikiIndex:
             },
         }
 
-        # Get all outbound links
-        cursor = self.conn.execute("""SELECT DISTINCT source_page FROM page_links""")
-        pages_with_outbound = {row[0] for row in cursor.fetchall()}
-        data["summary"]["pages_with_outbound"] = len(pages_with_outbound)
+        # Group every link in memory instead of querying per page.
+        for link in self.get_all_links():
+            data["outbound_links"].setdefault(link["source"], []).append(
+                {
+                    "target": link["target"],
+                    "section": link["section"],
+                    "display": link["display"],
+                    "file": link["file"],
+                }
+            )
+            data["inbound_links"].setdefault(link["target"], []).append(
+                {
+                    "source": link["source"],
+                    "section": link["section"],
+                    "file": link["file"],
+                }
+            )
 
-        for page in pages_with_outbound:
-            data["outbound_links"][page] = self.get_outbound_links(page)
-
-        # Get all inbound links
-        cursor = self.conn.execute("""SELECT DISTINCT target_page FROM page_links""")
-        pages_with_inbound = {row[0] for row in cursor.fetchall()}
-        data["summary"]["pages_with_inbound"] = len(pages_with_inbound)
-
-        for page in pages_with_inbound:
-            data["inbound_links"][page] = self.get_inbound_links(page)
+        data["summary"]["pages_with_outbound"] = len(data["outbound_links"])
+        data["summary"]["pages_with_inbound"] = len(data["inbound_links"])
 
         # Write JSON
         output_path.write_text(json.dumps(data, indent=2))

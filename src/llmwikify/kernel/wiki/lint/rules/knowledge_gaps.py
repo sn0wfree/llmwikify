@@ -31,7 +31,12 @@ class KnowledgeGapsRule(Rule):
     name = "knowledge_gap"
     max_results = 3
 
-    def run(self, wiki: Wiki) -> list[dict[str, Any]]:
+    def run(
+        self, wiki: Wiki, pages: dict[str, str] | None = None
+    ) -> list[dict[str, Any]]:
+        # Keeps its own walk: this rule inspects the sources/ tree and the
+        # relation graph, not the shared page map.
+        del pages
         if not wiki.wiki_dir.exists():
             return []
 

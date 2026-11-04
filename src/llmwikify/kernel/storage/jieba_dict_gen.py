@@ -56,6 +56,11 @@ def _is_cjk_word(word: str) -> bool:
     return any(_is_cjk_char(c) for c in word)
 
 
+def _has_cjk(content: str) -> bool:
+    """True if the content contains any CJK character."""
+    return any(_is_cjk_char(c) for c in content)
+
+
 def _load_all_pages(db_path: Path) -> list[str]:
     """Return list of raw content from all indexed pages."""
     if not db_path.exists():
@@ -158,6 +163,13 @@ def generate_fast_dict(db_path: Path, output_path: Path) -> int:
     tfidf: Counter = Counter()
 
     for content in pages:
+        # A Chinese segmentation dictionary has nothing to contribute from
+        # pure-Latin content, and tokenising it is expensive: on a
+        # 1400-page English wiki this pass took 19 s (jieba.analyse alone
+        # triggered 42k jieba.calc calls). Chinese wikis are unaffected —
+        # their pages still go through the full pass.
+        if not _has_cjk(content):
+            continue
         for word in jieba.cut(content):
             freq[word] += 1
         for kw in jieba.analyse.extract_tags(content, topK=30):

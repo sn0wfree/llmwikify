@@ -55,14 +55,28 @@ class Rule:
     name: str = ""
     max_results: int = 3
 
-    def run(self, wiki: Wiki) -> list[dict[str, Any]]:
+    def run(
+        self, wiki: Wiki, pages: dict[str, str] | None = None
+    ) -> list[dict[str, Any]]:
         """Run this rule against ``wiki`` and return any issues found.
 
         Template method: checks wiki_dir, iterates pages, calls detect().
+
+        Args:
+            wiki: The wiki to inspect.
+            pages: Optional pre-loaded ``{page_name: content}``. Reusing
+                it avoids re-reading every page for each rule — six
+                per-page rules meant 8400 redundant reads.
         """
         if not wiki.wiki_dir.exists():
             return []
         results: list[dict[str, Any]] = []
+        if pages is not None:
+            for page_name, content in pages.items():
+                self.detect(page_name, content, wiki, results)
+                if len(results) >= self.max_results:
+                    break
+            return results[: self.max_results]
         for page in self._iter_pages(wiki):
             page_name = wiki._page_display_name(page)
             content = page.read_text()
@@ -76,6 +90,21 @@ class Rule:
         for page in wiki._wiki_pages():
             if not wiki._page_display_name(page).startswith("Query:"):
                 yield page
+
+    def _load_pages(self, wiki: Wiki) -> dict[str, str]:
+        """Load all non-Query pages into a dict (utf-8).
+
+        Shared by both rule kinds so one wiki read serves every rule.
+        """
+        pages: dict[str, str] = {}
+        for page in wiki._wiki_pages():
+            name = wiki._page_display_name(page)
+            if not name.startswith("Query:"):
+                try:
+                    pages[name] = page.read_text(encoding="utf-8")
+                except TypeError:
+                    pages[name] = page.read_text()
+        return pages
 
     def detect(
         self,
@@ -108,18 +137,6 @@ class CrossPageRule(Rule):
         results: list[dict[str, Any]] = []
         self.detect_all(pages, wiki, results)
         return results[: self.max_results]
-
-    def _load_pages(self, wiki: Wiki) -> dict[str, str]:
-        """Load all non-Query pages into a dict (utf-8)."""
-        pages: dict[str, str] = {}
-        for page in wiki._wiki_pages():
-            name = wiki._page_display_name(page)
-            if not name.startswith("Query:"):
-                try:
-                    pages[name] = page.read_text(encoding="utf-8")
-                except TypeError:
-                    pages[name] = page.read_text()
-        return pages
 
     def detect_all(
         self,
@@ -165,8 +182,8 @@ class LintEngine:
         """Run every registered rule, return aggregated issues.
 
         Rules run in name-sorted order (deterministic for tests).
-        Cross-page rules share one ``{name: content}`` load so each
-        does not re-read the whole wiki.
+        All rules share one ``{name: content}`` load so each does not
+        re-read the whole wiki.
         """
         import logging
 
@@ -174,15 +191,25 @@ class LintEngine:
 
         all_issues: list[dict[str, Any]] = []
         shared_pages: dict[str, str] | None = None
+        load_failed = False
         for name in self.rule_names:
             rule = self._rules[name]
             try:
+                if shared_pages is None and not load_failed:
+                    try:
+                        shared_pages = rule._load_pages(self.wiki)
+                    except Exception:
+                        # Fall back to each rule loading its own pages.
+                        load_failed = True
+                        shared_pages = None
                 if isinstance(rule, CrossPageRule):
                     if shared_pages is None:
                         shared_pages = rule._load_pages(self.wiki)
                     results: list[dict[str, Any]] = []
                     rule.detect_all(shared_pages, self.wiki, results)
                     all_issues.extend(results[: rule.max_results])
+                elif shared_pages is not None:
+                    all_issues.extend(rule.run(self.wiki, pages=shared_pages))
                 else:
                     all_issues.extend(rule.run(self.wiki))
             except Exception as e:

@@ -24,17 +24,30 @@ class RedundancyRule(Rule):
     name = "redundancy"
     max_results = 2
 
-    def run(self, wiki: Wiki) -> list[dict[str, Any]]:
-        pages = wiki._wiki_pages()
-        if not pages:
+    def run(
+        self, wiki: Wiki, pages: dict[str, str] | None = None
+    ) -> list[dict[str, Any]]:
+        # Keeps its own walk: the original iterates ``_wiki_pages()``,
+        # which still includes Query: pages (the shared map excludes them).
+        del pages
+        if not wiki.wiki_dir.exists():
+            return []
+        page_names = [wiki._page_display_name(p) for p in wiki._wiki_pages()]
+        if not page_names:
             return []
 
-        page_names = [wiki._page_display_name(p) for p in pages]
         results: list[dict[str, Any]] = []
 
+        # Lower-case once: the comparison below used to re-lower both
+        # names on every pair, which is O(pairs) string allocations.
+        lowered = [name.lower() for name in page_names]
+
         for i, name1 in enumerate(page_names):
-            for name2 in page_names[i + 1 :]:
-                if name1.lower() in name2.lower() or name2.lower() in name1.lower():
+            low1 = lowered[i]
+            for j in range(i + 1, len(page_names)):
+                name2 = page_names[j]
+                low2 = lowered[j]
+                if low1 in low2 or low2 in low1:
                     if len(name1) > 5 and len(name2) > 5:
                         results.append(
                             {

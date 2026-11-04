@@ -115,6 +115,36 @@ class QuerySink:
         except OSError:
             return {"has_sink": False, "sink_entries": 0}
 
+    def get_info_for_pages(self, page_names: list[str]) -> dict[str, dict]:
+        """Get sink status for many pages at once.
+
+        One directory listing replaces one ``exists()`` per page — the
+        index rebuild asks about every page in the wiki.
+        """
+        if not self.sink_dir.exists():
+            return {name: {"has_sink": False, "sink_entries": 0} for name in page_names}
+
+        sink_files: dict[str, Path] = {}
+        for sink_file in self.sink_dir.glob("*.sink.md"):
+            logical = sink_file.name[: -len(".sink.md")]
+            sink_files[logical] = sink_file
+
+        result: dict[str, dict] = {}
+        for name in page_names:
+            sink_file = sink_files.get(name)
+            if sink_file is None:
+                result[name] = {"has_sink": False, "sink_entries": 0}
+                continue
+            try:
+                content = sink_file.read_text()
+                result[name] = {
+                    "has_sink": True,
+                    "sink_entries": self._count_entries(content),
+                }
+            except OSError:
+                result[name] = {"has_sink": False, "sink_entries": 0}
+        return result
+
     def _find_or_create_sink_file(self, page_name: str) -> Path:
         sink_file = self.sink_dir / f"{page_name}.sink.md"
         if not sink_file.exists():
@@ -645,16 +675,17 @@ class QuerySink:
         lines.append("")
 
         if content_store:
+            # Parse the dates once instead of searching the whole original
+            # per stored answer (that was O(answers x original length)).
+            dates: dict[str, str] = {}
+            for m in re.finditer(
+                r"^### (\S+) — (\d{4}-\d{2}-\d{2})", original, re.MULTILINE
+            ):
+                dates.setdefault(m.group(1), m.group(2))
+            today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
             for h, text in content_store.items():
-                # Try to find date from original content
-                date_match = re.search(
-                    rf"### {h} — (\d{{4}}-\d{{2}}-\d{{2}})", original
-                )
-                date = (
-                    date_match.group(1)
-                    if date_match
-                    else datetime.now(timezone.utc).strftime("%Y-%m-%d")
-                )
+                date = dates.get(h, today)
                 lines.append(f"### {h} — {date}")
                 lines.append(text)
                 lines.append("")

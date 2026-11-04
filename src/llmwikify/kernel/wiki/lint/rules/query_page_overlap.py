@@ -28,7 +28,12 @@ class QueryPageOverlapRule(Rule):
     name = "topic_overlap"
     max_results = MAX_QUERY_OVERLAP_HINTS
 
-    def run(self, wiki: Wiki) -> list[dict[str, Any]]:
+    def run(
+        self, wiki: Wiki, pages: dict[str, str] | None = None
+    ) -> list[dict[str, Any]]:
+        # Keeps its own walk: this rule keys off the bare page stem and
+        # reports absolute paths, neither of which the shared page map has.
+        del pages
         if not wiki.wiki_dir.exists():
             return []
 

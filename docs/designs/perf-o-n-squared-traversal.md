@@ -158,6 +158,105 @@ PRAGMA 实测生效：`journal_mode=wal`、`synchronous=1`（NORMAL）。
 | 11 | PRAGMA 生效 | `journal_mode=wal`、`synchronous=1` |
 | 12 | 既有 index / relation / link 测试 | 不回归 |
 
+## 第二批：剩余五项
+
+第一批消除了两处三重放大与两处建索引开销。剩下的五处都是「做了不该做的
+重复工作」，逐项修复。
+
+### #5 jieba 词典每次全量重算（19.3 s）
+
+`kernel/storage/jieba_dict_gen.py:148` 的 `generate_fast_dict()` 对**每页全文**
+做 `jieba.cut` 与 `jieba.analyse.extract_tags`（TF-IDF 关键词提取，会为每个
+候选词触发 `jieba.calc`）。实测 1400 页里 `jieba.calc` 被调用 4.2 万次、
+耗时 21.3 s。
+
+**关键事实**：实测 1400 页中**含 CJK 的页是 0**。中文分词词典对纯英文内容
+没有任何贡献，却让每次 `build_index` 多付 19 秒。
+
+修法：只对含 CJK 的页做分词与关键词提取。中文 wiki 的行为完全不变
+（中文页仍全量处理）。
+
+### #6 lint 走 14 遍全树（4.5 s）
+
+`LintEngine.run_all()` 只让 `CrossPageRule` 共享页面数据；6 条逐页型 `Rule`
+各自调 `rule.run(self.wiki)`，于是各自遍历全部页并 `read_text` —— 8400 次
+重复读文件。
+
+修法：`Rule` 也接受预加载的 `{name: content}`，`run_all` 加载一次给两类规则
+共用。逐页顺序与页集合保持不变（两者都基于 `wiki._wiki_pages()`，排除
+`Query:` 前缀）。
+
+### #7 `export_json` N+1 查询（0.5 s）
+
+`kernel/storage/index.py` 的 `export_json()` 对每个有链接的页调一次
+`get_outbound_links()` / `get_inbound_links()` —— 1400 页发出 **2804 条 SQL**。
+
+修法：一次取全部 `page_links`，在内存里按 `source_page` / `target_page` 分组，
+返回结构与逐页查询一致。
+
+### #8 `QuerySink`：无批量接口 + 重建时 O(N²)（1.0 s + 0.27 s）
+
+- `get_info_for_page()` 逐页调用（每次 `exists()` + `read_text()` + 正则），
+  `_update_index_file` 会对每一页调一次 —— 1400 次调用，1.02 s。
+- `_rebuild_sink_file()` 对内容存储里的**每个 hash** 都在整篇原文上
+  `re.search` 找日期 —— O(条目数 × 原文长度)。实测 200 条 4 ms、
+  800 条 112 ms、1600 条 267 ms（4 倍条目 → 67 倍时间）。
+
+修法：加 `get_info_for_pages()` 批量接口（一次列目录 + 只读有 sink 的页）；
+日期改为**一次扫描**原文解析出 `hash → date` 映射。
+
+### #9 `RedundancyRule` O(N²) 且重复 `.lower()`（0.41 s）
+
+`kernel/wiki/lint/rules/redundancy.py:37` 在双重循环里每次重新
+`name1.lower()` / `name2.lower()`。实测 N=400 → 0.062 s、N=1400 → 0.407 s
+（3.5 倍页数 → 6.6 倍时间）。
+
+修法：循环外预计算小写列表。
+
+## 第二批实测收益
+
+同一 1400 页 wiki（8402 条 wikilink），改动前后对照：
+
+| 场景 | 改动前 | 改动后 | 提升 |
+|------|--------|--------|------|
+| `build_index`（纯英文 wiki） | 12 218 ms | **3 672 ms** | **3.3x** |
+| `lint`（首次，force） | 4 719 ms | **3 828 ms** | 1.2x |
+| `export_index` | 94 ms | **15 ms** | **6x** |
+| `RedundancyRule` | 62 ms | **47 ms** | 1.3x |
+| `_update_index_file` | 406 ms | 406 ms | 持平 |
+
+`build_index` 的 3.3x 来自跳过纯英文内容的分词——原实测 1400 页中
+**含 CJK 的页是 0**，中文分词词典对它们没有任何贡献。
+`_update_index_file` 持平是因为该 wiki 没有 sink 文件，批量接口的收益
+（省去每页一次 `exists()`）只在有 sink 时体现。
+
+## 第二批的修改清单
+
+| 文件 | 类型 | 说明 |
+|------|------|------|
+| `kernel/storage/jieba_dict_gen.py` | edit | #5 只对含 CJK 的页分词（新增 `_has_cjk`） |
+| `kernel/wiki/lint/__init__.py` | edit | #6 `_load_pages` 上提到 `Rule`；`Rule.run` 支持共享页面；`run_all` 共享加载 + 失败回退 |
+| `kernel/wiki/lint/rules/dated_claims.py` | edit | #6 签名接受 `pages` 并传给基类 |
+| `kernel/wiki/lint/rules/knowledge_gaps.py` | edit | #6 签名接受 `pages`（自己扫，忽略） |
+| `kernel/wiki/lint/rules/query_page_overlap.py` | edit | #6 签名接受 `pages`（按 stem 扫，忽略） |
+| `kernel/wiki/lint/rules/redundancy.py` | edit | #6/#9 签名接受 `pages`；#9 预计算小写列表 |
+| `kernel/storage/index.py` | edit | #7 新增 `get_all_links()`；`export_json` 内存分组 |
+| `kernel/storage/query_sink.py` | edit | #8 新增 `get_info_for_pages()`；`_rebuild_sink_file` 日期一次解析 |
+| `kernel/wiki/mixins/io/page_io.py` | edit | #8 用批量 sink 接口（省每页一次 stat） |
+| `tests/test_perf_batch2.py` | NEW | 第二批等价性测试（9 项） |
+
+## 第二批的测试用例
+
+| # | 场景 | 期望 |
+|---|------|------|
+| 1 | 纯英文 wiki 生成词典 | 不做分词，词典为空，耗时大幅下降 |
+| 2 | 含中文的 wiki 生成词典 | 中文词条仍被收录（与原行为一致） |
+| 3 | lint 的逐页规则与共享页模式结果一致 | 规则输出逐条相同 |
+| 4 | `export_json` 的链接明细与逐页查询一致 | dict 结构与内容相同 |
+| 5 | `get_info_for_pages` 与逐页 `get_info_for_page` 一致 | 每页的 has_sink / sink_entries 相同 |
+| 6 | `_rebuild_sink_file` 的日期与原实现一致 | 每个 hash 的日期相同 |
+| 7 | `RedundancyRule` 的输出不变 | 相似页对相同 |
+
 ## 验证
 
 ```bash
