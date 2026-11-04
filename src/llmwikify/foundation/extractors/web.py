@@ -35,7 +35,14 @@ def _fetch_with_timeout(
         )
         resp.raise_for_status()
         return resp.text
-    except (requests.RequestException, Exception):
+    except requests.RequestException as e:
+        # Expected network/HTTP failures (timeout, 4xx/5xx, DNS…).
+        logger.warning("Fetch failed for %s: %s", url, e)
+        return None
+    except Exception:
+        # Unexpected programming error — keep the extractor contract
+        # (return None) but surface it so it isn't silently swallowed.
+        logger.exception("Unexpected error fetching %s", url)
         return None
 
 

@@ -30,6 +30,7 @@ from llmwikify.apps.chat.agent.unified.core import (
     StreamingHandler,
 )
 from llmwikify.apps.chat.agent.unified.spec import ActResult
+from llmwikify.foundation.utils_timing import measure_latency
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +68,7 @@ class ToolActor(StreamingHandler):
                     "tool": "",
                     "error": "Skipped malformed tool call with empty name",
                     "call_id": call_id,
+                    "duration_ms": 0,
                 }
                 continue
 
@@ -77,23 +79,25 @@ class ToolActor(StreamingHandler):
                 "call_id": call_id,
             }
 
-            # 执行工具
-            try:
-                result = await self._execute_tool(
-                    tool_name,
-                    args,
-                    spec,
-                    ctx,
-                )
-            except Exception as exc:
-                logger.warning("Tool %s failed", tool_name, exc_info=True)
-                yield {
-                    "type": "tool_call_error",
-                    "tool": tool_name,
-                    "error": str(exc),
-                    "call_id": call_id,
-                }
-                continue
+            # 执行工具 — 计时供 END / ERROR / CONFIRMATION 事件携带 duration_ms
+            with measure_latency() as get_ms:
+                try:
+                    result = await self._execute_tool(
+                        tool_name,
+                        args,
+                        spec,
+                        ctx,
+                    )
+                except Exception as exc:
+                    logger.warning("Tool %s failed", tool_name, exc_info=True)
+                    yield {
+                        "type": "tool_call_error",
+                        "tool": tool_name,
+                        "error": str(exc),
+                        "call_id": call_id,
+                        "duration_ms": get_ms(),
+                    }
+                    continue
 
             # Confirmation check
             if (
@@ -107,6 +111,7 @@ class ToolActor(StreamingHandler):
                     "args": args,
                     "impact": result.get("impact", {}),
                     "call_id": call_id,
+                    "duration_ms": get_ms(),
                 }
                 yield StepResult.ok(
                     ActResult(
@@ -125,6 +130,7 @@ class ToolActor(StreamingHandler):
                     "tool": tool_name,
                     "error": str(result.get("error", "")),
                     "call_id": call_id,
+                    "duration_ms": get_ms(),
                 }
                 continue
 
@@ -161,6 +167,7 @@ class ToolActor(StreamingHandler):
                 "tool": tool_name,
                 "result": result,
                 "call_id": call_id,
+                "duration_ms": get_ms(),
             }
 
         yield StepResult.ok(

@@ -81,6 +81,11 @@ def _as_skill_result(result: Any) -> SkillResult:
     if isinstance(result, dict):
         return SkillResult.ok(result)
     if result is None:
+        # Void-success: wiki methods like write/delete return None on
+        # success. Failures raise and are caught by safe_call. Log at
+        # debug so an unexpected None (handler swallowing an error)
+        # is at least observable.
+        logger.debug("handler returned None; treating as void success")
         return SkillResult.ok({})
     # Some wiki methods return raw strings (search
     # results, page content) — wrap them.

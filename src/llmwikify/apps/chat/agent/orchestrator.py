@@ -121,6 +121,7 @@ class ChatEvent:
         args: dict,
         impact: dict,
         call_id: str = "",
+        duration_ms: int = 0,
     ) -> dict:
         return {
             "type": events.CONFIRMATION_REQUIRED,
@@ -129,6 +130,7 @@ class ChatEvent:
             "args": args,
             "impact": impact,
             "call_id": call_id,
+            "duration_ms": duration_ms,
         }
 
     @staticmethod

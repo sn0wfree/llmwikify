@@ -662,6 +662,7 @@ class ChatRunnerV2(AgentRunner["ChatRunSpec", "ChatRunResult"]):
                     "tool": "",
                     "error": "Skipped malformed tool call with empty name",
                     "call_id": call_id,
+                    "duration_ms": 0,
                 }
                 continue
 
@@ -757,6 +758,7 @@ class ChatRunnerV2(AgentRunner["ChatRunSpec", "ChatRunResult"]):
                     "args": args,
                     "impact": result.get("impact", {}),
                     "call_id": call_id,
+                    "duration_ms": get_ms(),
                 }
                 break
 
@@ -766,6 +768,7 @@ class ChatRunnerV2(AgentRunner["ChatRunSpec", "ChatRunResult"]):
                     "tool": tool_name,
                     "error": str(result.get("error", "")),
                     "call_id": call_id,
+                    "duration_ms": get_ms(),
                 }
                 continue
 
@@ -886,6 +889,16 @@ class ChatRunnerV2(AgentRunner["ChatRunSpec", "ChatRunResult"]):
         try:
             result = method(*args)
             if inspect.iscoroutine(result):
+                # Adapter method is async but this helper is sync —
+                # silently returning default would skip truncation /
+                # tool-spec entirely. Log loudly and close the
+                # coroutine so it doesn't emit "never awaited".
+                logger.warning(
+                    "%s returned a coroutine (adapter method must be sync); "
+                    "falling back to default",
+                    log_label or attr_name,
+                )
+                result.close()
                 return default
             return result
         except (AttributeError, TypeError, KeyError, ValueError) as exc:
