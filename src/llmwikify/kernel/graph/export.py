@@ -301,11 +301,21 @@ def export_svg(graph: dict, output_path: Path) -> dict:
     write_dot(G_undirected, dot_path)
 
     # Convert DOT to SVG
-    result = subprocess.run(  # noqa: S603 — dot is a well-known binary
-        ["dot", "-Tsvg", dot_path, "-o", str(output_path)],
-        capture_output=True,
-        text=True,
-    )
+    try:
+        result = subprocess.run(  # noqa: S603 — dot is a well-known binary
+            ["dot", "-Tsvg", dot_path, "-o", str(output_path)],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+    except FileNotFoundError:
+        Path(dot_path).unlink(missing_ok=True)
+        raise RuntimeError(
+            "graphviz 'dot' executable not found on PATH. "
+            "Install Graphviz (https://graphviz.org/download/) "
+            "and ensure 'dot' is available."
+        ) from None
     if result.returncode != 0:
         raise RuntimeError(f"graphviz dot failed: {result.stderr}")
 

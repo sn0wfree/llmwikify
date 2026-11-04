@@ -96,12 +96,16 @@ class MaintenanceManager:
     @property
     def _state_file(self) -> Path:
         """Path to persistent health history file."""
-        # Use a fixed path under the first local wiki's root, or /tmp as fallback
+        # Use a fixed path under the first local wiki's root, or the
+        # system temp dir as fallback (Path("/tmp") does not exist on
+        # Windows — it would land at <drive>:\tmp or fail).
         for _, wiki in self._local_wikis():
             root = getattr(wiki, "root", None)
             if root:
                 return Path(root) / ".llmwikify" / "maintenance" / "health_history.json"
-        return Path("/tmp") / "llmwikify_health_history.json"
+        import tempfile
+
+        return Path(tempfile.gettempdir()) / "llmwikify_health_history.json"
 
     def _load_history(self) -> None:
         """Load health history from disk."""

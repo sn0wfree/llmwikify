@@ -78,13 +78,20 @@ def setup_logging(
         if log_dir is None:
             log_dir = Path.home() / ".llmwikify" / "agent"
         log_dir.mkdir(parents=True, exist_ok=True)
+        # encoding="utf-8": Windows default locale (GBK) would mojibake
+        # or raise UnicodeEncodeError on Chinese log messages.
         fh = RotatingFileHandler(
-            log_dir / log_file, maxBytes=10 * 1024 * 1024, backupCount=5
+            log_dir / log_file,
+            maxBytes=10 * 1024 * 1024,
+            backupCount=5,
+            encoding="utf-8",
         )
         fh.setFormatter(formatter)
         root.addHandler(fh)
 
     if console:
+        # encoding="utf-8" on the stream is ignored when the console
+        # codec differs, but makes file-redirected stderr deterministic.
         sh = logging.StreamHandler()
         sh.setFormatter(formatter)
         root.addHandler(sh)

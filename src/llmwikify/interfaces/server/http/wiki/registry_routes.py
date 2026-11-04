@@ -134,11 +134,16 @@ def register_registry_routes(app, registry: WikiRegistry) -> None:
         scan_paths: list[str] = []
         for p in raw_paths:
             resolved = Path(p).resolve()
-            if not (resolved == home or str(resolved).startswith(str(home) + "/")):
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Path outside home directory: {p}",
-                )
+            # relative_to works cross-platform (handles \ on Windows)
+            # and rejects paths outside home with ValueError.
+            try:
+                resolved.relative_to(home)
+            except ValueError:
+                if resolved != home:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Path outside home directory: {p}",
+                    ) from None
             scan_paths.append(str(resolved))
 
         new_wikis = registry.scan_directories(scan_paths, scan_depth)

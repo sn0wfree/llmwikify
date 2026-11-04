@@ -31,7 +31,7 @@ def _get_db_stats(app_db: Any) -> dict:
     if not db_path.exists():
         return None
     stats: dict = {}
-    with sqlite3.connect(db_path) as conn:
+    with sqlite3.connect(db_path, timeout=5.0) as conn:
         tables = {
             r[0]
             for r in conn.execute(
@@ -62,7 +62,7 @@ def _get_wiki_stats(app_db: Any, wiki_id: str) -> dict:
         "notifications": 0,
         "confirmations": 0,
     }
-    with sqlite3.connect(db_path) as conn:
+    with sqlite3.connect(db_path, timeout=5.0) as conn:
 
         def count(sql) -> Any:
             r = conn.execute(sql, (wiki_id,)).fetchone()
@@ -116,7 +116,7 @@ def _list_all_wikis(app_db: Any) -> list[dict]:
     """Aggregate wiki stats across all facades."""
     db_path = app_db.db_path
     wiki_ids: set[str] = set()
-    with sqlite3.connect(db_path) as conn:
+    with sqlite3.connect(db_path, timeout=5.0) as conn:
         for tbl in (
             "chat_sessions",
             "autoresearch_sessions",
@@ -140,7 +140,7 @@ def _delete_wiki_data(app_db: Any, wiki_id: str) -> dict:
     """Delete all data for a wiki across facades."""
     db_path = app_db.db_path
     result: dict = {}
-    with sqlite3.connect(db_path) as conn:
+    with sqlite3.connect(db_path, timeout=5.0) as conn:
         deletions = [
             ("chat_sessions", "wiki_id"),
             ("autoresearch_sessions", "wiki_id"),
@@ -205,7 +205,7 @@ def _export_wiki_data(app_db: Any, wiki_id: str) -> dict:
     """Export all wiki data to a JSON-serializable dict."""
     db_path = app_db.db_path
     data: dict = {}
-    with sqlite3.connect(db_path) as conn:
+    with sqlite3.connect(db_path, timeout=5.0) as conn:
         conn.row_factory = sqlite3.Row
         # Chat sessions/messages
         try:

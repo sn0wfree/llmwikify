@@ -78,7 +78,7 @@ def migrate_research_six_step_columns(
         logger.info("Old DB not found at %s, nothing to migrate", old_db_path)
         return 0
 
-    with sqlite3.connect(old_db_path) as conn:
+    with sqlite3.connect(old_db_path, timeout=5.0) as conn:
         # Check which legacy columns currently exist
         existing = {
             row[1]
@@ -129,7 +129,7 @@ def migrate_v3_add_events_column(ar_db_path) -> bool:
     ar_db_path = Path(ar_db_path)
     if not ar_db_path.exists():
         return False
-    with sqlite3.connect(ar_db_path) as conn:
+    with sqlite3.connect(ar_db_path, timeout=5.0) as conn:
         existing = {
             row[1]
             for row in conn.execute(
@@ -183,7 +183,7 @@ def migrate_v3_mark_partial_sessions(ar_db_path) -> list[str]:
     if not ar_db_path.exists():
         return []
     updated: list[str] = []
-    with sqlite3.connect(ar_db_path) as conn:
+    with sqlite3.connect(ar_db_path, timeout=5.0) as conn:
         conn.row_factory = sqlite3.Row
         # Find 'done' sessions with missing framework fields
         rows = conn.execute("""SELECT id, query, result,

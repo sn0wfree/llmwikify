@@ -8,6 +8,7 @@ from __future__ import annotations
 import logging
 from contextlib import asynccontextmanager
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, Request
@@ -89,7 +90,9 @@ class WikiServer:
             from llmwikify.kernel.multi_wiki.instance import WikiType
 
             self.registry = WikiRegistry(config={})
-            wiki_id = str(wiki.root).split("/")[-1] or "default"
+            # Path.name works cross-platform (handles \ on Windows);
+            # str.split("/") only works on POSIX paths.
+            wiki_id = Path(wiki.root).name or "default"
             self.registry.register_wiki(
                 wiki_id=wiki_id,
                 name=wiki_id.replace("-", " ").replace("_", " ").title(),

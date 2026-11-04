@@ -56,8 +56,11 @@ class WikiIndex:
         if self._conn is None:
             with self._lock:
                 if self._conn is None:
+                    # timeout=5.0: Windows concurrent access / antivirus
+                    # can hold the lock; without it sqlite3 raises
+                    # PermissionError / database is locked immediately.
                     self._conn = sqlite3.connect(
-                        str(self.db_path), check_same_thread=False
+                        str(self.db_path), check_same_thread=False, timeout=5.0
                     )
                     self._conn.row_factory = sqlite3.Row
                     self._apply_pragmas()

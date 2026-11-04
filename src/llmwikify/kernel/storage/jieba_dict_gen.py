@@ -65,7 +65,7 @@ def _load_all_pages(db_path: Path) -> list[str]:
     """Return list of raw content from all indexed pages."""
     if not db_path.exists():
         return []
-    conn = sqlite3.connect(str(db_path))
+    conn = sqlite3.connect(str(db_path), timeout=5.0)
     try:
         rows = conn.execute("SELECT content FROM pages_fts").fetchall()
         return [r[0] for r in rows if r[0]]
@@ -257,7 +257,7 @@ def generate_user_dict(db_path: Path, wiki_root: Path) -> dict[str, Any]:
     page_count = 0
     if db_path.exists():
         try:
-            conn = sqlite3.connect(str(db_path))
+            conn = sqlite3.connect(str(db_path), timeout=5.0)
             row = conn.execute("SELECT COUNT(*) FROM pages").fetchone()
             page_count = row[0] if row else 0
             conn.close()
