@@ -49,11 +49,11 @@ FORBIDDEN: dict[str, tuple[str, ...]] = {
 }
 
 # ── apps peer-package rule ────────────────────────────────────────────
-# Application packages inside apps/ may only depend on each other along
-# ``→ research`` (the research layer is consumable). Shared
-# infrastructure (``chat_db`` / ``wiki_db`` / ``db_base`` / ``db``) is
-# deliberately NOT a peer: it sits at the apps level like ``db_base``
-# and is consumed by the apps.
+# Application packages inside apps/ may depend on the two shared domain
+# layers — ``research`` (research engine) and ``wiki`` (knowledge base).
+# They may NOT depend on each other (``chat`` ↔ ``agent`` was the cycle
+# that motivated this rule). Shared infrastructure (``chat_db`` /
+# ``wiki_db`` / ``db_base`` / ``db``) is deliberately NOT a peer.
 #
 # Two classes of edge are tracked separately:
 #
@@ -66,8 +66,11 @@ APPS_APP_PACKAGES: frozenset[str] = frozenset(
     {"agent", "chat", "research", "wiki"}
 )
 
+# Apps may consume the shared domain layers; they may not depend on
+# each other (that is what created the chat↔agent cycle).
+APPS_ALLOWED_TARGETS: frozenset[str] = frozenset({"research", "wiki"})
 APPS_ALLOWED_EDGES: frozenset[tuple[str, str]] = frozenset(
-    {("chat", "research"), ("wiki", "research")}
+    {(a, b) for a in APPS_APP_PACKAGES for b in APPS_ALLOWED_TARGETS if a != b}
 )
 
 # Structural (module-level) baseline: 0 — a new module-level peer edge
@@ -75,13 +78,9 @@ APPS_ALLOWED_EDGES: frozenset[tuple[str, str]] = frozenset(
 APPS_PEER_BASELINE: dict[tuple[str, str], int] = {}
 
 # Runtime (function-local) baseline as of 2026-11.
-APPS_RUNTIME_BASELINE: dict[tuple[str, str], int] = {
-    ("agent", "chat"): 2,
-    ("agent", "research"): 1,
-    ("chat", "agent"): 1,
-    ("chat", "wiki"): 1,
-    ("wiki", "agent"): 4,
-}
+# After the Category 1+2 moves all app↔app edges are gone; kept as an
+# empty ceiling so any new runtime edge requires a conscious bump.
+APPS_RUNTIME_BASELINE: dict[tuple[str, str], int] = {}
 
 # Whitelist: files where a forbidden import is intentional.
 # These are pre-existing back-compat shims documented in AGENTS.md /

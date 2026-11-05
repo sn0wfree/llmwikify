@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from llmwikify.apps.agent.tools.skill_adapter import SkillToolAdapter
 from llmwikify.apps.chat.skills.service import SkillService
+from llmwikify.apps.chat.skills.tool_adapter import SkillToolAdapter
 from llmwikify.apps.chat.skills.workflows.builtins import (
     get_builtin,
     list_builtin_names,

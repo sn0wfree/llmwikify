@@ -249,7 +249,7 @@ def test_web_search_passes_config_to_websearch(
                 )(),
             ]
 
-    import llmwikify.apps.research.web_search as ws_module
+    import llmwikify.foundation.web.search as ws_module
 
     monkeypatch.setattr(ws_module, "WebSearch", FakeWebSearch)
 

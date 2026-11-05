@@ -149,7 +149,7 @@ class WikiService:
         if not wiki_id:
             raise ValueError("No wiki_id available")
         if wiki_id not in self._wiki_dream_editors:
-            from llmwikify.apps.agent.wiki_dream_editor import WikiDreamEditor
+            from llmwikify.apps.wiki.dream_editor import WikiDreamEditor
 
             wiki = self.get_wiki(wiki_id)
             self._wiki_dream_editors[wiki_id] = WikiDreamEditor(
@@ -165,7 +165,7 @@ class WikiService:
         if not wiki_id:
             raise ValueError("No wiki_id available")
         if wiki_id not in self._notification_managers:
-            from llmwikify.apps.agent.notifications import (
+            from llmwikify.apps.wiki.notifications import (
                 NotificationManager,
             )
 
@@ -181,7 +181,7 @@ class WikiService:
         if not wiki_id:
             raise ValueError("No wiki_id available")
         if wiki_id not in self._schedulers:
-            from llmwikify.apps.agent.scheduler import WikiScheduler
+            from llmwikify.apps.wiki.scheduler import WikiScheduler
 
             wiki = self.get_wiki(wiki_id)
             scheduler_dir = self.data_dir / wiki_id / "scheduler"
@@ -199,7 +199,7 @@ class WikiService:
         if not wiki_id:
             raise ValueError("No wiki_id available")
         if wiki_id not in self._tool_registries:
-            from llmwikify.apps.agent.tools import WikiToolRegistry
+            from llmwikify.apps.wiki.tool_registry import WikiToolRegistry
 
             wiki = self.get_wiki(wiki_id)
             self._tool_registries[wiki_id] = WikiToolRegistry(

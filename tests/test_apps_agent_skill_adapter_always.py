@@ -16,8 +16,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from llmwikify.apps.agent.tools.skill_adapter import SkillToolAdapter
 from llmwikify.apps.chat.skills.base import Skill, SkillAction, SkillResult
+from llmwikify.apps.chat.skills.tool_adapter import SkillToolAdapter
 
 
 def _noop(args, ctx):

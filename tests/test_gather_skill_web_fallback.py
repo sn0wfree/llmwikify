@@ -23,7 +23,7 @@ from llmwikify.apps.chat.skills.pipelines.gather_skill import (
     _gather,
     gather_skill,
 )
-from llmwikify.apps.research.web_search import SearchResult
+from llmwikify.foundation.web.search import SearchResult
 
 
 @pytest.fixture
@@ -67,7 +67,7 @@ class TestDefaultBehavior:
         )
         ctx = ctx.with_overrides(wiki=wiki)
 
-        with patch("llmwikify.apps.research.web_search.WebSearch") as MockSearch:
+        with patch("llmwikify.foundation.web.search.WebSearch") as MockSearch:
             r = await _gather(
                 {"sub_queries": [{"q": "test"}], "enable_web_search": False},
                 ctx,
@@ -87,7 +87,7 @@ class TestDefaultBehavior:
         wiki = _make_wiki_mock([{"url": "https://wiki/x", "title": "X"}])
         ctx = ctx.with_overrides(wiki=wiki)
 
-        with patch("llmwikify.apps.research.web_search.WebSearch") as MockSearch:
+        with patch("llmwikify.foundation.web.search.WebSearch") as MockSearch:
             r = await _gather(
                 {"sub_queries": [{"q": "test"}], "enable_web_search": True},
                 ctx,
@@ -112,7 +112,7 @@ class TestWebSearchFallback:
         wiki = _make_wiki_mock([])  # wiki returns nothing
         ctx = ctx.with_overrides(wiki=wiki)
 
-        with patch("llmwikify.apps.research.web_search.WebSearch") as MockSearch:
+        with patch("llmwikify.foundation.web.search.WebSearch") as MockSearch:
             instance = MagicMock()
             instance.search = AsyncMock(
                 return_value=[
@@ -172,7 +172,7 @@ class TestWebSearchFallback:
         wiki = _make_wiki_mock([])  # wiki returns nothing
         ctx = ctx.with_overrides(wiki=wiki)
 
-        with patch("llmwikify.apps.research.web_search.WebSearch") as MockSearch:
+        with patch("llmwikify.foundation.web.search.WebSearch") as MockSearch:
             instance = MagicMock()
             instance.search = AsyncMock(
                 side_effect=RuntimeError("all providers failed"),
@@ -200,7 +200,7 @@ class TestWebSearchFallback:
         # Pre-existing source with URL that web_search will return
         existing_url = "https://example.com/already-there"
 
-        with patch("llmwikify.apps.research.web_search.WebSearch") as MockSearch:
+        with patch("llmwikify.foundation.web.search.WebSearch") as MockSearch:
             instance = MagicMock()
             instance.search = AsyncMock(
                 return_value=[

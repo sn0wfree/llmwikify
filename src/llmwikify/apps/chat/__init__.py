@@ -85,7 +85,7 @@ _LAZY_ATTRS = {
     # so apps.research.db (which imports ChatDatabase from here) does not
     # hit this package mid-initialisation.
     "AutoResearchDatabase": "llmwikify.apps.research.db",
-    "WebSearch": "llmwikify.apps.research.web_search",
+    "WebSearch": "llmwikify.foundation.web.search",
     "research_router": "llmwikify.apps.research.routes",
     "ResearchGates": "llmwikify.apps.research.gates",
     "LLMCallMetrics": "llmwikify.apps.research.llm_step",

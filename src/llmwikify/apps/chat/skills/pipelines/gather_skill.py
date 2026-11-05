@@ -141,7 +141,7 @@ async def _gather(args: dict, ctx: SkillContext) -> SkillResult:
             # and the caller opted in via enable_web_search=True.
             if enable_web_search and len(sources_collected) == sources_before:
                 try:
-                    from llmwikify.apps.research.web_search import WebSearch
+                    from llmwikify.foundation.web.search import WebSearch
 
                     searcher = WebSearch(ctx.config or {})
                     logger.info(

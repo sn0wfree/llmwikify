@@ -182,7 +182,7 @@ def test_web_extractor_skips_jina_on_good_trafilatura():
 
 def test_create_provider_with_jina_key():
     """Jina API key is passed through."""
-    from llmwikify.apps.research.web_search import (
+    from llmwikify.foundation.web.search import (
         JinaSearchProvider,
         create_search_provider,
     )
@@ -199,7 +199,7 @@ def test_create_provider_with_jina_key():
 
 def test_create_provider_jina_only_mode():
     """search_provider='jina' only registers Jina."""
-    from llmwikify.apps.research.web_search import (
+    from llmwikify.foundation.web.search import (
         JinaSearchProvider,
         create_search_provider,
     )
@@ -211,7 +211,7 @@ def test_create_provider_jina_only_mode():
 
 def test_create_provider_no_config_uses_default_chain():
     """Empty config → Jina + DuckDuckGo (always-on providers)."""
-    from llmwikify.apps.research.web_search import (
+    from llmwikify.foundation.web.search import (
         create_search_provider,
     )
 
@@ -235,7 +235,7 @@ def _make_dream_db(tmp_path):
 
 
 def test_dream_proposal_create_and_retrieve(tmp_path):
-    from llmwikify.apps.agent.wiki_dream_editor import WikiDreamProposalManager
+    from llmwikify.apps.wiki.dream_editor import WikiDreamProposalManager
 
     db = _make_dream_db(tmp_path)
     mgr = WikiDreamProposalManager(db=db, wiki_id="w1")
@@ -255,7 +255,7 @@ def test_dream_proposal_create_and_retrieve(tmp_path):
 
 
 def test_dream_proposal_approve_reject(tmp_path):
-    from llmwikify.apps.agent.wiki_dream_editor import WikiDreamProposalManager
+    from llmwikify.apps.wiki.dream_editor import WikiDreamProposalManager
 
     db = _make_dream_db(tmp_path)
     mgr = WikiDreamProposalManager(db=db, wiki_id="w1")
@@ -284,7 +284,7 @@ def test_dream_proposal_approve_reject(tmp_path):
 
 def test_dream_proposal_auto_approve_short_appends(tmp_path):
     """append < threshold gets auto-approved."""
-    from llmwikify.apps.agent.wiki_dream_editor import WikiDreamProposalManager
+    from llmwikify.apps.wiki.dream_editor import WikiDreamProposalManager
 
     db = _make_dream_db(tmp_path)
     mgr = WikiDreamProposalManager(db=db, wiki_id="w1")
@@ -304,7 +304,7 @@ def test_dream_proposal_auto_approve_short_appends(tmp_path):
 
 def test_dream_proposal_apply_writes_to_wiki(tmp_path):
     """Approved proposal → apply_proposals writes to wiki."""
-    from llmwikify.apps.agent.wiki_dream_editor import WikiDreamEditor
+    from llmwikify.apps.wiki.dream_editor import WikiDreamEditor
     from llmwikify.kernel import Wiki
 
     wiki = Wiki(tmp_path / "wiki")
@@ -562,7 +562,7 @@ def test_proposal_visible_across_manager_instances(tmp_path):
     so reads must go to the database or half the proposals stay invisible
     (and unapprovable) until a restart.
     """
-    from llmwikify.apps.agent.wiki_dream_editor import WikiDreamProposalManager
+    from llmwikify.apps.wiki.dream_editor import WikiDreamProposalManager
 
     db = _make_dream_db(tmp_path)
     maintenance = WikiDreamProposalManager(db=db, wiki_id="w1")
@@ -584,7 +584,7 @@ def test_proposal_visible_across_manager_instances(tmp_path):
 
 def test_proposal_approvable_across_instances(tmp_path):
     """A proposal created by one manager must be approvable by another."""
-    from llmwikify.apps.agent.wiki_dream_editor import WikiDreamProposalManager
+    from llmwikify.apps.wiki.dream_editor import WikiDreamProposalManager
 
     db = _make_dream_db(tmp_path)
     maintenance = WikiDreamProposalManager(db=db, wiki_id="w1")
@@ -601,7 +601,7 @@ def test_proposal_approvable_across_instances(tmp_path):
 
 
 def test_proposal_rejectable_across_instances(tmp_path):
-    from llmwikify.apps.agent.wiki_dream_editor import WikiDreamProposalManager
+    from llmwikify.apps.wiki.dream_editor import WikiDreamProposalManager
 
     db = _make_dream_db(tmp_path)
     maintenance = WikiDreamProposalManager(db=db, wiki_id="w1")
@@ -618,7 +618,7 @@ def test_proposal_rejectable_across_instances(tmp_path):
 
 def test_proposal_no_db_fallback_still_works():
     """Without a database the in-memory pool is the only store."""
-    from llmwikify.apps.agent.wiki_dream_editor import WikiDreamProposalManager
+    from llmwikify.apps.wiki.dream_editor import WikiDreamProposalManager
 
     mgr = WikiDreamProposalManager(wiki_id="w2")
     p = mgr.create_proposal(page_name="X", edit_type="create", content="y", reason="r")
@@ -629,7 +629,7 @@ def test_proposal_no_db_fallback_still_works():
 
 def test_proposal_status_change_updates_cache(tmp_path):
     """The in-memory cache must not go stale after a status change."""
-    from llmwikify.apps.agent.wiki_dream_editor import WikiDreamProposalManager
+    from llmwikify.apps.wiki.dream_editor import WikiDreamProposalManager
 
     db = _make_dream_db(tmp_path)
     mgr = WikiDreamProposalManager(db=db, wiki_id="w1")

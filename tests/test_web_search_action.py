@@ -7,7 +7,7 @@ Covers the three actions exposed by the web_search Skill:
   - search_news    — News search via ``site:news.google.com`` routing
 
 Implementation is a thin wrapper over
-``llmwikify.apps.research.web_search.WebSearch``. We mock
+``llmwikify.foundation.web.search.WebSearch``. We mock
 ``WebSearch.search`` to avoid real network calls.
 
 Target: 10 tests covering happy path, validation errors,
@@ -30,7 +30,7 @@ from llmwikify.apps.chat.skills.actions import (
     register_all_actions,
     web_search_skill,
 )
-from llmwikify.apps.research.web_search import SearchResult
+from llmwikify.foundation.web.search import SearchResult
 
 # ─── Fixtures ────────────────────────────────────────────────────
 
@@ -171,7 +171,7 @@ class TestHappyPath:
         runtime: SkillRuntime,
         ctx: SkillContext,
     ) -> None:
-        with patch("llmwikify.apps.research.web_search.WebSearch") as MockSearch:
+        with patch("llmwikify.foundation.web.search.WebSearch") as MockSearch:
             instance = MagicMock()
             instance.search = AsyncMock(return_value=_mock_search_results())
             MockSearch.return_value = instance
@@ -199,7 +199,7 @@ class TestHappyPath:
         runtime: SkillRuntime,
         ctx: SkillContext,
     ) -> None:
-        with patch("llmwikify.apps.research.web_search.WebSearch") as MockSearch:
+        with patch("llmwikify.foundation.web.search.WebSearch") as MockSearch:
             instance = MagicMock()
             instance.search = AsyncMock(
                 return_value=[
@@ -230,7 +230,7 @@ class TestHappyPath:
         runtime: SkillRuntime,
         ctx: SkillContext,
     ) -> None:
-        with patch("llmwikify.apps.research.web_search.WebSearch") as MockSearch:
+        with patch("llmwikify.foundation.web.search.WebSearch") as MockSearch:
             instance = MagicMock()
             instance.search = AsyncMock(
                 return_value=[
@@ -261,7 +261,7 @@ class TestHappyPath:
         runtime: SkillRuntime,
         ctx: SkillContext,
     ) -> None:
-        with patch("llmwikify.apps.research.web_search.WebSearch") as MockSearch:
+        with patch("llmwikify.foundation.web.search.WebSearch") as MockSearch:
             instance = MagicMock()
             instance.search = AsyncMock(return_value=[])
             MockSearch.return_value = instance
@@ -288,7 +288,7 @@ class TestErrorPath:
         runtime: SkillRuntime,
         ctx: SkillContext,
     ) -> None:
-        with patch("llmwikify.apps.research.web_search.WebSearch") as MockSearch:
+        with patch("llmwikify.foundation.web.search.WebSearch") as MockSearch:
             instance = MagicMock()
             instance.search = AsyncMock(
                 side_effect=RuntimeError("all providers failed"),

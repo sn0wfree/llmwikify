@@ -180,7 +180,7 @@ def test_all_triggers_tool_name_matches_skill_tool_adapter() -> None:
     SkillToolAdapter's tool list (LLM consistency contract)."""
     from unittest.mock import MagicMock
 
-    from llmwikify.apps.agent.tools.skill_adapter import SkillToolAdapter
+    from llmwikify.apps.chat.skills.tool_adapter import SkillToolAdapter
 
     # Build via registry
     reg = SkillRegistry()

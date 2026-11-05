@@ -739,7 +739,7 @@ def _handle_web_search(
     import asyncio
 
     try:
-        from llmwikify.apps.research.web_search import WebSearch
+        from llmwikify.foundation.web.search import WebSearch
     except Exception as e:  # noqa: BLE001
         return {"error": f"WebSearch import failed: {e!r}"}
 

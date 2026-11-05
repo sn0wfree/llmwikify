@@ -31,7 +31,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from llmwikify.apps.agent.wiki_dream_editor import WikiDreamProposalManager
+from llmwikify.apps.wiki.dream_editor import WikiDreamProposalManager
 from llmwikify.kernel.storage.watcher import SUPPORTED_EXTENSIONS, FileSystemWatcher
 
 from .config import AutoIngestConfig

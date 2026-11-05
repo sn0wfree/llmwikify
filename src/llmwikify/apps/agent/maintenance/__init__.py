@@ -19,7 +19,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from llmwikify.apps.agent.wiki_dream_editor import WikiDreamProposalManager
+from llmwikify.apps.wiki.dream_editor import WikiDreamProposalManager
 from llmwikify.kernel.multi_wiki.instance import WikiType
 
 from .auto_ingest import AutoIngestService

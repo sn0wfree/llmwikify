@@ -27,14 +27,14 @@ class TestFallbackSearchProviderLogsChain:
     """
 
     def test_logs_chain_summary_at_info(self, caplog) -> None:
-        from llmwikify.apps.research.web_search import (
+        from llmwikify.foundation.web.search import (
             DuckDuckGoProvider,
             FallbackSearchProvider,
             SearXNGProvider,
         )
 
         chain = [SearXNGProvider("http://x"), DuckDuckGoProvider()]
-        with caplog.at_level(logging.INFO, logger="llmwikify.apps.research.web_search"):
+        with caplog.at_level(logging.INFO, logger="llmwikify.foundation.web.search"):
             FallbackSearchProvider(chain)
         messages = [r.message for r in caplog.records]
         chain_log = [m for m in messages if "fallback chain" in m]
@@ -67,7 +67,7 @@ class TestGatherSkillFallbackLoggingLevel:
         """
         from llmwikify.apps.chat.skills import SkillContext
         from llmwikify.apps.chat.skills.pipelines.gather_skill import _gather
-        from llmwikify.apps.research.web_search import SearchResult
+        from llmwikify.foundation.web.search import SearchResult
 
         # Wiki returns 0 results to force web fallback path.
         wiki = MagicMock()
@@ -87,7 +87,7 @@ class TestGatherSkillFallbackLoggingLevel:
         )
 
         with patch(
-            "llmwikify.apps.research.web_search.WebSearch",
+            "llmwikify.foundation.web.search.WebSearch",
             return_value=mock_search_instance,
         ):
             with caplog.at_level(
@@ -137,7 +137,7 @@ class TestGatherSkillFallbackLoggingLevel:
         )
 
         with patch(
-            "llmwikify.apps.research.web_search.WebSearch",
+            "llmwikify.foundation.web.search.WebSearch",
             return_value=mock_search_instance,
         ):
             with caplog.at_level(
@@ -180,7 +180,7 @@ class TestGathererWebSearchLogging:
         it should log both the invocation and the result count.
         """
         from llmwikify.apps.research.gatherer import SourceGatherer
-        from llmwikify.apps.research.web_search import SearchResult
+        from llmwikify.foundation.web.search import SearchResult
 
         # Build a minimal SourceGatherer with mocked deps
         wiki = MagicMock()
@@ -220,7 +220,7 @@ class TestGathererWebSearchLogging:
             return f"<html>content for {url}</html>"
 
         with patch(
-            "llmwikify.apps.research.web_search.WebSearch",
+            "llmwikify.foundation.web.search.WebSearch",
             return_value=mock_search,
         ):
             with patch.object(gatherer, "_fetch_url", fake_fetch_url):
@@ -283,7 +283,7 @@ class TestGathererWebSearchLogging:
         mock_search.search = timeout_search
 
         with patch(
-            "llmwikify.apps.research.web_search.WebSearch",
+            "llmwikify.foundation.web.search.WebSearch",
             return_value=mock_search,
         ):
             with caplog.at_level(

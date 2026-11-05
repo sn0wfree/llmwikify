@@ -19,8 +19,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from llmwikify.apps.agent.tools.skill_adapter import SkillToolAdapter
 from llmwikify.apps.chat.skills.service import SkillService
+from llmwikify.apps.chat.skills.tool_adapter import SkillToolAdapter
 
 # ─── Fixtures ────────────────────────────────────────────────────
 

@@ -14,7 +14,8 @@ both into a single ``apps.research`` package so the public surface is:
     ResearchEngine`` directly. Also accessible via the PEP 562 lazy
     attribute on ``apps.chat`` (``from llmwikify.apps.chat import
     ResearchEngine``).
-  - ``WebSearch`` (web_search.py) — unified web-search facade.
+  - ``WebSearch`` — unified web-search facade (now in
+    ``foundation.web.search``; re-exported here for compat).
   - ``BaseResearchConfig`` (base.py) — shared default config keys
     + merge helper. ``BaseQualityGate`` is planned (see base.py
     Future batches note) but not yet exported.
@@ -26,7 +27,8 @@ are exposed at the package top level. Submodules with chat dependencies
 their explicit submodule path.
 """
 
+from llmwikify.foundation.web.search import WebSearch  # noqa: F401  (moved)
+
 from .db import ResearchDatabase
-from .web_search import WebSearch
 
 __all__ = ["ResearchDatabase", "WebSearch"]

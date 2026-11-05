@@ -36,7 +36,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
-from llmwikify.apps.agent.wiki_dream_editor import WikiDreamProposalManager
+from llmwikify.apps.wiki.dream_editor import WikiDreamProposalManager
 
 from .config import EnricherConfig
 from .wikilink import build_pattern, is_linked, link_first_occurrence

@@ -85,7 +85,7 @@ class SkillToolAdapter:
 
     def _register_get_skill_commands(self) -> None:
         """Register the get_skill_commands tool."""
-        from llmwikify.apps.agent.tools import handle_get_skill_commands
+        from llmwikify.apps.chat.skills.commands_tool import handle_get_skill_commands
 
         self._tools["get_skill_commands"] = {
             "description": "List all available skill commands and triggers",
@@ -326,7 +326,7 @@ class CompositeToolRegistry:
 
     @staticmethod
     def _is_unknown_confirmation(result: Any) -> bool:
-        from llmwikify.apps.chat.agent.confirmation_manager import (
+        from llmwikify.kernel.skills.confirmation import (
             ConfirmationManager as _CM,
         )
 

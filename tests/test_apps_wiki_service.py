@@ -159,7 +159,7 @@ class TestToolRegistryFactory:
     def test_get_tool_registry_creates_instance(
         self, wiki_service: WikiService
     ) -> None:
-        from llmwikify.apps.agent.tools import WikiToolRegistry
+        from llmwikify.apps.wiki.tool_registry import WikiToolRegistry
 
         reg = wiki_service.get_tool_registry("test_wiki")
         assert isinstance(reg, WikiToolRegistry)

@@ -6,7 +6,7 @@ import asyncio
 
 import pytest
 
-from llmwikify.apps.chat.agent.confirmation_manager import ConfirmationManager
+from llmwikify.kernel.skills.confirmation import ConfirmationManager
 
 # ── Stubs ───────────────────────────────────────────────────────
 

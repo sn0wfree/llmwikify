@@ -615,7 +615,7 @@ class AgentService:
 
     @staticmethod
     def _is_unknown_confirmation(result: Any) -> bool:
-        from llmwikify.apps.chat.agent.confirmation_manager import (
+        from llmwikify.kernel.skills.confirmation import (
             ConfirmationManager as _CM,
         )
 

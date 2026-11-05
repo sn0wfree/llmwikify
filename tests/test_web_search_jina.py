@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 
 def test_jina_search_returns_results():
-    from llmwikify.apps.research.web_search import JinaSearchProvider
+    from llmwikify.foundation.web.search import JinaSearchProvider
 
     provider = JinaSearchProvider()
 
@@ -45,7 +45,7 @@ def test_jina_search_returns_results():
 
 
 def test_jina_search_returns_empty_on_failure():
-    from llmwikify.apps.research.web_search import JinaSearchProvider
+    from llmwikify.foundation.web.search import JinaSearchProvider
 
     provider = JinaSearchProvider()
 
@@ -62,7 +62,7 @@ def test_jina_search_returns_empty_on_failure():
 
 
 def test_jina_search_truncates_snippet():
-    from llmwikify.apps.research.web_search import JinaSearchProvider
+    from llmwikify.foundation.web.search import JinaSearchProvider
 
     provider = JinaSearchProvider()
     long_content = "x" * 1000
@@ -162,7 +162,7 @@ def test_web_extractor_falls_back_to_jina():
 
 
 def test_create_search_provider_includes_jina():
-    from llmwikify.apps.research.web_search import (
+    from llmwikify.foundation.web.search import (
         JinaSearchProvider,
         create_search_provider,
     )

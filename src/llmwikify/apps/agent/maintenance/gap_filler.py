@@ -18,7 +18,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
-from llmwikify.apps.agent.wiki_dream_editor import WikiDreamProposalManager
+from llmwikify.apps.wiki.dream_editor import WikiDreamProposalManager
 
 from .config import GapFillerConfig
 from .llm_support import ensure_global_llm_fallback
@@ -353,7 +353,7 @@ class GapFiller:
         level and counted, not swallowed at debug level.
         """
         try:
-            from llmwikify.apps.research.web_search import WebSearch
+            from llmwikify.foundation.web.search import WebSearch
 
             ws = WebSearch(self._search_config())
             results = await ws.search(concept, num_results=3)

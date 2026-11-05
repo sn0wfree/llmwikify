@@ -214,15 +214,15 @@ class ChatOrchestrator:
         config: dict | None = None,
         skill_service: Any = None,
     ):
-        from llmwikify.apps.chat.agent.confirmation_manager import (
-            ConfirmationManager,
-        )
         from llmwikify.apps.chat.agent.context_manager import ContextManager
         from llmwikify.apps.chat.agent.event_log import EventLog
         from llmwikify.apps.chat.agent.prompt_builder import PromptBuilder
         from llmwikify.apps.chat.agent.session_manager import SessionManager
         from llmwikify.apps.chat.agent.tool_executor import ToolExecutor
         from llmwikify.apps.research.six_step_config import merge_six_step_config
+        from llmwikify.kernel.skills.confirmation import (
+            ConfirmationManager,
+        )
 
         self.wiki_service = wiki_service
         self.db = chat_db
@@ -299,7 +299,7 @@ class ChatOrchestrator:
             # cross-invocation. Parent registries hold a live
             # SubagentManager ref and must rebuild each chat.
             return self._tool_registries[cache_key]
-        from llmwikify.apps.agent.tools.skill_adapter import (
+        from llmwikify.apps.chat.skills.tool_adapter import (
             CompositeToolRegistry,
             SkillToolAdapter,
         )
@@ -566,7 +566,7 @@ class ChatOrchestrator:
         callers (e.g. ``approve_confirmation_continue``) and external
         consumers (e.g. tests) continue to work.
         """
-        from llmwikify.apps.chat.agent.confirmation_manager import (
+        from llmwikify.kernel.skills.confirmation import (
             ConfirmationManager as _CM,
         )
 

@@ -21,7 +21,7 @@ Actions
 Implementation
 --------------
 
-Thin wrapper over ``llmwikify.apps.research.web_search.WebSearch``,
+Thin wrapper over ``llmwikify.foundation.web.search.WebSearch``,
 which implements the provider fallback chain. The skill reuses the
 research engine's existing search infrastructure rather than
 duplicating it.
@@ -172,7 +172,7 @@ async def _do_search(
     # Lazy import: WebSearch lives in apps/research (L3 dependency).
     # Imported here to keep module load cheap when skill isn't used.
     try:
-        from llmwikify.apps.research.web_search import WebSearch
+        from llmwikify.foundation.web.search import WebSearch
     except Exception as e:
         logger.error("Failed to import WebSearch: %s", e)
         return SkillResult.fail(f"WebSearch import failed: {e!r}")

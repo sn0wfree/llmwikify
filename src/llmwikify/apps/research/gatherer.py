@@ -144,7 +144,7 @@ class WebSearchStrategy(SourceStrategy):
         seen_urls: set[str],
     ) -> list[str]:
         """Search for URLs via WebSearch, returning unseen URLs."""
-        from llmwikify.apps.research.web_search import WebSearch
+        from llmwikify.foundation.web.search import WebSearch
 
         searcher = WebSearch(gatherer.config)
         search_query = (

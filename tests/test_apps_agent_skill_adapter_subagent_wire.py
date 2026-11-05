@@ -29,7 +29,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from llmwikify.apps.agent.tools.skill_adapter import SkillToolAdapter
+from llmwikify.apps.chat.skills.tool_adapter import SkillToolAdapter
 
 
 def _make_skill_service():

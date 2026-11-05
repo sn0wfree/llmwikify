@@ -1232,7 +1232,7 @@ class TestAutoresearchIntegration:
     @pytest.fixture(autouse=True)
     def _stub_web_search(self, monkeypatch):
         """Stub WebSearch.search to return [] (no real DuckDuckGo in tests)."""
-        from llmwikify.apps.research import web_search
+        from llmwikify.foundation.web import search as web_search
 
         async def _empty_search(self, query, num_results=None, **kwargs):
             return []
@@ -1245,7 +1245,7 @@ class TestAutoresearchIntegration:
 
         Prevents the gatherer from hitting real DuckDuckGo during tests.
         """
-        from llmwikify.apps.research import web_search
+        from llmwikify.foundation.web import search as web_search
 
         async def _empty_search(self, query, num_results=None, **kwargs):
             return []

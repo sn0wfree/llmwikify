@@ -24,7 +24,7 @@ def _db(tmp_path):
 
 
 def _editor(db, tmp_path):
-    from llmwikify.apps.agent.wiki_dream_editor import WikiDreamEditor
+    from llmwikify.apps.wiki.dream_editor import WikiDreamEditor
 
     return WikiDreamEditor(
         wiki=SimpleNamespace(root=tmp_path),
@@ -34,7 +34,7 @@ def _editor(db, tmp_path):
 
 
 def _enricher_manager(db):
-    from llmwikify.apps.agent.wiki_dream_editor import WikiDreamProposalManager
+    from llmwikify.apps.wiki.dream_editor import WikiDreamProposalManager
 
     return WikiDreamProposalManager(db=db, wiki_id="w1")
 

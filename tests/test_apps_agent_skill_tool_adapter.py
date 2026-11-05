@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import pytest
 
-from llmwikify.apps.agent.tools.skill_adapter import (
+from llmwikify.apps.chat.agent.tool_executor import ToolExecutor
+from llmwikify.apps.chat.skills.service import SkillService
+from llmwikify.apps.chat.skills.tool_adapter import (
     CompositeToolRegistry,
     SkillToolAdapter,
 )
-from llmwikify.apps.chat.agent.tool_executor import ToolExecutor
-from llmwikify.apps.chat.skills.service import SkillService
 
 
 @pytest.mark.asyncio

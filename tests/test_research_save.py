@@ -14,9 +14,9 @@ import sqlite3
 
 import pytest
 
-from llmwikify.apps.agent.tools import WikiToolRegistry
 from llmwikify.apps.chat_db import ChatDatabase
 from llmwikify.apps.db import AppDatabase
+from llmwikify.apps.wiki.tool_registry import WikiToolRegistry
 from llmwikify.kernel.wiki.wiki import Wiki
 
 # ─── Fixtures ──────────────────────────────────────────────────────────
