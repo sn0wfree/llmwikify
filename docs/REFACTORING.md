@@ -150,31 +150,76 @@ See **§6 Cross-Project Migration** below.
 
 The post-refactor codebase has a strict 4-layer architecture with **single-direction** dependencies:
 
+```mermaid
+graph TD
+    subgraph L4["interfaces/ — 入口层"]
+        CLI[CLI]
+        HTTP[HTTP / MCP]
+        OA[OpenAI 适配]
+    end
+
+    subgraph L3["apps/ — 应用层 + 领域共享层 + 共享基础设施"]
+        direction LR
+        subgraph app_layer["应用层（互不依赖）"]
+            chat[chat]
+            agent[agent]
+        end
+        subgraph domain_layer["领域共享层（可被应用层消费）"]
+            research[research]
+            wiki[wiki]
+        end
+        subgraph infra["共享基础设施（非 peer）"]
+            chat_db[chat_db]
+            wiki_db[wiki_db]
+            db_base[db_base / db]
+        end
+    end
+
+    subgraph L2["kernel/ — 领域抽象"]
+        agent_fw[agent framework]
+        skills[skills types]
+        wiki_eng[wiki engine / graph / storage]
+        codegen[codegen]
+    end
+
+    subgraph L1["foundation/ — 零依赖基础设施"]
+        llm[LLM protocol / providers]
+        web[web search]
+        extract[extractors / auth / prompts]
+    end
+
+    L4 --> L3
+    L4 --> L2
+    L4 --> L1
+    L3 --> L2
+    L3 --> L1
+    L2 --> L1
+
+    chat --> research
+    chat --> wiki
+    agent --> wiki
+    agent --> research
+    wiki --> research
+
+    style app_layer fill:#e8f4ff
+    style domain_layer fill:#e8ffe8
+    style infra fill:#f5f5f5
 ```
-                    interfaces/  (CLI, HTTP, MCP, Web entry)
-                       ↑
-                       │  (depends on all below)
-                       │
-                    apps/         (business logic)
-                       ↑
-                       │  (depends on foundation + kernel)
-                       │
-                    kernel/       (domain abstractions)
-                       ↑
-                       │  (depends on foundation)
-                       │
-                    foundation/   (zero-dependency infrastructure)
-```
+
+**关键约束**（2026-11 架构债清理后）：
+- `chat ↔ agent` 环已消除 —— 应用层之间**零依赖**
+- 允许方向：应用层 → 领域共享层（`→ research` / `→ wiki`）
+- 共享基础设施（`chat_db` / `wiki_db` / `db_base`）不是 peer 包
+- `scripts/check_architecture.py` 双基线棘轮强制执行
 
 ### 3.1 Layer responsibilities
 
-| Layer | Role | LoC (post v0.40) | Files |
-|-------|------|------------------|-------|
-| `foundation/` | LLM protocol, callback hooks, prompt registry, auth, extractors | **6,241** | 44 |
-| `kernel/` | Wiki engine, knowledge graph, storage, search, multi-wiki, agent, codegen | **12,407** | 76 |
-| `apps/` | Chat (40K LoC), Research (5K), Agent, Wiki, API | **40,218** | 192 |
-| `interfaces/` | CLI commands, HTTP routes, MCP server, Web entry | **9,030** | 54 |
-| **Total** | - | **67,896** | **366** |
+| Layer | Role |
+|-------|------|
+| `foundation/` | LLM protocol + providers, callback hooks, prompt registry, auth, extractors, web search |
+| `kernel/` | Wiki engine, knowledge graph, storage, agent framework, skill types, codegen |
+| `apps/` | 应用层 `chat` + `agent`（互不依赖）；领域共享层 `research` + `wiki`；共享基础设施 `chat_db` / `wiki_db` / `db_base` |
+| `interfaces/` | CLI commands, HTTP routes, MCP server, OpenAI adapter, Web entry |
 
 ### 3.2 Forbidden / allowed dependencies
 
@@ -204,39 +249,48 @@ grep -rln "from llmwikify\.apps" src/llmwikify/foundation/  # 0 hits
 ls src/llmwikify/reproduction/  # No such file (deleted in Phase 1)
 ```
 
-### 3.4 `kernel/quant/` — the only allowed quant-themed path
+### 3.4 协议下沉边界（Protocol Sinking Boundary）
 
-`kernel/quant/` is **kept** as a backward-compat shim, per AGENTS.md:
+当出现跨层耦合时，按以下判断链决定解法：
 
-```
-src/llmwikify/kernel/quant/
-├── __init__.py        (697 LoC, doc-only)
-└── llm_client.py      (891 LoC, re-exports from foundation/llm/client)
-```
+1. **能搬就搬** —— 实现本身 app 无关就直接搬到正确层级，不引入协议
+2. **不搬才下沉协议**，且优先数据契约、慎下行为对象
+3. 层级判据：
+   - 零依赖基础设施（HTTP 客户端 / LLM 协议 / 文件 IO / 计时）→ `foundation/`
+   - 领域抽象（wiki 协议 / storage / graph / agent loop / skill 类型）→ `kernel/`
+   - 编排与状态（service / engine / UI 适配）→ 留在 `apps/`
+4. **红线**：纯数据结构 / Protocol 定义可下沉；持有 app 状态或需要注入
+   app 配置的对象不下沉（会把 apps 依赖带进 kernel，制造新问题）
 
-The `__init__.py` documents the historical `kernel/quant/` design (C1–C3 era: codegen/, data_source/, llm_client/). The `llm_client.py` re-exports `build_llm_client`, `load_llm_config`, `CONFIG_PATH` from `foundation.llm.client` so old import paths still work.
+已按此标准下沉的实例：
+- `kernel/skills/types.py` — `SkillResult` / `SkillContext` / `SkillAction`（纯数据契约）
+- `kernel/skills/confirmation.py` — `ConfirmationManager`（97 行零依赖状态管理）
+- `foundation/web/search.py` — `WebSearch`（HTTP 搜索客户端）
 
-```python
-# Deprecated: prefer foundation/llm/client
-from llmwikify.kernel.quant.llm_client import build_llm_client  # still works
-# Recommended:
-from llmwikify.foundation.llm.client import build_llm_client
-```
+反例（不该下沉、已正确留在 apps）：
+- `apps/wiki/tool_registry.py` — WikiToolRegistry 是 wiki 领域能力，不是通用契约
 
 ---
 
 ## 4. The `apps/` internal structure
 
-### 4.1 LoC distribution
+### 4.1 Structure (post 2026-11 architecture-debt cleanup)
 
 ```
-apps/chat/       166 files  31,536 LoC  (78% of apps/)  ← Core: Chat + Research engine
-apps/research/    13 files   4,983 LoC  (12%)          ← Phase 4 canonical home
-apps/agent/        6 files   2,051 LoC   (5%)           ← Notifications + Scheduler
-apps/wiki/         3 files     917 LoC   (2%)           ← Wiki business
-apps/api/          1 files     512 LoC   (1%)           ← OpenAPI schema
-                  ────────  ────────
-                  192 files  40,218 LoC
+apps/chat/          应用层 — ChatBase, orchestrator, skills, memory, db
+apps/agent/         应用层 — maintenance/ (AutoIngest, enricher, gap_filler)
+apps/research/      领域共享层 — ResearchEngine, harness, runner, config
+apps/wiki/          领域共享层 — WikiService, tool_registry, dream_editor,
+                                  notifications, scheduler, harness
+apps/chat_db/       共享基础设施 — ChatDatabase + repositories + tables
+apps/wiki_db/       共享基础设施 — WikiDatabase
+apps/db_base.py     共享基础设施 — BaseDatabase + path helpers
+apps/db.py          共享基础设施 — 三 facade 聚合门面
+```
+
+**关键约束**：`chat` ↔ `agent` 互不依赖（环已消除）；
+应用层只可消费 `research` / `wiki`；
+共享基础设施不是 peer 包。
 ```
 
 ### 4.2 `apps/chat/agent/` — the heaviest submodule (≈ 200K LoC? no, 100K)

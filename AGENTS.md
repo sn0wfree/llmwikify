@@ -161,18 +161,34 @@ foundation  →  (self only)
 ```
 
 包职责:
-- `foundation/` — 零依赖基础设施 (LLM 协议/callback/extractor)
+- `foundation/` — 零依赖基础设施 (LLM 协议/callback/extractor/web search)
 - `kernel/agent/` — 通用 agent 框架 (UnifiedAgentLoop / StepHandler / Hook / Spec)
+- `kernel/skills/` — skill 框架类型 (SkillResult / SkillContext / ConfirmationManager)
 - `kernel/codegen/` — LLM 代码生成工具 (extract/validate/execute)
 - `kernel/{wiki,graph,search,storage}/` — 知识图谱相关
-- `apps/` — 应用层，子包 `agent` / `api` / `chat` / `research` / `wiki`
-- `interfaces/` — 入口层 (CLI/MCP/HTTP)
+- `apps/` — 应用层：
+  - `chat` / `agent` — 应用层（互不依赖）
+  - `research` / `wiki` — 领域共享层（可被应用层消费）
+  - `chat_db` / `wiki_db` / `db_base` / `db` — 共享基础设施（非 peer）
+- `interfaces/` — 入口层 (CLI/MCP/HTTP/OpenAI 适配)
 
 apps 内的包间依赖（peer rule）:
-- 允许：`chat → research`
-- 其余一律视为债务（v0.40 抽出 research 时留下的残余），
-  `scripts/check_architecture.py` 已把当前规模记为基线，
-  **只减不增**——新增边会让检查失败
+- 允许：应用层（`chat` / `agent`）可消费领域共享层（`research` / `wiki`）
+- 禁止：应用层之间互不依赖（`chat ↔ agent` 环已消除）
+- 共享基础设施（`chat_db` / `wiki_db` / `db_base` / `db`）不是 peer
+- `scripts/check_architecture.py` 双基线棘轮：
+  structural（模块级）基线为空，任何新增即失败；
+  runtime（函数级惰性导入）同样基线为空
+
+协议下沉边界（新增跨层耦合时按此判断）:
+1. **能搬就搬** —— 实现本身 app 无关就直接搬，不引入协议
+2. **不搬才下沉协议**，且优先数据契约、慎下行为对象
+3. 层级判据：
+   - 零依赖基础设施（HTTP 客户端 / LLM 协议 / 文件 IO / 计时）→ `foundation/`
+   - 领域抽象（wiki 协议 / storage / graph / agent loop / skill 类型）→ `kernel/`
+   - 编排与状态（service / engine / UI 适配）→ 留在 `apps/`
+4. 红线：纯数据结构 / Protocol 定义可下沉；持有 app 状态或需要注入
+   app 配置的对象不下沉（会把 apps 依赖带进 kernel）
 
 禁止:
 - `kernel/ → apps/` 任何 import (含 runtime lazy)
@@ -185,10 +201,13 @@ backward-compat shim 保留（仅供外部调用方，仓库内源码一律走�
   此处只剩 re-export（core/loop/steps/pipelines）
 - `apps/chat/agent/execution_context.py` — AgentExecutionContext
   已迁 kernel/agent/execution_context.py
+- `apps/chat/db.py` — ChatDatabase 已迁 apps/chat_db/
+- `apps/agent/tools/__init__.py` — WikiToolRegistry 已迁
+  apps/wiki/tool_registry.py，commands_tool 已迁 apps/chat/skills/
 
 验证:
 - `python scripts/check_architecture.py` 必须 0 violation
-  且 apps peer 债务不超基线
+  且 apps peer structural/runtime 均为 0
 - 反向依赖 grep 必须为空
 - 422+ tests 通过
 
