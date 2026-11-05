@@ -154,10 +154,9 @@ quantnodes-mysql、caddy、redis 等），全部被 `-f` 强删。容器配置�
 
 依赖方向（单向，禁止反向）:
 ```
-interfaces  →  apps, kernel, reproduction, foundation
+interfaces  →  apps, kernel, foundation
 apps        →  foundation, kernel
-kernel      →  foundation              ← 严格不依赖 apps/reproduction
-reproduction → foundation, kernel      ← 不依赖 apps
+kernel      →  foundation              ← 严格不依赖 apps
 foundation  →  (self only)
 ```
 
@@ -166,23 +165,30 @@ foundation  →  (self only)
 - `kernel/agent/` — 通用 agent 框架 (UnifiedAgentLoop / StepHandler / Hook / Spec)
 - `kernel/codegen/` — LLM 代码生成工具 (extract/validate/execute)
 - `kernel/{wiki,graph,search,storage}/` — 知识图谱相关
-- `apps/` — 应用层 (chat/wiki/research)，含 chat-specific 业务逻辑
-- `reproduction/` — 量化复现管线 (paper→factor→backtest→report)
+- `apps/` — 应用层，子包 `agent` / `api` / `chat` / `research` / `wiki`
 - `interfaces/` — 入口层 (CLI/MCP/HTTP)
+
+apps 内的包间依赖（peer rule）:
+- 允许：`chat → research`
+- 其余一律视为债务（v0.40 抽出 research 时留下的残余），
+  `scripts/check_architecture.py` 已把当前规模记为基线，
+  **只减不增**——新增边会让检查失败
 
 禁止:
 - `kernel/ → apps/` 任何 import (含 runtime lazy)
-- `foundation/ → kernel/apps/reproduction/`
-- `reproduction/ → apps/` 任何 import
+- `foundation/ → kernel/apps/`
+- `apps/ → interfaces/`
 - `kernel/quant/` 业务命名（已删）
 
-backward-compat shim 保留:
-- `apps/chat/agent/unified/` — 通用框架已迁 kernel/agent/, 此处为 shim
-- `apps/chat/agent/execution_context.py` — AgentExecutionContext 已迁 kernel/agent/
-- `kernel/quant/llm_client.py` — build_llm_client 已下沉 foundation/llm/client.py
+backward-compat shim 保留（仅供外部调用方，仓库内源码一律走新位置）:
+- `apps/chat/agent/unified/` — 通用框架已迁 kernel/agent/，
+  此处只剩 re-export（core/loop/steps/pipelines）
+- `apps/chat/agent/execution_context.py` — AgentExecutionContext
+  已迁 kernel/agent/execution_context.py
 
 验证:
 - `python scripts/check_architecture.py` 必须 0 violation
+  且 apps peer 债务不超基线
 - 反向依赖 grep 必须为空
 - 422+ tests 通过
 

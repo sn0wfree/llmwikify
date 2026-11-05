@@ -26,6 +26,9 @@ import uuid
 from pathlib import Path
 from typing import Any
 
+# The three DB facades share one physical file, so the research-side
+# "all facades" initializer derives from the chat facade.
+from llmwikify.apps.chat.db import ChatDatabase
 from llmwikify.apps.db_base import BaseDatabase, get_app_db_path
 
 logger = logging.getLogger(__name__)
@@ -1037,3 +1040,19 @@ def _row_to_step_dict(row: sqlite3.Row) -> dict:
     else:
         d["result"] = None
     return d
+
+
+class AutoResearchDatabase(ChatDatabase):
+    """Backward-compat: initializes all 3 facades.
+
+    Pre-v0.33.0 code used ``AutoResearchDatabase`` which created
+    all 11 tables. This subclass ensures all 3 facades are
+    instantiated so all tables exist in the shared DB file.
+    """
+
+    def __init__(self, data_dir) -> None:
+        super().__init__(data_dir)
+        from llmwikify.apps.wiki_db import WikiDatabase
+
+        ResearchDatabase(data_dir)
+        WikiDatabase(data_dir)

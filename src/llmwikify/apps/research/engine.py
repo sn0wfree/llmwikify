@@ -13,21 +13,21 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 from functools import partial
 from typing import Any
 
-from llmwikify.apps.chat.agent.research_bridge import translate_react_events
-from llmwikify.apps.chat.agent.research_runner import ReActConfig
-from llmwikify.apps.chat.config import merge_six_step_config
-from llmwikify.apps.chat.db import AutoResearchDatabase
-from llmwikify.apps.chat.gatherer import SourceGatherer
-from llmwikify.apps.chat.harness.quality_gate import QualityGate
-from llmwikify.apps.chat.harness.review import ResearchReviewer, ResearchRevisor
-from llmwikify.apps.chat.harness.source_analyzer import SourceAnalyzer
-from llmwikify.apps.chat.providers.registry import create_llm
-from llmwikify.apps.chat.session import ResearchSessionManager
-from llmwikify.apps.chat.state import (
+from llmwikify.apps.research.bridge import translate_react_events
+from llmwikify.apps.research.db import AutoResearchDatabase
+from llmwikify.apps.research.gatherer import SourceGatherer
+from llmwikify.apps.research.harness.quality_gate import QualityGate
+from llmwikify.apps.research.harness.review import ResearchReviewer, ResearchRevisor
+from llmwikify.apps.research.harness.source_analyzer import SourceAnalyzer
+from llmwikify.apps.research.runner import ReActConfig
+from llmwikify.apps.research.session import ResearchSessionManager
+from llmwikify.apps.research.six_step_config import merge_six_step_config
+from llmwikify.apps.research.state import (
     MetricsCollector,
     ResearchState,
 )
-from llmwikify.apps.chat.synthesizer import ResearchSynthesizer
+from llmwikify.apps.research.synthesizer import ResearchSynthesizer
+from llmwikify.foundation.llm.providers.registry import create_llm
 from llmwikify.foundation.llm.streamable import StreamableLLMClient
 
 from . import actions
@@ -81,7 +81,7 @@ class ResearchEngine:
         self._quality_gate = QualityGate(self.config)
 
         # ─── 6-step framework: clarifier (schema is built into the DB) ──
-        from llmwikify.apps.chat.clarifier import ResearchClarifier
+        from llmwikify.apps.research.clarifier import ResearchClarifier
 
         self.clarifier = ResearchClarifier(self._planning_llm, self.config)
         # The 6-step JSON fields (clarification/reasoning/structure/...) are
@@ -223,7 +223,7 @@ class ResearchEngine:
 
         # Build ReActConfig wired to ResearchEngine's domain logic
         config = self._build_react_config(state)
-        from llmwikify.apps.chat.agent.research_runner import (
+        from llmwikify.apps.research.runner import (
             ReActEngine,
             SkillContext,
         )
@@ -265,7 +265,7 @@ class ResearchEngine:
 
     def _build_react_config(self, state: ResearchState) -> ReActConfig:
         """Build a ReActConfig wired to ResearchEngine's domain logic."""
-        from llmwikify.apps.chat.agent.research_runner import (
+        from llmwikify.apps.research.runner import (
             SkillAction,
             SkillResult,
         )

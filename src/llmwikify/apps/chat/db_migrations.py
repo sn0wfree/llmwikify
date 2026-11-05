@@ -43,8 +43,8 @@ def init_autoresearch_db(db_path) -> None:
         the new name. To read the resulting DB, query the
         canonical path returned by ``get_app_db_path()``.
     """
-    from llmwikify.apps.chat.db import AutoResearchDatabase
     from llmwikify.apps.db_base import get_app_db_path
+    from llmwikify.apps.research.db import AutoResearchDatabase
 
     db_path = Path(db_path)
     AutoResearchDatabase(db_path.parent)

@@ -75,7 +75,7 @@ class MaintenanceManager:
         if self._proposal_db is not None or self._data_dir is None:
             return self._proposal_db
         try:
-            from llmwikify.apps.wiki.db import WikiDatabase
+            from llmwikify.apps.wiki_db import WikiDatabase
 
             self._proposal_db = WikiDatabase(Path(self._data_dir))
         except Exception:

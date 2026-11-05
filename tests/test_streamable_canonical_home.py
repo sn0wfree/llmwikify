@@ -181,7 +181,7 @@ def test_streamable_uses_relative_imports_for_budget_modules():
     # directly (per v0.32 Phase 4, providers migrated from
     # apps/agent/ to apps/chat/).
     assert "from llmwikify.apps.agent.providers.registry" not in src
-    assert "from llmwikify.apps.chat.providers.registry" not in src
+    assert "from llmwikify.foundation.llm.providers.registry" not in src
     assert "from llmwikify._legacy.adapters" not in src
     # No other absolute agent imports at module level
     top_level_agent_imports = [

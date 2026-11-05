@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from llmwikify.apps.chat.engine_helpers import (
+from llmwikify.apps.research.engine_helpers import (
     DEFAULT_LLM_PARAMS,
     resolve_llm_params,
 )
@@ -278,7 +278,7 @@ def test_output_unpacks_into_chat_json_kwargs():
     """resolve_llm_params output can be **-unpacked into chat_json."""
     import inspect
 
-    from llmwikify.apps.chat.engine_helpers import chat_json
+    from llmwikify.apps.research.engine_helpers import chat_json
 
     result = resolve_llm_params(
         registry=_make_registry({}), config=None, prompt_name="research_plan"

@@ -117,7 +117,7 @@ def test_engine_synthesis_to_text_delegates_to_gates():
 def test_framework_compliance_returns_missing_step():
     """Each incomplete framework field produces the right ``missing`` action."""
     from llmwikify.apps.chat.research_engine.gates import ResearchGates
-    from llmwikify.apps.chat.state import ResearchState
+    from llmwikify.apps.research.state import ResearchState
 
     class FakeEngine:
         db = None

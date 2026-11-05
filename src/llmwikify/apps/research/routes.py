@@ -13,8 +13,8 @@ from typing import Any
 
 from fastapi import APIRouter, Request
 
-from llmwikify.apps.chat.db import AutoResearchDatabase
-from llmwikify.apps.chat.task_manager import get_task_manager
+from llmwikify.apps.research.db import AutoResearchDatabase
+from llmwikify.apps.research.task_manager import get_task_manager
 
 from .engine import ResearchEngine
 

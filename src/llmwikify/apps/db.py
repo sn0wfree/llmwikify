@@ -23,7 +23,7 @@ from pathlib import Path
 
 from llmwikify.apps.chat.db import ChatDatabase
 from llmwikify.apps.research.db import ResearchDatabase
-from llmwikify.apps.wiki.db import WikiDatabase
+from llmwikify.apps.wiki_db import WikiDatabase
 
 
 class AppDatabase:

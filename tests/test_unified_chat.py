@@ -6,8 +6,8 @@ from typing import Any
 
 import pytest
 
-from llmwikify.apps.chat.agent.unified.core import StepResult
 from llmwikify.apps.chat.agent.unified.spec import ActResult, ChatSpec, ReasonResponse
+from llmwikify.kernel.agent import StepResult
 
 # ── Mock LLM service ──────────────────────────────────────
 

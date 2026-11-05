@@ -117,7 +117,7 @@ def run_serve(wiki: Any, config: dict, args: Any) -> int:
     force_skip_dream = getattr(args, "force_skip_dream", False)
     provider: Any = None
     try:
-        from llmwikify.apps.chat.providers.registry import get_default_provider
+        from llmwikify.foundation.llm.providers.registry import get_default_provider
 
         provider = get_default_provider()
         if provider is not None:

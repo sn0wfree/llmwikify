@@ -36,14 +36,14 @@ Design refs
 
 from __future__ import annotations
 
-from llmwikify.apps.chat.harness.quality_gate import GateResult, QualityGate
-from llmwikify.apps.chat.harness.review import (
+from llmwikify.apps.research.harness.quality_gate import GateResult, QualityGate
+from llmwikify.apps.research.harness.review import (
     ResearchReviewer,
     ResearchRevisor,
 )
-from llmwikify.apps.chat.harness.source_analyzer import SourceAnalyzer
-from llmwikify.apps.chat.harness.source_filter import SourceFilter
-from llmwikify.apps.chat.harness.structure_validator import StructureValidator
+from llmwikify.apps.research.harness.source_analyzer import SourceAnalyzer
+from llmwikify.apps.research.harness.source_filter import SourceFilter
+from llmwikify.apps.research.harness.structure_validator import StructureValidator
 
 __all__ = [
     "QualityGate",

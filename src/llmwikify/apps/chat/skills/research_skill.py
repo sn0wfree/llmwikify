@@ -64,10 +64,6 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from llmwikify.apps.chat.agent.research_runner import (
-    ReactConfig,
-    ReactLoop,
-)
 from llmwikify.apps.chat.skills.actions.analyze_action import analyze_skill
 from llmwikify.apps.chat.skills.actions.plan_action import plan_skill
 from llmwikify.apps.chat.skills.actions.revise_action import revise_skill
@@ -81,6 +77,10 @@ from llmwikify.apps.chat.skills.base import (
 )
 from llmwikify.apps.chat.skills.registry import (
     default_registry,
+)
+from llmwikify.apps.research.runner import (
+    ReactConfig,
+    ReactLoop,
 )
 
 logger = logging.getLogger(__name__)

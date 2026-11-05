@@ -22,13 +22,6 @@ import tempfile
 
 import pytest
 
-from llmwikify.apps.chat.agent.research_runner import (
-    EVENT_ACTION_ERROR,
-    EVENT_PHASE,
-    EVENT_REASONING,
-    EVENT_ROUND_COMPLETE,
-    ReactConfig,
-)
 from llmwikify.apps.chat.skills import (
     SkillContext,
     SkillRegistry,
@@ -52,6 +45,13 @@ from llmwikify.apps.chat.skills.research_skill import (
     research_skill,
     resume_research,
     run_research,
+)
+from llmwikify.apps.research.runner import (
+    EVENT_ACTION_ERROR,
+    EVENT_PHASE,
+    EVENT_REASONING,
+    EVENT_ROUND_COMPLETE,
+    ReactConfig,
 )
 
 

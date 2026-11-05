@@ -1,18 +1,18 @@
-"""Tests for unified/core.py — StepResult, Pipeline, UnifiedContext, UnifiedHook."""
+"""Tests for the generic agent core — StepResult, Pipeline, UnifiedContext, UnifiedHook."""
 
 from __future__ import annotations
 
 import pytest
 
-from llmwikify.apps.chat.agent.unified.core import (
+from llmwikify.apps.chat.agent.unified.spec import BaseSpec
+from llmwikify.foundation.utils import maybe_await as _maybe_await
+from llmwikify.kernel.agent import (
     Pipeline,
     StepHandler,
     StepResult,
     UnifiedContext,
     UnifiedHook,
-    _maybe_await,
 )
-from llmwikify.apps.chat.agent.unified.spec import BaseSpec
 
 # ── StepResult ────────────────────────────────────────────
 

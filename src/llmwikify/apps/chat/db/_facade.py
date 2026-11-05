@@ -75,7 +75,6 @@ logger = logging.getLogger(__name__)
 
 __all__ = [
     "ChatDatabase",
-    "AutoResearchDatabase",  # back-compat alias
     "DB_SIZE_WARNING_MB",
     "get_chat_db_path",
     "get_autoresearch_db_path",  # back-compat alias
@@ -721,19 +720,3 @@ class ChatDatabase(BaseDatabase):
     def get_db_stats(self) -> dict[str, Any]:
         return self._admin.get_db_stats()
 
-
-class AutoResearchDatabase(ChatDatabase):
-    """Backward-compat: initializes all 3 facades.
-
-    Pre-v0.33.0 code used ``AutoResearchDatabase`` which created
-    all 11 tables. This subclass ensures all 3 facades are
-    instantiated so all tables exist in the shared DB file.
-    """
-
-    def __init__(self, data_dir) -> None:
-        super().__init__(data_dir)
-        from llmwikify.apps.research.db import ResearchDatabase
-        from llmwikify.apps.wiki.db import WikiDatabase
-
-        ResearchDatabase(data_dir)
-        WikiDatabase(data_dir)

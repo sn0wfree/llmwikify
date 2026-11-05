@@ -2,7 +2,7 @@
 
 v0.40 moved the canonical implementation to
 ``llmwikify.apps.research.llm_step``. This shim preserves the old
-import path ``from llmwikify.apps.chat.research_engine.llm_step``
+import path ``from llmwikify.apps.research.llm_step``
 so existing tests and external callers keep working.
 
 The shim exposes the SAME module object as the canonical home (via

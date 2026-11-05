@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import pytest
 
-from llmwikify.apps.chat.agent.unified.pipelines.codegen import (
-    CodeActor,
-    CodegenReasoner,
-)
 from llmwikify.apps.chat.agent.unified.spec import (
     ActResult,
     CodegenSpec,
     ReasonResponse,
+)
+from llmwikify.kernel.agent import (
+    CodeActor,
+    CodegenReasoner,
 )
 
 # ── Mock LLM ──────────────────────────────────────────────

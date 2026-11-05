@@ -18,7 +18,7 @@ import pytest
 
 
 def _db(tmp_path):
-    from llmwikify.apps.wiki.db import WikiDatabase
+    from llmwikify.apps.wiki_db import WikiDatabase
 
     return WikiDatabase(tmp_path / "data")
 

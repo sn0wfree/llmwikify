@@ -4,15 +4,15 @@ from __future__ import annotations
 
 import pytest
 
-from llmwikify.apps.chat.harness.quality_gate import QualityGate
-from llmwikify.apps.chat.harness.review import (
+from llmwikify.apps.chat.harness.service import HarnessService
+from llmwikify.apps.research.harness.quality_gate import QualityGate
+from llmwikify.apps.research.harness.review import (
     ResearchReviewer,
     ResearchRevisor,
 )
-from llmwikify.apps.chat.harness.service import HarnessService
-from llmwikify.apps.chat.harness.source_analyzer import SourceAnalyzer
-from llmwikify.apps.chat.harness.source_filter import SourceFilter
-from llmwikify.apps.chat.harness.structure_validator import (
+from llmwikify.apps.research.harness.source_analyzer import SourceAnalyzer
+from llmwikify.apps.research.harness.source_filter import SourceFilter
+from llmwikify.apps.research.harness.structure_validator import (
     StructureValidator,
 )
 

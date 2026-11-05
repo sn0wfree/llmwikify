@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import pytest
 
-from llmwikify.apps.chat.agent.unified.core import StepHandler, StepResult
 from llmwikify.apps.chat.agent.unified.registry import (
     AgentModeConfig,
     create_agent_loop,
     list_modes,
     register_mode,
 )
+from llmwikify.kernel.agent import StepHandler, StepResult
 
 # ── Mock handlers ─────────────────────────────────────────
 

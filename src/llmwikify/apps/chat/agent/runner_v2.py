@@ -199,7 +199,7 @@ class ChatRunnerV2(AgentRunner["ChatRunSpec", "ChatRunResult"]):
         fresh copy so mutations to the child's hook / config do not
         leak back into the parent.
         """
-        from llmwikify.apps.chat.agent.execution_context import (
+        from llmwikify.kernel.agent.execution_context import (
             AgentExecutionContext,
         )
 

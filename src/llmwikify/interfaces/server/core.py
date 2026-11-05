@@ -55,7 +55,7 @@ class WikiServer:
         server.run(host="127.0.0.1", port=8765)
 
         # Phase 7: provider injection (enables Phase 6 DreamScheduler)
-        from llmwikify.apps.chat.providers.registry import get_default_provider
+        from llmwikify.foundation.llm.providers.registry import get_default_provider
         provider = get_default_provider()
         server = WikiServer(wiki, provider=provider, enable_dream_scheduler=True)
 

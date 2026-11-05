@@ -1223,7 +1223,7 @@ class StreamableLLMClient(LLMClient):
 
         This is a pure config-to-constructor translation; it does
         NOT consult the LLM provider registry (that lives at
-        L3 in ``llmwikify.apps.chat.providers.registry``).
+        L3 in ``llmwikify.foundation.llm.providers.registry``).
         Callers that need the registry's provider discovery
         should call ``apps.chat.providers.registry.create_llm``
         directly.

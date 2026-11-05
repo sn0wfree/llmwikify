@@ -474,7 +474,7 @@ class TestStreamableFromConfig:
 class TestProviderFromConfig:
     def test_minimax_provider_uses_resolver(self, monkeypatch):
         monkeypatch.delenv("LLM_USE_RESOLVER", raising=False)
-        from llmwikify.apps.chat.providers.minimax import MiniMaxProvider
+        from llmwikify.foundation.llm.providers.minimax import MiniMaxProvider
 
         provider = MiniMaxProvider()
         client = provider.from_config(
@@ -491,7 +491,7 @@ class TestProviderFromConfig:
 
     def test_minimax_provider_aliases_legacy_id(self, monkeypatch):
         monkeypatch.delenv("LLM_USE_RESOLVER", raising=False)
-        from llmwikify.apps.chat.providers.minimax import MiniMaxProvider
+        from llmwikify.foundation.llm.providers.minimax import MiniMaxProvider
 
         provider = MiniMaxProvider()
         client = provider.from_config(
@@ -504,7 +504,7 @@ class TestProviderFromConfig:
 
     def test_minimax_provider_raises_without_api_key(self, monkeypatch):
         monkeypatch.delenv("LLM_API_KEY", raising=False)
-        from llmwikify.apps.chat.providers.minimax import MiniMaxProvider
+        from llmwikify.foundation.llm.providers.minimax import MiniMaxProvider
 
         provider = MiniMaxProvider()
         with pytest.raises(ValueError, match="API key not configured"):
@@ -512,7 +512,7 @@ class TestProviderFromConfig:
 
     def test_xiaomi_provider_uses_resolver(self, monkeypatch):
         monkeypatch.delenv("LLM_USE_RESOLVER", raising=False)
-        from llmwikify.apps.chat.providers.xiaomi import XiaomiProvider
+        from llmwikify.foundation.llm.providers.xiaomi import XiaomiProvider
 
         provider = XiaomiProvider()
         client = provider.from_config(
@@ -530,7 +530,7 @@ class TestProviderFromConfig:
 
     def test_xiaomi_provider_raises_without_api_key(self, monkeypatch):
         monkeypatch.delenv("LLM_API_KEY", raising=False)
-        from llmwikify.apps.chat.providers.xiaomi import XiaomiProvider
+        from llmwikify.foundation.llm.providers.xiaomi import XiaomiProvider
 
         provider = XiaomiProvider()
         with pytest.raises(ValueError, match="API key not configured"):
@@ -540,7 +540,7 @@ class TestProviderFromConfig:
         # Sanity check: the registry still works end-to-end.
         monkeypatch.delenv("LLM_USE_RESOLVER", raising=False)
         monkeypatch.setenv("LLM_API_KEY", "k")
-        from llmwikify.apps.chat.providers.registry import create_llm
+        from llmwikify.foundation.llm.providers.registry import create_llm
 
         client = create_llm(
             {

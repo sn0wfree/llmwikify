@@ -48,7 +48,7 @@ def main() -> None:
     # semantics as ``llmwikify serve`` (see interfaces/cli/commands/serve.py).
     provider = None
     try:
-        from llmwikify.apps.chat.providers.registry import get_default_provider
+        from llmwikify.foundation.llm.providers.registry import get_default_provider
 
         provider = get_default_provider()
         if provider is not None:

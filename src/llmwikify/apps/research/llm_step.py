@@ -51,13 +51,13 @@ import logging
 import time
 from typing import Any
 
-from llmwikify.apps.chat.engine_helpers import resolve_llm_params, safe_json_loads
-from llmwikify.apps.chat.prompts import (
+from llmwikify.apps.research.engine_helpers import resolve_llm_params, safe_json_loads
+from llmwikify.apps.research.prompts import (
     PROMPT_REGISTRY,
     render_framework_block,
 )
-from llmwikify.apps.chat.retry_managers import LLMRetryManager
-from llmwikify.apps.chat.state import LLMCallMetrics
+from llmwikify.apps.research.retry_managers import LLMRetryManager
+from llmwikify.apps.research.state import LLMCallMetrics
 
 logger = logging.getLogger(__name__)
 

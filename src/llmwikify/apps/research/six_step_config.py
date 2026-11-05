@@ -23,7 +23,7 @@ from typing import Any
 
 from llmwikify.apps.research.base import BaseResearchConfig
 
-_DEFAULTS_FILE = Path(__file__).parent / "config_defaults.yaml"
+_DEFAULTS_FILE = Path(__file__).parent / "six_step_config_defaults.yaml"
 
 
 @lru_cache(maxsize=1)

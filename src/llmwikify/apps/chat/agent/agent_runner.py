@@ -45,7 +45,7 @@ from collections.abc import AsyncIterator
 from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
 if TYPE_CHECKING:
-    from llmwikify.apps.chat.agent.execution_context import (
+    from llmwikify.kernel.agent.execution_context import (
         AgentExecutionContext,
     )
 

@@ -11,7 +11,7 @@ WikiQuerySkill (Skill framework).
 Design ref: ``v0.32-execution-plan.md`` Phase 13d
 """
 
-from llmwikify.apps.wiki.db import WikiDatabase
 from llmwikify.apps.wiki.service import WikiService
+from llmwikify.apps.wiki_db import WikiDatabase
 
 __all__ = ["WikiDatabase", "WikiService"]

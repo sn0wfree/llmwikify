@@ -31,7 +31,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from llmwikify.apps.chat.research_engine.llm_step import run_prompt
+from llmwikify.apps.research.llm_step import run_prompt
 
 # ─── research_clarify.yaml matches legacy Chinese inline content ─────
 
@@ -282,7 +282,7 @@ class TestNoInlinePromptResidue:
     """
 
     def test_clarifier_no_chinese_inline_prompt(self):
-        from llmwikify.apps.chat import clarifier
+        from llmwikify.apps.research import clarifier
 
         source = open(clarifier.__file__).read()
         # The legacy Chinese prompt text should not be in the source

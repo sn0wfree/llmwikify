@@ -230,13 +230,13 @@ def _register_agent_routes(
     set_agent_service(agent_service)
 
     # Register /api/autoresearch/* routes (router exists, never mounted)
-    from llmwikify.apps.chat.config import merge_six_step_config
     from llmwikify.apps.chat.research_engine.routes import (
         router as autoresearch_router,
     )
     from llmwikify.apps.chat.research_engine.routes import (
         set_autoresearch_deps,
     )
+    from llmwikify.apps.research.six_step_config import merge_six_step_config
 
     db = agent_service.app_db.chat
     autoresearch_llm = provider
@@ -276,7 +276,7 @@ def _register_agent_routes(
 
     model_name = "llmwikify-chat"
     try:
-        from llmwikify.apps.chat.providers.registry import get_default_provider
+        from llmwikify.foundation.llm.providers.registry import get_default_provider
 
         provider = get_default_provider()
         if provider and getattr(provider, "model", None):

@@ -4,17 +4,17 @@ from __future__ import annotations
 
 import pytest
 
-from llmwikify.apps.chat.agent.unified.core import (
-    StepHandler,
-    StepResult,
-    StreamingHandler,
-)
-from llmwikify.apps.chat.agent.unified.loop import UnifiedAgentLoop
 from llmwikify.apps.chat.agent.unified.spec import (
     ActResult,
     BaseSpec,
     ReasonResponse,
     UnifiedResult,
+)
+from llmwikify.kernel.agent import (
+    StepHandler,
+    StepResult,
+    StreamingHandler,
+    UnifiedAgentLoop,
 )
 
 # ── Mock handlers ─────────────────────────────────────────

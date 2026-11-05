@@ -19,14 +19,14 @@ pl = pytest.importorskip(
 # 可选依赖) — 未安装则整文件跳过
 pytest.importorskip("QuantNodes")
 
-from llmwikify.apps.chat.agent.unified.pipelines.codegen import (  # noqa: E402
-    CodeActor,
-    CodegenReasoner,
-)
 from llmwikify.apps.chat.agent.unified.spec import (  # noqa: E402
     CodegenSpec,
     ReasonResponse,
     UnifiedResult,
+)
+from llmwikify.kernel.agent import (  # noqa: E402
+    CodeActor,
+    CodegenReasoner,
 )
 
 # ── Mock LLM ──────────────────────────────────────────────
@@ -513,7 +513,7 @@ class _DictLLM:
 @pytest.mark.asyncio
 async def test_generate_factor_code_success():
     """generate_factor_code returns UnifiedResult with code + series."""
-    from llmwikify.apps.chat.agent.unified.pipelines.codegen import generate_factor_code
+    from llmwikify.kernel.agent import generate_factor_code
 
     llm = _DictLLM("def compute_factor(df):\n    return df['close'].fill_null(0)")
     result = await generate_factor_code(
@@ -532,7 +532,7 @@ async def test_generate_factor_code_success():
 @pytest.mark.asyncio
 async def test_generate_factor_code_failure():
     """generate_factor_code returns error on bad code."""
-    from llmwikify.apps.chat.agent.unified.pipelines.codegen import generate_factor_code
+    from llmwikify.kernel.agent import generate_factor_code
 
     llm = _DictLLM("def compute_factor(df):\n    if rank(pl.col('x')) > 0: return 1")
     result = await generate_factor_code(
@@ -549,7 +549,7 @@ async def test_generate_factor_code_failure():
 @pytest.mark.asyncio
 async def test_generate_factor_code_builds_messages():
     """generate_factor_code auto-builds system+user prompt from spec."""
-    from llmwikify.apps.chat.agent.unified.pipelines.codegen import generate_factor_code
+    from llmwikify.kernel.agent import generate_factor_code
 
     llm = _DictLLM("def compute_factor(df):\n    return df['close'].fill_null(0)")
     await generate_factor_code(

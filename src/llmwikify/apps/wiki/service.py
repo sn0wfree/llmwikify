@@ -55,7 +55,7 @@ class WikiService:
 
         # WikiDatabase facade for subsystems that only need
         # wiki-domain methods (dream/notif/confirm/ingest).
-        from llmwikify.apps.wiki.db import WikiDatabase
+        from llmwikify.apps.wiki_db import WikiDatabase
 
         self._wiki_db = WikiDatabase(self.data_dir)
 
@@ -89,7 +89,7 @@ class WikiService:
     def get_llm(self) -> Any:
         """Lazy-create the LLM client from config."""
         if self._llm is None:
-            from llmwikify.apps.chat.config_manager import (
+            from llmwikify.apps.research.six_step_config_manager import (
                 get_global_config_manager,
             )
 
@@ -102,7 +102,7 @@ class WikiService:
                 if wiki_instance and wiki_instance.root:
                     wiki_root = wiki_instance.root
             config = self._config_manager.load_effective_llm_config(wiki_root)
-            from llmwikify.apps.chat.providers.registry import create_llm
+            from llmwikify.foundation.llm.providers.registry import create_llm
 
             self._llm = create_llm(config)
         return self._llm
@@ -116,7 +116,7 @@ class WikiService:
         from llmwikify.foundation.llm.resolver import resolve_chat_llm
 
         if self._config_manager is None:
-            from llmwikify.apps.chat.config_manager import (
+            from llmwikify.apps.research.six_step_config_manager import (
                 get_global_config_manager,
             )
 

@@ -6,7 +6,7 @@ import logging
 from collections.abc import AsyncIterator
 from typing import Any
 
-from llmwikify.apps.chat.prompts import source_hash as _source_hash
+from llmwikify.apps.research.prompts import source_hash as _source_hash
 
 from .llm_step import run_prompt
 
@@ -141,8 +141,8 @@ class ReportGenerator:
         ``generate`` method now uses ``run_prompt`` instead and does
         not call this method.
         """
-        from llmwikify.apps.chat.engine_helpers import resolve_llm_params
-        from llmwikify.apps.chat.prompts import render_framework_block
+        from llmwikify.apps.research.engine_helpers import resolve_llm_params
+        from llmwikify.apps.research.prompts import render_framework_block
         from llmwikify.kernel.wiki.prompt_registry import PromptRegistry
 
         registry = PromptRegistry(

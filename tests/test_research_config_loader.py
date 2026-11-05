@@ -323,7 +323,7 @@ class TestOverridesFlowIntoMergeSixStepConfig:
                 "research": {"search_provider": "auto", "tavily_api_key": "tvly-aa"},
             },
         )
-        from llmwikify.apps.chat.config import merge_six_step_config
+        from llmwikify.apps.research.six_step_config import merge_six_step_config
         from llmwikify.interfaces.server.http.routes import (
             _build_research_config_overrides,
         )
@@ -340,7 +340,7 @@ class TestOverridesFlowIntoMergeSixStepConfig:
         assert "totally_unknown_key" not in merged
 
     def test_no_overrides_keeps_defaults(self) -> None:
-        from llmwikify.apps.chat.config import merge_six_step_config
+        from llmwikify.apps.research.six_step_config import merge_six_step_config
 
         merged = merge_six_step_config()
         assert merged["search_provider"] == "auto"

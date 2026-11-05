@@ -21,23 +21,26 @@ Layout (post v0.40)
     ├── base.py                    (1.5K LOC) — ChatBase
     ├── research_agent.py          (142 LOC)  — ResearchAgent(ChatBase)
     ├── eval_harness.py            — Harness, GoldenCase, CaseResult, HarnessReport
-    ├── harness/                   (subpackage) — quality_gate, source_filter,
-    │                                              structure_validator, review,
-    │                                              source_analyzer, service
+    ├── harness/                   (subpackage) — service (eval harness runner)
     ├── agent/                     (30 files) — ReAct orchestrator, runner v2,
     │                                            microcompact, subagent manager,
     │                                            prompt builder, etc. (see
     │                                            apps/chat/agent/orchestrator.py:
     │                                            37K LOC)
     ├── db/                        — unified chat database (Phase v0.32)
-    ├── providers/                 — LLM provider registry (factory, base, abc)
     ├── skills/                    — skill plugins + workflow DSL + 7 actor prompts
     ├── bus/                       — pub/sub bus adapters
     ├── channels/                  — channel adapters (cli, http, mcp)
     ├── memory/                    — long-term memory
-    ├── config.py / config_manager.py / state.py / etc.  — config + state
+    ├── config_manager.py          — config file management
     ├── command_router.py          — slash command dispatch (priority / exact / prefix)
     ├── README.md                  — package-level design doc
+
+Research-side modules (state / prompts / gatherer / clarifier / synthesizer /
+session / harness / retry_managers / engine_helpers / reasoning_checker /
+task_manager) live in ``apps/research/`` — they belong to the research
+engine, and keeping them under ``chat/`` made ``apps/research`` depend on
+``apps/chat``.
 
 For the **6-step research engine** (the heavy lifter behind
 ResearchAgent), see ``apps/research/`` (Phase 4 canonical home).
@@ -52,15 +55,19 @@ For **L2 domain abstractions** (wiki engine, knowledge graph, search,
 storage, multi-wiki), see ``llmwikify.kernel.*``.
 """
 
+from llmwikify.apps.research.clarifier import ResearchClarifier
+from llmwikify.apps.research.harness.quality_gate import GateResult, QualityGate
+from llmwikify.apps.research.harness.source_filter import SourceFilter
+from llmwikify.apps.research.harness.structure_validator import StructureValidator
+from llmwikify.apps.research.reasoning_checker import ReasoningChecker
+from llmwikify.apps.research.six_step_config import (
+    DEFAULT_SIX_STEP_CONFIG,
+    merge_six_step_config,
+)
+
 from .base import ChatBase, ChatMessage, ChatSession
-from .clarifier import ResearchClarifier
-from .config import DEFAULT_SIX_STEP_CONFIG, merge_six_step_config
-from .db import AutoResearchDatabase, ChatDatabase
+from .db import ChatDatabase
 from .eval_harness import CaseResult, GoldenCase, Harness, HarnessReport
-from .harness.quality_gate import GateResult, QualityGate
-from .harness.source_filter import SourceFilter
-from .harness.structure_validator import StructureValidator
-from .reasoning_checker import ReasoningChecker
 from .research_agent import ResearchAgent
 
 # v0.40: research_engine 已被合并到 apps.research/ 主包. chat.research_engine/
@@ -74,6 +81,10 @@ from .research_agent import ResearchAgent
 _LAZY_ATTRS = {
     "ResearchEngine": "llmwikify.apps.research.engine",
     "ResearchDatabase": "llmwikify.apps.research.db",
+    # AutoResearchDatabase now lives in apps.research.db; imported lazily
+    # so apps.research.db (which imports ChatDatabase from here) does not
+    # hit this package mid-initialisation.
+    "AutoResearchDatabase": "llmwikify.apps.research.db",
     "WebSearch": "llmwikify.apps.research.web_search",
     "research_router": "llmwikify.apps.research.routes",
     "ResearchGates": "llmwikify.apps.research.gates",
@@ -109,20 +120,20 @@ def __getattr__(name: str):
 # Import-time constants for the public surface. Placed after the
 # PEP 562 __getattr__ so that the latter's lazy-resolve path stays
 # intact at module-load time.
-from .retry_managers import (  # noqa: E402
+from llmwikify.apps.research.retry_managers import (  # noqa: E402
     DBRetryManager,
     LLMRetryManager,
     StageRetryManager,
     retry_async,
 )
-from .state import (  # noqa: E402
+from llmwikify.apps.research.state import (  # noqa: E402
     VALID_TRANSITIONS,
     ActionMetrics,
     MetricsCollector,
     ResearchState,
     SessionMetrics,
 )
-from .synthesizer import ResearchSynthesizer  # noqa: E402
+from llmwikify.apps.research.synthesizer import ResearchSynthesizer  # noqa: E402
 
 __all__ = [
     # Engine

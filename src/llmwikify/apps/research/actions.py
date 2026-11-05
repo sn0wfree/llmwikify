@@ -14,19 +14,19 @@ import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from llmwikify.apps.chat.gatherer import SourceGatherer
-from llmwikify.apps.chat.harness.quality_gate import QualityGate
-from llmwikify.apps.chat.harness.review import ResearchReviewer, ResearchRevisor
-from llmwikify.apps.chat.prompts import _plan_fallback, _replan_fallback
-from llmwikify.apps.chat.session import ResearchSessionManager
-from llmwikify.apps.chat.state import (
+from llmwikify.apps.research.gatherer import SourceGatherer
+from llmwikify.apps.research.harness.quality_gate import QualityGate
+from llmwikify.apps.research.harness.review import ResearchReviewer, ResearchRevisor
+from llmwikify.apps.research.prompts import _plan_fallback, _replan_fallback
+from llmwikify.apps.research.session import ResearchSessionManager
+from llmwikify.apps.research.state import (
     VALID_TRANSITIONS,
     MetricsCollector,
     ResearchState,
 )
 
 if TYPE_CHECKING:
-    from llmwikify.apps.chat.clarifier import ResearchClarifier
+    from llmwikify.apps.research.clarifier import ResearchClarifier
 from llmwikify.foundation.llm.streamable import StreamableLLMClient
 
 from .llm_step import run_prompt
@@ -482,7 +482,7 @@ async def action_gather(
 
     # ─── 6-step step 2: evidence scoring (run only when enabled) ───
     if ctx.config.get("evidence_scoring_enabled", True) and sources:
-        from llmwikify.apps.chat.harness.source_filter import SourceFilter
+        from llmwikify.apps.research.harness.source_filter import SourceFilter
 
         sf = SourceFilter(ctx.config)
         new_scores: dict[str, float] = {}
@@ -597,7 +597,7 @@ async def action_synthesize(
     # ─── 6-step step 3: reasoning chain check ───
     if ctx.config.get("reasoning_check_enabled", True):
         try:
-            from llmwikify.apps.chat.reasoning_checker import ReasoningChecker
+            from llmwikify.apps.research.reasoning_checker import ReasoningChecker
 
             checker = ReasoningChecker()
             synth_text = synthesis_to_text(state.synthesis)
@@ -708,7 +708,7 @@ async def action_report(
     # ─── 6-step step 4: structure validation ───
     if state.report_md and ctx.config.get("structure_check_enabled", True):
         try:
-            from llmwikify.apps.chat.harness.structure_validator import (
+            from llmwikify.apps.research.harness.structure_validator import (
                 StructureValidator,
             )
 

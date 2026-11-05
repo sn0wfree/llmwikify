@@ -19,7 +19,7 @@ from urllib.parse import urlparse
 
 from fastapi import HTTPException
 
-from llmwikify.apps.wiki.db import WikiDatabase
+from llmwikify.apps.wiki_db import WikiDatabase
 from llmwikify.kernel import Wiki
 from llmwikify.kernel.multi_wiki.registry import WikiRegistry
 

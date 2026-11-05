@@ -21,13 +21,6 @@ from pathlib import Path
 
 import pytest
 
-from llmwikify.apps.chat.providers.minimax import MiniMaxProvider
-from llmwikify.apps.chat.providers.registry import (
-    PROVIDERS,
-    create_llm,
-    get_provider,
-    list_providers,
-)
 from llmwikify.foundation import config as foundation_config
 from llmwikify.foundation.llm.errors import (
     LLMError,
@@ -35,6 +28,13 @@ from llmwikify.foundation.llm.errors import (
     LLMNotConfiguredError,
     LLMSpecMismatchError,
     SubagentLLMError,
+)
+from llmwikify.foundation.llm.providers.minimax import MiniMaxProvider
+from llmwikify.foundation.llm.providers.registry import (
+    PROVIDERS,
+    create_llm,
+    get_provider,
+    list_providers,
 )
 from llmwikify.foundation.llm.resolver import apply_provider_alias
 from llmwikify.foundation.llm.streamable import StreamableLLMClient

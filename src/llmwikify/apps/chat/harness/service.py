@@ -55,7 +55,7 @@ class HarnessService:
     @property
     def quality_gate(self) -> Any:
         if self._quality_gate is None:
-            from llmwikify.apps.chat.harness.quality_gate import (
+            from llmwikify.apps.research.harness.quality_gate import (
                 QualityGate,
             )
 
@@ -65,7 +65,7 @@ class HarnessService:
     @property
     def source_filter(self) -> Any:
         if self._source_filter is None:
-            from llmwikify.apps.chat.harness.source_filter import (
+            from llmwikify.apps.research.harness.source_filter import (
                 SourceFilter,
             )
 
@@ -75,7 +75,7 @@ class HarnessService:
     @property
     def structure_validator(self) -> Any:
         if self._structure_validator is None:
-            from llmwikify.apps.chat.harness.structure_validator import (
+            from llmwikify.apps.research.harness.structure_validator import (
                 StructureValidator,
             )
 
@@ -85,7 +85,7 @@ class HarnessService:
     @property
     def research_reviewer(self) -> Any:
         if self._research_reviewer is None:
-            from llmwikify.apps.chat.harness.review import (
+            from llmwikify.apps.research.harness.review import (
                 ResearchReviewer,
             )
 
@@ -99,7 +99,7 @@ class HarnessService:
     @property
     def research_revisor(self) -> Any:
         if self._research_revisor is None:
-            from llmwikify.apps.chat.harness.review import (
+            from llmwikify.apps.research.harness.review import (
                 ResearchRevisor,
             )
 
@@ -113,7 +113,7 @@ class HarnessService:
     @property
     def source_analyzer(self) -> Any:
         if self._source_analyzer is None:
-            from llmwikify.apps.chat.harness.source_analyzer import (
+            from llmwikify.apps.research.harness.source_analyzer import (
                 SourceAnalyzer,
             )
 

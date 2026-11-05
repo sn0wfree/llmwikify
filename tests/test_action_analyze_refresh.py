@@ -22,7 +22,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from llmwikify.apps.chat.state import ResearchState
+from llmwikify.apps.research.state import ResearchState
 
 
 @pytest.fixture
@@ -33,7 +33,7 @@ def tmp_db_path(tmp_path):
 @pytest.fixture
 def db_with_sources(tmp_db_path):
     """Build a real AutoResearchDatabase with 3 sources: 1 analyzed, 2 not."""
-    from llmwikify.apps.chat.db import AutoResearchDatabase
+    from llmwikify.apps.research.db import AutoResearchDatabase
 
     db = AutoResearchDatabase(tmp_db_path)
 

@@ -127,7 +127,7 @@ module = [
     "llmwikify.apps.chat.memory.dream",
     "llmwikify.apps.chat.memory.dream_scheduler",
     "llmwikify.apps.chat.memory.facts_store",
-    "llmwikify.apps.chat.providers.base",
+    "llmwikify.foundation.llm.providers.base",
     "llmwikify.apps.chat.skills.actions.detect._base",
     "llmwikify.apps.chat.skills.actions.extract_action",
     "llmwikify.apps.chat.skills.pipelines.gather_skill",

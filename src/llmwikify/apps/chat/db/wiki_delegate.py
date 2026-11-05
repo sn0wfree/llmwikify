@@ -47,7 +47,7 @@ class WikiDelegate:
     def _wiki(self) -> Any:
         """Lazy WikiDatabase instance."""
         if not hasattr(self, "_wiki_db"):
-            from llmwikify.apps.wiki.db import WikiDatabase
+            from llmwikify.apps.wiki_db import WikiDatabase
 
             self._wiki_db = WikiDatabase(self._data_dir)
         return self._wiki_db

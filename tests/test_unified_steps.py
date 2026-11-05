@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from llmwikify.apps.chat.agent.unified.spec import ActResult, ReasonResponse
-from llmwikify.apps.chat.agent.unified.steps import (
+from llmwikify.kernel.agent.steps import (
     BuildFeedbackStep,
     CheckEmptyStep,
     CheckFieldStep,

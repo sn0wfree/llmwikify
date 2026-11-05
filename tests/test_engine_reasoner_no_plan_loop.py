@@ -27,7 +27,7 @@ from __future__ import annotations
 
 import inspect
 
-from llmwikify.apps.chat.state import ResearchState
+from llmwikify.apps.research.state import ResearchState
 
 # ─── Fixtures ──────────────────────────────────────────────────────
 

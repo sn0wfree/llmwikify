@@ -222,7 +222,7 @@ class ChatOrchestrator:
         from llmwikify.apps.chat.agent.prompt_builder import PromptBuilder
         from llmwikify.apps.chat.agent.session_manager import SessionManager
         from llmwikify.apps.chat.agent.tool_executor import ToolExecutor
-        from llmwikify.apps.chat.config import merge_six_step_config
+        from llmwikify.apps.research.six_step_config import merge_six_step_config
 
         self.wiki_service = wiki_service
         self.db = chat_db

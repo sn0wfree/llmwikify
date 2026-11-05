@@ -2,8 +2,8 @@
 
 import pytest
 
-from llmwikify.apps.chat.providers import get_provider, list_providers
-from llmwikify.apps.chat.providers.xiaomi import XiaomiProvider
+from llmwikify.foundation.llm.providers import get_provider, list_providers
+from llmwikify.foundation.llm.providers.xiaomi import XiaomiProvider
 from llmwikify.foundation.llm.streamable import StreamableLLMClient
 
 

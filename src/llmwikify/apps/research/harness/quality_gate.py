@@ -87,7 +87,7 @@ class QualityGate(BaseQualityGate):
         Uses ReasoningChecker which scores 6 dimensions and computes an
         aggregate. A failed gate forces the engine to return to plan stage.
         """
-        from llmwikify.apps.chat.reasoning_checker import ReasoningChecker
+        from llmwikify.apps.research.reasoning_checker import ReasoningChecker
 
         checker = ReasoningChecker()
         result = checker.check(

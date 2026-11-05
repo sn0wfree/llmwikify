@@ -89,7 +89,7 @@ def test_autoresearch_actions_imports_streamable_from_new_home():
 
 def test_autoresearch_engine_helpers_docstring_updated():
     """engine_helpers.py no longer references the deprecated path in its docs."""
-    from llmwikify.apps.chat import engine_helpers
+    from llmwikify.apps.research import engine_helpers
 
     src = Path(engine_helpers.__file__).read_text()
     assert "agent.backend.adapters" not in src

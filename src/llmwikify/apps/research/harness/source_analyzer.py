@@ -7,7 +7,7 @@ import hashlib
 import logging
 from typing import Any
 
-from llmwikify.apps.chat.session import ResearchSessionManager
+from llmwikify.apps.research.session import ResearchSessionManager
 
 logger = logging.getLogger(__name__)
 

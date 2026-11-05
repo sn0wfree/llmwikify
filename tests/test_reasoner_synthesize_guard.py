@@ -12,8 +12,8 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from llmwikify.apps.chat.state import ResearchState
 from llmwikify.apps.research.reasoner import ResearchReasoner
+from llmwikify.apps.research.state import ResearchState
 
 
 def _make_engine():

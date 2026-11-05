@@ -228,7 +228,7 @@ def test_create_provider_no_config_uses_default_chain():
 
 def _make_dream_db(tmp_path):
     """Create a real WikiDatabase for proposal tests."""
-    from llmwikify.apps.wiki.db import WikiDatabase
+    from llmwikify.apps.wiki_db import WikiDatabase
 
     db = WikiDatabase(tmp_path)
     return db
@@ -517,14 +517,14 @@ def test_extraction_cache_eviction(tmp_path):
 
 
 def test_reddit_not_in_low_quality_patterns():
-    from llmwikify.apps.chat.harness.source_filter import SourceFilter
+    from llmwikify.apps.research.harness.source_filter import SourceFilter
 
     assert not any("reddit" in p for p in SourceFilter.LOW_QUALITY_PATTERNS)
 
 
 def test_reddit_not_low_quality_and_not_pinterest():
     """Reddit should be neutral (not penalized), Pinterest should be low quality."""
-    from llmwikify.apps.chat.harness.source_filter import SourceFilter
+    from llmwikify.apps.research.harness.source_filter import SourceFilter
 
     f = SourceFilter()
     # Pinterest is in LOW_QUALITY_PATTERNS → 0.2

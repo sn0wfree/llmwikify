@@ -14,7 +14,7 @@ import logging
 from collections.abc import AsyncIterator, Callable
 from typing import Any
 
-from llmwikify.apps.chat.agent.research_runner import _state_get
+from llmwikify.apps.research.runner import _state_get
 
 logger = logging.getLogger(__name__)
 

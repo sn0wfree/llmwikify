@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import pytest
 
-from llmwikify.apps.chat.prompts import (
+from llmwikify.apps.research.prompts import (
     PROMPT_REGISTRY,
     ResearchPrompt,
     get_prompt,
@@ -147,7 +147,7 @@ class TestPromptRegistry:
 
 class TestFallbacks:
     def test_clarify_fallback_shape(self):
-        from llmwikify.apps.chat.prompts import _clarify_fallback
+        from llmwikify.apps.research.prompts import _clarify_fallback
 
         result = _clarify_fallback(query="foo")
         assert result["context"].startswith("未澄清")
@@ -158,7 +158,7 @@ class TestFallbacks:
         assert result["fallback"] is True
 
     def test_clarify_fallback_truncates_long_query(self):
-        from llmwikify.apps.chat.prompts import _clarify_fallback
+        from llmwikify.apps.research.prompts import _clarify_fallback
 
         long_q = "x" * 500
         result = _clarify_fallback(query=long_q)
@@ -166,7 +166,7 @@ class TestFallbacks:
         assert len(result["premises"][0]) <= 200 + len("原始查询: ")
 
     def test_plan_fallback_returns_single_subquery(self):
-        from llmwikify.apps.chat.prompts import _plan_fallback
+        from llmwikify.apps.research.prompts import _plan_fallback
 
         result = _plan_fallback(query="my research topic")
         assert result == [
@@ -174,26 +174,26 @@ class TestFallbacks:
         ]
 
     def test_replan_fallback_with_gaps(self):
-        from llmwikify.apps.chat.prompts import _replan_fallback
+        from llmwikify.apps.research.prompts import _replan_fallback
 
         result = _replan_fallback(query="q", gaps=["gap1", "gap2"])
         assert result == [{"query": "q gap1", "source_type": "web", "url": ""}]
 
     def test_replan_fallback_no_gaps(self):
-        from llmwikify.apps.chat.prompts import _replan_fallback
+        from llmwikify.apps.research.prompts import _replan_fallback
 
         result = _replan_fallback(query="q", gaps=[])
         assert result == []
 
     def test_reason_fallback_signals_rule_based(self):
-        from llmwikify.apps.chat.prompts import _reason_fallback
+        from llmwikify.apps.research.prompts import _reason_fallback
 
         result = _reason_fallback()
         assert result["action"] == "__rule_based__"
         assert "rule-based" in result["thought"]
 
     def test_review_fallback_shape(self):
-        from llmwikify.apps.chat.prompts import _review_fallback
+        from llmwikify.apps.research.prompts import _review_fallback
 
         result = _review_fallback()
         assert result["approved"] is False

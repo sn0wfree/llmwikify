@@ -20,7 +20,6 @@ Backward compat re-exports:
 
 from ._facade import (
     DB_SIZE_WARNING_MB,
-    AutoResearchDatabase,
     ChatDatabase,
     get_autoresearch_db_path,
     get_chat_db_path,
@@ -49,3 +48,16 @@ __all__ = [
     "get_autoresearch_db_path",
     "get_chat_db_path",
 ]
+
+
+def __getattr__(name: str):
+    """AutoResearchDatabase moved to apps/research/db.py (lazy re-export).
+
+    Imported on demand so ``apps.research.db`` (which imports
+    ChatDatabase from here) does not create an import-time cycle.
+    """
+    if name == "AutoResearchDatabase":
+        from llmwikify.apps.research.db import AutoResearchDatabase
+
+        return AutoResearchDatabase
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

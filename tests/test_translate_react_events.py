@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from llmwikify.apps.chat.agent.research_bridge import translate_react_events
+from llmwikify.apps.research.bridge import translate_react_events
 
 
 def _make_state(**overrides):

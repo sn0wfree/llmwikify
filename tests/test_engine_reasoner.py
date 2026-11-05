@@ -24,7 +24,7 @@ Tests cover the 3 reason methods that now live in
 
 import inspect
 
-from llmwikify.apps.chat.state import ResearchState
+from llmwikify.apps.research.state import ResearchState
 
 
 def test_engine_constructs_reasoner():

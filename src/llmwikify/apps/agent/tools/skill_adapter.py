@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from llmwikify.apps.chat.skills.base import SkillContext, SkillResult
-from llmwikify.apps.wiki.db import WikiDatabase
+from llmwikify.apps.wiki_db import WikiDatabase
 
 logger = logging.getLogger(__name__)
 

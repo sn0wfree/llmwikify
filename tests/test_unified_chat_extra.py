@@ -12,12 +12,16 @@ from typing import Any
 
 import pytest
 
-from llmwikify.apps.chat.agent.unified.core import StepHandler, StepResult, UnifiedHook
 from llmwikify.apps.chat.agent.unified.handlers.chat_reasoner import ChatReasoner
 from llmwikify.apps.chat.agent.unified.handlers.tool_actor import ToolActor
-from llmwikify.apps.chat.agent.unified.loop import UnifiedAgentLoop
 from llmwikify.apps.chat.agent.unified.spec import ActResult, ChatSpec, ReasonResponse
-from llmwikify.apps.chat.agent.unified.steps import CheckEmptyStep
+from llmwikify.kernel.agent import (
+    StepHandler,
+    StepResult,
+    UnifiedAgentLoop,
+    UnifiedHook,
+)
+from llmwikify.kernel.agent.steps import CheckEmptyStep
 
 # ── Mock services ─────────────────────────────────────────
 

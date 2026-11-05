@@ -93,7 +93,7 @@ class TestAllSevenStepsGoThroughRunPrompt:
         client_attr,
     ):
         """Each step uses the LLM client matching its role."""
-        from llmwikify.apps.chat.research_engine.llm_step import run_prompt
+        from llmwikify.apps.research.llm_step import run_prompt
 
         chat_return = json.dumps({"x": 1}) if expects_json else "raw markdown text"
         default_llm = _make_llm(chat_return)
@@ -145,7 +145,7 @@ class TestFrameworkAugmentationEndToEnd:
     """
 
     def test_report_injects_before_yaml_messages(self):
-        from llmwikify.apps.chat.research_engine.llm_step import run_prompt
+        from llmwikify.apps.research.llm_step import run_prompt
 
         llm = _make_llm("# R")
         ctx = _make_ctx(
@@ -175,7 +175,7 @@ class TestFrameworkAugmentationEndToEnd:
         assert len(messages) >= 2
 
     def test_review_injects_before_yaml_messages(self):
-        from llmwikify.apps.chat.research_engine.llm_step import run_prompt
+        from llmwikify.apps.research.llm_step import run_prompt
 
         llm = _make_llm(json.dumps({"approved": True, "score": 8}))
         ctx = _make_ctx(
@@ -212,7 +212,7 @@ class TestFrameworkAugmentationEndToEnd:
     def test_no_framework_injection_for_non_augmented_steps(self, prompt_name):
         """Steps without framework_kind set never inject, even when
         six_step_context is provided."""
-        from llmwikify.apps.chat.research_engine.llm_step import run_prompt
+        from llmwikify.apps.research.llm_step import run_prompt
 
         chat_return = json.dumps({"x": 1})
         default_llm = _make_llm(chat_return)
@@ -289,7 +289,7 @@ class TestPromptRegistrySingleSourceOfTruth:
     def test_clarifier_does_not_define_its_own_prompt(self):
         """clarifier.py should not have its own inline system prompt
         or message-building code; it should rely on run_prompt."""
-        from llmwikify.apps.chat import clarifier
+        from llmwikify.apps.research import clarifier
 
         source = open(clarifier.__file__).read()
         # The inline Chinese system prompt is no longer in clarifier.py
@@ -324,7 +324,7 @@ class TestPromptRegistrySingleSourceOfTruth:
     def test_review_does_not_have_its_own_framework_block_renderer(self):
         """review.py should not define its own _render_framework_review_block;
         it should use prompts.render_framework_block (via run_prompt)."""
-        from llmwikify.apps.chat.harness import review
+        from llmwikify.apps.research.harness import review
 
         source = open(review.__file__).read()
         assert "def _render_framework_review_block" not in source
@@ -333,7 +333,7 @@ class TestPromptRegistrySingleSourceOfTruth:
         """The md5-based source hash logic should be in prompts.source_hash,
         not duplicated in report/review."""
         from llmwikify.apps.chat import report
-        from llmwikify.apps.chat.harness import review
+        from llmwikify.apps.research.harness import review
 
         for module in (report, review):
             source = open(module.__file__).read()

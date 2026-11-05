@@ -20,19 +20,19 @@ from typing import Any
 
 import pytest
 
-from llmwikify.apps.chat.providers.abc import (
+from llmwikify.foundation.llm.providers.abc import (
     LLMProviderABC,
     ProviderConfig,
     RetryMode,
     ThinkingStyle,
 )
-from llmwikify.apps.chat.providers.base import LLMProvider
-from llmwikify.apps.chat.providers.minimax import MiniMaxProvider
-from llmwikify.apps.chat.providers.registry import (
+from llmwikify.foundation.llm.providers.base import LLMProvider
+from llmwikify.foundation.llm.providers.minimax import MiniMaxProvider
+from llmwikify.foundation.llm.providers.registry import (
     get_provider,
     list_providers,
 )
-from llmwikify.apps.chat.providers.xiaomi import XiaomiProvider
+from llmwikify.foundation.llm.providers.xiaomi import XiaomiProvider
 
 # ── RetryMode ───────────────────────────────────────────────────
 

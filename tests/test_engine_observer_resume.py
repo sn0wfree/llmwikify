@@ -86,7 +86,7 @@ def test_engine_load_resume_state_delegates_to_resume_loader():
 def test_observer_reloads_sources_and_sub_queries():
     """observer.observe reloads state.sources and state.sub_queries from DB."""
     from llmwikify.apps.chat.research_engine.observer import ResearchObserver
-    from llmwikify.apps.chat.state import ResearchState
+    from llmwikify.apps.research.state import ResearchState
 
     class FakeDB:
         def __init__(self):
@@ -130,7 +130,7 @@ def test_observer_reloads_sources_and_sub_queries():
 def test_observer_populates_observations_on_analyzed_sources():
     """observer.observe builds credibility + type + wiki/web observations."""
     from llmwikify.apps.chat.research_engine.observer import ResearchObserver
-    from llmwikify.apps.chat.state import ResearchState
+    from llmwikify.apps.research.state import ResearchState
 
     class FakeDB:
         def __init__(self):
@@ -186,7 +186,7 @@ def test_observer_populates_observations_on_analyzed_sources():
 def test_resume_loader_returns_silently_for_missing_session():
     """resume_loader.load silently returns if session row is missing."""
     from llmwikify.apps.chat.research_engine.resume import ResearchResumeLoader
-    from llmwikify.apps.chat.state import ResearchState
+    from llmwikify.apps.research.state import ResearchState
 
     class FakeDB:
         def get_research_session(self, session_id):
@@ -213,7 +213,7 @@ def test_resume_loader_hydrates_knowledge_gaps_from_json():
     import json
 
     from llmwikify.apps.chat.research_engine.resume import ResearchResumeLoader
-    from llmwikify.apps.chat.state import ResearchState
+    from llmwikify.apps.research.state import ResearchState
 
     session_row = {
         "max_rounds": 5,
@@ -284,7 +284,7 @@ def test_resume_loader_restores_self_loop_metadata():
     import json
 
     from llmwikify.apps.chat.research_engine.resume import ResearchResumeLoader
-    from llmwikify.apps.chat.state import ResearchState
+    from llmwikify.apps.research.state import ResearchState
 
     session_row = {
         "max_rounds": 5,
@@ -327,7 +327,7 @@ def test_resume_loader_tolerates_missing_self_loop_fields():
     pre-fix engine versions)."""
 
     from llmwikify.apps.chat.research_engine.resume import ResearchResumeLoader
-    from llmwikify.apps.chat.state import ResearchState
+    from llmwikify.apps.research.state import ResearchState
 
     session_row = {
         "max_rounds": 5,

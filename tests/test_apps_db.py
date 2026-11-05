@@ -10,7 +10,7 @@ import pytest
 from llmwikify.apps.chat.db import ChatDatabase
 from llmwikify.apps.db import AppDatabase
 from llmwikify.apps.research.db import ResearchDatabase
-from llmwikify.apps.wiki.db import WikiDatabase
+from llmwikify.apps.wiki_db import WikiDatabase
 
 
 @pytest.fixture
@@ -259,28 +259,28 @@ class TestWikiDatabaseMakeConfirmationId:
     source of truth for the 8-char hex confirmation token format."""
 
     def test_returns_8_char_string(self) -> None:
-        from llmwikify.apps.wiki.db import WikiDatabase
+        from llmwikify.apps.wiki_db import WikiDatabase
 
         cid = WikiDatabase.make_confirmation_id()
         assert isinstance(cid, str)
         assert len(cid) == 8
 
     def test_only_lowercase_hex(self) -> None:
-        from llmwikify.apps.wiki.db import WikiDatabase
+        from llmwikify.apps.wiki_db import WikiDatabase
 
         cid = WikiDatabase.make_confirmation_id()
         assert all(c in "0123456789abcdef" for c in cid), f"non-hex char in {cid!r}"
 
     def test_unique_across_many_calls(self) -> None:
         """16M id space; sampling 10K should yield zero collisions."""
-        from llmwikify.apps.wiki.db import WikiDatabase
+        from llmwikify.apps.wiki_db import WikiDatabase
 
         seen = {WikiDatabase.make_confirmation_id() for _ in range(10_000)}
         assert len(seen) == 10_000
 
     def test_callable_without_instance(self) -> None:
         """Static method — usable from non-DB code paths."""
-        from llmwikify.apps.wiki.db import WikiDatabase
+        from llmwikify.apps.wiki_db import WikiDatabase
 
         cid = WikiDatabase.make_confirmation_id()
         assert len(cid) == 8
@@ -289,7 +289,7 @@ class TestWikiDatabaseMakeConfirmationId:
         """Generated IDs are valid primary keys (no chars that break
         VARCHAR / TEXT). The save_confirmation idempotency check
         below also verifies the row is inserted."""
-        from llmwikify.apps.wiki.db import WikiDatabase
+        from llmwikify.apps.wiki_db import WikiDatabase
 
         cid = WikiDatabase.make_confirmation_id()
         app_db.wiki.save_confirmation(

@@ -287,7 +287,7 @@ def test_failed_ingest_not_marked_processed(tmp_path: Path):
 
 def test_fallback_proposal_persists_to_db(tmp_path: Path):
     from llmwikify.apps.agent.maintenance import MaintenanceConfig, MaintenanceManager
-    from llmwikify.apps.wiki.db import WikiDatabase
+    from llmwikify.apps.wiki_db import WikiDatabase
     from llmwikify.kernel.multi_wiki.instance import WikiInstance, WikiType
 
     raw = tmp_path / "raw"

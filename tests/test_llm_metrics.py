@@ -25,7 +25,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from llmwikify.apps.chat import LLMCallMetrics, MetricsCollector
-from llmwikify.apps.chat.research_engine.llm_step import run_prompt
+from llmwikify.apps.research.llm_step import run_prompt
 
 # ─── helpers ──────────────────────────────────────────────────────────
 
@@ -447,14 +447,14 @@ class TestSubmoduleMetricsKwarg:
     """
 
     def test_clarifier_accepts_metrics(self):
-        from llmwikify.apps.chat.clarifier import ResearchClarifier
+        from llmwikify.apps.research.clarifier import ResearchClarifier
 
         mc = MetricsCollector(session_id="s")
         c = ResearchClarifier(MagicMock(), config={}, metrics=mc)
         assert c.metrics is mc
 
     def test_clarifier_metrics_defaults_to_none(self):
-        from llmwikify.apps.chat.clarifier import ResearchClarifier
+        from llmwikify.apps.research.clarifier import ResearchClarifier
 
         c = ResearchClarifier(MagicMock())
         assert c.metrics is None
@@ -467,14 +467,14 @@ class TestSubmoduleMetricsKwarg:
         assert r.metrics is mc
 
     def test_reviewer_accepts_metrics(self):
-        from llmwikify.apps.chat.harness.review import ResearchReviewer
+        from llmwikify.apps.research.harness.review import ResearchReviewer
 
         mc = MetricsCollector(session_id="s")
         rv = ResearchReviewer(MagicMock(), MagicMock(), config={}, metrics=mc)
         assert rv.metrics is mc
 
     def test_revisor_accepts_metrics(self):
-        from llmwikify.apps.chat.harness.review import ResearchRevisor
+        from llmwikify.apps.research.harness.review import ResearchRevisor
 
         mc = MetricsCollector(session_id="s")
         rs = ResearchRevisor(MagicMock(), MagicMock(), config={}, metrics=mc)
@@ -483,7 +483,7 @@ class TestSubmoduleMetricsKwarg:
     def test_submodule_metrics_flows_to_run_prompt(self):
         """When a submodule has metrics, run_prompt records into it
         (not the engine's _action_ctx)."""
-        from llmwikify.apps.chat.clarifier import ResearchClarifier
+        from llmwikify.apps.research.clarifier import ResearchClarifier
 
         # Submodule's own MetricsCollector
         sub_mc = MetricsCollector(session_id="sub")

@@ -45,14 +45,14 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-from llmwikify.apps.chat.skills.base import (
+from llmwikify.foundation.llm.errors import LLMError
+from llmwikify.foundation.llm.streamable import LLMRequestError
+from llmwikify.foundation.utils import maybe_await as _maybe_await
+from llmwikify.kernel.skills.types import (
     SkillAction,
     SkillContext,
     SkillResult,
 )
-from llmwikify.foundation.llm.errors import LLMError
-from llmwikify.foundation.llm.streamable import LLMRequestError
-from llmwikify.foundation.utils import maybe_await as _maybe_await
 
 logger = logging.getLogger(__name__)
 

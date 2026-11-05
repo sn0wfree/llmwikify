@@ -179,7 +179,7 @@ class TestGathererWebSearchLogging:
         """When the gatherer invokes WebSearch for a 'web' sub-query,
         it should log both the invocation and the result count.
         """
-        from llmwikify.apps.chat.gatherer import SourceGatherer
+        from llmwikify.apps.research.gatherer import SourceGatherer
         from llmwikify.apps.research.web_search import SearchResult
 
         # Build a minimal SourceGatherer with mocked deps
@@ -226,7 +226,7 @@ class TestGathererWebSearchLogging:
             with patch.object(gatherer, "_fetch_url", fake_fetch_url):
                 with caplog.at_level(
                     logging.DEBUG,
-                    logger="llmwikify.apps.chat.gatherer",
+                    logger="llmwikify.apps.research.gatherer",
                 ):
                     await gatherer._gather_one(sub_query, seen_urls=set())
 
@@ -252,7 +252,7 @@ class TestGathererWebSearchLogging:
         time it out, the gatherer must log at WARNING before raising
         ValueError('Search timed out').
         """
-        from llmwikify.apps.chat.gatherer import SourceGatherer
+        from llmwikify.apps.research.gatherer import SourceGatherer
 
         wiki = MagicMock()
         db = MagicMock()
@@ -288,7 +288,7 @@ class TestGathererWebSearchLogging:
         ):
             with caplog.at_level(
                 logging.DEBUG,
-                logger="llmwikify.apps.chat.gatherer",
+                logger="llmwikify.apps.research.gatherer",
             ):
                 # _gather_one catches the ValueError internally and
                 # returns []; we just check the WARNING log fired.

@@ -32,7 +32,7 @@ from typing import TYPE_CHECKING
 from .llm_step import run_prompt
 
 if TYPE_CHECKING:
-    from llmwikify.apps.chat.state import ResearchState
+    from llmwikify.apps.research.state import ResearchState
 
     from .engine import ResearchEngine
 
@@ -232,7 +232,7 @@ class ResearchReasoner:
         Migrated to use ``run_prompt``. Falls back to the
         rule-based reasoner on persistent LLM failure.
         """
-        from llmwikify.apps.chat.prompts import _reason_fallback
+        from llmwikify.apps.research.prompts import _reason_fallback
 
         analyzed_count = sum(1 for s in state.sources if s.get("analysis"))
         failed_sq = sum(1 for sq in state.sub_queries if sq.get("status") == "failed")

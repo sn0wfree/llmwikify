@@ -145,7 +145,7 @@ class SubagentManager:
             # a new dataclass), so the parent's hook / memory are
             # untouched.
             parent_ctx = self._parent.execution_context()
-            from llmwikify.apps.chat.agent.execution_context import (
+            from llmwikify.kernel.agent.execution_context import (
                 AgentExecutionContext,
             )
 
