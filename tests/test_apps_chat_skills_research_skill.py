@@ -511,7 +511,7 @@ class TestPersistenceIntegration:
     @pytest.mark.asyncio
     async def test_run_research_persists_steps(self) -> None:
         """Every round persists the state via db.save_research_state."""
-        from llmwikify.apps.chat.db import ChatDatabase
+        from llmwikify.apps.chat_db import ChatDatabase
 
         with tempfile.TemporaryDirectory() as tmp:
             db = ChatDatabase(tmp)
@@ -536,7 +536,7 @@ class TestPersistenceIntegration:
 
     @pytest.mark.asyncio
     async def test_resume_loads_last_step(self) -> None:
-        from llmwikify.apps.chat.db import ChatDatabase
+        from llmwikify.apps.chat_db import ChatDatabase
 
         with tempfile.TemporaryDirectory() as tmp:
             db = ChatDatabase(tmp)
@@ -571,7 +571,7 @@ class TestCancelResearch:
 
     @pytest.mark.asyncio
     async def test_cancel_no_session_id(self, ctx: SkillContext) -> None:
-        from llmwikify.apps.chat.db import ChatDatabase
+        from llmwikify.apps.chat_db import ChatDatabase
 
         with tempfile.TemporaryDirectory() as tmp:
             db = ChatDatabase(tmp)
@@ -581,7 +581,7 @@ class TestCancelResearch:
 
     @pytest.mark.asyncio
     async def test_cancel_marks_session_cancelling(self) -> None:
-        from llmwikify.apps.chat.db import ChatDatabase
+        from llmwikify.apps.chat_db import ChatDatabase
 
         with tempfile.TemporaryDirectory() as tmp:
             db = ChatDatabase(tmp)
@@ -597,7 +597,7 @@ class TestCancelResearch:
     async def test_cancel_is_picked_up_by_control_signal_hook(self) -> None:
         """Integration: cancel + run_research should set
         state['cancelled'] = True (via on_before_act hook)."""
-        from llmwikify.apps.chat.db import ChatDatabase
+        from llmwikify.apps.chat_db import ChatDatabase
 
         with tempfile.TemporaryDirectory() as tmp:
             db = ChatDatabase(tmp)
@@ -722,8 +722,8 @@ class TestResearchSkillActionHandlers:
     async def test_cancel_research_via_runtime(
         self, ctx: SkillContext, populated_registry: SkillRegistry
     ) -> None:
-        from llmwikify.apps.chat.db import ChatDatabase
         from llmwikify.apps.chat.skills import SkillRuntime
+        from llmwikify.apps.chat_db import ChatDatabase
 
         with tempfile.TemporaryDirectory() as tmp:
             db = ChatDatabase(tmp)

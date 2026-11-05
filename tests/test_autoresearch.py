@@ -15,6 +15,12 @@ import sqlite3
 from unittest.mock import MagicMock, patch
 
 import pytest
+from llmwikify.apps.chat.db_migrations import (
+    LEGACY_SHARED_COLUMNS,
+    init_autoresearch_db,
+    migrate_research_six_step_columns,
+    migrate_v3_add_events_column,
+)
 
 from llmwikify.apps.chat import (
     DEFAULT_SIX_STEP_CONFIG,
@@ -30,12 +36,6 @@ from llmwikify.apps.chat import (
     StructureValidator,
     merge_six_step_config,
     retry_async,
-)
-from llmwikify.apps.chat.db_migrations import (
-    LEGACY_SHARED_COLUMNS,
-    init_autoresearch_db,
-    migrate_research_six_step_columns,
-    migrate_v3_add_events_column,
 )
 from llmwikify.apps.chat.research_engine.engine import (
     ResearchEngine,
@@ -2278,7 +2278,7 @@ class TestAutoResearchDatabase:
         assert sources[0]["analysis"]["topics"] == ["t1"]
 
     def test_get_autoresearch_db_path(self, tmp_path):
-        from llmwikify.apps.chat.db import get_autoresearch_db_path
+        from llmwikify.apps.chat_db import get_autoresearch_db_path
 
         p = get_autoresearch_db_path(tmp_path)
         # The canonical filename is now .llmwiki_agent.db

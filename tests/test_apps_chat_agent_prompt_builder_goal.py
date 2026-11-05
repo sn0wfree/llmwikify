@@ -30,7 +30,7 @@ class _StubWiki:
 
 @pytest.fixture
 def chat_db(tmp_path: Path):
-    from llmwikify.apps.chat.db._facade import ChatDatabase
+    from llmwikify.apps.chat_db._facade import ChatDatabase
 
     return ChatDatabase(tmp_path)
 

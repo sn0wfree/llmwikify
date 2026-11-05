@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from llmwikify.apps.chat.db import PermissionRepository
+from llmwikify.apps.chat_db import PermissionRepository
 
 
 @pytest.fixture

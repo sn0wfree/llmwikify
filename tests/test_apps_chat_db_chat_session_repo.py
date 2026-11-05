@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from llmwikify.apps.chat.db import ChatSessionRepository
+from llmwikify.apps.chat_db import ChatSessionRepository
 
 
 @pytest.fixture
@@ -132,7 +132,7 @@ class TestDelete:
         disable FKs for this test to verify the repo layer does
         NOT auto-cascade (the facade does manual cascade).
         """
-        from llmwikify.apps.chat.db import ToolCallRepository
+        from llmwikify.apps.chat_db import ToolCallRepository
 
         db_path = tmp_path / "test.db"
         repo._mgr.conn.execute("PRAGMA foreign_keys = OFF")

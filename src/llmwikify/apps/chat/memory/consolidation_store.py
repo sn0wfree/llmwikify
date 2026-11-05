@@ -23,7 +23,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from llmwikify.apps.chat.memory.tables import ALL_PHASE6_DDL
+from llmwikify.apps.chat_db.tables import ALL_PHASE6_DDL
 from llmwikify.foundation.db import get_connection
 
 logger = logging.getLogger(__name__)

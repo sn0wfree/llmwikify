@@ -30,7 +30,7 @@ def _run(coro):
 @pytest.fixture
 def chat_db(tmp_path: Path):
     """Build a real ChatDatabase with a temp SQLite file."""
-    from llmwikify.apps.chat.db._facade import ChatDatabase
+    from llmwikify.apps.chat_db._facade import ChatDatabase
 
     db = ChatDatabase(tmp_path)
     return db

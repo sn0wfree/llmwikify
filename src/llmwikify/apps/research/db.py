@@ -28,7 +28,7 @@ from typing import Any
 
 # The three DB facades share one physical file, so the research-side
 # "all facades" initializer derives from the chat facade.
-from llmwikify.apps.chat.db import ChatDatabase
+from llmwikify.apps.chat_db import ChatDatabase
 from llmwikify.apps.db_base import BaseDatabase, get_app_db_path
 
 logger = logging.getLogger(__name__)

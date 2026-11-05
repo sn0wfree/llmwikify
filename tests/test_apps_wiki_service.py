@@ -28,7 +28,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from llmwikify.apps.chat.db import ChatDatabase
+from llmwikify.apps.chat_db import ChatDatabase
 from llmwikify.apps.wiki.service import WikiService
 
 # ─── Mock helpers ─────────────────────────────────────────────────

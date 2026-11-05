@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from llmwikify.apps.chat.db import ChatDatabase, ResearchDelegate
+from llmwikify.apps.chat_db import ChatDatabase, ResearchDelegate
 
 
 @pytest.fixture

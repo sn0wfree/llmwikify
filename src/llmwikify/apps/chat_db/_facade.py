@@ -60,14 +60,14 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from llmwikify.apps.chat.db.admin_stats_repo import AdminStatsRepository
-from llmwikify.apps.chat.db.base import DB_SIZE_WARNING_MB, get_chat_db_path
-from llmwikify.apps.chat.db.chat_message_repo import ChatMessageRepository
-from llmwikify.apps.chat.db.chat_session_repo import ChatSessionRepository
-from llmwikify.apps.chat.db.permission_repo import PermissionRepository
-from llmwikify.apps.chat.db.research_delegate import ResearchDelegate
-from llmwikify.apps.chat.db.tool_call_repo import ToolCallRepository
-from llmwikify.apps.chat.db.wiki_delegate import WikiDelegate
+from llmwikify.apps.chat_db.admin_stats_repo import AdminStatsRepository
+from llmwikify.apps.chat_db.base import DB_SIZE_WARNING_MB, get_chat_db_path
+from llmwikify.apps.chat_db.chat_message_repo import ChatMessageRepository
+from llmwikify.apps.chat_db.chat_session_repo import ChatSessionRepository
+from llmwikify.apps.chat_db.permission_repo import PermissionRepository
+from llmwikify.apps.chat_db.research_delegate import ResearchDelegate
+from llmwikify.apps.chat_db.tool_call_repo import ToolCallRepository
+from llmwikify.apps.chat_db.wiki_delegate import WikiDelegate
 from llmwikify.apps.db_base import BaseDatabase
 
 logger = logging.getLogger(__name__)
@@ -187,7 +187,7 @@ class ChatDatabase(BaseDatabase):
             # Phase 6 (2026-06-19): memory_consolidations + memory_facts
             # (borrowed from nanobot Consolidator + Dream architecture).
             # See docs/poc/apply-plan.md §6 for full rationale.
-            from llmwikify.apps.chat.memory.tables import ALL_PHASE6_DDL
+            from .tables import ALL_PHASE6_DDL
 
             for ddl in ALL_PHASE6_DDL:
                 conn.execute(ddl)

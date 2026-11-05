@@ -6,7 +6,7 @@ import shutil
 import tempfile
 import time
 
-from llmwikify.apps.chat.db import ChatDatabase
+from llmwikify.apps.chat_db import ChatDatabase
 
 
 def _make_db() -> tuple[ChatDatabase, str]:

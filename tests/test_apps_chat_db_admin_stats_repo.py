@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from llmwikify.apps.chat.db import (
+from llmwikify.apps.chat_db import (
     AdminStatsRepository,
     AutoResearchDatabase,
 )

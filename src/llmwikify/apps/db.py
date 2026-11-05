@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from llmwikify.apps.chat.db import ChatDatabase
+from llmwikify.apps.chat_db import ChatDatabase
 from llmwikify.apps.research.db import ResearchDatabase
 from llmwikify.apps.wiki_db import WikiDatabase
 

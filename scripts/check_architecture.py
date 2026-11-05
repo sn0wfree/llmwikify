@@ -49,11 +49,18 @@ FORBIDDEN: dict[str, tuple[str, ...]] = {
 }
 
 # ── apps peer-package rule ────────────────────────────────────────────
-# Inside apps/ the packages may only depend on each other along
-# ``→ research`` (the research layer is consumable). Every other peer
-# edge is debt left over from the incomplete v0.40 research extraction;
-# the counts below are the baseline (2026-11) and must not grow — a new
+# Application packages inside apps/ may only depend on each other along
+# ``→ research`` (the research layer is consumable). Shared
+# infrastructure (``chat_db`` / ``wiki_db`` / ``db_base`` / ``db``) is
+# deliberately NOT a peer: it sits at the apps level like ``db_base``
+# and is consumed by the apps.
+#
+# The counts below are the baseline (2026-11) and must not grow — a new
 # edge, or more hits on an existing one, fails the check.
+APPS_APP_PACKAGES: frozenset[str] = frozenset(
+    {"agent", "api", "chat", "research", "wiki"}
+)
+
 APPS_ALLOWED_EDGES: frozenset[tuple[str, str]] = frozenset(
     {("chat", "research"), ("wiki", "research")}
 )
@@ -64,7 +71,7 @@ APPS_PEER_BASELINE: dict[tuple[str, str], int] = {
     ("api", "chat"): 1,
     ("chat", "agent"): 1,
     ("chat", "wiki"): 1,
-    ("research", "chat"): 1,
+    ("research", "chat"): 0,
     ("wiki", "agent"): 4,
 }
 
@@ -92,11 +99,11 @@ def _is_under(path: Path, layer: str) -> bool:
 
 
 def _apps_peers() -> set[str]:
-    """Peer packages inside apps/ (any sub-directory)."""
+    """Application packages inside apps/ (shared infra is not a peer)."""
     return {
         p.name
         for p in APPS.iterdir()
-        if p.is_dir() and p.name != "__pycache__" and not p.name.startswith(".")
+        if p.is_dir() and p.name in APPS_APP_PACKAGES
     }
 
 

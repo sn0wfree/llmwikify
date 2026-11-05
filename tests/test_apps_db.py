@@ -7,7 +7,7 @@ import time
 
 import pytest
 
-from llmwikify.apps.chat.db import ChatDatabase
+from llmwikify.apps.chat_db import ChatDatabase
 from llmwikify.apps.db import AppDatabase
 from llmwikify.apps.research.db import ResearchDatabase
 from llmwikify.apps.wiki_db import WikiDatabase

@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from llmwikify.apps.chat.db import ChatMessageRepository, ChatSessionRepository
+from llmwikify.apps.chat_db import ChatMessageRepository, ChatSessionRepository
 
 
 @pytest.fixture

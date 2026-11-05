@@ -27,7 +27,7 @@ Layout (post v0.40)
     │                                            prompt builder, etc. (see
     │                                            apps/chat/agent/orchestrator.py:
     │                                            37K LOC)
-    ├── db/                        — unified chat database (Phase v0.32)
+    ├── (db 已移 apps/chat_db/)     — shared chat database (Phase v0.32)
     ├── skills/                    — skill plugins + workflow DSL + 7 actor prompts
     ├── bus/                       — pub/sub bus adapters
     ├── channels/                  — channel adapters (cli, http, mcp)
@@ -55,6 +55,7 @@ For **L2 domain abstractions** (wiki engine, knowledge graph, search,
 storage, multi-wiki), see ``llmwikify.kernel.*``.
 """
 
+from llmwikify.apps.chat_db import ChatDatabase
 from llmwikify.apps.research.clarifier import ResearchClarifier
 from llmwikify.apps.research.harness.quality_gate import GateResult, QualityGate
 from llmwikify.apps.research.harness.source_filter import SourceFilter
@@ -66,7 +67,6 @@ from llmwikify.apps.research.six_step_config import (
 )
 
 from .base import ChatBase, ChatMessage, ChatSession
-from .db import ChatDatabase
 from .eval_harness import CaseResult, GoldenCase, Harness, HarnessReport
 from .research_agent import ResearchAgent
 
