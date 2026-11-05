@@ -15,12 +15,6 @@ import sqlite3
 from unittest.mock import MagicMock, patch
 
 import pytest
-from llmwikify.apps.chat.db_migrations import (
-    LEGACY_SHARED_COLUMNS,
-    init_autoresearch_db,
-    migrate_research_six_step_columns,
-    migrate_v3_add_events_column,
-)
 
 from llmwikify.apps.chat import (
     DEFAULT_SIX_STEP_CONFIG,
@@ -36,6 +30,12 @@ from llmwikify.apps.chat import (
     StructureValidator,
     merge_six_step_config,
     retry_async,
+)
+from llmwikify.apps.chat.db_migrations import (
+    LEGACY_SHARED_COLUMNS,
+    init_autoresearch_db,
+    migrate_research_six_step_columns,
+    migrate_v3_add_events_column,
 )
 from llmwikify.apps.chat.research_engine.engine import (
     ResearchEngine,

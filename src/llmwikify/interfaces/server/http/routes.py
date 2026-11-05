@@ -265,10 +265,10 @@ def _register_agent_routes(
     # OpenAI-compatible /v1/chat/completions + /v1/models + /v1/health.
     # L3-local: openai_server.py maintains its own agent_service registry
     # (no L3→L4 import); routes.py sets it explicitly here.
-    from llmwikify.apps.api.openai_server import (
+    from llmwikify.interfaces.server.http.openai_server import (
         create_openai_router,
     )
-    from llmwikify.apps.api.openai_server import (
+    from llmwikify.interfaces.server.http.openai_server import (
         set_agent_service as set_openai_agent_service,
     )
 

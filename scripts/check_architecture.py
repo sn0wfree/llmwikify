@@ -55,23 +55,31 @@ FORBIDDEN: dict[str, tuple[str, ...]] = {
 # deliberately NOT a peer: it sits at the apps level like ``db_base``
 # and is consumed by the apps.
 #
-# The counts below are the baseline (2026-11) and must not grow — a new
-# edge, or more hits on an existing one, fails the check.
+# Two classes of edge are tracked separately:
+#
+# - **structural** (module-level import): import-time coupling, the
+#   real cycle risk. Baseline is empty — ANY new one fails.
+# - **runtime** (function-local import): the composition-root pattern
+#   (a service lazily constructs its subsystems). Baseline records the
+#   current count; growth requires a conscious baseline bump.
 APPS_APP_PACKAGES: frozenset[str] = frozenset(
-    {"agent", "api", "chat", "research", "wiki"}
+    {"agent", "chat", "research", "wiki"}
 )
 
 APPS_ALLOWED_EDGES: frozenset[tuple[str, str]] = frozenset(
     {("chat", "research"), ("wiki", "research")}
 )
 
-APPS_PEER_BASELINE: dict[tuple[str, str], int] = {
-    ("agent", "chat"): 3,
+# Structural (module-level) baseline: 0 — a new module-level peer edge
+# anywhere in apps/ fails the check.
+APPS_PEER_BASELINE: dict[tuple[str, str], int] = {}
+
+# Runtime (function-local) baseline as of 2026-11.
+APPS_RUNTIME_BASELINE: dict[tuple[str, str], int] = {
+    ("agent", "chat"): 2,
     ("agent", "research"): 1,
-    ("api", "chat"): 1,
     ("chat", "agent"): 1,
     ("chat", "wiki"): 1,
-    ("research", "chat"): 0,
     ("wiki", "agent"): 4,
 }
 
@@ -107,15 +115,25 @@ def _apps_peers() -> set[str]:
     }
 
 
-def _check_apps_peers() -> tuple[dict[tuple[str, str], int], list[str]]:
-    """Count apps→apps peer edges and flag ones beyond the baseline.
+def _check_apps_peers() -> tuple[dict, list[str]]:
+    """Classify apps→apps peer imports and flag structural regressions.
 
-    Returns ``(counts, regressions)`` where regressions are human-readable
-    descriptions of edges that exceed the recorded baseline.
+    Two kinds of edge are counted:
+
+    - **module-level** — an import-time (structural) dependency. This is
+      what the baseline guards: a new one, or more hits on an existing
+      one, is a regression.
+    - **function-local** — a deliberate runtime dependency (the
+      composition-root pattern: a service lazily constructs its
+      subsystems). Reported for visibility but not gated.
+
+    Returns ``(report, regressions)``.
     """
+    import ast
+
     peers = _apps_peers()
-    pat = re.compile(r"^\s*(?:from|import)\s+llmwikify\.apps\.([a-z_][a-z0-9_]*)")
-    counts: dict[tuple[str, str], int] = defaultdict(int)
+    structural: dict[tuple[str, str], int] = defaultdict(int)
+    runtime: dict[tuple[str, str], int] = defaultdict(int)
 
     for py_file in sorted(APPS.rglob("*.py")):
         rel = py_file.relative_to(APPS).parts
@@ -123,28 +141,45 @@ def _check_apps_peers() -> tuple[dict[tuple[str, str], int], list[str]]:
             continue
         own = rel[0]
         try:
-            text = py_file.read_text(encoding="utf-8")
-        except UnicodeDecodeError:
+            tree = ast.parse(py_file.read_text(encoding="utf-8"))
+        except (SyntaxError, UnicodeDecodeError):
             continue
-        for line in text.splitlines():
-            m = pat.match(line)
-            if not m:
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.ImportFrom) or not node.module:
                 continue
-            target = m.group(1)
+            if not node.module.startswith("llmwikify.apps."):
+                continue
+            target = node.module.split(".")[2]
             if target not in peers or target == own:
                 continue
-            counts[(own, target)] += 1
+            if (own, target) in APPS_ALLOWED_EDGES:
+                continue
+            bucket = structural if node.col_offset == 0 else runtime
+            bucket[(own, target)] += 1
 
     regressions: list[str] = []
-    for (own, target), n in sorted(counts.items()):
-        if (own, target) in APPS_ALLOWED_EDGES:
-            continue
+    for (own, target), n in sorted(structural.items()):
         allowed = APPS_PEER_BASELINE.get((own, target), 0)
         if n > allowed:
             regressions.append(
-                f"{own} → {target}: {n} import(s), baseline allows {allowed}"
+                f"{own} → {target}: {n} module-level import(s), "
+                f"baseline allows {allowed}"
             )
-    return dict(counts), regressions
+    for (own, target), n in sorted(runtime.items()):
+        if (own, target) in APPS_ALLOWED_EDGES:
+            continue
+        allowed = APPS_RUNTIME_BASELINE.get((own, target), 0)
+        if n > allowed:
+            regressions.append(
+                f"{own} → {target}: {n} function-local import(s), "
+                f"runtime baseline allows {allowed}"
+            )
+
+    report = {
+        "structural": dict(structural),
+        "runtime": dict(runtime),
+    }
+    return report, regressions
 
 
 def main() -> int:
@@ -216,23 +251,35 @@ def main() -> int:
         )
 
     # ── apps peer-package debt (baselined ratchet) ───────────────────
-    counts, regressions = _check_apps_peers()
-    debt = sum(
-        n
-        for (a, b), n in counts.items()
-        if (a, b) not in APPS_ALLOWED_EDGES
+    report, regressions = _check_apps_peers()
+    structural = report["structural"]
+    runtime = report["runtime"]
+
+    s_debt = sum(
+        n for (a, b), n in structural.items() if (a, b) not in APPS_ALLOWED_EDGES
     )
+    r_debt = sum(n for (a, b), n in runtime.items() if (a, b) not in APPS_ALLOWED_EDGES)
     print(
-        f"\napps peer packages: {len(counts)} edge(s), "
-        f"{debt} import(s) outside the allowed → research direction"
+        f"\napps peer packages — {s_debt} structural (module-level) + "
+        f"{r_debt} runtime (function-local) import(s) "
+        f"outside the allowed → research direction"
     )
-    for (a, b), n in sorted(counts.items()):
+    print("  structural (gated by APPS_PEER_BASELINE):")
+    for (a, b), n in sorted(structural.items()):
         mark = "ok " if (a, b) in APPS_ALLOWED_EDGES else "debt"
-        print(f"  [{mark}] {a} → {b}: {n}")
+        print(f"    [{mark}] {a} → {b}: {n}")
+    if not structural:
+        print("    (none)")
+    print("  runtime (composition-root lazy imports, reported only):")
+    for (a, b), n in sorted(runtime.items()):
+        mark = "ok " if (a, b) in APPS_ALLOWED_EDGES else "lazy"
+        print(f"    [{mark}] {a} → {b}: {n}")
+    if not runtime:
+        print("    (none)")
 
     if regressions:
         print(
-            "\n❌ apps peer-package debt grew beyond the baseline:"
+            "\n❌ structural apps peer debt grew beyond the baseline:"
             f"\n  {chr(10).join('  ' + r for r in regressions)}"
             "\nMove the code into the right package, or (if the edge is"
             "\nintentional) raise the baseline in APPS_PEER_BASELINE."

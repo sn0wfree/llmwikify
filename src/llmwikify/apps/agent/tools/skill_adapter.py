@@ -8,8 +8,8 @@ import logging
 from datetime import datetime, timezone
 from typing import Any
 
-from llmwikify.apps.chat.skills.base import SkillContext, SkillResult
 from llmwikify.apps.wiki_db import WikiDatabase
+from llmwikify.kernel.skills.types import SkillContext, SkillResult
 
 logger = logging.getLogger(__name__)
 
