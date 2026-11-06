@@ -15,16 +15,19 @@
 
 | 操作 | wall | 峰值内存 | 说明 |
 |---|---:|---:|---|
-| `build_index` 首次 | **47–77 s** | 112 MB | 词典生成 34 s + 索引构建 22–40 s |
-| `build_index` 重复 | **~47 s** | — | 词典已跳过（见 §3），剩余为索引构建 |
-| `generate_user_dict` 首次 | **34.2 s** | — | jieba 全库分词（1439 页 / 199 万 CJK 字符） |
-| `generate_user_dict` 重复 | **0.12 s** | — | ✅ 内容指纹命中，已跳过 |
+| `build_index` 首次 | **~39 s** | 112 MB | 词典生成 ~21 s + 1 页重建（DB 已基本追平） |
+| `build_index` 重复 | **~1.0 s** | — | ✅ 词典跳过 + 全部页面未变更（见 §3） |
+| `generate_user_dict` 首次 | **21–34 s** | — | jieba 全库分词（1439 页 / 199 万 CJK 字符） |
+| `generate_user_dict` 重复 | **0.2–0.4 s** | — | ✅ 内容指纹命中，已跳过 |
 | `graph_analyze(force)` | **~13 s** | 71 MB | networkx greedy modularity |
 | `search` 首次 | **~10.5 s** | 48.6 MB | jieba 词典 `marshal.load`（一次性） |
 | `search` 第 2 次 | **0.06 s** | — | 稳态 |
 | `lint(force=True)` | **2–4 s** | 23 MB | 冷文件缓存时可达 ~22 s（读 1438 个文件） |
 | `lint` 热 | **0.06–0.3 s** | 1 MB | 指纹缓存 |
 | `fix_wikilinks(dry_run)` | **0.6 s** | 2.5 MB | O(N²) 已修 ✓（历史 143.4 s） |
+
+**优化前基线**（同一 wiki，纯 wall）：`build_index` 46.9–60.6 s、`generate_user_dict` 34 s、
+`build_index_from_files` 26.8 s（其中 `_segment`/`jieba.cut` 8.9 s = 33%）。
 
 **内存不是瓶颈**：峰值 112 MB，常驻大头是 jieba 词典 ~48 MB。
 
@@ -91,6 +94,35 @@
 
 重复 `build_index` 净省 **~21 s/次**。
 
+### A3. `build_index_from_files` 未变更页整页跳过 ✅ 已验证
+
+**改动**（`kernel/storage/index.py`）：原先 `DELETE FROM pages_fts/page_links/pages`
+全表清空后逐页重建（每页 = jieba 分词 + 链接正则 + 多条 SQL）。改为：
+
+1. 先 `SELECT page_name, content FROM pages_fts` 读出现有内容（一次查询）
+2. 逐文件比对：内容一致 → **整页跳过**（不重分词、不重解析链接、不写 SQL）
+3. 内容变了 / 新文件 → `upsert_page`
+4. 磁盘上已消失的页 → 从三张表删除（原全表 DELETE 的清理语义保留）
+5. 单次 `_commit()`
+
+**语义等价验证**：同一份 wiki 上，基线全量重建 vs 新增量重建的三张表
+**逐行完全一致**——`pages_fts` 1440 行、`page_links` 16869 行、`pages` 1440 行；
+删除一个文件后两边同样降到 1439 / 15397 / 1439。
+
+**实测**：
+
+| 场景 | 基线（全量） | 新（增量） | 加速 |
+|---|---:|---:|---:|
+| `build_index_from_files` 1 页变更 | 48.34 s | **1.00 s** | 48× |
+| 全部未变更 | 48.89 s | **0.66 s** | 74× |
+| 删除 1 个文件 | 49.18 s | **0.72 s** | 68× |
+| **`build_index` 端到端 #2** | **46.9–60.6 s** | **1.05 s** | **~50×** |
+| **`build_index` 端到端 #3** | — | **1.01 s** | — |
+
+> 注：`extract_tags` 只存在于 `jieba_dict_gen`（已由 §3.A 指纹缓存覆盖），
+> 初版报告把它归到 `upsert_page` 是错的。`upsert_page` 里的真实热点是
+> `_segment()` → `jieba.cut`，占 `build_index_from_files` 的 33%（8.9 s / 26.8 s）。
+
 ### B. `missing_cross_refs` 首词过滤 ✅ 已验证（收益有限）
 
 **改动**（`kernel/wiki/lint/rules/missing_cross_refs.py`）：
@@ -119,11 +151,21 @@
 
 | # | 改动 | 预期 | 说明 |
 |---|---|---|---|
-| 1 | `build_index_from_files` 里的 `extract_tags` 缓存/可选 | `build_index` **~34 → ~15 s** | 词典已跳过，这是最大剩余项 |
-| 2 | `graph_analyze` 换 Louvain 或加结果缓存 | 13 → ~2 s | |
-| 3 | jieba 词典预热（启动后台 `initialize()`） | 首次 search 10.5 s → ~0 | |
-| 4 | ~~`generate_user_dict` 指纹缓存 + 磁盘输入解耦~~ | ✅ **已完成** | 21 s → 0.2–0.4 s；乒乓已消除 |
-| 5 | ~~`missing_cross_refs` 去滑窗~~ | ✅ **已完成** | 2×，但基数小 |
+| 1 | ~~`build_index_from_files` 未变更页跳过~~ | ✅ **已完成** | `build_index` 重复 **~50 → 1 s** |
+| 2 | ~~`generate_user_dict` 指纹缓存 + 磁盘输入解耦~~ | ✅ **已完成** | 21 s → 0.2–0.4 s；乒乓已消除 |
+| 3 | ~~`missing_cross_refs` 去滑窗~~ | ✅ **已完成** | 2×，但基数小 |
+| 4 | `graph_analyze` 换 Louvain 或加结果缓存 | 13 → ~2 s | |
+| 5 | jieba 词典预热（启动后台 `initialize()`） | 首次 search 10.5 s → ~0 | |
+| 6 | `lint` 冷启动的文件读取（1438 个文件 ~20 s） | 视 OS 缓存 | 仅首次冷缓存时 |
+
+**累计效果**（同一 1438 页 wiki，纯 wall）：
+
+| 指标 | 优化前 | 优化后 |
+|---|---:|---:|
+| `build_index` 重复 | 46.9–60.6 s | **~1.0 s** |
+| `build_index_from_files` | 26.8–49 s | **0.66–1.0 s** |
+| `generate_user_dict` 重复 | 21–34 s | **0.2–0.4 s** |
+| `detect_all` | 1.02–1.92 s | **0.85 s** |
 
 初版报告里「lint 118 s → 秒级」的目标**不成立**——lint 本来就只有 2–4 s。
 
