@@ -254,7 +254,6 @@ class WikiPageIOMixin(WikiProtocol):
         return cut + "..."
 
     def _extract_page_summary(self, page_path: Path, max_len: int = 120) -> str:
-        # TODO(refactor): C901=17 — too complex, consider splitting
         """Extract a one-line summary from a wiki page.
 
         Priority:
@@ -369,7 +368,6 @@ class WikiPageIOMixin(WikiProtocol):
         return summary
 
     def _update_index_file(self) -> None:
-        # TODO(refactor): C901=24 — too complex, consider splitting
         """Update index.md with current wiki contents, summaries, and sink status.
 
         Groups pages by type (Sources, Concepts, Entities, etc.).

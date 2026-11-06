@@ -45,9 +45,9 @@
 | C2 | **`@lazy_attr` / `cached_property`**（25 处样板 / 14 类） | `code-reuse-audit-2026-11.md:134`；`grep lazy_attr foundation/` = 0 | 先按 6 类语义分类，可做约 15–20 处 |
 | C3 | **mypy baseline 未收紧** | `pyproject.toml:81-84` 「681 错 / 138 文件」+ `:226 ignore_errors=true` | 逐模块递减豁免 |
 | C4 | **5 个 import 环** | graphify 报告；根因 `mixins/analysis/status.py:5 from llmwikify import __version__` | 改 `from llmwikify._version import __version__` 类的叶子导入即可断环 |
-| C5 | **6 处 C901 过复杂** | `TODO(refactor): C901` in `page_io.py`(2) / `link.py` / `utility.py` / `relation.py`(2) | 拆函数 |
+| C5 | **6 处 `TODO(refactor): C901` 过复杂标注** | ruff `select = [E,F,I,W,B,C4,UP]` **不含 mccabe**，注释无工具强制 → 决定**不拆**（均为 wiki 读写/索引/链接核心函数，纯可读性收益不足以覆盖回归风险），改为删除 6 条误导注释 | 2026-11-06 已删，`grep C901 src/` = 0 |
 | C6 | **`apps/chat/agent/unified/` 生产死树**（1165 LOC + 9 测试） | code-survey §5.1 已证；`create_agent_loop` 仅测试引用 | 处置决策（见 code-survey 建议 2） |
-| C7 | **AGENTS.md 分层描述过期** | 仍写 `reproduction/` 层，实际目录不存在（`apps/ agent/ chat/ chat_db/ research/ wiki/`） | 下次 agents-sync 修订时更正 |
+| C7 | **AGENTS.md 包职责清单缺 `kernel/multi_wiki/`** | `AGENTS.md:168` 只列 `kernel/{wiki,graph,search,storage}/`，实际还有独立子包 `kernel/multi_wiki/`（`RemoteWiki` / `WikiRegistry`） | 下次 agents-sync 修订时补一行 |
 
 ---
 

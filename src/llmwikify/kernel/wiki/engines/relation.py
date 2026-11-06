@@ -239,7 +239,6 @@ class RelationEngine:
         fuzzy_threshold: float = 0.85,
         known_pages: list[str] | None = None,
     ) -> str:
-        # TODO(refactor): C901=14 — too complex, consider splitting
         """Resolve entity name to canonical form.
 
         Resolution order:
