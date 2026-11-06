@@ -145,6 +145,17 @@ class MissingCrossRefsRule(CrossPageRule):
 
         title_index, path_index = _build_inverted_index(candidates)
 
+        # A position can only produce a hit if its first token starts some
+        # index key; elsewhere ``.get()`` returns nothing anyway. Filtering
+        # on that turns the scan from MAX_TITLE_WORDS × len(words) n-gram
+        # joins per page into one set membership test per word — the same
+        # grams are still generated wherever they could match.
+        index_first_words: set[str] = set()
+        for gram in title_index:
+            index_first_words.add(gram.split(" ", 1)[0])
+        for gram in path_index:
+            index_first_words.add(gram.split(" ", 1)[0])
+
         for page_name, content_text_l in stripped.items():
             page_links = linked[page_name]
             words = _tokenize(content_text_l)
@@ -152,10 +163,10 @@ class MissingCrossRefsRule(CrossPageRule):
             # Cheap inverted-index lookup narrows the candidates down to
             # the ones this page could possibly mention.
             mentioned: set[str] = set()
-            for n in range(1, MAX_TITLE_WORDS + 1):
-                if n > len(words):
-                    break
-                for i in range(len(words) - n + 1):
+            for i, token in enumerate(words):
+                if token not in index_first_words:
+                    continue
+                for n in range(1, min(MAX_TITLE_WORDS, len(words) - i) + 1):
                     gram = " ".join(words[i : i + n])
                     mentioned.update(title_index.get(gram, ()))
                     mentioned.update(path_index.get(gram, ()))
