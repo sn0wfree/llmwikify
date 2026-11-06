@@ -145,7 +145,7 @@ python scripts/check_architecture.py               # 分层 + peer + 坏导入
 #   reuse_scan.py  reuse_scan2.py（未入库）
 ```
 
-## 六、落地记录（1–5 项，2026-11-06）
+## 六、落地记录（1–5、8 项，2026-11-06）
 
 | # | 项 | 实际改动 | 结果 |
 |---|---|---|---|
@@ -154,6 +154,9 @@ python scripts/check_architecture.py               # 分层 + peer + 坏导入
 | 3 | `_set_status` | 抽 `_apply_status(p, status)` + `_set_status(id, status)`，`approve`/`reject` 变 1 行 | −8 行 |
 | 4 | `read_json` | **仅 3/11 处可安全替换**（`maintenance._load_history`、`chat/memory._load`、`doctor_cmd._check_llm_connectivity`）。其余 8 处需要异常对象做日志或区分错误串（`logger.warning(..., exc)` / `"config parse error"` vs `"config not found"`），`read_json` 的静默契约不覆盖 | 3 处 |
 | 5 | section getter | 抽 `_section_config(section, cfg, *, deep)`；`wikis` 用 `deep_merge`（`deep=True`），`mcp`/`search` 用浅 `update`；默认 `deepcopy` 取代原 `.copy()`，消除与 `DEFAULT_CONFIG` 的共享引用 | 3 → 1 |
+| 8 | `cached_property` | **实测 20 处（原估 25）**。安全子集 11 处换 `functools.cached_property`：`harness/service` 6 + `wiki.py` 2（`ref_index_path`/`query_sink`）+ `dream.py` 2 + `consolidator` 1；其中 harness 与 consolidator 的测试断言私有字段（`_quality_gate`/`_store`），同步改为缓存语义断言（`__dict__` 存在性 + reset 后重建）。**未做**：带参构造 5 处（需 `@lazy_attr` 存参）、`skills/service.initialize()` 2 处（显式初始化语义）、`rate_limit.lock` 1 处（asyncio.Lock 必须延迟绑定 loop，属必要 lazy）、`config.py` 2 处（依赖 `read_json` 错误语义） | 11 处 |
+
+**第 8 项验证**：ruff 全过；harness/memory 测试 80 passed + 1 failed（`test_markdown_failure_continues`，**worktree 基线同样失败**，Windows 路径问题）；wiki 四件套与基线**逐条比对 35 failing / 0 differences**。
 
 **修正第 4 项的估算**：原报告按 14 处 × 3–5 行估 ~50 行，实际只有 3 处语义完全匹配
 （静默 default）。多数调用点「失败要留痕」，这是 helper 契约太窄，不是调用方偷懒——

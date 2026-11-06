@@ -1,6 +1,7 @@
 """Wiki core business logic."""
 
 import logging
+from functools import cached_property
 from pathlib import Path
 from typing import Any
 
@@ -99,7 +100,6 @@ class Wiki(
         ref_index_name = self.config.get("reference_index", {}).get(
             "name", "reference_index.json"
         )
-        self._ref_index_path: Path | None = None
         self._ref_index_name = ref_index_name
 
         # Orphan detection configuration
@@ -115,8 +115,6 @@ class Wiki(
         perf_config = self.config.get("performance", {})
         self._batch_size = perf_config.get("batch_size", 100)
 
-        self._query_sink: QuerySink | None = None
-
         # Phase 2 #4 — cache the analyzer instance on the Wiki
         # so that lint / recommend / hint / detect_X / _llm_*
         # mixin methods share one WikiAnalyzer (and its
@@ -130,19 +128,15 @@ class Wiki(
         if custom_dir:
             self._prompt_custom_dir = (self.root / custom_dir).resolve()
 
-    @property
+    @cached_property
     def ref_index_path(self) -> Path:
         """Path to reference index JSON."""
-        if self._ref_index_path is None:
-            self._ref_index_path = self.wiki_dir / self._ref_index_name
-        return self._ref_index_path
+        return self.wiki_dir / self._ref_index_name
 
-    @property
+    @cached_property
     def query_sink(self) -> QuerySink:
         """Lazy-load QuerySink."""
-        if self._query_sink is None:
-            self._query_sink = QuerySink(self.root, self.wiki_dir)
-        return self._query_sink
+        return QuerySink(self.root, self.wiki_dir)
 
     @property
     def qmd(self) -> Any:

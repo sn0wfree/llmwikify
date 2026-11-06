@@ -69,7 +69,8 @@ class TestHarnessServiceLazyInit:
 
 class TestHarnessServiceReset:
     def test_reset_clears_cache(self, harness):
-        _ = harness.quality_gate
-        assert harness._quality_gate is not None
+        gate = harness.quality_gate
+        assert "quality_gate" in harness.__dict__
         harness.reset()
-        assert harness._quality_gate is None
+        assert "quality_gate" not in harness.__dict__
+        assert harness.quality_gate is not gate  # rebuilt after reset

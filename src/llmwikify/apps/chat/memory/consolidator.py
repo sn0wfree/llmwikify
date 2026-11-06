@@ -30,6 +30,7 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass
+from functools import cached_property
 from pathlib import Path
 from typing import Any
 
@@ -116,9 +117,6 @@ class Consolidator:
         self.data_dir = Path(data_dir)
         self.config = config or ConsolidatorConfig()
 
-        # Lazy-init stores
-        self._store: MemoryConsolidationStore | None = None
-
         # Per-session throttling timestamps
         self._last_consolidation: dict[str, float] = {}
 
@@ -127,12 +125,11 @@ class Consolidator:
 
     # ─── lazy property ─────────────────────────────────────────
 
-    @property
+    @cached_property
     def store(self) -> MemoryConsolidationStore:
-        if self._store is None:
-            self._store = MemoryConsolidationStore(self.db_path)
-            self._store.init_schema()
-        return self._store
+        store = MemoryConsolidationStore(self.db_path)
+        store.init_schema()
+        return store
 
     # ─── public API ────────────────────────────────────────────
 

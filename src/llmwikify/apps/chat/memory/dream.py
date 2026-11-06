@@ -40,6 +40,7 @@ import logging
 import re
 import time
 from dataclasses import dataclass
+from functools import cached_property
 from pathlib import Path
 from typing import Any
 
@@ -129,10 +130,6 @@ class Dream:
         self.data_dir = Path(data_dir)
         self.config = config or DreamConfig()
 
-        # Lazy-init stores
-        self._consolidation_store: MemoryConsolidationStore | None = None
-        self._facts_store: MemoryFactsStore | None = None
-
         # Filesystem paths
         self._memory_dir = self.data_dir / "memory"
         self._facts_dir = self._memory_dir / "facts"
@@ -140,19 +137,17 @@ class Dream:
 
     # ─── lazy properties ─────────────────────────────────────────
 
-    @property
+    @cached_property
     def consolidation_store(self) -> MemoryConsolidationStore:
-        if self._consolidation_store is None:
-            self._consolidation_store = MemoryConsolidationStore(self.db_path)
-            self._consolidation_store.init_schema()
-        return self._consolidation_store
+        store = MemoryConsolidationStore(self.db_path)
+        store.init_schema()
+        return store
 
-    @property
+    @cached_property
     def facts_store(self) -> MemoryFactsStore:
-        if self._facts_store is None:
-            self._facts_store = MemoryFactsStore(self.db_path)
-            self._facts_store.init_schema()
-        return self._facts_store
+        store = MemoryFactsStore(self.db_path)
+        store.init_schema()
+        return store
 
     # ─── cursor management ──────────────────────────────────────
 

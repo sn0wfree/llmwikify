@@ -16,6 +16,7 @@ The 6 eval classes:
 from __future__ import annotations
 
 import logging
+from functools import cached_property
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -42,96 +43,79 @@ class HarnessService:
         self.llm = llm
         self.report_llm = report_llm
 
-        # Lazy-initialized primitives
-        self._quality_gate = None
-        self._source_filter = None
-        self._structure_validator = None
-        self._research_reviewer = None
-        self._research_revisor = None
-        self._source_analyzer = None
-
     # ─── Lazy property accessors ─────────────────────────────
 
-    @property
+    @cached_property
     def quality_gate(self) -> Any:
-        if self._quality_gate is None:
-            from llmwikify.apps.research.harness.quality_gate import (
-                QualityGate,
-            )
+        from llmwikify.apps.research.harness.quality_gate import (
+            QualityGate,
+        )
 
-            self._quality_gate = QualityGate(self.config)
-        return self._quality_gate
+        return QualityGate(self.config)
 
-    @property
+    @cached_property
     def source_filter(self) -> Any:
-        if self._source_filter is None:
-            from llmwikify.apps.research.harness.source_filter import (
-                SourceFilter,
-            )
+        from llmwikify.apps.research.harness.source_filter import (
+            SourceFilter,
+        )
 
-            self._source_filter = SourceFilter(self.config)
-        return self._source_filter
+        return SourceFilter(self.config)
 
-    @property
+    @cached_property
     def structure_validator(self) -> Any:
-        if self._structure_validator is None:
-            from llmwikify.apps.research.harness.structure_validator import (
-                StructureValidator,
-            )
+        from llmwikify.apps.research.harness.structure_validator import (
+            StructureValidator,
+        )
 
-            self._structure_validator = StructureValidator()
-        return self._structure_validator
+        return StructureValidator()
 
-    @property
+    @cached_property
     def research_reviewer(self) -> Any:
-        if self._research_reviewer is None:
-            from llmwikify.apps.research.harness.review import (
-                ResearchReviewer,
-            )
+        from llmwikify.apps.research.harness.review import (
+            ResearchReviewer,
+        )
 
-            self._research_reviewer = ResearchReviewer(
-                wiki=self.wiki,
-                llm_client=self.llm,
-                config=self.config,
-            )
-        return self._research_reviewer
+        return ResearchReviewer(
+            wiki=self.wiki,
+            llm_client=self.llm,
+            config=self.config,
+        )
 
-    @property
+    @cached_property
     def research_revisor(self) -> Any:
-        if self._research_revisor is None:
-            from llmwikify.apps.research.harness.review import (
-                ResearchRevisor,
-            )
+        from llmwikify.apps.research.harness.review import (
+            ResearchRevisor,
+        )
 
-            self._research_revisor = ResearchRevisor(
-                wiki=self.wiki,
-                llm_client=self.report_llm or self.llm,
-                config=self.config,
-            )
-        return self._research_revisor
+        return ResearchRevisor(
+            wiki=self.wiki,
+            llm_client=self.report_llm or self.llm,
+            config=self.config,
+        )
 
-    @property
+    @cached_property
     def source_analyzer(self) -> Any:
-        if self._source_analyzer is None:
-            from llmwikify.apps.research.harness.source_analyzer import (
-                SourceAnalyzer,
-            )
+        from llmwikify.apps.research.harness.source_analyzer import (
+            SourceAnalyzer,
+        )
 
-            self._source_analyzer = SourceAnalyzer(
-                wiki=self.wiki,
-                session_manager=self.session_manager,
-                config=self.config,
-            )
-        return self._source_analyzer
+        return SourceAnalyzer(
+            wiki=self.wiki,
+            session_manager=self.session_manager,
+            config=self.config,
+        )
 
     def reset(self) -> None:
-        """Reset all cached primitives (for tests)."""
-        self._quality_gate = None
-        self._source_filter = None
-        self._structure_validator = None
-        self._research_reviewer = None
-        self._research_revisor = None
-        self._source_analyzer = None
+        """Drop cached primitives (for tests)."""
+        for name in (
+            "quality_gate",
+            "source_filter",
+            "structure_validator",
+            "research_reviewer",
+            "research_revisor",
+            "source_analyzer",
+        ):
+            self.__dict__.pop(name, None)
 
 
 __all__ = ["HarnessService"]

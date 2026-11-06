@@ -42,7 +42,7 @@
 | # | 项 | 证据 | 建议 |
 |---|---|---|---|
 | C1 | **统一 `@retry`**（3 套并存） | `foundation/llm/streamable.py` 4 个循环骨架 + `apps/research/retry_managers.py` 4 个 + `tool_executor.py:167` + `executor.py:428` | 已承诺：等 minmax key 恢复、`acceptance_real_llm.py` 跑通后再动 |
-| C2 | **`@lazy_attr` / `cached_property`**（25 处样板 / 14 类） | `code-reuse-audit-2026-11.md:134`；`grep lazy_attr foundation/` = 0 | 先按 6 类语义分类，可做约 15–20 处 |
+| C2 | **`@lazy_attr` / `cached_property`**（实测 20 处样板） | `code-reuse-audit-2026-11.md:134`；`grep lazy_attr foundation/` = 0 | ✅ 安全子集 **11 处**已换 `cached_property`（见 audit §六 第 8 项）；带参 5 处需 `@lazy_attr`，`initialize()`/`asyncio.Lock` 4 处明确不动 |
 | C3 | **mypy baseline 未收紧** | `pyproject.toml:81-84` 「681 错 / 138 文件」+ `:226 ignore_errors=true` | 逐模块递减豁免 |
 | C4 | **5 个 import 环** | graphify 报告；根因 `mixins/analysis/status.py:5 from llmwikify import __version__` | 改 `from llmwikify._version import __version__` 类的叶子导入即可断环 |
 | C5 | **6 处 `TODO(refactor): C901` 过复杂标注** | ruff `select = [E,F,I,W,B,C4,UP]` **不含 mccabe**，注释无工具强制 → 决定**不拆**（均为 wiki 读写/索引/链接核心函数，纯可读性收益不足以覆盖回归风险），改为删除 6 条误导注释 | 2026-11-06 已删，`grep C901 src/` = 0 |

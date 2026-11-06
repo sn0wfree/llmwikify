@@ -414,9 +414,10 @@ class TestConsolidatorSQLite:
             provider=provider,
             data_dir=tmp_path,
         )
-        assert consol._store is None
-        _ = consol.store  # trigger init
-        assert consol._store is not None
+        assert "store" not in consol.__dict__  # not built yet
+        store = consol.store  # trigger init
+        assert "store" in consol.__dict__
+        assert consol.store is store  # cached
 
 
 # ─── MemoryManager.consolidate_session forwarding ────────────────
