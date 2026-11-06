@@ -2,7 +2,7 @@
 
 import logging
 
-from llmwikify import __version__
+from llmwikify._version import __version__
 from llmwikify.kernel.storage.backend import is_path_excluded
 
 from ...protocols import WikiProtocol
