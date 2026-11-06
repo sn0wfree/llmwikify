@@ -615,24 +615,38 @@ class WikiIndex:
         return links
 
     def build_index_from_files(self, wiki_dir: Path, batch_size: int = 100) -> dict:
-        """Build index from all wiki markdown files."""
+        """Build index from all wiki markdown files.
+
+        Pages already indexed with identical content are left untouched:
+        re-segmenting and re-inserting them costs a jieba cut plus several
+        statements each (1440 pages ≈ 27 s), and their rows are already
+        correct. Only new/changed pages are written; only pages whose file
+        disappeared are deleted. The resulting index is identical to a
+        full wipe-and-rebuild.
+        """
         import time
 
         from llmwikify.kernel.graph.cache import cache_invalidate
 
         start_time = time.time()
 
-        # Clear existing index
-        self._execute("DELETE FROM pages_fts")
-        self._execute("DELETE FROM page_links")
-        self._execute("DELETE FROM pages")
-
-        # Process all markdown files
         md_files = [p for p in wiki_dir.rglob("*.md") if not is_path_excluded(p)]
         total = len(md_files)
 
-        # One transaction for the whole build: committing per page means
-        # one fsync per page (1400 pages x ~13 ms on Windows = 19 s).
+        # Existing content by page_name — one query replaces the old
+        # blanket DELETE + re-insert of every page.
+        existing: dict[str, str] = {}
+        try:
+            for name, content in self.conn.execute(
+                "SELECT page_name, content FROM pages_fts"
+            ):
+                existing[name] = content
+        except sqlite3.OperationalError:
+            existing = {}
+
+        on_disk: set[str] = set()
+        unchanged = 0
+
         for i, md_file in enumerate(md_files):
             if (i + 1) % batch_size == 0 or (i + 1) == total:
                 elapsed = time.time() - start_time
@@ -646,8 +660,19 @@ class WikiIndex:
             content = md_file.read_text(encoding="utf-8")
             rel_path = md_file.relative_to(wiki_dir).as_posix()
             page_name = rel_path[:-3]  # e.g., "concepts/Factor Investing"
+            on_disk.add(page_name)
+
+            if existing.get(page_name) == content:
+                unchanged += 1
+                continue
 
             self.upsert_page(page_name, content, rel_path, commit=False)
+
+        # Pages whose file is gone must leave every table.
+        for stale in sorted(set(existing) - on_disk):
+            self._execute("DELETE FROM pages_fts WHERE page_name = ?", (stale,))
+            self._execute("DELETE FROM page_links WHERE source_page = ?", (stale,))
+            self._execute("DELETE FROM pages WHERE page_name = ?", (stale,))
 
         self._commit()
 
@@ -661,6 +686,7 @@ class WikiIndex:
             "total_pages": total,
             "total_links": self.get_link_count(),
             "processed": total,
+            "unchanged": unchanged,
             "errors": 0,
             "elapsed_seconds": round(elapsed, 2),
             "files_per_second": round(speed, 1),
