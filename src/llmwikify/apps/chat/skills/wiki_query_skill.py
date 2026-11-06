@@ -79,6 +79,34 @@ def _json(obj: Any) -> str:
     return json.dumps(obj, ensure_ascii=False, indent=2)
 
 
+def _registry(ctx: SkillContext) -> Any | SkillResult:
+    """Extract wiki_registry from context, or return error SkillResult."""
+    found = ctx.config.get("wiki_registry") if ctx.config else None
+    if found is None:
+        return SkillResult.fail("wiki_registry not configured")
+    return found
+
+
+async def _op(
+    ctx: SkillContext, method: str, *params: Any, **kwargs: Any
+) -> SkillResult:
+    """Call ``wiki.<method>(*params, **kwargs)`` and wrap the result."""
+    wiki = _wiki(ctx)
+    if isinstance(wiki, SkillResult):
+        return wiki
+    return SkillResult.ok({"result": getattr(wiki, method)(*params, **kwargs)})
+
+
+def _need(args: dict, *keys: str) -> list[Any] | SkillResult:
+    """Fetch required args positionally; fail if any is missing or empty."""
+    values = [args.get(key, "") for key in keys]
+    if any(not v for v in values):
+        names = " and ".join(keys)
+        verb = "is" if len(keys) == 1 else "are"
+        return SkillResult.fail(f"{names} {verb} required")
+    return values
+
+
 # ─── 20 core wiki action handlers ────────────────────────────────
 
 
@@ -91,37 +119,24 @@ async def _init(args: dict, ctx: SkillContext) -> SkillResult:
 
 
 async def _ingest(args: dict, ctx: SkillContext) -> SkillResult:
-    wiki = _wiki(ctx)
-    if isinstance(wiki, SkillResult):
-        return wiki
-    source = args.get("source", "")
-    if not source:
-        return SkillResult.fail("source is required")
-    result = wiki.ingest_source(source)
-    return SkillResult.ok({"result": result})
+    values = _need(args, "source")
+    if isinstance(values, SkillResult):
+        return values
+    return await _op(ctx, "ingest_source", values[0])
 
 
 async def _write_page(args: dict, ctx: SkillContext) -> SkillResult:
-    wiki = _wiki(ctx)
-    if isinstance(wiki, SkillResult):
-        return wiki
-    page_name = args.get("page_name", "")
-    content = args.get("content", "")
-    if not page_name or not content:
-        return SkillResult.fail("page_name and content are required")
-    result = wiki.write_page(page_name, content)
-    return SkillResult.ok({"result": result})
+    values = _need(args, "page_name", "content")
+    if isinstance(values, SkillResult):
+        return values
+    return await _op(ctx, "write_page", *values)
 
 
 async def _read_page(args: dict, ctx: SkillContext) -> SkillResult:
-    wiki = _wiki(ctx)
-    if isinstance(wiki, SkillResult):
-        return wiki
-    page_name = args.get("page_name", "")
-    if not page_name:
-        return SkillResult.fail("page_name is required")
-    result = wiki.read_page(page_name)
-    return SkillResult.ok({"result": result})
+    values = _need(args, "page_name")
+    if isinstance(values, SkillResult):
+        return values
+    return await _op(ctx, "read_page", values[0])
 
 
 async def _search(args: dict, ctx: SkillContext) -> SkillResult:
@@ -169,14 +184,12 @@ async def _lint(args: dict, ctx: SkillContext) -> SkillResult:
 
 
 async def _analyze_source(args: dict, ctx: SkillContext) -> SkillResult:
-    wiki = _wiki(ctx)
-    if isinstance(wiki, SkillResult):
-        return wiki
-    source_path = args.get("source_path", "")
-    if not source_path:
-        return SkillResult.fail("source_path is required")
-    result = wiki.analyze_source(source_path, force=args.get("force", False))
-    return SkillResult.ok({"result": result})
+    values = _need(args, "source_path")
+    if isinstance(values, SkillResult):
+        return values
+    return await _op(
+        ctx, "analyze_source", values[0], force=args.get("force", False)
+    )
 
 
 async def _references(args: dict, ctx: SkillContext) -> SkillResult:
@@ -198,58 +211,33 @@ async def _references(args: dict, ctx: SkillContext) -> SkillResult:
 
 
 async def _status(args: dict, ctx: SkillContext) -> SkillResult:
-    wiki = _wiki(ctx)
-    if isinstance(wiki, SkillResult):
-        return wiki
-    result = wiki.status()
-    return SkillResult.ok({"result": result})
+    return await _op(ctx, "status")
 
 
 async def _log(args: dict, ctx: SkillContext) -> SkillResult:
-    wiki = _wiki(ctx)
-    if isinstance(wiki, SkillResult):
-        return wiki
-    operation = args.get("operation", "")
-    details = args.get("details", "")
-    if not operation or not details:
-        return SkillResult.fail("operation and details are required")
-    result = wiki.append_log(operation, details)
-    return SkillResult.ok({"result": result})
+    values = _need(args, "operation", "details")
+    if isinstance(values, SkillResult):
+        return values
+    return await _op(ctx, "append_log", *values)
 
 
 async def _recommend(args: dict, ctx: SkillContext) -> SkillResult:
-    wiki = _wiki(ctx)
-    if isinstance(wiki, SkillResult):
-        return wiki
-    result = wiki.recommend()
-    return SkillResult.ok({"result": result})
+    return await _op(ctx, "recommend")
 
 
 async def _build_index(args: dict, ctx: SkillContext) -> SkillResult:
-    wiki = _wiki(ctx)
-    if isinstance(wiki, SkillResult):
-        return wiki
-    result = wiki.build_index()
-    return SkillResult.ok({"result": result})
+    return await _op(ctx, "build_index")
 
 
 async def _read_schema(args: dict, ctx: SkillContext) -> SkillResult:
-    wiki = _wiki(ctx)
-    if isinstance(wiki, SkillResult):
-        return wiki
-    result = wiki.read_schema()
-    return SkillResult.ok({"result": result})
+    return await _op(ctx, "read_schema")
 
 
 async def _update_schema(args: dict, ctx: SkillContext) -> SkillResult:
-    wiki = _wiki(ctx)
-    if isinstance(wiki, SkillResult):
-        return wiki
-    content = args.get("content", "")
-    if not content:
-        return SkillResult.fail("content is required")
-    result = wiki.update_schema(content)
-    return SkillResult.ok({"result": result})
+    values = _need(args, "content")
+    if isinstance(values, SkillResult):
+        return values
+    return await _op(ctx, "update_schema", values[0])
 
 
 async def _synthesize(args: dict, ctx: SkillContext) -> SkillResult:
@@ -274,11 +262,7 @@ async def _synthesize(args: dict, ctx: SkillContext) -> SkillResult:
 
 
 async def _sink_status(args: dict, ctx: SkillContext) -> SkillResult:
-    wiki = _wiki(ctx)
-    if isinstance(wiki, SkillResult):
-        return wiki
-    result = wiki.sink_status()
-    return SkillResult.ok({"result": result})
+    return await _op(ctx, "sink_status")
 
 
 async def _suggest_synthesis(args: dict, ctx: SkillContext) -> SkillResult:
@@ -301,11 +285,7 @@ async def _knowledge_gaps(args: dict, ctx: SkillContext) -> SkillResult:
 
 
 async def _graph_analyze(args: dict, ctx: SkillContext) -> SkillResult:
-    wiki = _wiki(ctx)
-    if isinstance(wiki, SkillResult):
-        return wiki
-    result = wiki.graph_analyze()
-    return SkillResult.ok({"result": result})
+    return await _op(ctx, "graph_analyze")
 
 
 async def _graph(args: dict, ctx: SkillContext) -> SkillResult:
@@ -327,9 +307,9 @@ async def _graph(args: dict, ctx: SkillContext) -> SkillResult:
 
 
 async def _wiki_list(args: dict, ctx: SkillContext) -> SkillResult:
-    registry = ctx.config.get("wiki_registry") if ctx.config else None
-    if registry is None:
-        return SkillResult.fail("wiki_registry not configured")
+    registry = _registry(ctx)
+    if isinstance(registry, SkillResult):
+        return registry
     wikis = registry.list_wikis()
     return SkillResult.ok(
         {
@@ -340,9 +320,9 @@ async def _wiki_list(args: dict, ctx: SkillContext) -> SkillResult:
 
 
 async def _wiki_switch(args: dict, ctx: SkillContext) -> SkillResult:
-    registry = ctx.config.get("wiki_registry") if ctx.config else None
-    if registry is None:
-        return SkillResult.fail("wiki_registry not configured")
+    registry = _registry(ctx)
+    if isinstance(registry, SkillResult):
+        return registry
     wiki_id = args.get("wiki_id", "")
     if not wiki_id:
         return SkillResult.fail("wiki_id is required")
@@ -359,9 +339,9 @@ async def _wiki_switch(args: dict, ctx: SkillContext) -> SkillResult:
 
 
 async def _wiki_register(args: dict, ctx: SkillContext) -> SkillResult:
-    registry = ctx.config.get("wiki_registry") if ctx.config else None
-    if registry is None:
-        return SkillResult.fail("wiki_registry not configured")
+    registry = _registry(ctx)
+    if isinstance(registry, SkillResult):
+        return registry
     wiki_id = args.get("wiki_id", "")
     name = args.get("name", "")
     if not wiki_id or not name:
@@ -400,9 +380,9 @@ async def _wiki_register(args: dict, ctx: SkillContext) -> SkillResult:
 
 
 async def _wiki_unregister(args: dict, ctx: SkillContext) -> SkillResult:
-    registry = ctx.config.get("wiki_registry") if ctx.config else None
-    if registry is None:
-        return SkillResult.fail("wiki_registry not configured")
+    registry = _registry(ctx)
+    if isinstance(registry, SkillResult):
+        return registry
     wiki_id = args.get("wiki_id", "")
     if not wiki_id:
         return SkillResult.fail("wiki_id is required")
@@ -414,9 +394,9 @@ async def _wiki_unregister(args: dict, ctx: SkillContext) -> SkillResult:
 
 
 async def _wiki_status_by_id(args: dict, ctx: SkillContext) -> SkillResult:
-    registry = ctx.config.get("wiki_registry") if ctx.config else None
-    if registry is None:
-        return SkillResult.fail("wiki_registry not configured")
+    registry = _registry(ctx)
+    if isinstance(registry, SkillResult):
+        return registry
     wiki_id = args.get("wiki_id", "")
     try:
         if wiki_id:
@@ -432,9 +412,9 @@ async def _wiki_status_by_id(args: dict, ctx: SkillContext) -> SkillResult:
 
 
 async def _wiki_search_by_id(args: dict, ctx: SkillContext) -> SkillResult:
-    registry = ctx.config.get("wiki_registry") if ctx.config else None
-    if registry is None:
-        return SkillResult.fail("wiki_registry not configured")
+    registry = _registry(ctx)
+    if isinstance(registry, SkillResult):
+        return registry
     query = args.get("query", "")
     if not query:
         return SkillResult.fail("query is required")
@@ -462,9 +442,9 @@ async def _wiki_search_by_id(args: dict, ctx: SkillContext) -> SkillResult:
 
 
 async def _wiki_search_cross(args: dict, ctx: SkillContext) -> SkillResult:
-    registry = ctx.config.get("wiki_registry") if ctx.config else None
-    if registry is None:
-        return SkillResult.fail("wiki_registry not configured")
+    registry = _registry(ctx)
+    if isinstance(registry, SkillResult):
+        return registry
     query = args.get("query", "")
     if not query:
         return SkillResult.fail("query is required")
@@ -482,9 +462,9 @@ async def _wiki_search_cross(args: dict, ctx: SkillContext) -> SkillResult:
 
 
 async def _wiki_scan(args: dict, ctx: SkillContext) -> SkillResult:
-    registry = ctx.config.get("wiki_registry") if ctx.config else None
-    if registry is None:
-        return SkillResult.fail("wiki_registry not configured")
+    registry = _registry(ctx)
+    if isinstance(registry, SkillResult):
+        return registry
     scan_paths_str = args.get("scan_paths", ".")
     scan_depth = args.get("scan_depth", 2)
     paths = [p.strip() for p in scan_paths_str.split(",")]
