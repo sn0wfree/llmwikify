@@ -78,27 +78,25 @@ target-version = [ "py310", "py311", "py312",]
 include = "\\.pyi?$"
 
 
-# ── CI 转绿 baseline (2026-10-14, mypy 2.4.0) ───────────────────
-# 存量模块豁免: 681 错 / 138 文件 (duck-typing 噪音为主, 含少量真 bug
-# 已在 fix(wrappers)/fix(security) 等提交中修复)。TODO: 逐模块收紧后
-# 从此清单移出; 新增文件不在清单内 → 默认全严格检查。
+# ── 存量豁免 baseline (2026-11-06 复测, mypy 2.4.0) ──────────────
+# 实测: 豁免下 140 错 / 34 文件; 关闭本段全量 702 错 / 147 文件。
+# 2026-10-14 记录的 681 错 / 138 文件已过期; 21 个迁移后失效的模块名
+# (apps/chat/db -> apps/chat_db 等) 与 4 个已带类型信息的三方包条目
+# 已按 mypy unused-section 报告删除。TODO: 逐模块收紧后从此清单移出;
+# 新增文件不在清单内 → 默认全严格检查。复测方法见
+# docs/diagnostics/feature-completeness-2026-11.md。
 [[tool.mypy.overrides]]
 module = [
     "llmwikify.apps.agent.maintenance.auto_ingest",
-    "llmwikify.apps.agent.notifications",
     "llmwikify.apps.agent.tools",
-    "llmwikify.apps.agent.tools.skill_adapter",
-    "llmwikify.apps.agent.wiki_dream_editor",
     "llmwikify.apps.chat",
     "llmwikify.apps.chat.agent.agent_service",
     "llmwikify.apps.chat.agent.autocompact",
     "llmwikify.apps.chat.agent.bridge_backend",
     "llmwikify.apps.chat.agent.builtin_commands",
-    "llmwikify.apps.chat.agent.confirmation_manager",
     "llmwikify.apps.chat.agent.context_manager",
     "llmwikify.apps.chat.agent.event_log",
     "llmwikify.apps.chat.agent.orchestrator",
-    "llmwikify.apps.chat.agent.research_runner",
     "llmwikify.apps.chat.agent.runner_v2",
     "llmwikify.apps.chat.agent.session_manager",
     "llmwikify.apps.chat.agent.subagent_manager",
@@ -106,22 +104,9 @@ module = [
     "llmwikify.apps.chat.agent.unified.handlers.chat_reasoner",
     "llmwikify.apps.chat.agent.unified.handlers.tool_actor",
     "llmwikify.apps.chat.agent.unified.registry",
-    "llmwikify.apps.chat.clarifier",
-    "llmwikify.apps.chat.db._facade",
-    "llmwikify.apps.chat.db.admin_stats_repo",
-    "llmwikify.apps.chat.db.chat_message_repo",
-    "llmwikify.apps.chat.db.chat_session_repo",
-    "llmwikify.apps.chat.db.permission_repo",
-    "llmwikify.apps.chat.db.research_delegate",
-    "llmwikify.apps.chat.db.tool_call_repo",
-    "llmwikify.apps.chat.db.wiki_delegate",
     "llmwikify.apps.chat.db_migrations",
-    "llmwikify.apps.chat.engine_helpers",
     "llmwikify.apps.chat.eval_harness",
-    "llmwikify.apps.chat.gatherer",
-    "llmwikify.apps.chat.harness.review",
     "llmwikify.apps.chat.harness.service",
-    "llmwikify.apps.chat.harness.source_analyzer",
     "llmwikify.apps.chat.memory",
     "llmwikify.apps.chat.memory.consolidation_store",
     "llmwikify.apps.chat.memory.dream",
@@ -138,8 +123,6 @@ module = [
     "llmwikify.apps.chat.skills.workflows.dag",
     "llmwikify.apps.chat.skills.workflows.executor",
     "llmwikify.apps.chat.skills.workflows.subagent_worker",
-    "llmwikify.apps.chat.state",
-    "llmwikify.apps.chat.synthesizer",
     "llmwikify.apps.db_base",
     "llmwikify.apps.research.actions",
     "llmwikify.apps.research.base",
@@ -148,7 +131,6 @@ module = [
     "llmwikify.apps.research.reasoner",
     "llmwikify.apps.research.report",
     "llmwikify.apps.research.routes",
-    "llmwikify.apps.research.web_search",
     "llmwikify.apps.wiki.db",
     "llmwikify.apps.wiki.service",
     "llmwikify.foundation.auth._jwt",
@@ -221,7 +203,7 @@ module = [
     "llmwikify.kernel.wiki.mixins.io.page_io",
     "llmwikify.kernel.wiki.mixins.io.source_analysis",
     "llmwikify.kernel.wiki.protocols",
-    "llmwikify.kernel.wiki.wiki",
+    "llmwikify.kernel.wiki.wiki"
 ]
 ignore_errors = true
 
@@ -241,7 +223,9 @@ no_implicit_optional = true
 warn_redundant_casts = true
 warn_unused_ignores = true
 [[tool.mypy.overrides]]
-module = [ "croniter", "networkx", "networkx.*", "pyvis.*", "community",]
+module = [
+    "croniter"
+]
 ignore_missing_imports = true
 
 [tool.importlinter]
