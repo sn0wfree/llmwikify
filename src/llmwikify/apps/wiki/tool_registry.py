@@ -544,7 +544,7 @@ class WikiToolRegistry:
         return result
 
     def _graph_action(self, args: dict) -> dict:
-        from ....kernel.wiki.engines.relation import RelationEngine
+        from llmwikify.kernel.wiki.engines.relation import RelationEngine
 
         engine = RelationEngine(self.wiki.index, wiki_root=self.wiki.root)
         action = args.get("action", "query")
