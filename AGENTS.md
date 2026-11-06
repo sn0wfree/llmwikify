@@ -208,6 +208,7 @@ backward-compat shim 保留（仅供外部调用方，仓库内源码一律走�
 验证:
 - `python scripts/check_architecture.py` 必须 0 violation
   且 apps peer structural/runtime 均为 0
+  且 0 broken import（每条 `llmwikify.*` 导入按 AST 解析到真实包树）
 - 反向依赖 grep 必须为空
 - 422+ tests 通过
 

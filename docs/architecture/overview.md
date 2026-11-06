@@ -300,7 +300,7 @@ sequenceDiagram
 ## 9. 验证与维护
 
 ```bash
-python scripts/check_architecture.py     # 分层依赖检查：必须 0 violations
+python scripts/check_architecture.py     # 分层依赖 + 导入解析：0 violation / 0 broken import
 pytest --collect-only -q                 # 测试收集（4940，排除 tests/ab_testing）
 pytest -m e2e                            # 端到端（需要真实服务）
 curl http://localhost:8765/api/health    # 运行时健康检查

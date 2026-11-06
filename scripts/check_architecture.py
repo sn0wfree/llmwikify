@@ -20,6 +20,11 @@ suitable for pre-commit and CI. It is conservative (some false
 positives are tolerated via the per-layer whitelist at the bottom of
 this file).
 
+Beyond layering it also resolves every `llmwikify.*` import against
+the real package tree (AST, no import execution), because a rename or
+move that leaves a dangling path is a runtime ModuleNotFoundError the
+layer check cannot see (see the broken-import check below).
+
 Usage:
 
     python scripts/check_architecture.py
@@ -27,6 +32,7 @@ Usage:
 """
 from __future__ import annotations
 
+import ast
 import re
 import sys
 from collections import defaultdict
@@ -128,8 +134,6 @@ def _check_apps_peers() -> tuple[dict, list[str]]:
 
     Returns ``(report, regressions)``.
     """
-    import ast
-
     peers = _apps_peers()
     structural: dict[tuple[str, str], int] = defaultdict(int)
     runtime: dict[tuple[str, str], int] = defaultdict(int)
@@ -179,6 +183,187 @@ def _check_apps_peers() -> tuple[dict, list[str]]:
         "runtime": dict(runtime),
     }
     return report, regressions
+
+
+# ── broken-import check ──────────────────────────────────────────────
+# The layer check above only compares *names*; it cannot see that a
+# module was renamed/moved and an import still points at the old path.
+# efba3812 shipped exactly that P0: 6 imports of
+# ``llmwikify.apps.research.six_step_config_manager`` (a module that
+# never existed) broke ``WikiService.get_llm()`` and the 4
+# ``/api/agent/config*`` endpoints at runtime.
+#
+# This check resolves every ``llmwikify.*`` import against the real
+# package tree via AST (no import execution) and reports two kinds of
+# breakage:
+#
+#   MISSING_MODULE — the dotted path does not exist at all
+#   MISSING_SYMBOL — the parent module exists but does not export the
+#                    name (and no ``*`` / ``__getattr__`` escape hatch)
+PKG_PREFIX = "llmwikify"
+
+
+def _collect_modules() -> dict[str, Path]:
+    """Map every importable dotted name under ``src/llmwikify`` to a path.
+
+    Directories count as namespace packages so that a package whose
+    ``__init__.py`` was deleted still resolves.
+    """
+    mods: dict[str, Path] = {}
+    for path in SRC.rglob("*"):
+        if "__pycache__" in path.parts:
+            continue
+        rel = path.relative_to(SRC)
+        if path.is_dir():
+            mods[".".join((PKG_PREFIX, *rel.parts))] = path
+            continue
+        if path.suffix != ".py":
+            continue
+        parts = list(rel.with_suffix("").parts)
+        if parts[-1] == "__init__":
+            parts = parts[:-1]
+        mods[".".join((PKG_PREFIX, *parts))] = path
+    return mods
+
+
+def _module_package(path: Path) -> list[str]:
+    """Dotted package that relative imports in ``path`` resolve against."""
+    rel = path.relative_to(SRC)
+    parts = list(rel.with_suffix("").parts)
+    return parts[:-1] if path.name != "__init__.py" else parts
+
+
+def _replaces_own_module(node: ast.stmt) -> bool:
+    """True for ``sys.modules[__name__] = other`` (module-object shims).
+
+    Such a shim exposes the target module's namespace at runtime; the
+    names are not in this file, so static export resolution must not
+    second-guess it.
+    """
+    if not isinstance(node, ast.Assign):
+        return False
+    for tgt in node.targets:
+        if not isinstance(tgt, ast.Subscript):
+            continue
+        value = tgt.value
+        if not (isinstance(value, ast.Attribute) and value.attr == "modules"):
+            continue
+        slice_ = tgt.slice
+        # ``sys.modules[__name__]`` (Name) or ``sys.modules["__name__"]``
+        if isinstance(slice_, ast.Name) and slice_.id == "__name__":
+            return True
+        if isinstance(slice_, ast.Constant) and slice_.value == "__name__":
+            return True
+    return False
+
+
+def _exported_names(path: Path) -> set[str] | None:
+    """Names a module exposes at import time.
+
+    ``None`` means the namespace is unresolvable (``from x import *``,
+    a PEP 562 ``__getattr__``, or a ``sys.modules[__name__]`` shim) —
+    callers must treat that as "ok".
+    """
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+    except (SyntaxError, UnicodeDecodeError):
+        return None
+
+    names: set[str] = set()
+    star = False
+
+    def walk(body: list[ast.stmt]) -> None:
+        nonlocal star
+        for node in body:
+            if _replaces_own_module(node):
+                star = True
+                return
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                names.add(node.name)
+            elif isinstance(node, ast.Assign):
+                for tgt in node.targets:
+                    if isinstance(tgt, ast.Name):
+                        names.add(tgt.id)
+            elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+                names.add(node.target.id)
+            elif isinstance(node, ast.Import):
+                for alias in node.names:
+                    names.add((alias.asname or alias.name).split(".")[0])
+            elif isinstance(node, ast.ImportFrom):
+                for alias in node.names:
+                    if alias.name == "*":
+                        star = True
+                    else:
+                        names.add(alias.asname or alias.name)
+            elif isinstance(node, ast.If):
+                walk(node.body)
+                walk(node.orelse)
+            elif isinstance(node, (ast.Try, ast.With, ast.AsyncWith)):
+                walk(node.body)
+                walk(node.orelse)
+                walk(node.finalbody)
+
+    walk(tree.body)
+    if star or "__getattr__" in names:
+        return None
+    return names
+
+
+def _check_imports() -> tuple[list[tuple[Path, int, str, str]], int]:
+    """Resolve every ``llmwikify.*`` import; return (problems, total)."""
+    mods = _collect_modules()
+    problems: list[tuple[Path, int, str, str]] = []
+    total = 0
+
+    for py_file in sorted(SRC.rglob("*.py")):
+        if "__pycache__" in py_file.parts:
+            continue
+        try:
+            tree = ast.parse(py_file.read_text(encoding="utf-8"))
+        except (SyntaxError, UnicodeDecodeError):
+            continue
+        pkg = _module_package(py_file)
+
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                targets = [(a.name, None) for a in node.names]
+            elif isinstance(node, ast.ImportFrom):
+                if node.level:
+                    base = pkg[: len(pkg) - (node.level - 1)] if node.level > 1 else pkg
+                    if node.module:
+                        base = base + node.module.split(".")
+                    base_d = ".".join(base)
+                elif node.module:
+                    base_d = node.module
+                else:
+                    continue
+                targets = [(base_d, None)]
+                targets += [(base_d, a.name) for a in node.names]
+            else:
+                continue
+
+            for dotted, symbol in targets:
+                if not dotted.startswith(PKG_PREFIX):
+                    continue
+                total += 1
+                if dotted not in mods:
+                    problems.append((py_file, node.lineno, "MISSING_MODULE", dotted))
+                    continue
+                if symbol is None:
+                    continue
+                # ``from pkg import name`` — name may be a submodule
+                if f"{dotted}.{symbol}" in mods:
+                    continue
+                exports = _exported_names(mods[dotted])
+                if exports is None or symbol in exports:
+                    continue
+                problems.append(
+                    (py_file, node.lineno, "MISSING_SYMBOL", f"{dotted}.{symbol}")
+                )
+
+    # one report per (file, line, kind, target) — a single ``from a.b
+    # import c`` produces two candidate targets for the same module
+    return list(dict.fromkeys(problems)), total
 
 
 def main() -> int:
@@ -276,6 +461,31 @@ def main() -> int:
     if not runtime:
         print("    (none)")
 
+    # ── broken imports: every llmwikify.* import must resolve ─────────
+    problems, total = _check_imports()
+    print(
+        f"\nimports — {len(problems)} broken of {total} llmwikify import(s) "
+        "(AST-resolved, no import execution)"
+    )
+    if problems:
+        for kind in ("MISSING_MODULE", "MISSING_SYMBOL"):
+            hits = [p for p in problems if p[2] == kind]
+            if not hits:
+                continue
+            print(f"  {kind}:")
+            for f, n, _kind, target in hits[:10]:
+                print(f"    {f.relative_to(REPO_ROOT)}:{n}  {target}")
+            if len(hits) > 10:
+                print(f"    ... and {len(hits) - 10} more")
+        print(
+            "\n❌ import target does not exist — a runtime ModuleNotFoundError "
+            "/ ImportError waiting to happen.\n"
+            "Fix the path or restore the module. The layer check cannot "
+            "catch this: it only compares names."
+        )
+    else:
+        print("  (none)")
+
     if regressions:
         print(
             "\n❌ structural apps peer debt grew beyond the baseline:"
@@ -285,7 +495,7 @@ def main() -> int:
         )
         return 1
 
-    return 1 if violations else 0
+    return 1 if (violations or problems) else 0
 
 
 if __name__ == "__main__":
