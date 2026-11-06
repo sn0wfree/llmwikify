@@ -1,8 +1,14 @@
 # 性能 / 内存瓶颈实测 · 2026-11-06（已修正）
 
 > 数据源：真实 wiki `CKbase-test-2026-10-22`（**1438 页 / 9.4 MB**）
-> 方法：复制到临时目录（不碰原数据）→ **纯 `time.perf_counter` wall 计时** + `tracemalloc`
+> 方法：复制到临时目录（不碰原数据）→ **纯 `time.perf_counter` wall 计时**
 > 复现：会话 scratch `clean_timing.py` / `phase_timing.py` / `equiv_check.py`
+>
+> **方法论教训**：`cProfile` 与 `tracemalloc` 都会把高频小操作放大数十倍
+> （`set.update` / `jieba.initialize` / `marshal.load`）。本文件中凡标注
+> 「无 profiler」的数字才是可信的；早期版本里套了 tracemalloc 的
+> `wall_timing.py` 结果（search 10.5 s、lint 21.8 s、build_index 158 s）
+> **同样作废**，已用不带 profiler 的重测覆盖。
 
 ## ⚠️ 修正说明
 
@@ -20,9 +26,9 @@
 | `generate_user_dict` 首次 | **21–34 s** | — | jieba 全库分词（1439 页 / 199 万 CJK 字符） |
 | `generate_user_dict` 重复 | **0.2–0.4 s** | — | ✅ 内容指纹命中，已跳过 |
 | `graph_analyze(force)` | **~1.7 s** | 71 MB | ✅ 换 networkx 内置 Louvain（见 §3.A4） |
-| `search` 首次 | **~10.5 s** | 48.6 MB | jieba 词典 `marshal.load`（一次性） |
-| `search` 第 2 次 | **0.06 s** | — | 稳态 |
-| `lint(force=True)` | **2–4 s** | 23 MB | 冷文件缓存时可达 ~22 s（读 1438 个文件） |
+| `search` 首次 | **0.44 s** | 48.6 MB | jieba `initialize()` 0.38 s（一次性；曾误报 10.5 s，见方法论说明） |
+| `search` 第 2 次 | **0.05 s** | — | 稳态 |
+| `lint(force=True)` | **2.0–2.7 s** | 23 MB | 含首次读 1438 个文件 |
 | `lint` 热 | **0.06–0.3 s** | 1 MB | 指纹缓存 |
 | `fix_wikilinks(dry_run)` | **0.6 s** | 2.5 MB | O(N²) 已修 ✓（历史 143.4 s） |
 
@@ -31,17 +37,19 @@
 
 **内存不是瓶颈**：峰值 112 MB，常驻大头是 jieba 词典 ~48 MB。
 
-## 2. 真实瓶颈排序
+## 2. 真实瓶颈排序（优化后现状）
 
-| 排名 | 项 | 耗时 | 根因 |
+| 排名 | 项 | 耗时 | 说明 |
 |---|---|---:|---|
-| **1** | `build_index` | **47–77 s** | ① `generate_user_dict` 34 s（jieba 全库分词，**无缓存**→已修）② `build_index_from_files` 22–40 s，其中每页 `extract_tags` TF-IDF |
-| **2** | `graph_analyze` | ~13 s | networkx `greedy_modularity_communities`（纯 Python） |
-| **3** | `search` 首次 | ~10.5 s | jieba 词典一次性加载（之后 0.06 s） |
-| 4 | `lint` 冷 | 2–4 s | 读 1438 个文件 + 各规则；`detect_all` 仅 ~1 s |
-| — | `lint` 热 / `fix_wikilinks` | <1 s | 已优化 ✓ |
+| **1** | `generate_user_dict` 首次 | 21–34 s | jieba 全库分词；**重复调用已跳过（0.2–0.4 s）** |
+| **2** | `build_index` 首次 | ~39 s | 词典首次 + 1 页重建；**重复调用 ~1 s** |
+| **3** | `search` 首次 | 0.44 s | jieba `initialize()` 一次性；之后 0.05 s |
+| 4 | `graph_analyze(force)` | 1.7–2.1 s | 已换 Louvain |
+| 5 | `lint` 冷 / 热 | 2.7 s / 0.13 s | `detect_all` 仅 ~0.85 s |
+| — | `fix_wikilinks` | 0.6 s | 历史 143.4 s，已修 ✓ |
 
-**结论修正**：`lint` **不是瓶颈**（2–4 s）。真正的瓶颈是 `build_index`。
+**结论**：优化后已无秒级以上瓶颈。最大的单项是**首次** `generate_user_dict`
+（21–34 s，只在内容变化时发生）；重复路径全部在 1–3 s 内。
 
 ## 3. 本轮落地的两项优化
 
@@ -181,10 +189,9 @@
 | 2 | ~~`generate_user_dict` 指纹缓存 + 磁盘输入解耦~~ | ✅ **已完成** | 21 s → 0.2–0.4 s；乒乓已消除 |
 | 3 | ~~`missing_cross_refs` 去滑窗~~ | ✅ **已完成** | 2×，但基数小 |
 | 4 | ~~`graph_analyze` 换 Louvain~~ | ✅ **已完成** | 4.89 s → 1.66 s（2.9×） |
-| 5 | jieba 词典预热（启动后台 `initialize()`） | 首次 search 10.5 s → ~0 | |
-| 6 | `lint` 冷启动的文件读取（1438 个文件 ~20 s） | 视 OS 缓存 | 仅首次冷缓存时 |
+| 5 | ~~jieba 词典预热~~ | ⛔ **不需要** | 首次 search 真实仅 **0.44 s**（原报 10.5 s 是 tracemalloc 放大） |
 
-**累计效果**（同一 1438 页 wiki，纯 wall）：
+**累计效果**（同一 1438 页 wiki，纯 wall、无 profiler）：
 
 | 指标 | 优化前 | 优化后 |
 |---|---:|---:|
@@ -193,6 +200,7 @@
 | `generate_user_dict` 重复 | 21–34 s | **0.2–0.4 s** |
 | `graph_analyze(force)` | 4.89 s | **1.66 s** |
 | `detect_all` | 1.02–1.92 s | **0.85 s** |
+| `search` 首次 | 0.44 s | 0.44 s（无需优化） |
 
 初版报告里「lint 118 s → 秒级」的目标**不成立**——lint 本来就只有 2–4 s。
 
