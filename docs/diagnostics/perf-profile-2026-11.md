@@ -19,7 +19,7 @@
 | `build_index` 重复 | **~1.0 s** | — | ✅ 词典跳过 + 全部页面未变更（见 §3） |
 | `generate_user_dict` 首次 | **21–34 s** | — | jieba 全库分词（1439 页 / 199 万 CJK 字符） |
 | `generate_user_dict` 重复 | **0.2–0.4 s** | — | ✅ 内容指纹命中，已跳过 |
-| `graph_analyze(force)` | **~13 s** | 71 MB | networkx greedy modularity |
+| `graph_analyze(force)` | **~1.7 s** | 71 MB | ✅ 换 networkx 内置 Louvain（见 §3.A4） |
 | `search` 首次 | **~10.5 s** | 48.6 MB | jieba 词典 `marshal.load`（一次性） |
 | `search` 第 2 次 | **0.06 s** | — | 稳态 |
 | `lint(force=True)` | **2–4 s** | 23 MB | 冷文件缓存时可达 ~22 s（读 1438 个文件） |
@@ -123,6 +123,32 @@
 > 初版报告把它归到 `upsert_page` 是错的。`upsert_page` 里的真实热点是
 > `_segment()` → `jieba.cut`，占 `build_index_from_files` 的 33%（8.9 s / 26.8 s）。
 
+### A4. `graph_analyze` 社区检测换 networkx 内置 Louvain ✅ 已验证
+
+**改动**（`kernel/graph/export.py`）：
+
+- `detect_communities` 的默认路径（`algorithm="leiden"` 实际落到这里——
+  代码里**没有 Leiden 实现**，只有 louvain / else 两个分支）原先依赖
+  `python-louvain`，未安装时回退到 networkx 的 `greedy_modularity_communities`
+- 改为优先用 **networkx 内置 `louvain_communities`**（3.0+ 自带，无需额外依赖），
+  `seed=0` 保证可复现；仅在 networkx < 3 时才回退 greedy
+- `_compute_modularity` 同样补上 networkx 实现——原先 `python-louvain` 缺失时
+  **直接返回 0.0**，modularity 一直是假的
+- `algorithm="louvain"` 分支保留（装了 `python-louvain` 时行为不变）
+
+**实测**（同一 1438 页 wiki，`force=True`）：
+
+| | greedy（原） | networkx Louvain |
+|---|---:|---:|
+| `graph_analyze(force)` | 4.89 s | **1.66 s**（2.9×） |
+
+返回结构不变：`num_communities=17`、`modularity=0.5971`、
+`stats={nodes:1446, edges:20232}`、`suggestions` 7 条。
+
+> 诚实说明：换算法会改变社区划分（Louvain 与 greedy 的最优解不同），
+> `surprise_score` 的「跨社区 +1」维度结果会略有差异。测试只断言
+> `num_communities >= 1` 与 `0 <= modularity <= 1`，不受影响。
+
 ### B. `missing_cross_refs` 首词过滤 ✅ 已验证（收益有限）
 
 **改动**（`kernel/wiki/lint/rules/missing_cross_refs.py`）：
@@ -154,7 +180,7 @@
 | 1 | ~~`build_index_from_files` 未变更页跳过~~ | ✅ **已完成** | `build_index` 重复 **~50 → 1 s** |
 | 2 | ~~`generate_user_dict` 指纹缓存 + 磁盘输入解耦~~ | ✅ **已完成** | 21 s → 0.2–0.4 s；乒乓已消除 |
 | 3 | ~~`missing_cross_refs` 去滑窗~~ | ✅ **已完成** | 2×，但基数小 |
-| 4 | `graph_analyze` 换 Louvain 或加结果缓存 | 13 → ~2 s | |
+| 4 | ~~`graph_analyze` 换 Louvain~~ | ✅ **已完成** | 4.89 s → 1.66 s（2.9×） |
 | 5 | jieba 词典预热（启动后台 `initialize()`） | 首次 search 10.5 s → ~0 | |
 | 6 | `lint` 冷启动的文件读取（1438 个文件 ~20 s） | 视 OS 缓存 | 仅首次冷缓存时 |
 
@@ -165,6 +191,7 @@
 | `build_index` 重复 | 46.9–60.6 s | **~1.0 s** |
 | `build_index_from_files` | 26.8–49 s | **0.66–1.0 s** |
 | `generate_user_dict` 重复 | 21–34 s | **0.2–0.4 s** |
+| `graph_analyze(force)` | 4.89 s | **1.66 s** |
 | `detect_all` | 1.02–1.92 s | **0.85 s** |
 
 初版报告里「lint 118 s → 秒级」的目标**不成立**——lint 本来就只有 2–4 s。
