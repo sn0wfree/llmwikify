@@ -358,7 +358,11 @@ def detect_communities(
 
     Args:
         index: WikiIndex instance.
-        algorithm: 'leiden' or 'louvain'.
+        algorithm: ``"louvain"`` uses python-louvain when installed,
+            otherwise networkx's Louvain. Any other value (the default
+            ``"leiden"`` included — there is no Leiden implementation)
+            uses networkx Louvain, falling back to greedy modularity on
+            networkx < 3.
         resolution: Resolution parameter (higher = more communities).
 
     Returns:
@@ -397,23 +401,8 @@ def detect_communities(
         try:
             import community as community_louvain
         except ImportError:
-            raise ImportError(
-                "python-louvain is required for Louvain algorithm"
-            ) from None
-
-        partition = community_louvain.best_partition(
-            G.to_undirected(), resolution=resolution, weight="weight"
-        )
-        modularity = community_louvain.modularity(
-            partition, G.to_undirected(), weight="weight"
-        )
-    else:
-        # Default: use a simple greedy modularity approach (no igraph dependency)
-        try:
-            import community as community_louvain
-        except ImportError:
-            # Fallback to networkx built-in greedy modularity
-            partition = _greedy_modularity_communities(G)
+            # networkx ships Louvain — no python-louvain needed.
+            partition = _louvain_partition(G, resolution)
             modularity = _compute_modularity(G, partition)
         else:
             partition = community_louvain.best_partition(
@@ -422,6 +411,16 @@ def detect_communities(
             modularity = community_louvain.modularity(
                 partition, G.to_undirected(), weight="weight"
             )
+    else:
+        # Default path (also what ``algorithm="leiden"`` resolves to —
+        # there is no Leiden implementation here). networkx's Louvain is
+        # an order of magnitude faster than greedy modularity on a
+        # 1400-node graph (≈10 s → ≈1 s) and needs no extra package.
+        try:
+            partition = _louvain_partition(G, resolution)
+        except ImportError:  # networkx < 3
+            partition = _greedy_modularity_communities(G)
+        modularity = _compute_modularity(G, partition)
 
     # Invert partition: community_id -> [nodes]
     communities = {}
@@ -584,6 +583,19 @@ def _build_networkx(graph: dict) -> Any:
     return G
 
 
+def _louvain_partition(G, resolution: float = 1.0) -> dict:
+    """Louvain communities via networkx (bundled since 3.0).
+
+    ``seed=0`` keeps the partition reproducible run to run.
+    """
+    from networkx.algorithms.community import louvain_communities
+
+    comms = louvain_communities(
+        G.to_undirected(), weight="weight", resolution=resolution, seed=0
+    )
+    return {node: cid for cid, comm in enumerate(comms) for node in comm}
+
+
 def _greedy_modularity_communities(G) -> Any:
     """Simple greedy modularity communities using networkx."""
     from networkx.algorithms.community import greedy_modularity_communities
@@ -593,7 +605,7 @@ def _greedy_modularity_communities(G) -> Any:
 
 
 def _compute_modularity(G, partition) -> Any:
-    """Compute modularity of a partition."""
+    """Compute modularity of a ``{node: community_id}`` partition."""
     try:
         import community as community_louvain
 
@@ -601,5 +613,13 @@ def _compute_modularity(G, partition) -> Any:
             partition, G.to_undirected(), weight="weight"
         )
     except ImportError:
-        # Fallback: return 0
-        return 0.0
+        from collections import defaultdict
+
+        from networkx.algorithms.community import modularity
+
+        groups: dict[Any, set] = defaultdict(set)
+        for node, cid in partition.items():
+            groups[cid].add(node)
+        return modularity(
+            G.to_undirected(), list(groups.values()), weight="weight"
+        )
