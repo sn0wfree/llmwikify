@@ -17,6 +17,15 @@ shim 设计:
 - 子目录 pipelines/codegen.py: 已删除 (内容在 kernel.agent.codegen_pipeline.py)
 
 历史: G+Y commit 2 (apps/unified/ 维度 A 拆解)。
+
+状态标记 (2026-11-06):
+- **生产零入口** — 导入图 BFS 只达测试 (9 个 test_unified_*.py); chat 主链路走
+  ChatRunnerV2, 不实例化 UnifiedAgentLoop。
+- **与生产侧重复** — events.py 是 apps/chat/agent/events.py 的超集 (21 vs 16);
+  handlers/ 与 ChatRunnerV2 有 6 组同名方法各写一遍 (_build_system_prompt /
+  _safe_truncate / _get_tool_specs / _stream_llm / _execute_tool / microcompact)。
+- 处置方案与分阶段计划: docs/designs/unified-loop-merge-plan.md。
+  未获授权前不改动本包; 确需新增能力时只写一处, 不要再做平行实现。
 """
 
 # 通用框架 re-export (from kernel.agent)

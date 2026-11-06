@@ -46,7 +46,7 @@
 | C3 | **mypy baseline 未收紧** | `pyproject.toml:81-84` 「681 错 / 138 文件」+ `:226 ignore_errors=true` | 逐模块递减豁免 |
 | C4 | **5 个 import 环** | graphify 报告；根因 `mixins/analysis/status.py:5 from llmwikify import __version__` | 改 `from llmwikify._version import __version__` 类的叶子导入即可断环 |
 | C5 | **6 处 `TODO(refactor): C901` 过复杂标注** | ruff `select = [E,F,I,W,B,C4,UP]` **不含 mccabe**，注释无工具强制 → 决定**不拆**（均为 wiki 读写/索引/链接核心函数，纯可读性收益不足以覆盖回归风险），改为删除 6 条误导注释 | 2026-11-06 已删，`grep C901 src/` = 0 |
-| C6 | **`apps/chat/agent/unified/` 生产死树**（1165 LOC + 9 测试） | code-survey §5.1 已证；`create_agent_loop` 仅测试引用 | 处置决策（见 code-survey 建议 2） |
+| C6 | **`apps/chat/agent/unified/` 生产死树**（13 文件/1165 LOC + 9 测试，事件常量为生产侧超集、handlers 6 组方法与 `ChatRunnerV2` 平行重写） | code-survey §5.1；本轮实测 events 21⊃16、4+2 组同名方法 | **已标记 + 方案已出，暂缓执行**。定位约束：本项目核心是知识处理而非 agent 框架 → 不入当前批次。方案与分阶段见 [unified-loop-merge-plan.md](../designs/unified-loop-merge-plan.md) |
 | C7 | **AGENTS.md 包职责清单缺 `kernel/multi_wiki/`** | `AGENTS.md:168` 只列 `kernel/{wiki,graph,search,storage}/`，实际还有独立子包 `kernel/multi_wiki/`（`RemoteWiki` / `WikiRegistry`） | 下次 agents-sync 修订时补一行 |
 
 ---
