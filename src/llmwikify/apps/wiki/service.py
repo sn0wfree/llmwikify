@@ -89,7 +89,7 @@ class WikiService:
     def get_llm(self) -> Any:
         """Lazy-create the LLM client from config."""
         if self._llm is None:
-            from llmwikify.apps.research.six_step_config_manager import (
+            from llmwikify.apps.config_manager import (
                 get_global_config_manager,
             )
 
@@ -116,7 +116,7 @@ class WikiService:
         from llmwikify.foundation.llm.resolver import resolve_chat_llm
 
         if self._config_manager is None:
-            from llmwikify.apps.research.six_step_config_manager import (
+            from llmwikify.apps.config_manager import (
                 get_global_config_manager,
             )
 

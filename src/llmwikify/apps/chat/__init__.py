@@ -32,7 +32,7 @@ Layout (post v0.40)
     ├── bus/                       — pub/sub bus adapters
     ├── channels/                  — channel adapters (cli, http, mcp)
     ├── memory/                    — long-term memory
-    ├── config_manager.py          — config file management
+    ├── (config_manager 已移 apps/)  — config file management (shared infra)
     ├── command_router.py          — slash command dispatch (priority / exact / prefix)
     ├── README.md                  — package-level design doc
 

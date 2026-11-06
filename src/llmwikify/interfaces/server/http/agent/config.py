@@ -24,10 +24,9 @@ logger = logging.getLogger(__name__)
 
 async def _get_config_data() -> dict:
     """组装配置数据（mutable + research_mutable + system_prompt）。"""
-    from llmwikify.apps.research.six_step_config_manager import (
+    from llmwikify.apps.config_manager import (
         get_global_config_manager,
     )
-
     from llmwikify.apps.research.six_step_config import get_mutable_defaults
 
     manager = get_global_config_manager()
@@ -83,7 +82,7 @@ async def save_llm_config(request: Request) -> dict[str, Any]:
 
     v0.41: 只接受 mutable 字段。immutable 字段（如果客户端发送）会被忽略。
     """
-    from llmwikify.apps.research.six_step_config_manager import (
+    from llmwikify.apps.config_manager import (
         get_global_config_manager,
     )
 
@@ -123,10 +122,9 @@ async def get_llm_config_debug() -> Any:
 
     v0.41: 新增调试端点，返回完整配置（含 immutable）。
     """
-    from llmwikify.apps.research.six_step_config_manager import (
+    from llmwikify.apps.config_manager import (
         get_global_config_manager,
     )
-
     from llmwikify.apps.research.six_step_config import get_all_defaults
 
     manager = get_global_config_manager()
@@ -139,7 +137,7 @@ async def get_llm_config_debug() -> Any:
 
 @router.post("/config/reload")
 async def reload_llm_config() -> dict[str, Any]:
-    from llmwikify.apps.research.six_step_config_manager import (
+    from llmwikify.apps.config_manager import (
         get_global_config_manager,
     )
 

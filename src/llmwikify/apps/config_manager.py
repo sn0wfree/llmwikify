@@ -39,7 +39,7 @@ class ConfigManager:
 
     Usage::
 
-        from llmwikify.apps.research.six_step_config_manager import ConfigManager
+        from llmwikify.apps.config_manager import ConfigManager
 
         manager = ConfigManager(agent_service_ref=lambda: service)
         llm_cfg = manager.load_effective_llm_config(wiki_root)
