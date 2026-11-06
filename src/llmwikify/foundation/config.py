@@ -322,6 +322,38 @@ def get_directory(
     return wiki_root / dir_name
 
 
+def _section_config(
+    section: str,
+    cfg: dict[str, Any] | None = None,
+    *,
+    deep: bool = False,
+) -> dict[str, Any]:
+    """Overlay the user's ``cfg[section]`` on ``DEFAULT_CONFIG[section]``.
+
+    Args:
+        section: Key in both ``DEFAULT_CONFIG`` and the user config.
+        cfg: Optional configuration dict; defaults to ``get_default_config()``.
+        deep: Merge nested dicts instead of replacing top-level keys
+            (``wikis`` nests ``local``/``remote``/``discovery``).
+
+    Returns:
+        A merged copy — never a view onto ``DEFAULT_CONFIG``.
+    """
+    if cfg is None:
+        cfg = get_default_config()
+
+    merged: dict[str, Any] = copy.deepcopy(DEFAULT_CONFIG[section])
+    user_cfg = cfg.get(section, {})
+    if user_cfg:
+        if deep:
+            from llmwikify.foundation.utils import deep_merge
+
+            merged = deep_merge(merged, user_cfg)
+        else:
+            merged.update(user_cfg)
+    return merged
+
+
 def get_mcp_config(cfg: dict[str, Any] | None = None) -> dict[str, Any]:
     """Get MCP server configuration.
 
@@ -331,16 +363,7 @@ def get_mcp_config(cfg: dict[str, Any] | None = None) -> dict[str, Any]:
     Returns:
         MCP configuration dict with host, port, and transport
     """
-    if cfg is None:
-        cfg = get_default_config()
-
-    mcp_config: dict = DEFAULT_CONFIG["mcp"].copy()  # type: ignore[attr-defined]
-    user_mcp = cfg.get("mcp", {})
-
-    if user_mcp:
-        mcp_config.update(user_mcp)
-
-    return mcp_config
+    return _section_config("mcp", cfg)
 
 
 def get_search_config(cfg: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -352,16 +375,7 @@ def get_search_config(cfg: dict[str, Any] | None = None) -> dict[str, Any]:
     Returns:
         Search configuration dict with backend and QMD settings
     """
-    if cfg is None:
-        cfg = get_default_config()
-
-    search_config: dict = DEFAULT_CONFIG["search"].copy()  # type: ignore[attr-defined]
-    user_search = cfg.get("search", {})
-
-    if user_search:
-        search_config.update(user_search)
-
-    return search_config
+    return _section_config("search", cfg)
 
 
 def get_wikis_config(cfg: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -373,18 +387,7 @@ def get_wikis_config(cfg: dict[str, Any] | None = None) -> dict[str, Any]:
     Returns:
         Wikis configuration dict with default, local, remote, and discovery settings
     """
-    if cfg is None:
-        cfg = get_default_config()
-
-    wikis_config: dict = copy.deepcopy(DEFAULT_CONFIG["wikis"])
-    user_wikis = cfg.get("wikis", {})
-
-    if user_wikis:
-        from llmwikify.foundation.utils import deep_merge
-
-        wikis_config = deep_merge(wikis_config, user_wikis)
-
-    return wikis_config
+    return _section_config("wikis", cfg, deep=True)
 
 
 def expand_env_vars(value: str) -> str:

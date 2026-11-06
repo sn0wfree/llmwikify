@@ -31,6 +31,7 @@ from pathlib import Path
 from typing import Any
 
 from llmwikify.apps.db import AppDatabase
+from llmwikify.foundation.io import read_json
 
 logger = logging.getLogger(__name__)
 
@@ -321,10 +322,7 @@ class UserPreferenceStore:
             self._prefs_file.write_text("{}", encoding="utf-8", newline="\n")
 
     def _load(self) -> dict:
-        try:
-            return json.loads(self._prefs_file.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, FileNotFoundError):
-            return {}
+        return read_json(self._prefs_file, {})
 
     def _save(self, prefs: dict) -> None:
         self._prefs_file.write_text(json.dumps(prefs, indent=2), encoding="utf-8", newline="\n")

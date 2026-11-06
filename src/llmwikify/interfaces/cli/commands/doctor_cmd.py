@@ -18,6 +18,8 @@ import time
 from pathlib import Path
 from typing import Any
 
+from llmwikify.foundation.io import read_json
+
 from .._base import Command
 from .._output import ICON_SUCCESS
 
@@ -219,9 +221,8 @@ def _check_llm_connectivity() -> tuple[bool, float, str]:
     if not CONFIG_PATH.exists():
         return False, 0.0, "config not found"
 
-    try:
-        data = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
+    data = read_json(CONFIG_PATH)
+    if data is None:
         return False, 0.0, "config parse error"
 
     llm = data.get("llm", {})

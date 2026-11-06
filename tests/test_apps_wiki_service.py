@@ -212,6 +212,17 @@ class TestWikiDreamLifecycle:
         assert result["approved"] == 0
         assert result["results"] == []
 
+    def test_batch_approve_proposals_not_found(self, wiki_service: WikiService) -> None:
+        # Unknown ids still yield one entry each, in input order, so
+        # approved == len(results) holds (the HTTP contract).
+        result = wiki_service.batch_approve_wiki_dream_proposals(["a", "b"])
+        assert result["approved"] == 2
+        assert [r["status"] for r in result["results"]] == ["error", "error"]
+        assert [r["error"] for r in result["results"]] == [
+            "Proposal not found",
+            "Proposal not found",
+        ]
+
 
 # ─── Notifications ───────────────────────────────────────────────
 

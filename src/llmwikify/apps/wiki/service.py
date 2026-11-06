@@ -258,10 +258,23 @@ class WikiService:
         return {"status": "error", "error": "Proposal not found"}
 
     def batch_approve_wiki_dream_proposals(self, proposal_ids: list[str]) -> dict:
-        results = []
-        for pid in proposal_ids:
-            r = self.approve_wiki_dream_proposal(pid)
-            results.append(r)
+        # One proposal load per editor instead of a full DB read per
+        # (id, editor) pair: approve_wiki_dream_proposal() re-reads every
+        # proposal each time it is asked about a single id.
+        remaining = list(proposal_ids)
+        found: dict[str, dict] = {}
+        for editor in self._wiki_dream_editors.values():
+            if not remaining:
+                break
+            approved = editor.proposal_manager.batch_approve(remaining)
+            if not approved:
+                continue
+            found.update({p["id"]: p for p in approved})
+            remaining = [pid for pid in remaining if pid not in found]
+        results = [
+            found.get(pid, {"status": "error", "error": "Proposal not found"})
+            for pid in proposal_ids
+        ]
         return {"approved": len(results), "results": results}
 
     async def apply_wiki_dream_proposals(

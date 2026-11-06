@@ -116,32 +116,35 @@ class WikiDreamProposalManager:
                 return
         self._add_proposal(proposal)
 
-    def approve(self, proposal_id: str) -> dict | None:
+    def _apply_status(self, proposal: dict[str, Any], status: str) -> dict[str, Any]:
+        """Mutate ``proposal`` to ``status`` and persist it."""
+        proposal["status"] = status
+        proposal["reviewed_at"] = datetime.now(timezone.utc).isoformat()
+        self._sync_to_db(proposal)
+        self._cache_proposal(proposal)
+        return proposal
+
+    def _set_status(self, proposal_id: str, status: str) -> dict[str, Any] | None:
         p = self.get_proposal(proposal_id)
         if p is None:
             return None
-        p["status"] = "approved"
-        p["reviewed_at"] = datetime.now(timezone.utc).isoformat()
-        self._sync_to_db(p)
-        self._cache_proposal(p)
-        return p
+        return self._apply_status(p, status)
+
+    def approve(self, proposal_id: str) -> dict | None:
+        return self._set_status(proposal_id, "approved")
 
     def reject(self, proposal_id: str) -> dict | None:
-        p = self.get_proposal(proposal_id)
-        if p is None:
-            return None
-        p["status"] = "rejected"
-        p["reviewed_at"] = datetime.now(timezone.utc).isoformat()
-        self._sync_to_db(p)
-        self._cache_proposal(p)
-        return p
+        return self._set_status(proposal_id, "rejected")
 
     def batch_approve(self, proposal_ids: list[str]) -> list[dict]:
+        # One load for the whole batch — ``get_proposal`` would re-read
+        # every proposal from the DB once per id.
+        by_id = {p["id"]: p for p in self._load_proposals()}
         results = []
         for pid in proposal_ids:
-            result = self.approve(pid)
-            if result:
-                results.append(result)
+            p = by_id.get(pid)
+            if p is not None:
+                results.append(self._apply_status(p, "approved"))
         return results
 
     def get_pending(self) -> list[dict]:

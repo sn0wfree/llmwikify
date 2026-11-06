@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any
 
 from llmwikify.apps.wiki.dream_editor import WikiDreamProposalManager
+from llmwikify.foundation.io import read_json
 from llmwikify.kernel.multi_wiki.instance import WikiType
 
 from .auto_ingest import AutoIngestService
@@ -109,14 +110,9 @@ class MaintenanceManager:
 
     def _load_history(self) -> None:
         """Load health history from disk."""
-        try:
-            f = self._state_file
-            if f.exists():
-                data = json.loads(f.read_text(encoding="utf-8"))
-                if isinstance(data, list):
-                    self._health_history = data[-HEALTH_HISTORY_LIMIT:]
-        except (json.JSONDecodeError, OSError):
-            pass
+        data = read_json(self._state_file)
+        if isinstance(data, list):
+            self._health_history = data[-HEALTH_HISTORY_LIMIT:]
 
     def _save_history(self) -> None:
         """Persist health history to disk (atomic write)."""

@@ -103,7 +103,9 @@ class Rule:
                 try:
                     pages[name] = page.read_text(encoding="utf-8")
                 except TypeError:
-                    pages[name] = page.read_text(encoding="utf-8")
+                    # page object with a read_text() that takes no kwargs
+                    # (mock / legacy Page) — fall back to the default read
+                    pages[name] = page.read_text()
         return pages
 
     def detect(

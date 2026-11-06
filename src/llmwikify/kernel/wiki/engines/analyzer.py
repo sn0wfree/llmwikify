@@ -63,7 +63,8 @@ class WikiAnalyzer:
             try:
                 content = page.read_text(encoding="utf-8")
             except TypeError:
-                content = page.read_text(encoding="utf-8")
+                # page object with a read_text() that takes no kwargs
+                content = page.read_text()
             contents.append((name, content))
 
         # Fast existence set — full display names only (stems can false-match).

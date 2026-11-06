@@ -282,6 +282,30 @@ def test_dream_proposal_approve_reject(tmp_path):
     assert any(p["id"] == p2["id"] and p["status"] == "rejected" for p in all_proposals)
 
 
+def test_dream_proposal_batch_approve(tmp_path):
+    """batch_approve applies one status change per id from a single load."""
+    from llmwikify.apps.wiki.dream_editor import WikiDreamProposalManager
+
+    db = _make_dream_db(tmp_path)
+    mgr = WikiDreamProposalManager(db=db, wiki_id="w1")
+
+    p1 = mgr.create_proposal(page_name="P1", edit_type="create", content="x", reason="r")
+    p2 = mgr.create_proposal(page_name="P2", edit_type="create", content="y", reason="r")
+    p3 = mgr.create_proposal(page_name="P3", edit_type="create", content="z", reason="r")
+
+    results = mgr.batch_approve([p1["id"], p3["id"], "missing-id"])
+
+    # One entry per found id, in input order; unknown ids are skipped.
+    assert [p["id"] for p in results] == [p1["id"], p3["id"]]
+    assert all(p["status"] == "approved" for p in results)
+    assert all(p["reviewed_at"] for p in results)
+
+    by_id = {p["id"]: p["status"] for p in db.get_dream_proposals("w1", status=None)}
+    assert by_id[p1["id"]] == "approved"
+    assert by_id[p3["id"]] == "approved"
+    assert by_id[p2["id"]] == "pending"
+
+
 def test_dream_proposal_auto_approve_short_appends(tmp_path):
     """append < threshold gets auto-approved."""
     from llmwikify.apps.wiki.dream_editor import WikiDreamProposalManager
