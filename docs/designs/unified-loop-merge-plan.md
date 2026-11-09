@@ -2,7 +2,9 @@
 
 > 对应 [feature-completeness-2026-11.md](../diagnostics/feature-completeness-2026-11.md) **C6**
 > 与 [code-survey-2026-11.md](../diagnostics/code-survey-2026-11.md) §5.1 / §7-建议2。
-> **状态：已标记、暂缓执行**（见 §1 定位约束）。
+> **状态（2026-11-06 查证）：收敛已在 `v0.41-dev` 分支完成，当前分支 `feat/auto-doc-ingest`
+> 未合并**（见 §2.1）。本文档因此由「待执行方案」改为**事实记录 + 合并预案**；
+> §7 的 Phase 1/3 不要在本分支重做。
 
 ---
 
@@ -29,6 +31,24 @@
 mode 注册表（chat mode / codegen mode）。chat 主链路随后固化为 `ChatRunnerV2`，
 这层注册表即失去生产调用方（AGENTS.md「backward-compat shim 保留」登记的是
 shim 部分，未覆盖 mode 注册表的死链事实）。
+
+### 2.1 关键事实：该清理在 `v0.41-dev` 已完成（2026-11-06 查证）
+
+上面 §2 描述的是**当前分支**的状态。同一件事在 `v0.41-dev` 上已做完：
+
+| 事实 | 证据 |
+|---|---|
+| unified 源码 + 测试**已删除** | `cb8f424d refactor(chat): 删除生产零引用的 unified/ shim 包（13 文件 1119 LOC）`（2026-11-02）；`git ls-tree origin/v0.41-dev` 下 `unified/` = **0 文件**、`test_unified*` = **0** |
+| events **已合并**（本文档 Phase 1） | v0.41-dev 上只剩 `apps/chat/agent/events.py` 一份，`unified/events.py` 不存在 |
+| 循环**已收敛到共享骨架**（本文档 Phase 3） | `881cd46b` 新建 `kernel/agent/runtime.py`（220 行）+ `research_runner` 迁入；`457b1039` `ChatRunnerV2` 迁入（−180 行内联），抽出 `chat_plan.py` / `state_trace.py` |
+| 官方设计文档 | `docs/designs/phase2-agent-runtime.md`（v0.41-dev），含 stage 契约与「只搬驱动、保留语义」原则 |
+| 两分支关系 | 分叉点 `8acb494c`（2026-10-27）；`feat/auto-doc-ingest` **ahead 55 / behind 54** |
+| 合并冲突面 | `changed in both` **约 30+ 文件**（`runner_v2.py`、`research/*`、`memory/*`、`pyproject.toml`、`AGENTS.md`、`check_architecture.py` 等） |
+| 未受影响 | `kernel/agent/loop.py` 两分支 **diff 为空**（抽象本体一致） |
+
+**推论**：T54.4 / T56 标记 done 是**真实的**（在 v0.41-dev 完成），不是误标——
+矛盾来自两分支平行。本文档 §6/§7 若按原文执行，会在当前分支**重复造已完成的轮子**。
+当前分支的正确行动项是**合并**，见 §7。
 
 ---
 
@@ -126,6 +146,13 @@ PRECHECK → [REASON → DECIDE① → ACT → DECIDE② → OBSERVE → DECIDE�
 **结论**：设计模式可取、抽象成本过高；失败点在「先建框架、后接线」而非设计本身。
 故 §5 方向 A 应理解为**吸收零件、砍重复实现**，不是连锅端。
 
+**该判断已被实践验证**（2026-11-06 查证，见 §2.1）：`v0.41-dev` 保留了
+`kernel/agent/` 抽象本体（`loop.py` 两分支 diff 为空），删除了 apps 层平行实现，
+并把骨架演进为 `kernel/agent/runtime.py` + `AgentPlan`——契约从鸭子探测升级为显式
+stage 契约（reason 留 `None`=失败停止；act 留 `None`=失败但**继续下一轮**），
+原则是「只搬驱动、保留语义」，plan 不控制流程、只控制步骤。
+**设计可取的部分被吸收，不可取的部分被修掉。**
+
 ---
 
 ## 5. 两个可选方向
@@ -142,33 +169,61 @@ PRECHECK → [REASON → DECIDE① → ACT → DECIDE② → OBSERVE → DECIDE�
 （仅 `unified/pipelines` 自引 + 测试），与 `kernel/codegen` 工具链同属「建好未接线」。
 若无量化复现需求回归，B 方向也应连同它一起决定去留，而不是默认保留。
 
+**结局（2026-11-06 查证）**：A 的 Phase 1（events 合并）与 Phase 3（循环收敛）
+在 `v0.41-dev` 已完成，且 Phase 3 走的是本文档未列的**第三条路**——既非 A 也非 B，
+而是新建共享 `AgentRuntime`，让 `ChatRunnerV2` 与 `research_runner` 都迁入
+（`881cd46b` / `457b1039`，详见 §2.1 与 `phase2-agent-runtime.md`）。
+**B 方向因此永久出局**；A 方向在当前分支已无执行价值。
+
 ---
 
-## 6. 建议
+## 6. 建议（2026-11-06 更新）
 
-1. **首选 A**，理由：本项目价值在知识处理，第二套循环没有存在理由，那就该收敛到一套；
-   A 已能消除全部漂移与重复，且不承担主链路风险。
-2. **A 的第一步是事件常量合并**（§3.1）：取 21 个超集为唯一真源，
-   `apps/chat/agent/events.py` 改为 re-export；零行为变化，可独立 commit + 回归。
-3. **B 暂不启动**。启动前必须回答：为什么要两套循环？若答不出，做 A 收敛即可。
-4. 无论 A/B，**先补一个契约测试**锁住当前 `ChatRunnerV2` 的 SSE 事件序列
-   （已有 `test_sse_contract_*` 可扩展），否则重构无安全网。
+1. **当前分支不要重做 §7 的 Phase 1/2/3** —— 它们在 `v0.41-dev` 已完成
+   （events 已合并、`unified/` 已删、循环已迁 `AgentRuntime`），重做即重复造轮子。
+2. **当前分支的正确动作是合并 `v0.41-dev`**，而非在此分支继续收敛。
+3. 合并前先做**冲突预案**（§7.2），逐文件判定：快进 / 需裁决 / 两边都要留。
+4. 若暂不合并：**保持现状 + 保留 §2.1 标记**；本分支不得再往 `unified/` 加代码
+   （`unified/__init__.py` 已写入状态标记指向本文档）。
+5. 合并时**先确认 SSE 契约测试在目标分支通过**（`test_sse_contract_*`），否则无安全网。
 
-## 7. 分阶段（待授权后执行）
+## 7. 状态对照与合并预案
 
-| Phase | 内容 | 风险 | 状态 |
+### 7.1 两分支状态对照
+
+| Phase | 内容 | `v0.41-dev` | 当前分支 `feat/auto-doc-ingest` |
 |---|---|---|---|
-| 0 | 分析 + 本文档 + 代码/报告标记 | 极低 | ✅ 2026-11-06 |
-| 1 | 事件常量合并（超集 + re-export） | 极低 | 待授权 |
-| 2 | 6 组方法收敛（先定真源再删平行实现） | 中（触 RunnerV2 内部） | 待授权 |
-| 3 | 循环本体二选一（含 codegen mode 去留） | 高 | 需产品决策 |
+| 0 | 分析 + 本文档 + 标记 | — | ✅ 2026-11-06 |
+| 1 | 事件常量合并（取超集） | ✅ 已完成（`unified/events.py` 已不存在，只剩生产侧一份） | ❌ 未做（两份并存，21 ⊃ 16） |
+| 2 | 6 组方法收敛 | ✅ 随 `cb8f424d` 删除实现而消解 | ❌ 未做 |
+| 3 | 循环本体 | ✅ 走 `AgentRuntime` **第三条路**（`881cd46b` / `457b1039`） | ❌ 未做（`ChatRunnerV2` 仍内联 42 KB） |
+
+### 7.2 合并预案（待授权；先分析不动手）
+
+- **分叉点** `8acb494c`（2026-10-27）；ahead 55 / behind 54。
+- **冲突面**：`changed in both` 约 30+ 文件，按三类处置：
+  1. **循环与状态**（`runner_v2.py`、`research_runner.py`、`memory/*`、`orchestrator.py`、`skills/workflows/subagent_worker.py`）→ **以 `v0.41-dev` 为准**（那边已完成迁移）
+  2. **配置与门禁**（`pyproject.toml` 两边都改过 mypy 豁免、`check_architecture.py`、`AGENTS.md`）→ 逐行裁决，倾向取 `v0.41-dev` 的收敛结果 + 保留本分支的坏导入扫描
+  3. **本轮新增且 `v0.41-dev` 没有**（`_version.py`、`tool_registry.py` 越界导入修复、11 处 `cached_property`、mypy 25 条清理、`docs/diagnostics/*` 两份报告）→ **保留当前分支**
+- **合并后必跑**：`check_architecture.py`、`test_sse_contract_*`、全量 pytest 与
+  基线逐条比对（Windows 约 365 条已知失败）。
 
 ## 8. 复现
 
 ```bash
+# ── 两分支状态查证（本轮关键，先跑这组）──
+git merge-base HEAD origin/v0.41-dev                          # 分叉点 → 8acb494c
+git rev-list --left-right --count HEAD...origin/v0.41-dev     # ahead 55 / behind 54
+git ls-tree -r --name-only origin/v0.41-dev -- src/llmwikify/apps/chat/agent/unified/   # → 0 行
+git ls-tree -r --name-only origin/v0.41-dev -- tests/ | grep -c test_unified            # → 0
+git log --all --oneline --grep="unified" -i                   # → cb8f424d 删除提交
+git diff --stat HEAD origin/v0.41-dev -- src/llmwikify/kernel/agent/loop.py             # → 空（抽象本体一致）
+git show --stat 881cd46b 457b1039                             # AgentRuntime 两笔迁移
+
+# ── 本分支状态 ──
 graphify update .                                   # 图谱（环 / 社区 / god nodes）
 # 生产可达性：以 __main__ + interfaces.{cli,server,mcp,web} 为入口做导入图 BFS
 rg -n "create_agent_loop|CodegenReasoner" src tests   # unified 的全部引用面
-# 事件常量差集
-python -c "import re,pathlib; a=set(re.findall(r'^([A-Z_][A-Z0-9_]+)=',pathlib.Path('src/llmwikify/apps/chat/agent/events.py').read_text(encoding='utf-8'),re.M)); b=set(re.findall(r'^([A-Z_][A-Z0-9_]+)=',pathlib.Path('src/llmwikify/apps/chat/agent/unified/events.py').read_text(encoding='utf-8'),re.M)); print(a-b, b-a)"
+# 事件常量差集（本分支应打印 5 个 only-in-unified；v0.41-dev 上该文件已不存在）
+python -c "import re,pathlib; a=set(re.findall(r'^([A-Z_][A-Z0-9_]+)=',pathlib.Path('src/llmwikify/apps/chat/agent/events.py').read_text(encoding='utf-8'),re.M)); b=set(re.findall(r'^([A-Z_][A-Z0-9_]+)=',pathlib.Path('src/llmwikify/apps/chat/agent/unified/events.py').read_text(encoding='utf-8'),re.M)); print('only-main',a-b); print('only-unified',b-a)"
 ```
