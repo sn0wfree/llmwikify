@@ -186,7 +186,8 @@ after_iteration · finalize_content · on_error
 `CompositeHook` fan-out 错误隔离（async 钩子自动 try/except log warning），
 仅 `finalize_content` 透传异常（pipeline 语义）。业务钩子位于
 `foundation/callback/integrations/`：`WikiHook` / `WikiDreamSyncHook` /
-`AutoIngestHook`。
+`RawFileScanHook`（仅探测 raw/ 新文件，不入库；入库走 maintenance
+`AutoIngestService`）。
 
 ---
 

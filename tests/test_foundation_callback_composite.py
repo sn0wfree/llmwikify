@@ -17,7 +17,7 @@ from llmwikify.foundation.callback import (
     NoOpHook,
 )
 from llmwikify.foundation.callback.integrations import (
-    AutoIngestHook,
+    RawFileScanHook,
     WikiDreamSyncHook,
     WikiHook,
 )
@@ -150,7 +150,7 @@ def test_integration_hooks_instantiate() -> None:
     WikiHook(wiki)
     WikiDreamSyncHook(wiki_dream_editor=dream)
     WikiDreamSyncHook(wiki_dream_editor=None)
-    AutoIngestHook(wiki)
+    RawFileScanHook(wiki)
 
 
 async def test_wiki_hook_logs_only_on_wiki_tools() -> None:

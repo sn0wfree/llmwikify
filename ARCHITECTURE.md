@@ -82,7 +82,7 @@ src/llmwikify/
 │   ├── llm_client.py             # OpenAI-compatible client + retry/backoff
 │   ├── auth/                     # JWT secret (OS keyring) + verification
 │   ├── callback/                 # AgentHook (13 hook points) + CompositeHook
-│   │   └── integrations/         # WikiHook / WikiDreamSyncHook / AutoIngestHook
+│   │   └── integrations/         # WikiHook / WikiDreamSyncHook / RawFileScanHook
 │   ├── llm/
 │   │   ├── client.py             # build_llm_client + load_llm_config
 │   │   ├── spec.py               # LLMSpec (LAL)
@@ -433,7 +433,7 @@ Built-in prompts include wiki, lint, synthesis and skill prompts.
 `AgentHook` (13 hook points) + `CompositeHook` (fan-out with per-hook
 error isolation; `finalize_content` passes exceptions through).
 Business hooks live in `callback/integrations/` — `WikiHook`,
-`WikiDreamSyncHook`, `AutoIngestHook`.
+`WikiDreamSyncHook`, `RawFileScanHook`.
 
 ---
 

@@ -2,7 +2,7 @@
 
 Exposes the AgentHook abstract base, the CompositeHook fan-out helper,
 and AgentHookContext (mutable per-iteration state). Domain hooks (wiki,
-dream, auto-ingest) live in ``integrations/`` and depend on app code
+dream, raw-file scan) live in ``integrations/`` and depend on app code
 at runtime only.
 """
 

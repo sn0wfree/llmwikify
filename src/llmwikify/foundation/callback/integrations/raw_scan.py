@@ -1,4 +1,9 @@
-"""AutoIngestHook — track new files in a wiki raw/ directory."""
+"""RawFileScanHook — detect new files in a wiki raw/ directory.
+
+Detection only: diffs the raw/ tree against a known-file set each
+agent iteration. Does not ingest, extract, or write pages — that is
+``apps.agent.maintenance.auto_ingest.AutoIngestService``.
+"""
 
 from __future__ import annotations
 
@@ -8,8 +13,8 @@ from llmwikify.foundation.callback.composite import AgentHook
 from llmwikify.foundation.callback.context import AgentHookContext
 
 
-class AutoIngestHook(AgentHook):
-    name = "auto_ingest"
+class RawFileScanHook(AgentHook):
+    name = "raw_scan"
 
     def __init__(self, wiki: Any) -> None:
         self.wiki = wiki
