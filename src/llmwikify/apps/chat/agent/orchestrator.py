@@ -23,7 +23,7 @@ import asyncio
 import json
 import logging
 from collections.abc import AsyncIterator
-from typing import Any
+from typing import Any, cast
 
 from llmwikify.apps.chat.agent import events
 from llmwikify.apps.chat.agent.context_manager import AgentContext
@@ -289,11 +289,12 @@ class ChatOrchestrator:
         wiki_registry = self.wiki_service.get_tool_registry(wiki_id)
         if self.skill_service is None:
             return wiki_registry
-        cache_key = (
-            session_id or ctx.session_id or "",
-            wiki_id or "",
-            bool(expose_subagent),
-        )
+        # Key is (session_id, wiki_id): only child registries (the sole
+        # kind ever stored, guarded below by ``not expose_subagent``)
+        # enter the cache, so an extra expose flag in the key would be
+        # redundant — and would break ConfirmationManager, which unpacks
+        # 2-tuples from this dict.
+        cache_key = (session_id or ctx.session_id or "", wiki_id or "")
         if cache_key in self._tool_registries and not expose_subagent:
             # Only the child (no-subagent) registry is safe to cache
             # cross-invocation. Parent registries hold a live
@@ -373,16 +374,20 @@ class ChatOrchestrator:
 
         try:
             if session_id is None:
-                session_id = await asyncio.to_thread(
+                # ``created`` is typed str so mypy narrows session_id to
+                # str after both branches (create_chat_session is Any).
+                created: str = await asyncio.to_thread(
                     self.db.create_chat_session, wiki_id
                 )
+                session_id = created
                 yield {"type": events.SESSION_CREATED, "session_id": session_id}
             else:
                 session = await asyncio.to_thread(self.db.get_chat_session, session_id)
                 if session is None:
-                    session_id = await asyncio.to_thread(
+                    created = await asyncio.to_thread(
                         self.db.create_chat_session, wiki_id
                     )
+                    session_id = created
                     yield {"type": events.SESSION_CREATED, "session_id": session_id}
 
             await asyncio.to_thread(
@@ -472,14 +477,20 @@ class ChatOrchestrator:
         except Exception as e:
             logger.exception("Chat error")
             err_event = ChatEvent.error(str(e))
-            await asyncio.to_thread(self.event_log.log, session_id, err_event)
+            # session_id is str after the creation block above, but mypy
+            # resets narrowing in except/finally; cast is a no-op that
+            # preserves the legacy None-keyed behaviour if creation
+            # itself raised.
+            sid = cast(str, session_id)
+            await asyncio.to_thread(self.event_log.log, sid, err_event)
             await asyncio.to_thread(
-                self.tool_executor.save_message, session_id, "assistant", f"Error: {e}"
+                self.tool_executor.save_message, sid, "assistant", f"Error: {e}"
             )
             yield err_event
         finally:
-            self._session_status[session_id] = "idle"
-            self._abort_events.pop(session_id, None)
+            sid = cast(str, session_id)
+            self._session_status[sid] = "idle"
+            self._abort_events.pop(sid, None)
 
     # ─── Confirmation continue ───────────────────────────────────
 

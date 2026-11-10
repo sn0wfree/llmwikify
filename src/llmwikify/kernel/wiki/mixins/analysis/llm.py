@@ -175,7 +175,9 @@ class WikiLLMMixin(WikiProtocol):
             )
             params = registry.get_api_params("select_sections")
 
-            result = self._call_llm_with_retry("select_sections", messages, params)
+            result: dict[str, Any] = self._call_llm_with_retry(
+                "select_sections", messages, params
+            )
 
             errors = registry.validate_output("select_sections", result)
             if errors:
@@ -266,19 +268,25 @@ class WikiLLMMixin(WikiProtocol):
         data_gaps: list[dict],
     ) -> dict:
         """Use LLM to generate investigation suggestions."""
-        return self._analyzer._llm_generate_investigations(contradictions, data_gaps)
+        result: dict = self._analyzer._llm_generate_investigations(
+            contradictions, data_gaps
+        )
+        return result
 
     def _llm_detect_gaps(self, context: str) -> list[dict]:
         """Call LLM to detect gaps between wiki schema and current state."""
-        return self._analyzer._llm_detect_gaps(context)
+        result: list[dict] = self._analyzer._llm_detect_gaps(context)
+        return result
 
     def _fallback_detect_gaps(self) -> list[dict]:
         """Basic gap detection without LLM."""
-        return self._analyzer._fallback_detect_gaps()
+        result: list[dict] = self._analyzer._fallback_detect_gaps()
+        return result
 
     def _build_lint_context(self, limit: int = 20) -> str:
         """Build minimal context for LLM lint analysis."""
-        return self._analyzer._build_lint_context(limit)
+        result: str = self._analyzer._build_lint_context(limit)
+        return result
 
     def _llm_generate_synthesize_answer(
         self,

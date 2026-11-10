@@ -96,8 +96,10 @@ class FileSystemWatcher:
             on_event: Optional callback(event_type, path) for each event.
         """
         try:
-            from watchdog.events import FileSystemEventHandler
-            from watchdog.observers import Observer
+            from watchdog.events import (  # type: ignore[import-not-found]
+                FileSystemEventHandler,
+            )
+            from watchdog.observers import Observer  # type: ignore[import-not-found]
         except ImportError:
             raise ImportError(
                 "watchdog package is required. " "Install with: pip install watchdog"
@@ -107,22 +109,22 @@ class FileSystemWatcher:
         self._running = True
 
         class _Handler(FileSystemEventHandler):
-            def __init__(self, watcher) -> None:
+            def __init__(self, watcher: FileSystemWatcher) -> None:
                 self.watcher = watcher
 
-            def on_created(self, event) -> None:
+            def on_created(self, event: Any) -> None:
                 if not event.is_directory:
                     self.watcher._handle_event("created", event.src_path)
 
-            def on_modified(self, event) -> None:
+            def on_modified(self, event: Any) -> None:
                 if not event.is_directory:
                     self.watcher._handle_event("modified", event.src_path)
 
-            def on_deleted(self, event) -> None:
+            def on_deleted(self, event: Any) -> None:
                 if not event.is_directory:
                     self.watcher._handle_event("deleted", event.src_path)
 
-            def on_moved(self, event) -> None:
+            def on_moved(self, event: Any) -> None:
                 if not event.is_directory:
                     self.watcher._handle_event("moved", event.dest_path)
 
@@ -195,7 +197,7 @@ class FileSystemWatcher:
                 print(f"    Tip: run 'llmwikify ingest {path.name}' to process")
             print("    Or start with --auto-ingest to process automatically")
 
-    def trigger_ingest(self, path: Path, wiki=None) -> dict | None:
+    def trigger_ingest(self, path: Path, wiki: Any = None) -> dict | None:
         """Manually trigger ingest for a specific file.
 
         Args:
@@ -210,7 +212,8 @@ class FileSystemWatcher:
 
         self._ingest_count += 1
         try:
-            return wiki.ingest_source(str(path))
+            result: dict[str, Any] = wiki.ingest_source(str(path))
+            return result
         except (OSError, ValueError, RuntimeError) as e:
             return {"error": str(e)}
 

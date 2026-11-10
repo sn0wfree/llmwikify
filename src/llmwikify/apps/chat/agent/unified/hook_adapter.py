@@ -13,7 +13,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 from llmwikify.apps.chat.agent.unified.core import UnifiedContext, UnifiedHook
 
@@ -77,7 +77,12 @@ class AgentHookAdapter(UnifiedHook):
         self._hook.on_error(self._to_hook_ctx(ctx), error)
 
     def finalize(self, ctx: UnifiedContext, content: str | None) -> str | None:
-        return self._hook.finalize_content(self._to_hook_ctx(ctx), content)
+        # AgentHook.finalize_content 可返回协程（async hook）；本桥接层契约
+        # 与 UnifiedHook.finalize 一致按同步处理，cast 不产生运行时开销。
+        return cast(
+            "str | None",
+            self._hook.finalize_content(self._to_hook_ctx(ctx), content),
+        )
 
     def after_iteration(self, ctx: UnifiedContext) -> None:
         self._hook.after_iteration(self._to_hook_ctx(ctx))

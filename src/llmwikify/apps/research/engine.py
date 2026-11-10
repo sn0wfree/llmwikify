@@ -267,6 +267,7 @@ class ResearchEngine:
         """Build a ReActConfig wired to ResearchEngine's domain logic."""
         from llmwikify.apps.research.runner import (
             SkillAction,
+            SkillContext,
             SkillResult,
         )
 
@@ -274,7 +275,7 @@ class ResearchEngine:
 
         # Build SkillAction wrappers for each action in the dispatch table
         def _make_action_handler(action_name: str) -> Any:
-            async def handler(args, ctx) -> Any:
+            async def handler(args: dict[str, Any], ctx: SkillContext) -> Any:
                 dispatch = engine_ref._action_dispatch.get(action_name)
                 if dispatch is None:
                     return SkillResult.fail(f"Unknown action: {action_name}")
@@ -323,7 +324,9 @@ class ResearchEngine:
         ]
 
         # Reason callback: wraps ResearchReasoner with compliance gate
-        async def reason(state, ctx, emit):
+        async def reason(
+            state: Any, ctx: Any, emit: Any
+        ) -> dict[str, Any]:
             # Update budget
             elapsed = time.monotonic() - engine_ref._start_time
             state.budget_remaining = max(0, 1 - elapsed / engine_ref._timeout_seconds)
@@ -386,7 +389,7 @@ class ResearchEngine:
             return {"action": action, "thought": thought}
 
         # Observe callback: delegates to ResearchObserver + quality gate
-        async def observe(state, ctx) -> dict[str, Any]:
+        async def observe(state: Any, ctx: Any) -> dict[str, Any]:
             engine_ref._observe(state)
             # Quality gate check
             if engine_ref.config.get("gate_enabled", True):
@@ -402,7 +405,7 @@ class ResearchEngine:
             return {"observations": state.observations}
 
         # Done condition: check phase + special states
-        def done_condition(s) -> Any:
+        def done_condition(s: Any) -> bool:
             phase = (
                 getattr(s, "phase", "") if hasattr(s, "phase") else s.get("phase", "")
             )
@@ -414,7 +417,7 @@ class ResearchEngine:
             )
 
         # on_after_act: metrics tracking + gate intervention
-        def on_after_act(state, action_name, result) -> None:
+        def on_after_act(state: Any, action_name: Any, result: Any) -> None:
             if engine_ref._metrics:
                 engine_ref._metrics.finish()
 
@@ -474,7 +477,7 @@ class ResearchEngine:
         self,
         state: ResearchState,
         reason: str,
-    ):
+    ) -> AsyncIterator[dict[str, Any]]:
         """Async-gen wrapper around actions.action_incomplete."""
         async for ev in actions.action_incomplete(self._action_ctx, state, reason):
             yield ev

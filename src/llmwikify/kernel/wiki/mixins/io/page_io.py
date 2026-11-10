@@ -3,6 +3,7 @@
 import logging
 import re
 from pathlib import Path
+from typing import Any
 
 from ...protocols import WikiProtocol
 
@@ -176,7 +177,7 @@ class WikiPageIOMixin(WikiProtocol):
             limit: Maximum number of results
             backend: Search backend - "fts5" (default) or "qmd"
         """
-        results = self.index.search(query, limit, backend=backend)
+        results: list[Any] = self.index.search(query, limit, backend=backend)
 
         page_types = {}
         try:
@@ -214,7 +215,7 @@ class WikiPageIOMixin(WikiProtocol):
         self, auto_export: bool = True, output_path: Path | None = None
     ) -> dict:
         """Build reference index and auto-generate jieba dictionary."""
-        result = self.index.build_index_from_files(
+        result: dict[str, Any] = self.index.build_index_from_files(
             self.wiki_dir, batch_size=self._batch_size
         )
 
@@ -236,7 +237,8 @@ class WikiPageIOMixin(WikiProtocol):
 
     def export_index(self, output_path: Path) -> dict:
         """Export reference index to JSON."""
-        return self.index.export_json(output_path)
+        result: dict[str, Any] = self.index.export_json(output_path)
+        return result
 
     @staticmethod
     def _truncate_summary(text: str, max_len: int) -> str:

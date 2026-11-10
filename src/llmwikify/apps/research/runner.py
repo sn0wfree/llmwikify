@@ -74,6 +74,12 @@ EVENT_TIMEOUT = "timeout"
 ReasonCallable = Callable[..., Awaitable[dict] | dict]
 ActionCallable = Callable[[dict, Any], Awaitable[Any] | Any]
 HookCallable = Callable[..., Awaitable[None] | None]
+# Observe may return a state-update dict (folded into state by the
+# loop) or None — stricter than HookCallable because the return value
+# is consumed (see ``observe_output`` handling in ReactLoop.run).
+ObserveCallable = Callable[
+    ..., Awaitable[dict[str, Any] | None] | dict[str, Any] | None
+]
 
 
 # ─── ReactConfig ──────────────────────────────────────────────────
@@ -88,13 +94,15 @@ class ReactConfig:
     """
 
     actions: list[Any]
-    initial_state: dict[str, Any]
+    # dict or dataclass — the _state_get/_state_update/_state_snapshot
+    # helpers accept both (v0.50 compat), so a dict-only type is wrong.
+    initial_state: Any
     reason_prompt: str = ""
     done_condition: Callable[[dict], bool] = field(
         default=lambda s: s.get("phase") == "done",
     )
     reason: ReasonCallable | None = None
-    observe: HookCallable | None = None
+    observe: ObserveCallable | None = None
     max_rounds: int = 5
     timeout_seconds: float = 0
     on_before_act: HookCallable | None = None

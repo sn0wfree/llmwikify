@@ -11,7 +11,7 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 # Default configuration (embedded for zero-dependency)
-DEFAULT_CONFIG = {
+DEFAULT_CONFIG: dict[str, Any] = {
     "directories": {
         "raw": "raw",
         "wiki": "wiki",
@@ -111,6 +111,9 @@ class Config:
     """
 
     _instance: Config | None = None
+    # Declared at class level so __init__ can read it before the first
+    # __new__ assignment is visible to type checkers.
+    _initialized: bool = False
 
     def __new__(cls) -> Config:
         if cls._instance is None:
@@ -296,7 +299,9 @@ def get_db_path(wiki_root: Path, cfg: dict[str, Any] | None = None) -> Path:
     if cfg is None:
         cfg = get_default_config()
 
-    db_name = cfg.get("database", {}).get("name", DEFAULT_CONFIG["database"]["name"])
+    db_name: str = cfg.get("database", {}).get(
+        "name", DEFAULT_CONFIG["database"]["name"]
+    )
     return wiki_root / db_name
 
 
@@ -316,7 +321,7 @@ def get_directory(
     if cfg is None:
         cfg = get_default_config()
 
-    dir_name = cfg.get("directories", {}).get(
+    dir_name: str = cfg.get("directories", {}).get(
         dir_type, DEFAULT_CONFIG["directories"][dir_type]
     )
     return wiki_root / dir_name
@@ -405,7 +410,10 @@ def expand_env_vars(value: str) -> str:
 
     def replace_env(match: re.Match) -> str:
         var_name = match.group(1)
-        return os.environ.get(var_name, match.group(0))
+        # match.group() is Any in typeshed; pin the fallback to str so
+        # os.environ.get returns str.
+        fallback: str = match.group(0)
+        return os.environ.get(var_name, fallback)
 
     return re.sub(r"\$\{(\w+)\}", replace_env, value)
 

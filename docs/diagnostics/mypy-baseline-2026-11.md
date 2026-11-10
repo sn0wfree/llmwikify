@@ -47,7 +47,7 @@
 | 批 | 范围 | 错误数 | 累计 | 备注 |
 |---|---|---:|---:|---|
 | 1 | top 10 文件 | 222 | 31% | ✅ **2026-11-10 完成**：摘豁免后修至 0；全量 702→约 61 错（含级联收益） |
-| 2 | top 11–30 | 184 | 46% | **进行中**：20 模块，含 `composite.py` 12 条 `override`（方案 A：基类返回 `Awaitable\|None`） |
+| 2 | top 11–30 | 184 | 46% | ✅ **2026-11-10 完成**：20 模块摘豁免修至 0；全量 → **55 错 / 24 文件** |
 | 3 | top 31–80 | 205 | 73% | 分 2–3 个 commit |
 | 4 | 其余 67 文件长尾 | 91 | 100% | 单文件多为 1–2 错 |
 
@@ -67,34 +67,15 @@
 | `mixins/core/init` | 跨 mixin 方法补 `WikiProtocol` 桩 |
 | `research/state` | `_cached_source_count` 字段 + `record` 返回 CM 类型 |
 
-### 批 2 计划（2026-11-10 开工）
+### 批 2 完成记录（2026-11-10）
 
-**范围**：基线 top 11–30 共 20 模块，约 184 错。开工前先摘 `pyproject.toml` 对应 `ignore_errors`。
+| 组 | 要点 |
+|---|---|
+| A 协议 | **方案 A**：`AgentHook` 返回 `Awaitable[None] \| None`（`finalize_content` 同理）消 12 override；`protocols` 清 unused-ignore + 对齐桩签名；`utility` 注解；`hook_adapter` cast 修连带回归 |
+| B kernel | `analyzer` 补标注；`page_io`/`source_analysis`/`llm` attr-defined → WikiProtocol 桩；`lint` no-any-return；`remote` return-value；`watcher`/`code_tools` 可选依赖处理 |
+| C apps | `orchestrator` arg-type；`middleware`/`webui`/`config`/`resolver` no-any-return；`auto_ingest` union-attr；`engine`/`builtin_commands`/`reasoner` 逐条 |
 
-| 组 | 模块 | 错约 | 修法要点 |
-|---|---|---:|---|
-| A 协议对齐 | `foundation.callback.composite` | 12 | **方案 A**：`AgentHook` 各钩子返回 `Awaitable[None] \| None`（`finalize_content` → `Awaitable[str \| None] \| str \| None`），同步/异步子类均合法，消 12 条 `override`；`CompositeHook` 的 `async def` 保持不变 |
-| A 协议对齐 | `kernel.wiki.protocols` | 9 | 清理批 1 引入的多余 `unused-ignore`（桩若已解析则删 `type: ignore`） |
-| A 协议对齐 | `kernel.wiki.mixins.core.utility` | 9 | `override` + `no-any-return`，对齐协议后修 |
-| B kernel | `kernel.graph.analyzer` | 12 | `no-untyped-def` 机械补标注 |
-| B kernel | `kernel.wiki.mixins.io.{page_io,source_analysis}` | 22 | `attr-defined` → `WikiProtocol` 桩（批 1 同款） |
-| B kernel | `kernel.wiki.mixins.analysis.{lint,llm}` | 18 | `no-any-return` / `attr-defined` |
-| B kernel | `kernel.storage.watcher` | 9 | 补标注；`import-not-found` 仅对 `watchdog` 可选依赖局部 ignore |
-| B kernel | `kernel.multi_wiki.remote` | 9 | `return-value` 逐条判断 |
-| B kernel | `kernel.codegen.code_tools` | 7 | 可选依赖 stub / 局部 ignore + `attr-defined` |
-| C apps/interfaces | `apps.chat.agent.orchestrator` | 12 | `arg-type`×8 需判断 |
-| C apps/interfaces | `interfaces.server.http.middleware` | 11 | `no-any-return` + 补标注 |
-| C apps/interfaces | `apps.research.engine` | 9 | 补标注 + `arg-type` |
-| C apps/interfaces | `foundation.config` | 8 | `no-any-return` / `index` |
-| C apps/interfaces | `interfaces.server.utils.webui` | 8 | `no-any-return` |
-| C apps/interfaces | `apps.agent.maintenance.auto_ingest` | 8 | `union-attr` / `arg-type` |
-| C apps/interfaces | `foundation.llm.resolver` | 7 | `no-any-return` |
-| C apps/interfaces | `apps.chat.agent.builtin_commands` | 7 | `attr-defined` |
-| C apps/interfaces | `apps.research.reasoner` | 7 | `return-value`×4 |
-
-**约束**：不改运行时行为；不用全局 `ignore_errors` 回退；可选三方依赖允许模块级 `ignore_missing_imports`；修完批内 0 错再 commit。
-
-**验证**：`mypy src/llmwikify` 批内文件 0 错；`ruff check` 改动文件；相关单测；`scripts/check_architecture.py` 0 violation。
+**批 2 后基线**：豁免生效 mypy = **55 错 / 24 文件**（批 1 前 141 → 批 2 后 55）。
 
 ## 5. Top 30 文件
 

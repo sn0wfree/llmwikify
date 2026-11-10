@@ -23,7 +23,7 @@ import re
 import threading
 from typing import Any
 
-import polars as pl
+import polars as pl  # type: ignore[import-not-found]
 
 # ─── Compiled regex ────────────────────────────────────────────────
 
@@ -87,7 +87,7 @@ def validate_safety(code: str) -> tuple[bool, str]:
     Returns:
         (is_safe, error_message) where error_message is empty on success.
     """
-    from QuantNodes.ai.sandbox import CodeSandbox
+    from QuantNodes.ai.sandbox import CodeSandbox  # type: ignore[import-not-found]
 
     sandbox = CodeSandbox(max_code_length=500_000)
     validation = sandbox.validate(code)
@@ -105,7 +105,10 @@ def build_execute_namespace() -> dict[str, Any]:
     Returns:
         Dict mapping operator names to functions, plus pl/pd/np.
     """
-    from QuantNodes.operators.proxy import get_operator, list_operators
+    from QuantNodes.operators.proxy import (  # type: ignore[import-not-found]
+        get_operator,
+        list_operators,
+    )
 
     ns: dict[str, Any] = {
         "pl": pl,
@@ -155,8 +158,8 @@ def execute_code(
     # Wrap: define compute_factor, then call it and capture the result.
     wrapped = code.rstrip() + "\n_factor_result = compute_factor(df)\n"
 
-    result_box = [None]
-    error_box = [None]
+    result_box: list[Any] = [None]
+    error_box: list[Any] = [None]
 
     def _run() -> None:
         try:

@@ -6,13 +6,14 @@ Used by both WikiServer core and legacy entry points.
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import FileResponse, Response
+from starlette.types import ASGIApp, Scope
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +48,7 @@ class _CacheControlledStaticFiles(StaticFiles):
     browser (and any CDN in front) to fetch the updated file by name.
     """
 
-    async def get_response(self, path, scope):  # type -> response: ignore[override]
+    async def get_response(self, path: str, scope: Scope) -> Response:
         response = await super().get_response(path, scope)
         response.headers["Cache-Control"] = HASHED_ASSET_CACHE_CONTROL
         return response
@@ -66,12 +67,14 @@ class SPAFallbackMiddleware(BaseHTTPMiddleware):
     causing the dynamic-import failures users saw.
     """
 
-    def __init__(self, app, index_html: Path, dist_dir: Path) -> None:
+    def __init__(self, app: ASGIApp, index_html: Path, dist_dir: Path) -> None:
         super().__init__(app)
         self.index_html = index_html
         self.dist_dir = dist_dir
 
-    async def dispatch(self, request: Request, call_next: Callable) -> Response:
+    async def dispatch(
+        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
         response = await call_next(request)
 
         # Only intercept 404s

@@ -95,7 +95,11 @@ def make_skill_ctx(
     """
 
     class _StubSkillContext:
-        pass
+        # Declared so attribute assignment below type-checks; the
+        # stub is duck-typed as SkillContext for skill handlers.
+        session_id: str
+        db: Any
+        config: dict[str, Any]
 
     stub = _StubSkillContext()
     stub.session_id = cmd_ctx.session_id or ""
@@ -200,14 +204,15 @@ async def memory_dream_handler(
     else:
         result = await _run({}, stub)
 
+    # SkillResult has no ``ok``/``message`` fields — reading ``result.ok``
+    # returned the bound classmethod (always truthy) and ``message`` never
+    # existed, so the event always claimed success and could not be JSON
+    # serialized. Use the status/error fields like goal_handler does.
+    ok = getattr(result, "status", "ok") == "ok"
     yield command_done_event(
         "/memory_dream",
-        result.ok if hasattr(result, "ok") else True,
-        (
-            result.message
-            if hasattr(result, "message") and not result.ok
-            else "dream complete"
-        ),
+        ok,
+        (getattr(result, "error", "") or "dream failed") if not ok else "dream complete",
         data=getattr(result, "data", None),
     )
 
@@ -226,7 +231,8 @@ def _summarize_goal(args_text: str, res: Any) -> str:
     if args_text.lower() == "done" or args_text.lower().startswith("done "):
         if data.get("completed"):
             return f"Completed: {data.get('objective', '')[:80]}"
-        return data.get("reason", "no active goal")
+        reason: str = data.get("reason", "no active goal")
+        return reason
     return f"Goal registered: {data.get('objective', '')[:100]}"
 
 

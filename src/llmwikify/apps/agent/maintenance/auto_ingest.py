@@ -311,7 +311,10 @@ class AutoIngestService:
             # keep the LATER deadline if events keep arriving
             deadline = max(deadline, prev[0])
         self._pending[key] = (deadline, size)
-        self._loop.call_later(self.config.debounce_seconds + 0.1, self._flush_pending)
+        if self._loop is not None:
+            self._loop.call_later(
+                self.config.debounce_seconds + 0.1, self._flush_pending
+            )
 
     def _flush_pending(self) -> None:
         """Main loop context: dispatch files whose debounce window expired."""
@@ -329,9 +332,10 @@ class AutoIngestService:
                         time.monotonic() + self.config.debounce_seconds,
                         path.stat().st_size,
                     )
-                    self._loop.call_later(
-                        self.config.debounce_seconds + 0.1, self._flush_pending
-                    )
+                    if self._loop is not None:
+                        self._loop.call_later(
+                            self.config.debounce_seconds + 0.1, self._flush_pending
+                        )
                     continue
             except OSError:
                 continue
@@ -357,7 +361,9 @@ class AutoIngestService:
                 result = self._extraction_cache.get(cache_key)
                 if result is None:
                     try:
-                        result = await asyncio.to_thread(
+                        # Typed local so mypy narrows ``result`` to a
+                        # dict after the None-branch (to_thread is Any).
+                        fetched: dict[str, Any] = await asyncio.to_thread(
                             self.wiki.ingest_source, str(path)
                         )
                     except Exception as exc:
@@ -370,6 +376,7 @@ class AutoIngestService:
                             exc,
                         )
                         return
+                    result = fetched
                     # Cache successful extractions (skip error results)
                     if not result.get("error"):
                         self._extraction_cache[cache_key] = result

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, cast
 
 import requests
 
@@ -82,7 +82,8 @@ class RemoteWiki:
                 **kwargs,
             )
             response.raise_for_status()
-            return response.json()
+            data: dict[str, Any] | list[dict[str, Any]] = response.json()
+            return data
         except requests.exceptions.Timeout as e:
             raise TimeoutError(f"Remote wiki timed out: {self.url}") from e
         except requests.exceptions.ConnectionError as e:
@@ -98,7 +99,9 @@ class RemoteWiki:
         Returns:
             Health status dict
         """
-        return self._request("GET", "/api/wiki/status")
+        return cast(
+            dict[str, Any], self._request("GET", "/api/wiki/status")
+        )
 
     def get_status(self) -> dict[str, Any]:
         """Get remote wiki status.
@@ -106,7 +109,9 @@ class RemoteWiki:
         Returns:
             Wiki status dict
         """
-        return self._request("GET", "/api/wiki/status")
+        return cast(
+            dict[str, Any], self._request("GET", "/api/wiki/status")
+        )
 
     def search(self, query: str, limit: int = 10) -> list[dict[str, Any]]:
         """Search remote wiki.
@@ -118,8 +123,11 @@ class RemoteWiki:
         Returns:
             List of search results
         """
-        return self._request(
-            "GET", "/api/wiki/search", params={"q": query, "limit": limit}
+        return cast(
+            list[dict[str, Any]],
+            self._request(
+                "GET", "/api/wiki/search", params={"q": query, "limit": limit}
+            ),
         )
 
     def read_page(self, page_name: str) -> dict[str, Any]:
@@ -131,7 +139,9 @@ class RemoteWiki:
         Returns:
             Page content dict
         """
-        return self._request("GET", f"/api/wiki/page/{page_name}")
+        return cast(
+            dict[str, Any], self._request("GET", f"/api/wiki/page/{page_name}")
+        )
 
     def write_page(self, page_name: str, content: str) -> dict[str, Any]:
         """Write a page to remote wiki.
@@ -143,8 +153,11 @@ class RemoteWiki:
         Returns:
             Response dict
         """
-        return self._request(
-            "POST", "/api/wiki/page", json={"page_name": page_name, "content": content}
+        return cast(
+            dict[str, Any],
+            self._request(
+                "POST", "/api/wiki/page", json={"page_name": page_name, "content": content}
+            ),
         )
 
     def get_references(self, page_name: str, detail: bool = True) -> dict[str, Any]:
@@ -157,8 +170,11 @@ class RemoteWiki:
         Returns:
             References dict with inbound/outbound links
         """
-        return self._request(
-            "GET", f"/api/wiki/references/{page_name}", params={"detail": detail}
+        return cast(
+            dict[str, Any],
+            self._request(
+                "GET", f"/api/wiki/references/{page_name}", params={"detail": detail}
+            ),
         )
 
     def get_graph(self, **kwargs: Any) -> dict[str, Any]:
@@ -167,7 +183,9 @@ class RemoteWiki:
         Returns:
             Graph visualization data
         """
-        return self._request("GET", "/api/wiki/graph", params=kwargs)
+        return cast(
+            dict[str, Any], self._request("GET", "/api/wiki/graph", params=kwargs)
+        )
 
     def lint(self, format: str = "brief") -> dict[str, Any]:
         """Run health check on remote wiki.
@@ -178,7 +196,10 @@ class RemoteWiki:
         Returns:
             Lint results
         """
-        return self._request("GET", "/api/wiki/lint", params={"format": format})
+        return cast(
+            dict[str, Any],
+            self._request("GET", "/api/wiki/lint", params={"format": format}),
+        )
 
     def close(self) -> None:
         """Close the HTTP session."""

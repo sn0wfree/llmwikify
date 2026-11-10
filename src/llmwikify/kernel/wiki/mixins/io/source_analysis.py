@@ -3,6 +3,7 @@
 import hashlib
 import logging
 from pathlib import Path
+from typing import Any
 
 from llmwikify.kernel.storage.backend import is_path_excluded
 
@@ -109,7 +110,8 @@ class WikiSourceAnalysisMixin(WikiProtocol):
             if cached:
                 current_hash = self._compute_content_hash(source_path)
                 if cached.get("hash") == current_hash:
-                    return cached.get("data", {})
+                    data: dict[str, Any] = cached.get("data", {})
+                    return data
 
         full_path = self.root / source_path
         if not full_path.exists():
@@ -149,7 +151,7 @@ class WikiSourceAnalysisMixin(WikiProtocol):
         params = registry.get_api_params("analyze_source")
 
         try:
-            analysis = client.chat_json(messages, **params)
+            analysis: dict[str, Any] = client.chat_json(messages, **params)
         except (ConnectionError, TimeoutError, ValueError, OSError):
             return {"status": "error", "reason": "LLM analysis failed"}
 

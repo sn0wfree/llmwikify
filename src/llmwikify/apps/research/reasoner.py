@@ -27,7 +27,7 @@ Architecture:
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, cast
 
 from .llm_step import run_prompt
 
@@ -96,7 +96,7 @@ class ResearchReasoner:
             logger.warning("LLM reasoning failed: %s, using rule-based fallback", e)
             return self.rule_based(state) or "done"
 
-    def rule_based(self, state: ResearchState) -> str | None:
+    def rule_based(self, state: ResearchState) -> str:
         """Deterministic decision tree as fallback.
 
         Walks the state in canonical order:
@@ -247,7 +247,9 @@ class ResearchReasoner:
         # Build vars dict for the YAML template (research_reason.yaml
         # does not exist yet, but the call layer falls back gracefully
         # and the rule-based fallback is triggered by the sentinel).
-        vars_dict = {
+        # Typed dict[str, Any] so **vars_dict matches run_prompt's
+        # keyword params (inferred object values are invariant).
+        vars_dict: dict[str, Any] = {
             "query": state.query,
             "round": state.round,
             "max_rounds": state.max_rounds,
@@ -275,7 +277,7 @@ class ResearchReasoner:
         if result.get("action") == "__rule_based__":
             return self.rule_based(state)
 
-        action = result.get("action", "done")
+        action: str = result.get("action", "done")
         thought = result.get("thought", "")
 
         # Anti-spin guard for the LLM path: if the LLM keeps returning
@@ -309,7 +311,9 @@ class ResearchReasoner:
             action = "done"
 
         # Store thought for SSE event (set on state so _react_loop
-        # can yield it).
-        state._last_thought = thought
+        # can yield it). Dynamic attribute (not a ResearchState field,
+        # so snapshots/serialization stay unchanged); cast keeps the
+        # plain assignment while satisfying the type checker.
+        cast(Any, state)._last_thought = thought
 
         return action

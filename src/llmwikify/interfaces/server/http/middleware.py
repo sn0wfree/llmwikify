@@ -7,11 +7,13 @@ import logging
 import os
 import time
 from collections import OrderedDict
+from collections.abc import Awaitable, Callable
 
 import jwt as _pyjwt
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
+from starlette.types import ASGIApp
 
 from llmwikify.foundation.auth import (
     AuthError,
@@ -177,7 +179,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     Disable by setting env var RATE_LIMIT_PER_MIN=0.
     """
 
-    def __init__(self, app, limit_per_min: int = RATE_LIMIT_PER_MIN) -> None:
+    def __init__(
+        self, app: ASGIApp, limit_per_min: int = RATE_LIMIT_PER_MIN
+    ) -> None:
         super().__init__(app)
         self.limit_per_min = limit_per_min
         # Buckets: ip -> (tokens: float, last_refill: float)
@@ -201,7 +205,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self._buckets[client_ip] = bucket
         return bucket
 
-    async def dispatch(self, request: Request, call_next) -> Response:
+    async def dispatch(
+        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
         # Only rate-limit agent API routes.
         path = request.url.path
         if not path.startswith("/api/agent"):
@@ -264,7 +270,7 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
 
     def __init__(
         self,
-        app,
+        app: ASGIApp,
         *,
         secret: bytes | None = None,
         public_read: bool = True,
@@ -291,7 +297,9 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
                 return True
         return False
 
-    async def dispatch(self, request: Request, call_next) -> Response:
+    async def dispatch(
+        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
         path = request.url.path
 
         if self._is_excluded(path):

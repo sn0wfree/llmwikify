@@ -14,6 +14,7 @@ This avoids forcing every consumer to migrate to async in one step.
 from __future__ import annotations
 
 import logging
+from collections.abc import Awaitable
 from typing import Any
 
 from llmwikify.foundation.callback.context import AgentHookContext
@@ -23,27 +24,37 @@ logger = logging.getLogger(__name__)
 
 
 class AgentHook:
+    """Hook base. Methods may be sync (return None) or async (return Awaitable)."""
+
     name: str = "base"
 
     def wants_streaming(self) -> bool:
         return False
 
-    def before_iteration(self, ctx: AgentHookContext) -> None:
+    def before_iteration(self, ctx: AgentHookContext) -> Awaitable[None] | None:
         pass
 
-    def on_stream(self, ctx: AgentHookContext, delta: str) -> None:
+    def on_stream(
+        self, ctx: AgentHookContext, delta: str
+    ) -> Awaitable[None] | None:
         pass
 
-    def on_stream_end(self, ctx: AgentHookContext, *, resuming: bool) -> None:
+    def on_stream_end(
+        self, ctx: AgentHookContext, *, resuming: bool
+    ) -> Awaitable[None] | None:
         pass
 
-    def emit_reasoning(self, ctx: AgentHookContext, content: str) -> None:
+    def emit_reasoning(
+        self, ctx: AgentHookContext, content: str
+    ) -> Awaitable[None] | None:
         pass
 
-    def emit_reasoning_end(self, ctx: AgentHookContext) -> None:
+    def emit_reasoning_end(self, ctx: AgentHookContext) -> Awaitable[None] | None:
         pass
 
-    def before_execute_tools(self, ctx: AgentHookContext) -> None:
+    def before_execute_tools(
+        self, ctx: AgentHookContext
+    ) -> Awaitable[None] | None:
         pass
 
     def after_tool_executed(
@@ -51,7 +62,7 @@ class AgentHook:
         ctx: AgentHookContext,
         tool_call: Any,
         result: Any,
-    ) -> None:
+    ) -> Awaitable[None] | None:
         pass
 
     def on_tool_error(
@@ -59,21 +70,25 @@ class AgentHook:
         ctx: AgentHookContext,
         tool_call: Any,
         error: BaseException,
-    ) -> None:
+    ) -> Awaitable[None] | None:
         pass
 
-    def on_confirmation(self, ctx: AgentHookContext, tool_call: Any) -> None:
+    def on_confirmation(
+        self, ctx: AgentHookContext, tool_call: Any
+    ) -> Awaitable[None] | None:
         pass
 
-    def after_iteration(self, ctx: AgentHookContext) -> None:
+    def after_iteration(self, ctx: AgentHookContext) -> Awaitable[None] | None:
         pass
 
     def finalize_content(
         self, ctx: AgentHookContext, content: str | None
-    ) -> str | None:
+    ) -> Awaitable[str | None] | str | None:
         return content
 
-    def on_error(self, ctx: AgentHookContext, error: BaseException) -> None:
+    def on_error(
+        self, ctx: AgentHookContext, error: BaseException
+    ) -> Awaitable[None] | None:
         pass
 
 

@@ -117,7 +117,9 @@ class WikiUtilityMixin(WikiProtocol):
 
         provider = self.config.get("llm", {}).get("provider", "openai")
         custom_dir = self._prompt_custom_dir
-        cache = getattr(self, "_prompt_registry_cache", None)
+        cache: tuple[str, str | None, PromptRegistry] | None = getattr(
+            self, "_prompt_registry_cache", None
+        )
         if (
             cache is not None
             and cache[0] == provider
@@ -188,17 +190,17 @@ class WikiUtilityMixin(WikiProtocol):
         return page.relative_to(self.wiki_dir).as_posix()[:-3]  # strip .md
 
     @staticmethod
-    def _parse_sections(content: str) -> list:
+    def _parse_sections(content: str) -> list[tuple[str, str]]:
         """Parse markdown into list of (section_header, section_body).
 
         Only parses H2 headers (## Header) for top-level sections.
         Ignores headers inside code blocks (``` ... ```) and HTML comments.
         Returns list of tuples: ("Section Name", "section content without header")
         """
-        sections = []
+        sections: list[tuple[str, str]] = []
         lines = content.split("\n")
         current_header = None
-        current_body = []
+        current_body: list[str] = []
         in_code_block = False
         in_html_comment = False
 
@@ -250,7 +252,7 @@ class WikiUtilityMixin(WikiProtocol):
         return len(content)
 
     @staticmethod
-    def _build_merge_notice(new_sections: list, version: str) -> str:
+    def _build_merge_notice(new_sections: list[str], version: str) -> str:
         """Build the dedup instruction notice for LLM agents."""
         section_list = "\n".join(f"  - {s}" for s in new_sections)
         return f"""<!--

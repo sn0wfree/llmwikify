@@ -33,7 +33,7 @@ class GraphAnalyzer:
         # Returns: centrality, communities, suggestions, stats
     """
 
-    def __init__(self, wiki) -> None:
+    def __init__(self, wiki: Any) -> None:
         self.wiki = wiki
 
     def analyze(self, force: bool = False) -> dict:
@@ -55,7 +55,7 @@ class GraphAnalyzer:
         # users see a misleading "no pages" message when their KB has
         # hundreds of pages but networkx isn't installed.
         try:
-            import networkx as nx  # noqa: F401  (used by _build_graph etc.)
+            import networkx as nx  # type: ignore[import-untyped]  # noqa: F401  (used by _build_graph etc.)
         except ImportError:
             return {
                 "status": "missing_dependency",
@@ -133,7 +133,7 @@ class GraphAnalyzer:
 
         return G
 
-    def _compute_centrality(self, G) -> dict:
+    def _compute_centrality(self, G: Any) -> dict:
         """Compute PageRank and identify hub/authority nodes.
 
         Returns:
@@ -178,7 +178,7 @@ class GraphAnalyzer:
             ],
         }
 
-    def _analyze_communities(self, G) -> dict:
+    def _analyze_communities(self, G: Any) -> dict:
         """Run community detection and label communities.
 
         Returns:
@@ -229,13 +229,13 @@ class GraphAnalyzer:
             return "Unknown"
 
         # Count directory prefixes
-        prefix_counts = {}
+        prefix_counts: dict[str, int] = {}
         for member in members:
             prefix = member.split("/")[0] if "/" in member else "root"
             prefix_counts[prefix] = prefix_counts.get(prefix, 0) + 1
 
         if prefix_counts:
-            dominant_prefix = max(prefix_counts, key=prefix_counts.get)
+            dominant_prefix = max(prefix_counts, key=lambda p: prefix_counts[p])
             if prefix_counts[dominant_prefix] >= len(members) * 0.5:
                 return f"{dominant_prefix.title()} Community"
 
@@ -245,7 +245,7 @@ class GraphAnalyzer:
             return f"{short_names[0]} + {len(members)-1} more"
         return ", ".join(short_names)
 
-    def _find_bridge_nodes(self, G, communities: dict) -> list[dict]:
+    def _find_bridge_nodes(self, G: Any, communities: dict) -> list[dict]:
         """Find nodes that connect multiple communities.
 
         Returns:
@@ -289,7 +289,7 @@ class GraphAnalyzer:
         bridges.sort(key=lambda x: -x["communities_connected"])
         return bridges
 
-    def _generate_suggestions(self, G, graph_data: dict) -> list[dict]:
+    def _generate_suggestions(self, G: Any, graph_data: dict) -> list[dict]:
         """Generate suggestions for improving the knowledge graph.
 
         Types of suggestions:
@@ -323,9 +323,9 @@ class GraphAnalyzer:
             names.add(md_file.relative_to(wiki_dir).as_posix()[:-3])
         return names
 
-    def _suggest_pages_for_concepts(self, G) -> list[dict]:
+    def _suggest_pages_for_concepts(self, G: Any) -> list[dict]:
         """Suggest creating pages for high-degree concepts that lack wiki pages."""
-        suggestions = []
+        suggestions: list[dict] = []
 
         try:
             import networkx as nx  # noqa: F401  (used by _build_networkx / G.degree)
@@ -380,7 +380,7 @@ class GraphAnalyzer:
 
         return suggestions
 
-    def _suggest_link_improvements(self, G) -> list[dict]:
+    def _suggest_link_improvements(self, G: Any) -> list[dict]:
         """Suggest improving wikilinks for under-connected pages."""
         suggestions = []
 
@@ -401,7 +401,7 @@ class GraphAnalyzer:
 
         return suggestions[:5]
 
-    def _compute_stats(self, G) -> dict:
+    def _compute_stats(self, G: Any) -> dict:
         """Compute graph statistics."""
         try:
             import networkx as nx  # noqa: F401  (used by _build_networkx / G.degree)
@@ -425,7 +425,7 @@ class GraphAnalyzer:
         analysis = self.analyze()
 
         if analysis["status"] == "empty":
-            return analysis["message"]
+            return str(analysis["message"])
 
         lines = [
             "# Knowledge Graph Analysis Report",

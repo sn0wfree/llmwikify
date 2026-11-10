@@ -34,7 +34,8 @@ class WikiProtocol:
     config: dict[str, Any]
     query_sink: Any
     _analyzer: Any
-    _prompt_custom_dir: str
+    _backend: Any
+    _prompt_custom_dir: Path | None
 
     # Configuration
     _default_exclude_patterns: list[str]
@@ -61,39 +62,61 @@ class WikiProtocol:
     def _render_template(name: str, **variables: Any) -> str: ...  # type: ignore[empty-body]
 
     # Methods - File operations
-    def _get_prompt_registry(self) -> Any: ...  # type: ignore[empty-body]
+    def _get_prompt_registry(self) -> Any: ...
 
-    def _wiki_pages(self) -> Any: ...  # type: ignore[empty-body]
+    def _wiki_pages(self) -> Any: ...
 
     def _page_display_name(self, path: Path) -> str: ...  # type: ignore[empty-body]
 
     def _parse_wikilink_target(self, link: str) -> str: ...  # type: ignore[empty-body]
 
-    def _update_index_file(self) -> None: ...  # type: ignore[empty-body]
+    def _update_index_file(self) -> None: ...
 
-    def _resolve_wikilink_target(self, target: str) -> Path | None: ...  # type: ignore[empty-body]
+    def _resolve_wikilink_target(self, target: str) -> Path | None: ...
 
     def _load_page_type_mapping(self) -> dict[str, str]: ...  # type: ignore[empty-body]
 
-    def _get_cached_source_analysis(self, source_name: str) -> dict[str, Any] | None: ...  # type: ignore[empty-body]
+    def _get_cached_source_analysis(self, page_path: Path) -> dict[str, Any] | None: ...
 
-    def _parse_sections(self, content: str) -> dict[str, str]: ...  # type: ignore[empty-body]
+    # Methods - Utility (implemented in mixins/core/utility.py)
+    @staticmethod
+    def _parse_sections(content: str) -> list[tuple[str, str]]: ...  # type: ignore[empty-body]
 
-    def _find_insertion_point(self, existing_sections: list[str], new_section: str) -> int: ...  # type: ignore[empty-body]
+    @staticmethod
+    def _find_insertion_point(content: str) -> int: ...  # type: ignore[empty-body]
 
-    def _build_merge_notice(self, new_content: str, existing_content: str) -> str: ...  # type: ignore[empty-body]
+    @staticmethod
+    def _build_merge_notice(new_sections: list[str], version: str) -> str: ...  # type: ignore[empty-body]
+
+    # Index content (implemented in wiki.py, used by core/utility mixin)
+    def _get_index_content(self) -> str: ...  # type: ignore[empty-body]
+
+    def _write_index_content(self, content: str) -> None: ...
+
+    # Cross-mixin methods (implemented in io/ingest + analysis mixins)
+    def extract_section_metadata(self, content: str, title: str = "") -> dict: ...  # type: ignore[empty-body]
+
+    def targeted_read(  # type: ignore[empty-body]
+        self, content: str, selected_sections: list[int], max_chars: int = 32000
+    ) -> tuple[str, bool]: ...
+
+    def _select_sections(  # type: ignore[empty-body]
+        self, section_metadata: dict, content_type: str = "unknown"
+    ) -> dict: ...
+
+    def _get_source_cache(self, key: str) -> dict[str, Any] | None: ...
 
     # Methods - wiki.md schema (implemented in wiki.py, used by core/init mixin)
     def _get_wiki_md_content(self) -> str: ...  # type: ignore[empty-body]
 
-    def _write_wiki_md_content(self, content: str) -> None: ...  # type: ignore[empty-body]
+    def _write_wiki_md_content(self, content: str) -> None: ...
 
     def _merge_wiki_md_content(self, existing: str, new: str) -> str: ...  # type: ignore[empty-body]
 
     # Methods - Core operations
-    def append_log(self, operation: str, details: str) -> dict[str, Any]: ...  # type: ignore[empty-body]
+    def append_log(self, operation: str, details: str) -> str: ...  # type: ignore[empty-body]
 
-    def write_page(self, name: str, content: str, page_type: str | None = None) -> dict[str, Any]: ...  # type: ignore[empty-body]
+    def write_page(self, name: str, content: str, page_type: str | None = None) -> str: ...  # type: ignore[empty-body]
 
     def get_relation_engine(self) -> RelationEngine: ...  # type: ignore[empty-body]
 
@@ -119,13 +142,13 @@ class WikiProtocol:
     def join(*parts: str) -> str: ...  # type: ignore[empty-body]
 
     @staticmethod
-    def copy(text: str) -> None: ...  # type: ignore[empty-body]
+    def copy(text: str) -> None: ...
 
     @staticmethod
     def lower(text: str) -> str: ...  # type: ignore[empty-body]
 
-    def append(self, text: str) -> None: ...  # type: ignore[empty-body]
+    def append(self, text: str) -> None: ...
 
-    def get(self, key: str, default: Any = None) -> Any: ...  # type: ignore[empty-body]
+    def get(self, key: str, default: Any = None) -> Any: ...
 
-    def stop(self) -> None: ...  # type: ignore[empty-body]
+    def stop(self) -> None: ...
