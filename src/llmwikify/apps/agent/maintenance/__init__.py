@@ -11,16 +11,14 @@ All blocking wiki calls are wrapped in ``asyncio.to_thread``; a shared
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import sqlite3
-import tempfile
 import time
 from pathlib import Path
 from typing import Any
 
 from llmwikify.apps.wiki.dream_editor import WikiDreamProposalManager
-from llmwikify.foundation.io import read_json
+from llmwikify.foundation.io import read_json, write_json_atomic
 from llmwikify.kernel.multi_wiki.instance import WikiType
 
 from .auto_ingest import AutoIngestService
@@ -117,16 +115,10 @@ class MaintenanceManager:
     def _save_history(self) -> None:
         """Persist health history to disk (atomic write)."""
         try:
-            f = self._state_file
-            f.parent.mkdir(parents=True, exist_ok=True)
-            payload = json.dumps(self._health_history[-HEALTH_HISTORY_LIMIT:])
-            fd, tmp = tempfile.mkstemp(dir=f.parent, suffix=".tmp")
-            try:
-                with open(fd, "w", encoding="utf-8", newline="\n") as fh:
-                    fh.write(payload)
-                Path(tmp).replace(f)
-            finally:
-                Path(tmp).unlink(missing_ok=True)
+            write_json_atomic(
+                self._state_file,
+                self._health_history[-HEALTH_HISTORY_LIMIT:],
+            )
         except OSError:
             pass
 

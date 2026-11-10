@@ -11,6 +11,7 @@ added as they are identified during subsequent batches.
 from __future__ import annotations
 
 import json
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -46,6 +47,27 @@ def write_json(path: Path, data: Any, indent: int = 2) -> None:
         json.dumps(data, indent=indent, ensure_ascii=False), encoding="utf-8",
         newline="\n",
     )
+
+
+def write_json_atomic(path: Path, data: Any) -> None:
+    """Write JSON via tmp + rename so a crash never leaves a partial file.
+
+    Compact encoding (matches maintenance state files). ``OSError``
+    propagates — callers decide whether to log or swallow.
+
+    Args:
+        path: Destination path.
+        data: JSON-serializable data.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = json.dumps(data)
+    fd, tmp = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
+    try:
+        with open(fd, "w", encoding="utf-8", newline="\n") as fh:
+            fh.write(payload)
+        Path(tmp).replace(path)
+    finally:
+        Path(tmp).unlink(missing_ok=True)
 
 
 def safe_read_text(path: Path, default: str = "") -> str:
@@ -100,6 +122,7 @@ def read_yaml(path: Path, default: Any = None) -> Any:
 __all__ = [
     "read_json",
     "write_json",
+    "write_json_atomic",
     "safe_read_text",
     "safe_write_text",
     "read_yaml",

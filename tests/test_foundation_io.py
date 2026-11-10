@@ -13,6 +13,7 @@ from llmwikify.foundation.io import (
     safe_read_text,
     safe_write_text,
     write_json,
+    write_json_atomic,
 )
 
 
@@ -73,6 +74,42 @@ class TestWriteJson:
         write_json(path, {"key": "value"}, indent=4)
         content = path.read_text()
         assert "    " in content
+
+
+class TestWriteJsonAtomic:
+    """Tests for write_json_atomic() function."""
+
+    def test_creates_file(self, tmp_path: Path) -> None:
+        """Creates compact JSON file."""
+        path = tmp_path / "sub" / "state.json"
+        write_json_atomic(path, {"version": 1, "files": {}})
+        assert path.exists()
+        assert json.loads(path.read_text(encoding="utf-8")) == {
+            "version": 1,
+            "files": {},
+        }
+        # compact: no indent whitespace
+        assert "\n" not in path.read_text(encoding="utf-8")
+
+    def test_overwrites_existing(self, tmp_path: Path) -> None:
+        """Replaces existing file content."""
+        path = tmp_path / "state.json"
+        write_json_atomic(path, {"a": 1})
+        write_json_atomic(path, {"a": 2})
+        assert json.loads(path.read_text(encoding="utf-8")) == {"a": 2}
+
+    def test_no_tmp_left_behind(self, tmp_path: Path) -> None:
+        """Temp files are cleaned up after success."""
+        path = tmp_path / "state.json"
+        write_json_atomic(path, {"a": 1})
+        leftovers = list(tmp_path.glob("*.tmp"))
+        assert leftovers == []
+
+    def test_creates_parent_dirs(self, tmp_path: Path) -> None:
+        """Creates parent directories."""
+        path = tmp_path / "a" / "b" / "state.json"
+        write_json_atomic(path, {"ok": True})
+        assert path.exists()
 
 
 class TestReadYaml:

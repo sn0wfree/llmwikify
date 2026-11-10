@@ -26,12 +26,12 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import tempfile
 import time
 from pathlib import Path
 from typing import Any
 
 from llmwikify.apps.wiki.dream_editor import WikiDreamProposalManager
+from llmwikify.foundation.io import write_json_atomic
 from llmwikify.kernel.storage.watcher import SUPPORTED_EXTENSIONS, FileSystemWatcher
 
 from .config import AutoIngestConfig
@@ -229,16 +229,10 @@ class AutoIngestService:
     def _save_processed(self) -> None:
         """Atomic write (tmp + rename) so a crash never corrupts state."""
         try:
-            f = self._state_file
-            f.parent.mkdir(parents=True, exist_ok=True)
-            payload = json.dumps({"version": _STATE_VERSION, "files": self._processed})
-            fd, tmp = tempfile.mkstemp(dir=f.parent, suffix=".tmp")
-            try:
-                with open(fd, "w", encoding="utf-8", newline="\n") as fh:
-                    fh.write(payload)
-                Path(tmp).replace(f)
-            finally:
-                Path(tmp).unlink(missing_ok=True)
+            write_json_atomic(
+                self._state_file,
+                {"version": _STATE_VERSION, "files": self._processed},
+            )
         except OSError as exc:
             logger.warning(
                 "[%s] auto_ingest: processed state write failed: %s", self.wiki_id, exc
