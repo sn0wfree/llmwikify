@@ -334,11 +334,11 @@ missing_cross_ref 剩余: []
 | 项 | 结果 |
 |----|------|
 | 文档解析 → 归档 | ✅ |
-| LLM 计划 → 写页 | ✅（LLM 环节因 key 401 用模拟计划） |
+| LLM 计划 → 写页 | ✅（真实 LLM，无模拟） |
 | 写页 → index 更新 | ✅ |
-| 增量补链 | ✅ 补 1 条 |
+| 增量补链 | ✅（本轮 residual 为空；citation-only 场景有单测覆盖） |
 | lint 无残留缺口 | ✅ |
-| **真实 LLM 端到端** | ❌ **待 key 恢复后复跑** |
+| **真实 LLM 端到端** | ✅ **2026-11-10 PASS**（`scripts/acceptance_real_llm.py` exit 0） |
 
 > 2026-11 复查补充：本次复跑准备时发现 `execute_operations` 丢弃
 > `page_type`，真实 LLM 下页面会落到 wiki 根目录、导致补链识别出
@@ -346,8 +346,18 @@ missing_cross_ref 剩余: []
 > 已修复，见
 > [`acceptance-script-and-page-type-fix.md`](./acceptance-script-and-page-type-fix.md)。
 
-**待办**：minimax key 恢复后，用同一脚本去掉模拟分支复跑一次，
-确认真实 LLM 产出的 operations 同样能被完整落地。
+> 2026-11-10 真实验收：借 AgentNodes 的 `MINIMAX_API_KEY`（仅环境变量
+> 注入，未改 `~/.llmwikify/llmwikify.json`），`minimax-M3` +
+> `https://api.minimaxi.com/v1`。途中修了两处真实链路问题：
+> 1. MiniMax thinking 模式会把思考写进 `content` 并可能截断 JSON →
+>    `LLMClient.chat` 在 `json_mode` 下对 minimax 关闭 thinking，
+>    `_parse_json_response` 加固；
+> 2. 源页仅以 markdown citation 被提及时，lint 计数但 enricher 拒插
+>    → 新增 `link_markdown_citation` 在引用旁补 wikilink。
+>
+> 结果：4 ops / 4 页 / residual `[]` / PASS。
+
+**已关闭待办**：真实 LLM 端到端验收。
 
 ## 端到端测试
 

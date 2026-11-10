@@ -39,7 +39,12 @@ from typing import Any
 from llmwikify.apps.wiki.dream_editor import WikiDreamProposalManager
 
 from .config import EnricherConfig
-from .wikilink import build_pattern, is_linked, link_first_occurrence
+from .wikilink import (
+    build_pattern,
+    is_linked,
+    link_first_occurrence,
+    link_markdown_citation,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -291,6 +296,10 @@ class KnowledgeEnricher:
             if not self._has_plain_mention(content, pattern):
                 continue
             new_content = link_first_occurrence(content, pattern, target)
+            if new_content == content:
+                # Citation-only mentions live inside markdown links;
+                # place the wikilink beside the citation instead.
+                new_content = link_markdown_citation(content, pattern, target)
             if new_content == content:
                 continue
             await asyncio.to_thread(self.wiki.write_page, candidate, new_content)

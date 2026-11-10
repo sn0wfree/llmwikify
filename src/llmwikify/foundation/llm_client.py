@@ -265,6 +265,11 @@ class LLMClient:
 
         if json_mode:
             payload["response_format"] = {"type": "json_object"}
+            # MiniMax thinking often lands in `content` and can truncate
+            # before any JSON is emitted — force thinking off for
+            # structured output so chat_json gets a clean body.
+            if (self.provider or "").lower() in {"minimax", "minimax-chat"}:
+                payload["thinking"] = {"type": "disabled"}
 
         for key in ("temperature", "max_tokens", "top_p"):
             if key in generation_params:
@@ -276,7 +281,12 @@ class LLMClient:
             )
             resp.raise_for_status()
             data = resp.json()
-            return data["choices"][0]["message"]["content"]
+            message = data["choices"][0]["message"]
+            content = message.get("content")
+            if content is None or (isinstance(content, str) and not content.strip()):
+                # Some providers park the answer in reasoning_content.
+                content = message.get("reasoning_content") or ""
+            return content
         except requests.exceptions.RequestException as e:
             raise ConnectionError(f"LLM API request failed: {e}") from e
         except (KeyError, IndexError) as e:
@@ -297,32 +307,37 @@ class LLMClient:
 
     @staticmethod
     def _parse_json_response(raw: str) -> Any:
-        """Extract JSON from potentially markdown-wrapped response."""
-        # Strip <think> blocks (minimax thinking mode) — sometimes the LLM
-        # returns thinking text without a JSON code block after it.
-        raw = re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL).strip()
+        """Extract JSON from thinking/markdown-wrapped model output."""
+        original = raw or ""
+        # Strip thinking blocks; also drop a trailing unclosed opener
+        # when MiniMax never emitted the closing tag.
+        cleaned = re.sub(r"\U0001F4AD.*?\U0001F4AD", "", original, flags=re.DOTALL)
+        cleaned = re.sub(r"\U0001F4AD.*$", "", cleaned, flags=re.DOTALL)
+        cleaned = cleaned.strip()
 
-        # Try direct parse
-        try:
-            return json.loads(raw)
-        except json.JSONDecodeError:
-            pass
-
-        # Try extracting from markdown code block
-        match = re.search(r"```(?:json)?\s*\n?(.*?)\n?\s*```", raw, re.DOTALL)
-        if match:
+        for text in (cleaned, original.strip()):
+            if not text:
+                continue
             try:
-                return json.loads(match.group(1))
+                return json.loads(text)
             except json.JSONDecodeError:
                 pass
-
-        # Try finding JSON array or object in text
-        for pattern in (r"\[.*\]", r"\{.*\}"):
-            match = re.search(pattern, raw, re.DOTALL)
+            fence = re.compile(r"```(?:json)?\s*\n?(.*?)\n?\s*```", re.DOTALL)
+            match = fence.search(text)
             if match:
                 try:
-                    return json.loads(match.group(0))
+                    return json.loads(match.group(1))
                 except json.JSONDecodeError:
                     pass
+            for pattern in (r"\{.*\}", r"\[.*\]"):
+                match = re.search(pattern, text, re.DOTALL)
+                if match:
+                    try:
+                        return json.loads(match.group(0))
+                    except json.JSONDecodeError:
+                        pass
 
-        raise ValueError(f"Could not parse JSON from LLM response:\n{raw}")
+        preview = (cleaned or original or "").strip()
+        if len(preview) > 400:
+            preview = preview[:400] + "..."
+        raise ValueError(f"Could not parse JSON from LLM response:\n{preview}")

@@ -190,6 +190,24 @@ def test_orphan_source_gets_linked_from_mentioning_page(wiki_instance):
     assert "[[sources/Baz]]" in content
 
 
+def test_orphan_source_citation_only_mention_gets_linked(wiki_instance):
+    """Markdown citation alone still counts as a mention lint will flag."""
+    wiki_instance.write_page("sources/Baz", "# Baz\n\nContent.\n")
+    wiki_instance.write_page(
+        "concepts/Notes",
+        "# Notes\n\n## Sources\n\n- [Source: Baz](raw/baz.md)\n",
+    )
+
+    result = asyncio.run(
+        _enricher(wiki_instance).enrich(exec_result=_ops("sources/Baz"))
+    )
+
+    assert result.links_added == 1
+    content = wiki_instance.read_page("concepts/Notes")["content"]
+    assert "[[sources/Baz]]" in content
+    assert "[Source: Baz](raw/baz.md)" in content
+
+
 # ── missing page proposals ───────────────────────────────────────────
 
 

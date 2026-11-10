@@ -91,6 +91,23 @@ def link_first_occurrence(content: str, pattern: re.Pattern, concept: str) -> st
     return content[: hit.start()] + f"[[{concept}]]" + content[hit.end() :]
 
 
+def link_markdown_citation(content: str, pattern: re.Pattern, concept: str) -> str:
+    """Link a markdown citation that mentions the concept.
+
+    Source pages are often cited only as ``[Source: Title](raw/...)``.
+    ``link_first_occurrence`` refuses those regions (inserting inside a
+    markdown link would corrupt it), but lint still counts the title as a
+    plain mention — so the fixer must place the wikilink beside the
+    citation rather than inside it.
+    """
+    for match in re.finditer(r"\[([^\]\n]+)\]\(([^)\n]+)\)", content):
+        text = match.group(1)
+        if "[[" in text or not pattern.search(text):
+            continue
+        return content[: match.start()] + f"[[{concept}]] " + content[match.start() :]
+    return content
+
+
 def build_pattern(concept: str) -> re.Pattern:
     """Word-boundary pattern for a concept name (case-insensitive).
 

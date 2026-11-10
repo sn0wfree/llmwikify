@@ -13,6 +13,7 @@ from llmwikify.apps.agent.maintenance.wikilink import (
     build_pattern,
     is_linked,
     link_first_occurrence,
+    link_markdown_citation,
     mask_unsafe,
 )
 
@@ -37,6 +38,25 @@ def test_insertion_after_existing_wikilink() -> None:
     content = "See [[Foo|the docs]] first. Foo later."
     out = link_first_occurrence(content, build_pattern("Foo"), "concepts/Foo")
     assert out == "See [[Foo|the docs]] first. [[concepts/Foo]] later."
+
+
+def test_markdown_citation_gets_wikilink_beside_it() -> None:
+    content = "## Sources\n\n- [Source: Foo](raw/foo.md)\n"
+    out = link_markdown_citation(content, build_pattern("Foo"), "sources/Foo")
+    assert out.startswith("## Sources\n\n- [[sources/Foo]] [Source: Foo](raw/foo.md)")
+    assert is_linked(out, "sources/Foo")
+
+
+def test_markdown_citation_without_title_untouched() -> None:
+    content = "- [Source: Other](raw/other.md)\n"
+    out = link_markdown_citation(content, build_pattern("Foo"), "sources/Foo")
+    assert out == content
+
+
+def test_markdown_citation_already_wikilinked_skipped() -> None:
+    content = "- [Source: [[sources/Foo|Foo]]](raw/foo.md)\n"
+    out = link_markdown_citation(content, build_pattern("Foo"), "sources/Foo")
+    assert out == content
 
 
 def test_insertion_before_existing_wikilink() -> None:
