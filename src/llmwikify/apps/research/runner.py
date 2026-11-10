@@ -43,7 +43,7 @@ import inspect
 import logging
 from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, cast
 
 from llmwikify.foundation.llm.errors import LLMError
 from llmwikify.foundation.llm.streamable import LLMRequestError
@@ -70,7 +70,8 @@ EVENT_TIMEOUT = "timeout"
 
 # ─── Hook type aliases ─────────────────────────────────────────────
 
-ReasonCallable = Callable[[dict, Any], Awaitable[dict] | dict]
+# Accepts (state, ctx) or (state, ctx, emit) — arity is inspected at runtime.
+ReasonCallable = Callable[..., Awaitable[dict] | dict]
 ActionCallable = Callable[[dict, Any], Awaitable[Any] | Any]
 HookCallable = Callable[..., Awaitable[None] | None]
 
@@ -138,7 +139,7 @@ def _state_snapshot(state: Any) -> dict:
     import dataclasses
 
     if dataclasses.is_dataclass(state):
-        return dataclasses.asdict(state)
+        return cast(dict, dataclasses.asdict(cast(Any, state)))
     return dict(vars(state))
 
 
@@ -172,6 +173,7 @@ class ReactLoop:
         # mutations are visible to the caller.
         import dataclasses
 
+        self._state: Any
         initial = config.initial_state
         if dataclasses.is_dataclass(initial) and not isinstance(initial, dict):
             self._state = initial
@@ -191,7 +193,7 @@ class ReactLoop:
 
     @property
     def state(self) -> dict[str, Any]:
-        return self._state
+        return cast(dict[str, Any], self._state)
 
     async def run(
         self,

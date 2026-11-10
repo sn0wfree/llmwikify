@@ -18,7 +18,7 @@ from __future__ import annotations
 import logging
 import time
 from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import AbstractContextManager, contextmanager
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -191,7 +191,7 @@ class MetricsCollector:
         )
         return "\n".join(lines)
 
-    def record(self, action: str) -> Iterator[ActionMetrics]:
+    def record(self, action: str) -> AbstractContextManager[ActionMetrics]:
         """Context manager: start/finish tracking for one action.
 
         Usage::
@@ -297,3 +297,7 @@ class ResearchState:
     # plan→plan self-loops. Reset to 0 on any non-plan action. Excluded
     # from repr/eq because it is observation state, not value state.
     _consecutive_plan: int = field(default=0, repr=False, compare=False)
+
+    # Observation cache (Issue#8): source count as of the last observe()
+    # reload; -1 = never cached. Excluded from repr/eq — bookkeeping only.
+    _cached_source_count: int = field(default=-1, repr=False, compare=False)

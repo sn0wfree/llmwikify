@@ -31,7 +31,11 @@ callers identified in the 2026-06-19 audit.
 from __future__ import annotations
 
 import logging
-from typing import Any
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, cast
+
+if TYPE_CHECKING:
+    from llmwikify.apps.research.db import ResearchDatabase
 
 logger = logging.getLogger(__name__)
 
@@ -43,11 +47,11 @@ class ResearchDelegate:
     1-line forwarders.
     """
 
-    def __init__(self, data_dir) -> None:
+    def __init__(self, data_dir: Path | str) -> None:
         self._data_dir = data_dir
 
     @property
-    def _research(self) -> Any:
+    def _research(self) -> ResearchDatabase:
         """Lazy ResearchDatabase instance."""
         if not hasattr(self, "_research_db"):
             from llmwikify.apps.research.db import ResearchDatabase
@@ -66,7 +70,12 @@ class ResearchDelegate:
     def list_research_sessions(
         self, wiki_id: str | None = None, limit: int = 50
     ) -> list[dict]:
-        return self._research.list_research_sessions(wiki_id, limit)
+        # Positional call kept for behavior parity: ``limit`` lands on the
+        # underlying (currently unused) ``session_type`` param, exactly as
+        # before typing was added.
+        return self._research.list_research_sessions(
+            wiki_id, cast("str | None", limit)
+        )
 
     def update_research_status(
         self,
@@ -264,14 +273,20 @@ class ResearchDelegate:
         result: Any = None,
         duration_ms: int = 0,
     ) -> None:
-        return self._research.save_step(
-            session_id,
-            step_num,
-            action,
-            status,
-            thought,
-            result,
-            duration_ms,
+        # cast(None, ...) keeps the declared None contract (facade also
+        # declares -> None) while forwarding the underlying str return
+        # unchanged, matching pre-typing runtime behavior.
+        return cast(
+            None,
+            self._research.save_step(
+                session_id,
+                step_num,
+                action,
+                status,
+                thought,
+                result,
+                duration_ms,
+            ),
         )
 
     def get_step(self, session_id: str, step_num: int) -> dict | None:

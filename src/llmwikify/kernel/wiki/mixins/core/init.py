@@ -1,7 +1,7 @@
 """Wiki init mixin — directory structure, core files, MCP config, skill files."""
 
 import logging
-from typing import Any
+from typing import Any, cast
 
 from ...protocols import WikiProtocol
 
@@ -46,9 +46,9 @@ class WikiInitMixin(WikiProtocol):
         self, agent: str | None, merge: bool, force: bool
     ) -> dict:
         """Handle initialization when wiki already exists."""
-        created = []
-        skipped = []
-        warnings = []
+        created: list[str] = []
+        skipped: list[str] = []
+        warnings: list[str] = []
 
         existing = []
         if self.raw_dir.exists():
@@ -90,9 +90,9 @@ class WikiInitMixin(WikiProtocol):
         self, agent: str | None, force: bool, merge: bool, overwrite: bool = False
     ) -> dict:
         """Handle initialization for new wiki."""
-        created = []
-        skipped = []
-        warnings = []
+        created: list[str] = []
+        skipped: list[str] = []
+        warnings: list[str] = []
 
         self._create_directories(created, skipped)
         self.index.initialize()
@@ -332,7 +332,10 @@ class WikiInitMixin(WikiProtocol):
     def _generate_wiki_md(self) -> str:
         """Generate wiki.md - LLM agent instructions for wiki maintenance."""
         registry = self._get_prompt_registry()
-        return registry.render_document("wiki_schema", version=self._get_version())
+        return cast(
+            "str",
+            registry.render_document("wiki_schema", version=self._get_version()),
+        )
 
     def _analyze_raw(self) -> dict:
         """Analyze raw/ directory structure for init report.

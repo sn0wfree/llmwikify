@@ -62,7 +62,7 @@ Design refs
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, cast
 
 from llmwikify.apps.chat.skills.actions.analyze_action import analyze_skill
 from llmwikify.apps.chat.skills.actions.plan_action import plan_skill
@@ -82,6 +82,7 @@ from llmwikify.apps.research.runner import (
     ReactConfig,
     ReactLoop,
 )
+from llmwikify.kernel.skills.types import AsyncHandler
 
 logger = logging.getLogger(__name__)
 
@@ -124,7 +125,7 @@ async def _act_plan(args: dict, ctx: SkillContext) -> SkillResult:
     if not query:
         return SkillResult.fail("query is required for plan")
     # Delegate to Phase 5's plan action
-    r = await plan_skill.actions["plan"].handler(
+    r = await cast("AsyncHandler", plan_skill.actions["plan"].handler)(
         {"query": query},
         ctx,
     )
@@ -173,7 +174,7 @@ async def _act_gather(args: dict, ctx: SkillContext) -> SkillResult:
         gather_skill as _gather,
     )
 
-    r = await _gather.actions["gather_for_research"].handler(
+    r = await cast("AsyncHandler", _gather.actions["gather_for_research"].handler)(
         {
             "sub_queries": ungathered,
             "sources": state.get("sources", []),
@@ -236,7 +237,7 @@ async def _act_analyze(args: dict, ctx: SkillContext) -> SkillResult:
     for s in sources:
         if s.get("analysis"):
             continue
-        r = await analyze_skill.actions["analyze"].handler(
+        r = await cast("AsyncHandler", analyze_skill.actions["analyze"].handler)(
             {"source_path": s.get("url", ""), "force": False},
             ctx,
         )
@@ -251,7 +252,7 @@ async def _act_synthesize(args: dict, ctx: SkillContext) -> SkillResult:
     state = args
     state["phase"] = "synthesizing"
     sources = state.get("sources", [])
-    r = await summarize_skill.actions["summarize"].handler(
+    r = await cast("AsyncHandler", summarize_skill.actions["summarize"].handler)(
         {"sources": sources},
         ctx,
     )
@@ -277,7 +278,7 @@ async def _act_score(args: dict, ctx: SkillContext) -> SkillResult:
     text = synthesis.get("narrative", "")
     if not text:
         return SkillResult.fail("no synthesis narrative to score")
-    r = await score_skill.actions["score"].handler(
+    r = await cast("AsyncHandler", score_skill.actions["score"].handler)(
         {"text": text},
         ctx,
     )
@@ -302,7 +303,7 @@ async def _act_revise(args: dict, ctx: SkillContext) -> SkillResult:
     text = synthesis.get("narrative", "")
     if score >= 0.5:
         return SkillResult.ok({"_skipped": True, "score": score})
-    r = await revise_skill.actions["revise"].handler(
+    r = await cast("AsyncHandler", revise_skill.actions["revise"].handler)(
         {"text": text, "score": score},
         ctx,
     )
@@ -333,7 +334,7 @@ async def _act_report(args: dict, ctx: SkillContext) -> SkillResult:
         report_skill as _report,
     )
 
-    r = await _report.actions["generate_report"].handler(
+    r = await cast("AsyncHandler", _report.actions["generate_report"].handler)(
         {
             "query": state.get("query", "Research Report"),
             "synthesis": state.get("synthesis"),
@@ -505,7 +506,7 @@ def _make_research_config(args: dict, ctx: SkillContext) -> ReactConfig:
     # binding).
     from llmwikify.apps.chat.skills.base import SkillAction
 
-    def _wrap(name: str, fn: Any) -> SkillAction:
+    def _wrap(name: str, fn: AsyncHandler) -> SkillAction:
         async def handler(args: dict, ctx: SkillContext) -> SkillResult:
             return await fn(args, ctx)
 

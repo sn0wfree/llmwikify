@@ -28,7 +28,11 @@ identified in the 2026-06-19 audit.
 from __future__ import annotations
 
 import logging
-from typing import Any
+from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from llmwikify.apps.wiki_db import WikiDatabase
 
 logger = logging.getLogger(__name__)
 
@@ -40,11 +44,11 @@ class WikiDelegate:
     1-line forwarders.
     """
 
-    def __init__(self, data_dir) -> None:
+    def __init__(self, data_dir: Path | str) -> None:
         self._data_dir = data_dir
 
     @property
-    def _wiki(self) -> Any:
+    def _wiki(self) -> WikiDatabase:
         """Lazy WikiDatabase instance."""
         if not hasattr(self, "_wiki_db"):
             from llmwikify.apps.wiki_db import WikiDatabase

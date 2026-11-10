@@ -25,10 +25,11 @@ Async support (Phase 3.5 / v0.36):
 from __future__ import annotations
 
 import asyncio
+import builtins
 import json
 import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from llmwikify.apps.db import AppDatabase
 from llmwikify.foundation.io import read_json
@@ -89,9 +90,12 @@ class ConversationStore:
         limit: int | None = None,
     ) -> list[dict]:
         """List messages in a session (chronological order)."""
-        return self.db.get_chat_messages(
-            session_id,
-            limit=limit if limit is not None else 50,
+        return cast(
+            "list[dict]",
+            self.db.get_chat_messages(
+                session_id,
+                limit=limit if limit is not None else 50,
+            ),
         )
 
     def search(
@@ -99,7 +103,7 @@ class ConversationStore:
         session_id: str,
         query: str,
         limit: int = 10,
-    ) -> list[dict]:
+    ) -> builtins.list[dict]:
         """Search messages by content substring."""
         messages = self.list(session_id)
         results = [m for m in messages if query.lower() in m.get("content", "").lower()]
@@ -112,27 +116,30 @@ class ConversationStore:
         session_id: str,
         role: str,
         content: str,
-        tool_calls: list | None = None,
+        tool_calls: builtins.list | None = None,
     ) -> str:
         """Async variant of ``add`` (Phase 3.5 / v0.36)."""
-        return await _run_sync(self.add, session_id, role, content, tool_calls)
+        return cast("str", await _run_sync(self.add, session_id, role, content, tool_calls))
 
     async def alist(
         self,
         session_id: str,
         limit: int | None = None,
-    ) -> list[dict]:
+    ) -> builtins.list[dict]:
         """Async variant of ``list`` (Phase 3.5 / v0.36)."""
-        return await _run_sync(self.list, session_id, limit)
+        return cast(
+            "list[dict]",
+            await _run_sync(self.list, session_id, limit),
+        )
 
     async def asearch(
         self,
         session_id: str,
         query: str,
         limit: int = 10,
-    ) -> list[dict]:
+    ) -> builtins.list[dict]:
         """Async variant of ``search`` (Phase 3.5 / v0.36)."""
-        return await _run_sync(self.search, session_id, query, limit)
+        return cast("list[dict]", await _run_sync(self.search, session_id, query, limit))
 
 
 class KnowledgeStore:
@@ -156,14 +163,14 @@ class KnowledgeStore:
         """Read a knowledge page from the wiki."""
         if not self.wiki.is_initialized():
             return None
-        return self.wiki.read_page(page_name)
+        return cast("str | None", self.wiki.read_page(page_name))
 
     def search(self, query: str, limit: int = 10) -> list[dict]:
         """Search the wiki for pages matching query."""
         if not self.wiki.is_initialized():
             return []
         try:
-            results = self.wiki.search_pages(query, limit=limit)
+            results: list[dict] = self.wiki.search_pages(query, limit=limit)
             return results
         except AttributeError:
             return []
@@ -213,7 +220,7 @@ class ContextStore:
     ) -> list[dict]:
         """List context entries for a session."""
         if entry_type:
-            rows = self.db._mgr.select_all(
+            rows: list[dict] = self.db._mgr.select_all(
                 """SELECT * FROM context_entries
                    WHERE session_id = ? AND entry_type = ?
                    ORDER BY created_at DESC
@@ -236,7 +243,7 @@ class ContextStore:
             "DELETE FROM context_entries WHERE session_id = ?",
             (session_id,),
         )
-        return cursor.rowcount
+        return cast("int", cursor.rowcount)
 
     # ── async wrappers (Phase 3.5 / v0.36) ───────────────────
 
@@ -248,12 +255,15 @@ class ContextStore:
         metadata: dict | None = None,
     ) -> str:
         """Async variant of ``add`` (Phase 3.5 / v0.36)."""
-        return await _run_sync(
-            self.add,
-            session_id,
-            entry_type,
-            content,
-            metadata,
+        return cast(
+            "str",
+            await _run_sync(
+                self.add,
+                session_id,
+                entry_type,
+                content,
+                metadata,
+            ),
         )
 
     async def alist(
@@ -261,18 +271,21 @@ class ContextStore:
         session_id: str,
         entry_type: str | None = None,
         limit: int = 50,
-    ) -> list[dict]:
+    ) -> builtins.list[dict]:
         """Async variant of ``list`` (Phase 3.5 / v0.36)."""
-        return await _run_sync(
-            self.list,
-            session_id,
-            entry_type,
-            limit,
+        return cast(
+            "list[dict]",
+            await _run_sync(
+                self.list,
+                session_id,
+                entry_type,
+                limit,
+            ),
         )
 
     async def aclear(self, session_id: str) -> int:
         """Async variant of ``clear`` (Phase 3.5 / v0.36)."""
-        return await _run_sync(self.clear, session_id)
+        return cast("int", await _run_sync(self.clear, session_id))
 
 
 class ReActStateStore:
@@ -297,7 +310,7 @@ class ReActStateStore:
 
     def load(self, session_id: str, step_num: int) -> dict | None:
         """Load a research state snapshot."""
-        return self.db.load_research_state(session_id, step_num)
+        return cast("dict | None", self.db.load_research_state(session_id, step_num))
 
     def latest(self, session_id: str) -> dict | None:
         """Load the most recent research state."""
@@ -322,7 +335,7 @@ class UserPreferenceStore:
             self._prefs_file.write_text("{}", encoding="utf-8", newline="\n")
 
     def _load(self) -> dict:
-        return read_json(self._prefs_file, {})
+        return cast("dict", read_json(self._prefs_file, {}))
 
     def _save(self, prefs: dict) -> None:
         self._prefs_file.write_text(json.dumps(prefs, indent=2), encoding="utf-8", newline="\n")
@@ -339,7 +352,7 @@ class UserPreferenceStore:
         self._save(prefs)
 
     def all(self, user_id: str) -> dict:
-        return self._load().get(user_id, {})
+        return cast("dict", self._load().get(user_id, {}))
 
     # ── async wrappers (Phase 3.5 / v0.36) ───────────────────
 
@@ -350,7 +363,7 @@ class UserPreferenceStore:
         await _run_sync(self.set, user_id, key, value)
 
     async def aall(self, user_id: str) -> dict:
-        return await _run_sync(self.all, user_id)
+        return cast("dict", await _run_sync(self.all, user_id))
 
 
 class MemoryIndex:
@@ -434,7 +447,10 @@ class MemoryIndex:
         limit: int = 10,
     ) -> list[dict]:
         """Async variant of ``search`` (Phase 3.5 / v0.36)."""
-        return await _run_sync(self.search, query, session_id, limit)
+        return cast(
+            "list[dict]",
+            await _run_sync(self.search, query, session_id, limit),
+        )
 
 
 class MemoryManager:

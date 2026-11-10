@@ -5,7 +5,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
+from fastapi.responses import FileResponse
 
 from llmwikify.interfaces.server.http._models import WikiWritePageRequest
 from llmwikify.interfaces.server.http.wiki._common import (
@@ -25,7 +26,9 @@ from llmwikify.kernel.multi_wiki.registry import WikiRegistry
 logger = logging.getLogger(__name__)
 
 
-def _get_wiki_db_and_id(registry: WikiRegistry, wiki_id: str | None = None):
+def _get_wiki_db_and_id(
+    registry: WikiRegistry, wiki_id: str | None = None
+) -> tuple[Any, str | None]:
     """获取 WikiDB 实例和 wiki_id（用于 token 操作）。
 
     Raises:
@@ -61,7 +64,7 @@ def _parse_write_page_body(raw: Any) -> WikiWritePageRequest:
         raise HTTPException(status_code=400, detail=str(e)) from None
 
 
-def register_wiki_routes(app, registry: WikiRegistry) -> None:
+def register_wiki_routes(app: FastAPI, registry: WikiRegistry) -> None:
     """注册默认 wiki + Wiki-ID 路由。"""
     get_wiki, get_wiki_by_id = create_wiki_dependency(registry)
 
@@ -70,28 +73,28 @@ def register_wiki_routes(app, registry: WikiRegistry) -> None:
     wiki_router = APIRouter(prefix="/api/wiki", tags=["wiki"])
 
     @wiki_router.get("/status")
-    async def wiki_status(wiki: Wiki = Depends(get_wiki)):  # noqa -> Any: B008
+    async def wiki_status(wiki: Wiki = Depends(get_wiki)) -> dict[str, Any]:  # noqa -> Any: B008
         """Get wiki status summary."""
         return enrich_status(wiki.status())
 
     @wiki_router.get("/search")
     async def wiki_search(
         q: str, limit: int = 10, backend: str = "fts5", wiki: Wiki = Depends(get_wiki)
-    ):  # noqa -> Any: B008
+    ) -> list[Any]:  # noqa -> Any: B008
         """Full-text search across wiki pages."""
         return wiki.search(q, limit, backend=backend)
 
     @wiki_router.get("/page/{page_name:path}")
     async def wiki_read_page(
         page_name: str, wiki: Wiki = Depends(get_wiki)
-    ):  # noqa -> Any: B008
+    ) -> dict[str, Any]:  # noqa -> Any: B008
         """Read a wiki page."""
         return read_page_with_sink(wiki, page_name)
 
     @wiki_router.post("/page")
     async def wiki_write_page(
         request: Request, wiki: Wiki = Depends(get_wiki)
-    ):  # noqa -> Any: B008
+    ) -> dict[str, Any]:  # noqa -> Any: B008
         """Write a wiki page."""
         body = _parse_write_page_body(await request.json())
         # v0.40: confirm_token resolution — query string > POST body.
@@ -121,12 +124,12 @@ def register_wiki_routes(app, registry: WikiRegistry) -> None:
         )
 
     @wiki_router.get("/guide")
-    async def wiki_guide(wiki: Wiki = Depends(get_wiki)):  # noqa -> Any: B008
+    async def wiki_guide(wiki: Wiki = Depends(get_wiki)) -> dict[str, Any]:  # noqa -> Any: B008
         """Get wiki guide: schema, overview, index, and API usage instructions."""
         return get_wiki_guide(wiki)
 
     @wiki_router.get("/sink/status")
-    async def wiki_sink_status(wiki: Wiki = Depends(get_wiki)):  # noqa -> Any: B008
+    async def wiki_sink_status(wiki: Wiki = Depends(get_wiki)) -> dict[str, Any]:  # noqa -> Any: B008
         """Get sink buffer status."""
         return wiki.sink_status()
 
@@ -136,19 +139,19 @@ def register_wiki_routes(app, registry: WikiRegistry) -> None:
         limit: int = 10,
         force: bool = False,
         wiki: Wiki = Depends(get_wiki),  # noqa: B008
-    ):
+    ) -> dict[str, Any]:
         """Health-check the wiki."""
         return wiki.lint(mode=mode, limit=limit, force=force)
 
     @wiki_router.get("/recommend")
-    async def wiki_recommend(wiki: Wiki = Depends(get_wiki)):  # noqa -> Any: B008
+    async def wiki_recommend(wiki: Wiki = Depends(get_wiki)) -> dict[str, Any]:  # noqa -> Any: B008
         """Get wiki recommendations."""
         return wiki.recommend()
 
     @wiki_router.get("/suggest_synthesis")
     async def wiki_suggest_synthesis(
         source_name: str | None = None, wiki: Wiki = Depends(get_wiki)
-    ):  # noqa -> Any: B008
+    ) -> dict[str, Any]:  # noqa -> Any: B008
         """Get cross-source synthesis suggestions."""
         return wiki.suggest_synthesis(source_name=source_name)
 
@@ -158,7 +161,7 @@ def register_wiki_routes(app, registry: WikiRegistry) -> None:
     @wiki_router.get("/graph_analyze")
     def wiki_graph_analyze(
         force: bool = False, wiki: Wiki = Depends(get_wiki)
-    ):  # noqa -> Any: B008
+    ) -> dict[str, Any]:  # noqa -> Any: B008
         """Analyze knowledge graph structure (cached; force=1 to recompute)."""
         return wiki.graph_analyze(force=force)
 
@@ -167,7 +170,7 @@ def register_wiki_routes(app, registry: WikiRegistry) -> None:
         current_page: str | None = None,
         mode: str = "auto",
         wiki: Wiki = Depends(get_wiki),  # noqa: B008
-    ):
+    ) -> dict[str, Any]:
         """Return graph data optimized for visualization."""
         from llmwikify.kernel.graph.visualizer import build_visualization_data
 
@@ -176,7 +179,7 @@ def register_wiki_routes(app, registry: WikiRegistry) -> None:
     @wiki_router.get("/file/{path:path}")
     async def wiki_serve_file(
         path: str, wiki: Wiki = Depends(get_wiki)
-    ):  # noqa -> Any: B008
+    ) -> FileResponse:  # noqa -> Any: B008
         """Serve a raw file from the wiki root (PDF, markdown, source)."""
         return _serve_wiki_file(wiki.root, path)
 
@@ -253,7 +256,7 @@ def register_wiki_routes(app, registry: WikiRegistry) -> None:
         mode: str = "check",
         limit: int = 10,
         force: bool = False,
-    ):
+    ) -> dict[str, Any]:
         """Health-check a specific wiki."""
         with wiki_or_404(registry, wiki_id) as wiki:
             return wiki.lint(mode=mode, limit=limit, force=force)
@@ -269,7 +272,7 @@ def register_wiki_routes(app, registry: WikiRegistry) -> None:
         wiki_id: str,
         current_page: str | None = None,
         mode: str = "auto",
-    ):
+    ) -> dict[str, Any]:
         """Get graph data for a specific wiki."""
         with wiki_or_404(registry, wiki_id) as wiki:
             from llmwikify.kernel.graph.visualizer import build_visualization_data

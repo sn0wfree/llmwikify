@@ -83,6 +83,13 @@ class WikiProtocol:
 
     def _build_merge_notice(self, new_content: str, existing_content: str) -> str: ...  # type: ignore[empty-body]
 
+    # Methods - wiki.md schema (implemented in wiki.py, used by core/init mixin)
+    def _get_wiki_md_content(self) -> str: ...  # type: ignore[empty-body]
+
+    def _write_wiki_md_content(self, content: str) -> None: ...  # type: ignore[empty-body]
+
+    def _merge_wiki_md_content(self, existing: str, new: str) -> str: ...  # type: ignore[empty-body]
+
     # Methods - Core operations
     def append_log(self, operation: str, details: str) -> dict[str, Any]: ...  # type: ignore[empty-body]
 

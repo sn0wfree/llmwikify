@@ -11,6 +11,8 @@ engine.py refactoring plan — see docs/refactoring-engine-py.md).
 from __future__ import annotations
 
 import logging
+from collections.abc import AsyncIterator, Callable
+from contextlib import nullcontext
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -48,15 +50,23 @@ def tracked(action_name: str) -> Any:
             ...  # body unchanged, no indentation bump
     """
 
-    def decorator(fn) -> Any:
-        async def wrapper(ctx: ActionContext, state: ResearchState) -> None:
-            with ctx.metrics.record(action_name):
+    def decorator(
+        fn: Callable[[ActionContext, ResearchState], AsyncIterator[dict[str, Any]]],
+    ) -> Any:
+        async def wrapper(
+            ctx: ActionContext, state: ResearchState
+        ) -> AsyncIterator[dict[str, Any]]:
+            metrics_cm = (
+                ctx.metrics.record(action_name) if ctx.metrics else nullcontext()
+            )
+            with metrics_cm:
                 async for event in fn(ctx, state):
                     yield event
 
         wrapper.__name__ = fn.__name__
         wrapper.__doc__ = fn.__doc__
-        wrapper.__wrapped__ = fn
+        # Direct assignment trips mypy attr-defined; setattr trips ruff B010.
+        wrapper.__dict__["__wrapped__"] = fn
         return wrapper
 
     return decorator
@@ -308,7 +318,7 @@ def synthesis_to_text(synthesis: dict | None) -> str:
 async def action_clarify(
     ctx: ActionContext,
     state: ResearchState,
-):
+) -> AsyncIterator[dict[str, Any]]:
     """6-step step 1: clarify research context, boundaries, position, premises.
 
     Runs only when clarify_enabled (default true) and not on resume. The
@@ -395,7 +405,7 @@ async def action_clarify(
 async def action_plan(
     ctx: ActionContext,
     state: ResearchState,
-):
+) -> AsyncIterator[dict[str, Any]]:
     """Plan sub-queries (initial or replanning for gaps)."""
     _warn_invalid_transition(state.phase, "planning")
 
@@ -447,7 +457,7 @@ async def action_plan(
 async def action_gather(
     ctx: ActionContext,
     state: ResearchState,
-):
+) -> AsyncIterator[dict[str, Any]]:
     """Gather sources for ungathered or failed sub-queries."""
     _warn_invalid_transition(state.phase, "gathering")
 
@@ -523,7 +533,7 @@ async def action_gather(
 async def action_analyze(
     ctx: ActionContext,
     state: ResearchState,
-):
+) -> AsyncIterator[dict[str, Any]]:
     """Analyze unanalyzed sources."""
     _warn_invalid_transition(state.phase, "analyzing")
 
@@ -555,7 +565,7 @@ async def action_analyze(
 async def action_synthesize(
     ctx: ActionContext,
     state: ResearchState,
-):
+) -> AsyncIterator[dict[str, Any]]:
     """Synthesize findings from analyzed sources."""
     _warn_invalid_transition(state.phase, "synthesizing")
 
@@ -622,7 +632,7 @@ async def action_synthesize(
 async def action_report(
     ctx: ActionContext,
     state: ResearchState,
-):
+) -> AsyncIterator[dict[str, Any]]:
     """Generate research report."""
     _warn_invalid_transition(state.phase, "reporting")
 
@@ -733,7 +743,7 @@ async def action_report(
 async def action_review(
     ctx: ActionContext,
     state: ResearchState,
-):
+) -> AsyncIterator[dict[str, Any]]:
     """Review report quality."""
     _warn_invalid_transition(state.phase, "reviewing")
 
@@ -801,7 +811,7 @@ async def action_review(
 async def action_revise(
     ctx: ActionContext,
     state: ResearchState,
-):
+) -> AsyncIterator[dict[str, Any]]:
     """Revise report based on review feedback."""
     _warn_invalid_transition(state.phase, "revise")
 
@@ -844,7 +854,7 @@ async def action_revise(
 async def action_done(
     ctx: ActionContext,
     state: ResearchState,
-):
+) -> AsyncIterator[dict[str, Any]]:
     """Finalize research session."""
     _warn_invalid_transition(state.phase, "done")
 
@@ -915,7 +925,7 @@ async def _action_incomplete_impl(
     ctx: ActionContext,
     state: ResearchState,
     reason: str = "",
-):
+) -> AsyncIterator[dict[str, Any]]:
     """Implementation of action_incomplete (no @tracked wrapper)."""
     _warn_invalid_transition(state.phase, "incomplete")
 
@@ -1019,7 +1029,7 @@ async def action_incomplete(
     ctx: ActionContext,
     state: ResearchState,
     reason: str = "",
-):
+) -> AsyncIterator[dict[str, Any]]:
     """Mark session as incomplete (framework compliance gate failed, no budget).
 
     Distinct from action_done: the 6-step framework is NOT fully run,
@@ -1034,8 +1044,6 @@ async def action_incomplete(
     signature) because this action takes a custom 'reason' arg.
     Metrics are recorded manually if ctx.metrics is available.
     """
-    from contextlib import nullcontext
-
     metrics_cm = ctx.metrics.record("incomplete") if ctx.metrics else nullcontext()
     with metrics_cm:
         async for ev in _action_incomplete_impl(ctx, state, reason):

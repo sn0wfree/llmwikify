@@ -46,12 +46,26 @@
 
 | 批 | 范围 | 错误数 | 累计 | 备注 |
 |---|---|---:|---:|---|
-| 1 | top 10 文件 | 222 | 31% | `research_delegate` 33（32 条机械）· `runner_v2` 33 · `research/runner` 27 |
+| 1 | top 10 文件 | 222 | 31% | ✅ **2026-11-10 完成**：摘豁免后修至 0；全量 702→约 61 错（含级联收益） |
 | 2 | top 11–30 | 184 | 46% | 含 `composite.py` 12 条 `override`（hook 协议对齐，一次修完） |
 | 3 | top 31–80 | 205 | 73% | 分 2–3 个 commit |
 | 4 | 其余 67 文件长尾 | 91 | 100% | 单文件多为 1–2 错 |
 
 **节奏**：每批 = 从豁免清单摘除该批模块 → 修到 0 → `mypy` 复验 → 独立 commit（可单独回滚）。任一批修不完就停在该批，清单保持可回滚状态。
+
+### 批 1 完成记录（2026-11-10）
+
+| 文件 | 修法要点 |
+|---|---|
+| `chat_db/{research,wiki}_delegate` | 惰性 property `-> Any` 改 `TYPE_CHECKING` 真类型 |
+| `chat/agent/runner_v2` | async gen 标注；`_maybe_await(fn, *args)` 调 hook |
+| `research/runner` | `_state: Any` 显式注解 |
+| `chat/memory` | 方法名 `list` 遮蔽 → `builtins.list[...]` |
+| `chat/skills/research_skill` | handler cast 为 AsyncHandler |
+| `wiki/service` | `ConfigManager \| None` + narrow |
+| `wiki_routes` / `research/actions` | 路由返回类型；`AsyncIterator`；`AbstractContextManager` |
+| `mixins/core/init` | 跨 mixin 方法补 `WikiProtocol` 桩 |
+| `research/state` | `_cached_source_count` 字段 + `record` 返回 CM 类型 |
 
 ## 5. Top 30 文件
 

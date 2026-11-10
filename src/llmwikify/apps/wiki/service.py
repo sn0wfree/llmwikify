@@ -24,7 +24,10 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
+
+if TYPE_CHECKING:
+    from llmwikify.apps.config_manager import ConfigManager
 
 logger = logging.getLogger(__name__)
 
@@ -71,13 +74,13 @@ class WikiService:
         self._tool_registries: dict[str, Any] = {}
 
         # LLM lazy init
-        self._llm = None
-        self._config_manager = None
+        self._llm: Any = None
+        self._config_manager: ConfigManager | None = None
 
     # ─── Wiki resolution ─────────────────────────────────────────
 
     def get_default_wiki_id(self) -> str | None:
-        return self.wiki_registry.get_default_wiki_id()
+        return cast("str | None", self.wiki_registry.get_default_wiki_id())
 
     def get_wiki(self, wiki_id: str | None = None) -> Any:
         if wiki_id:
@@ -214,7 +217,7 @@ class WikiService:
         if not wiki_id:
             return {"status": "error", "error": "No wiki_id available"}
         editor = self._get_wiki_dream_editor(wiki_id)
-        result = editor.run_wiki_dream()
+        result: dict = editor.run_wiki_dream()
         if result.get("pending_review", 0) > 0:
             nm = self._get_notification_manager(wiki_id)
             nm.add(
@@ -231,7 +234,7 @@ class WikiService:
         if not wiki_id:
             return []
         editor = self._get_wiki_dream_editor(wiki_id)
-        return editor.get_wiki_dream_edit_log(limit)
+        return cast("list[dict]", editor.get_wiki_dream_edit_log(limit))
 
     def get_wiki_dream_proposals(self, wiki_id: str | None = None) -> dict:
         wiki_id = wiki_id or self.get_default_wiki_id()
@@ -245,14 +248,14 @@ class WikiService:
 
     def approve_wiki_dream_proposal(self, proposal_id: str) -> dict:
         for editor in self._wiki_dream_editors.values():
-            p = editor.proposal_manager.approve(proposal_id)
+            p: dict | None = editor.proposal_manager.approve(proposal_id)
             if p:
                 return p
         return {"status": "error", "error": "Proposal not found"}
 
     def reject_wiki_dream_proposal(self, proposal_id: str) -> dict:
         for editor in self._wiki_dream_editors.values():
-            p = editor.proposal_manager.reject(proposal_id)
+            p: dict | None = editor.proposal_manager.reject(proposal_id)
             if p:
                 return p
         return {"status": "error", "error": "Proposal not found"}
@@ -286,7 +289,7 @@ class WikiService:
         if not wiki_id:
             return {"status": "error", "error": "No wiki_id available"}
         editor = self._get_wiki_dream_editor(wiki_id)
-        result = editor.apply_wiki_dream_proposals(proposal_ids)
+        result: dict = editor.apply_wiki_dream_proposals(proposal_ids)
         if result.get("applied", 0) > 0:
             nm = self._get_notification_manager(wiki_id)
             nm.add(
@@ -306,8 +309,8 @@ class WikiService:
             return []
         nm = self._get_notification_manager(wiki_id)
         if unread_only:
-            return nm.list_unread()
-        return nm.list_all()
+            return cast("list[dict]", nm.list_unread())
+        return cast("list[dict]", nm.list_all())
 
     def mark_notification_read(self, notification_id: str) -> dict:
         for nm in self._notification_managers.values():
@@ -322,7 +325,7 @@ class WikiService:
         if not wiki_id:
             return {}
         registry = self.get_tool_registry(wiki_id)
-        return registry.get_pending_by_group()
+        return cast("dict[str, list[dict]]", registry.get_pending_by_group())
 
     async def approve_confirmation(
         self,
@@ -345,7 +348,7 @@ class WikiService:
                 "Failed to fetch confirmation %s", confirmation_id, exc_info=True
             )
         registry = self.get_tool_registry(wiki_id)
-        result = registry.confirm_execution(confirmation_id, arguments=arguments)
+        result: dict = registry.confirm_execution(confirmation_id, arguments=arguments)
         # v0.40: if response="always", save permission for future auto-approval
         if response == "always" and tool_name and result.get("status") != "error":
             self.db.save_permission(
@@ -363,7 +366,7 @@ class WikiService:
         if not wiki_id:
             return {"status": "error", "error": "No wiki_id available"}
         registry = self.get_tool_registry(wiki_id)
-        return registry.reject_execution(confirmation_id)
+        return cast("dict", registry.reject_execution(confirmation_id))
 
     async def batch_approve_confirmations(
         self,
@@ -383,10 +386,10 @@ class WikiService:
         wiki_id = wiki_id or self.get_default_wiki_id()
         if not wiki_id:
             return []
-        return self.db.get_ingest_log(wiki_id, limit)
+        return cast("list[dict]", self.db.get_ingest_log(wiki_id, limit))
 
     def get_ingest_entry(self, ingest_id: str) -> dict | None:
-        return self.db.get_ingest_entry(ingest_id)
+        return cast("dict | None", self.db.get_ingest_entry(ingest_id))
 
     # ─── Status (1 method) ───────────────────────────────────────
 

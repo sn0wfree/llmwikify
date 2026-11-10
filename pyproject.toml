@@ -82,9 +82,10 @@ include = "\\.pyi?$"
 # 实测: 豁免下 140 错 / 34 文件; 关闭本段全量 702 错 / 147 文件。
 # 2026-10-14 记录的 681 错 / 138 文件已过期; 21 个迁移后失效的模块名
 # (apps/chat/db -> apps/chat_db 等) 与 4 个已带类型信息的三方包条目
-# 已按 mypy unused-section 报告删除。TODO: 逐模块收紧后从此清单移出;
-# 新增文件不在清单内 → 默认全严格检查。复测方法见
-# docs/diagnostics/feature-completeness-2026-11.md。
+# 已按 mypy unused-section 报告删除。
+# T59 批1 (2026-11-10): 摘除 top10 模块豁免并修至 0 —— 全量现约
+# 61 错 / 30 文件 (mypy-baseline-2026-11.md §4)。TODO: 逐模块收紧后
+# 从此清单移出; 新增文件不在清单内 → 默认全严格检查。
 [[tool.mypy.overrides]]
 module = [
     "llmwikify.apps.agent.maintenance.auto_ingest",
@@ -97,7 +98,6 @@ module = [
     "llmwikify.apps.chat.agent.context_manager",
     "llmwikify.apps.chat.agent.event_log",
     "llmwikify.apps.chat.agent.orchestrator",
-    "llmwikify.apps.chat.agent.runner_v2",
     "llmwikify.apps.chat.agent.session_manager",
     "llmwikify.apps.chat.agent.subagent_manager",
     "llmwikify.apps.chat.agent.tool_executor",
@@ -107,7 +107,6 @@ module = [
     "llmwikify.apps.chat.db_migrations",
     "llmwikify.apps.chat.eval_harness",
     "llmwikify.apps.chat.harness.service",
-    "llmwikify.apps.chat.memory",
     "llmwikify.apps.chat.memory.consolidation_store",
     "llmwikify.apps.chat.memory.dream",
     "llmwikify.apps.chat.memory.dream_scheduler",
@@ -118,13 +117,11 @@ module = [
     "llmwikify.apps.chat.skills.pipelines.gather_skill",
     "llmwikify.apps.chat.skills.pipelines.ingest_skill",
     "llmwikify.apps.chat.skills.plugin_loader",
-    "llmwikify.apps.chat.skills.research_skill",
     "llmwikify.apps.chat.skills.runtime",
     "llmwikify.apps.chat.skills.workflows.dag",
     "llmwikify.apps.chat.skills.workflows.executor",
     "llmwikify.apps.chat.skills.workflows.subagent_worker",
     "llmwikify.apps.db_base",
-    "llmwikify.apps.research.actions",
     "llmwikify.apps.research.base",
     "llmwikify.apps.research.engine",
     "llmwikify.apps.research.observer",
@@ -132,7 +129,6 @@ module = [
     "llmwikify.apps.research.report",
     "llmwikify.apps.research.routes",
     "llmwikify.apps.wiki.db",
-    "llmwikify.apps.wiki.service",
     "llmwikify.foundation.auth._jwt",
     "llmwikify.foundation.auth.db",
     "llmwikify.foundation.auth.prompt",
@@ -165,7 +161,6 @@ module = [
     "llmwikify.interfaces.server.http.wiki.log_routes",
     "llmwikify.interfaces.server.http.wiki.registry_routes",
     "llmwikify.interfaces.server.http.wiki.search_routes",
-    "llmwikify.interfaces.server.http.wiki.wiki_routes",
     "llmwikify.interfaces.server.utils.webui",
     "llmwikify.kernel.agent._core_types",
     "llmwikify.kernel.agent.context",
@@ -195,7 +190,6 @@ module = [
     "llmwikify.kernel.wiki.mixins.analysis.llm",
     "llmwikify.kernel.wiki.mixins.analysis.query",
     "llmwikify.kernel.wiki.mixins.analysis.status",
-    "llmwikify.kernel.wiki.mixins.core.init",
     "llmwikify.kernel.wiki.mixins.core.schema",
     "llmwikify.kernel.wiki.mixins.core.utility",
     "llmwikify.kernel.wiki.mixins.io.ingest",
