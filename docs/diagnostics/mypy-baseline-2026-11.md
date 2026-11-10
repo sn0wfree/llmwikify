@@ -47,7 +47,7 @@
 | 批 | 范围 | 错误数 | 累计 | 备注 |
 |---|---|---:|---:|---|
 | 1 | top 10 文件 | 222 | 31% | ✅ **2026-11-10 完成**：摘豁免后修至 0；全量 702→约 61 错（含级联收益） |
-| 2 | top 11–30 | 184 | 46% | 含 `composite.py` 12 条 `override`（hook 协议对齐，一次修完） |
+| 2 | top 11–30 | 184 | 46% | **进行中**：20 模块，含 `composite.py` 12 条 `override`（方案 A：基类返回 `Awaitable\|None`） |
 | 3 | top 31–80 | 205 | 73% | 分 2–3 个 commit |
 | 4 | 其余 67 文件长尾 | 91 | 100% | 单文件多为 1–2 错 |
 
@@ -66,6 +66,35 @@
 | `wiki_routes` / `research/actions` | 路由返回类型；`AsyncIterator`；`AbstractContextManager` |
 | `mixins/core/init` | 跨 mixin 方法补 `WikiProtocol` 桩 |
 | `research/state` | `_cached_source_count` 字段 + `record` 返回 CM 类型 |
+
+### 批 2 计划（2026-11-10 开工）
+
+**范围**：基线 top 11–30 共 20 模块，约 184 错。开工前先摘 `pyproject.toml` 对应 `ignore_errors`。
+
+| 组 | 模块 | 错约 | 修法要点 |
+|---|---|---:|---|
+| A 协议对齐 | `foundation.callback.composite` | 12 | **方案 A**：`AgentHook` 各钩子返回 `Awaitable[None] \| None`（`finalize_content` → `Awaitable[str \| None] \| str \| None`），同步/异步子类均合法，消 12 条 `override`；`CompositeHook` 的 `async def` 保持不变 |
+| A 协议对齐 | `kernel.wiki.protocols` | 9 | 清理批 1 引入的多余 `unused-ignore`（桩若已解析则删 `type: ignore`） |
+| A 协议对齐 | `kernel.wiki.mixins.core.utility` | 9 | `override` + `no-any-return`，对齐协议后修 |
+| B kernel | `kernel.graph.analyzer` | 12 | `no-untyped-def` 机械补标注 |
+| B kernel | `kernel.wiki.mixins.io.{page_io,source_analysis}` | 22 | `attr-defined` → `WikiProtocol` 桩（批 1 同款） |
+| B kernel | `kernel.wiki.mixins.analysis.{lint,llm}` | 18 | `no-any-return` / `attr-defined` |
+| B kernel | `kernel.storage.watcher` | 9 | 补标注；`import-not-found` 仅对 `watchdog` 可选依赖局部 ignore |
+| B kernel | `kernel.multi_wiki.remote` | 9 | `return-value` 逐条判断 |
+| B kernel | `kernel.codegen.code_tools` | 7 | 可选依赖 stub / 局部 ignore + `attr-defined` |
+| C apps/interfaces | `apps.chat.agent.orchestrator` | 12 | `arg-type`×8 需判断 |
+| C apps/interfaces | `interfaces.server.http.middleware` | 11 | `no-any-return` + 补标注 |
+| C apps/interfaces | `apps.research.engine` | 9 | 补标注 + `arg-type` |
+| C apps/interfaces | `foundation.config` | 8 | `no-any-return` / `index` |
+| C apps/interfaces | `interfaces.server.utils.webui` | 8 | `no-any-return` |
+| C apps/interfaces | `apps.agent.maintenance.auto_ingest` | 8 | `union-attr` / `arg-type` |
+| C apps/interfaces | `foundation.llm.resolver` | 7 | `no-any-return` |
+| C apps/interfaces | `apps.chat.agent.builtin_commands` | 7 | `attr-defined` |
+| C apps/interfaces | `apps.research.reasoner` | 7 | `return-value`×4 |
+
+**约束**：不改运行时行为；不用全局 `ignore_errors` 回退；可选三方依赖允许模块级 `ignore_missing_imports`；修完批内 0 错再 commit。
+
+**验证**：`mypy src/llmwikify` 批内文件 0 错；`ruff check` 改动文件；相关单测；`scripts/check_architecture.py` 0 violation。
 
 ## 5. Top 30 文件
 
@@ -105,9 +134,9 @@
 ## 6. 复现
 
 ```bash
-# 豁免生效
-mypy src/llmwikify                       # 期望 141 错 / 34 文件
+# 豁免生效（批 1 后基线已降；批 2 摘除 20 模块后批内应为 0）
+mypy src/llmwikify
 # 全量（临时配置，不动仓库）
 python -c "import re,pathlib; t=pathlib.Path('pyproject.toml').read_text(encoding='utf-8'); pathlib.Path('/tmp/noexempt.toml').write_text(re.sub(r'(?m)^(ignore_errors = true)\$', r'# \\1', t), encoding='utf-8')"
-mypy --config-file /tmp/noexempt.toml src/llmwikify   # 期望 702 错 / 147 文件
+mypy --config-file /tmp/noexempt.toml src/llmwikify
 ```
