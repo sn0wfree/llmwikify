@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, cast
 
 
 class NotificationManager:
@@ -53,12 +53,18 @@ class NotificationManager:
 
     def list_unread(self) -> list[dict[str, Any]]:
         if self.db and self.wiki_id:
-            return self.db.list_notifications(self.wiki_id, unread_only=True)
+            return cast(
+                list[dict[str, Any]],
+                self.db.list_notifications(self.wiki_id, unread_only=True),
+            )
         return [n for n in self._notifications if not n["read"]]
 
     def list_all(self) -> list[dict[str, Any]]:
         if self.db and self.wiki_id:
-            return self.db.list_notifications(self.wiki_id, unread_only=False)
+            return cast(
+                list[dict[str, Any]],
+                self.db.list_notifications(self.wiki_id, unread_only=False),
+            )
         return list(self._notifications)
 
     def mark_read(self, notification_id: str) -> bool:
@@ -82,7 +88,7 @@ class NotificationManager:
 
     def unread_count(self) -> int:
         if self.db and self.wiki_id:
-            return self.db.get_unread_count(self.wiki_id)
+            return cast(int, self.db.get_unread_count(self.wiki_id))
         return sum(1 for n in self._notifications if not n["read"])
 
     def clear(self) -> None:

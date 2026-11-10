@@ -28,7 +28,7 @@ import json
 import logging
 import sqlite3
 import uuid
-from typing import Any
+from typing import Any, cast
 
 from .base import ChatDBBase
 
@@ -144,7 +144,7 @@ class ChatSessionRepository(ChatDBBase):
             return ""
         stored = session.get("title")
         if stored:
-            return stored
+            return cast(str, stored)
         # Fallback: derive from first user message via the message repo
         # (deferred to ChatDatabase facade to avoid circular import).
         return ""  # facade will derive if needed

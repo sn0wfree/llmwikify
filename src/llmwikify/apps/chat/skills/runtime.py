@@ -53,7 +53,7 @@ logger = logging.getLogger(__name__)
 # ─── input-schema validation ─────────────────────────────────────
 
 
-_PRIM_TYPE_TO_PY = {
+_PRIM_TYPE_TO_PY: dict[str, Any] = {
     "string": str,
     "integer": int,
     "number": (int, float),
@@ -264,7 +264,7 @@ class SkillRuntime:
 
         result = action.handler(args, ctx)
         if inspect.isawaitable(result):
-            result = await result  # type: ignore[assignment]
+            result = await result
 
         # Normalize: handler may return SkillResult or a plain dict.
         if isinstance(result, SkillResult):

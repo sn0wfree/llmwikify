@@ -93,46 +93,31 @@ module = [
     "llmwikify.apps.chat.agent.agent_service",
     "llmwikify.apps.chat.agent.autocompact",
     "llmwikify.apps.chat.agent.bridge_backend",
-    "llmwikify.apps.chat.agent.context_manager",
     "llmwikify.apps.chat.agent.event_log",
-    "llmwikify.apps.chat.agent.session_manager",
-    "llmwikify.apps.chat.agent.subagent_manager",
     "llmwikify.apps.chat.agent.tool_executor",
     "llmwikify.apps.chat.agent.unified.handlers.chat_reasoner",
     "llmwikify.apps.chat.agent.unified.handlers.tool_actor",
     "llmwikify.apps.chat.agent.unified.registry",
-    "llmwikify.apps.chat.db_migrations",
     "llmwikify.apps.chat.eval_harness",
     "llmwikify.apps.chat.harness.service",
     "llmwikify.apps.chat.memory.consolidation_store",
-    "llmwikify.apps.chat.memory.dream",
     "llmwikify.apps.chat.memory.dream_scheduler",
     "llmwikify.apps.chat.memory.facts_store",
-    "llmwikify.foundation.llm.providers.base",
     "llmwikify.apps.chat.skills.actions.detect._base",
     "llmwikify.apps.chat.skills.actions.extract_action",
     "llmwikify.apps.chat.skills.pipelines.gather_skill",
-    "llmwikify.apps.chat.skills.pipelines.ingest_skill",
     "llmwikify.apps.chat.skills.plugin_loader",
     "llmwikify.apps.chat.skills.runtime",
     "llmwikify.apps.chat.skills.workflows.dag",
-    "llmwikify.apps.chat.skills.workflows.executor",
     "llmwikify.apps.chat.skills.workflows.subagent_worker",
     "llmwikify.apps.db_base",
     "llmwikify.apps.research.base",
-    "llmwikify.apps.research.observer",
     "llmwikify.apps.research.report",
-    "llmwikify.apps.research.routes",
     "llmwikify.apps.wiki.db",
-    "llmwikify.foundation.auth._jwt",
     "llmwikify.foundation.auth.db",
-    "llmwikify.foundation.auth.prompt",
-    "llmwikify.foundation.db",
     "llmwikify.foundation.extractors.youtube",
     "llmwikify.foundation.llm",
     "llmwikify.foundation.llm.client",
-    "llmwikify.foundation.llm.streamable",
-    "llmwikify.foundation.llm_client",
     "llmwikify.foundation.migration",
     "llmwikify.foundation.prompts.prompt_registry",
     "llmwikify.interfaces.cli._app",
@@ -140,44 +125,18 @@ module = [
     "llmwikify.interfaces.cli.commands.db",
     "llmwikify.interfaces.cli.commands.help_cmd",
     "llmwikify.interfaces.cli.commands.init_llm_cmd",
-    "llmwikify.interfaces.mcp.adapter",
     "llmwikify.interfaces.server",
-    "llmwikify.interfaces.server.core",
     "llmwikify.interfaces.server.http.agent.sessions",
     "llmwikify.interfaces.server.http.auth_routes",
-    "llmwikify.interfaces.server.http.maintenance_routes",
-    "llmwikify.interfaces.server.http.routes",
     "llmwikify.interfaces.server.http.wiki._common",
-    "llmwikify.interfaces.server.http.wiki._wiki_ops",
     "llmwikify.interfaces.server.http.wiki.log_routes",
     "llmwikify.interfaces.server.http.wiki.registry_routes",
     "llmwikify.interfaces.server.http.wiki.search_routes",
-    "llmwikify.kernel.agent._core_types",
     "llmwikify.kernel.agent.context",
-    "llmwikify.kernel.agent.loop",
     "llmwikify.kernel.agent.steps.code",
-    "llmwikify.kernel.codegen.json_extract",
-    "llmwikify.kernel.graph.export",
-    "llmwikify.kernel.graph.visualizer",
-    "llmwikify.kernel.multi_wiki.registry",
     "llmwikify.kernel.search.qmd_client",
-    "llmwikify.kernel.search.qmd_index",
-    "llmwikify.kernel.storage.backend",
-    "llmwikify.kernel.storage.index",
-    "llmwikify.kernel.storage.jieba_dict_gen",
-    "llmwikify.kernel.storage.query_sink",
-    "llmwikify.kernel.wiki.engines.analyzer",
-    "llmwikify.kernel.wiki.engines.relation",
-    "llmwikify.kernel.wiki.engines.synthesis",
     "llmwikify.kernel.wiki.lint",
-    "llmwikify.kernel.wiki.lint.rules.potential_contradictions",
-    "llmwikify.kernel.wiki.lint.rules.query_page_overlap",
-    "llmwikify.kernel.wiki.mixins.analysis.query",
-    "llmwikify.kernel.wiki.mixins.analysis.status",
-    "llmwikify.kernel.wiki.mixins.core.schema",
-    "llmwikify.kernel.wiki.mixins.io.ingest",
-    "llmwikify.kernel.wiki.mixins.io.link",
-    "llmwikify.kernel.wiki.wiki"
+    "llmwikify.kernel.wiki.lint.rules.potential_contradictions"
 ]
 ignore_errors = true
 
@@ -199,6 +158,33 @@ warn_unused_ignores = true
 [[tool.mypy.overrides]]
 module = [
     "croniter"
+]
+ignore_missing_imports = true
+
+# T59 批3 A 组: 可选三方依赖 (缺失时有 fallback, 见各调用点 try/except)
+[[tool.mypy.overrides]]
+module = [
+    "tiktoken",
+    "markitdown",
+    "trafilatura",
+    "tavily",
+    "ddgs",
+    "apscheduler",
+    "apscheduler.*",
+    "polars",
+    "youtube_transcript_api"
+]
+ignore_missing_imports = true
+
+# T59 批3 B 组: 已安装但无 py.typed/stub 的三方库 (jieba/networkx/pyvis/community)
+[[tool.mypy.overrides]]
+module = [
+    "jieba",
+    "jieba.*",
+    "networkx",
+    "networkx.*",
+    "pyvis.*",
+    "community"
 ]
 ignore_missing_imports = true
 

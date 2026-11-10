@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, cast
 
 logger = logging.getLogger(__name__)
 
@@ -123,7 +123,7 @@ class ResearchSynthesizer:
                 claim = item.get("claim", item.get("statement", str(item)))
                 conf = item.get("confidence", "")
                 count = item.get("confirmed_by_count", 0)
-                parts = [claim]
+                parts = [cast(str, claim)]
                 if conf:
                     parts.append(f"(confidence: {conf})")
                 if count:
@@ -133,12 +133,14 @@ class ResearchSynthesizer:
 
         def _contradiction_str(item: Any) -> str:
             if isinstance(item, dict):
-                return item.get("contradiction", item.get("observation", str(item)))
+                return cast(
+                    str, item.get("contradiction", item.get("observation", str(item)))
+                )
             return str(item)
 
         def _gap_str(item: Any) -> str:
             if isinstance(item, dict):
-                return item.get("gap", item.get("observation", str(item)))
+                return cast(str, item.get("gap", item.get("observation", str(item))))
             return str(item)
 
         def _entity_str(item: Any) -> str:

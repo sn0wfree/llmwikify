@@ -4,6 +4,7 @@ import logging
 import re
 import time
 from pathlib import Path
+from typing import Any
 
 from .....foundation.extractors import extract
 from ...protocols import WikiProtocol
@@ -28,7 +29,7 @@ class WikiIngestMixin(WikiProtocol):
             Section metadata dict with sections, total_words, has_headers, etc.
         """
         lines = content.split("\n")
-        sections = []
+        sections: list[dict[str, Any]] = []
         header_lines = []
 
         for i, line in enumerate(lines):
@@ -69,7 +70,7 @@ class WikiIngestMixin(WikiProtocol):
         Uses heuristics: short lines surrounded by blank lines, or lines
         ending with colon, are treated as implicit headers.
         """
-        sections = []
+        sections: list[dict] = []
         current_section_start = 0
 
         for i, line in enumerate(lines):
@@ -187,7 +188,7 @@ class WikiIngestMixin(WikiProtocol):
     ) -> tuple[str, bool]:
         """Fallback targeted reading by paragraph when no headings exist."""
         paragraphs = []
-        current = []
+        current: list[str] = []
         for line in lines:
             if line.strip() == "" and current:
                 paragraphs.append("\n".join(current))

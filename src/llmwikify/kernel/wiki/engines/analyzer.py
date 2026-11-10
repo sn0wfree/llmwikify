@@ -11,7 +11,7 @@ import json
 import logging
 import re
 import warnings
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
     from ..wiki import Wiki
@@ -152,7 +152,7 @@ class WikiAnalyzer:
         )
         cached = cache_get("gaps", wkey, fp, ttl_s=_LINT_TTL_S)
         if cached is not None:
-            return cached
+            return cast(list[dict], cached)
         result = self._run_rule("knowledge_gap")
         cache_put("gaps", wkey, fp, result)
         return result
@@ -324,7 +324,7 @@ class WikiAnalyzer:
             if isinstance(result, list):
                 return result
             elif isinstance(result, dict) and "gaps" in result:
-                return result["gaps"]
+                return cast(list[dict], result["gaps"])
         except (ConnectionError, TimeoutError, ValueError, OSError):
             pass
 

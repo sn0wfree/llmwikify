@@ -24,7 +24,9 @@ Because:
 from __future__ import annotations
 
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass
+from typing import TextIO
 
 from ._errors import AuthError
 from .db import auto_first_admin
@@ -52,7 +54,9 @@ def _is_tty() -> bool:
         return False
 
 
-def _prompt_email(input_fn=input, out=sys.stdout) -> str:
+def _prompt_email(
+    input_fn: Callable[[], str] = input, out: TextIO = sys.stdout
+) -> str:
     """Ask for email with basic format validation. Empty input → retry."""
     while True:
         out.write("Email: ")
@@ -69,8 +73,8 @@ def _prompt_email(input_fn=input, out=sys.stdout) -> str:
 
 def prompt_first_admin(
     *,
-    input_fn=input,
-    out=sys.stdout,
+    input_fn: Callable[[], str] = input,
+    out: TextIO = sys.stdout,
 ) -> FirstAdminPromptResult:
     """Interactively create the first admin user.
 

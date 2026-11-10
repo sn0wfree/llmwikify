@@ -5,6 +5,7 @@ import logging
 import re
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any, cast
 
 from ...constants import (
     MAX_KEY_TOPICS,
@@ -62,7 +63,7 @@ class WikiQueryMixin(WikiProtocol):
             mode = "update" if merge_or_replace in ("merge", "replace") else "sink"
 
         similar_page = self._find_similar_query_page(query)
-        hint = ""
+        hint: str | dict[str, Any] = ""
 
         if similar_page and mode == "update":
             similar_name = similar_page["page_name"]
@@ -144,7 +145,7 @@ class WikiQueryMixin(WikiProtocol):
 
         logged = False
         if auto_log:
-            if status == "sunk":
+            if status == "sunk" and similar_page is not None:
                 log_detail = f"{query} → [sink] (see wiki/.sink/{similar_page['page_name']}.sink.md)"
             elif status == "updated":
                 log_detail = f"{query} → [[{page_name}]] ({status})"
@@ -199,7 +200,7 @@ class WikiQueryMixin(WikiProtocol):
             return None
 
         best_match = None
-        best_score = 0
+        best_score: float = 0
 
         for page in self._wiki_pages():
             page_name = page.stem
@@ -321,8 +322,8 @@ class WikiQueryMixin(WikiProtocol):
 
     def read_sink(self, page_name: str) -> dict:
         """Read all entries from a query sink file (hash references resolved)."""
-        return self.query_sink.read(page_name)
+        return cast(dict, self.query_sink.read(page_name))
 
     def sink_status(self) -> dict:
         """Overview of all query sinks with entry counts and urgency."""
-        return self.query_sink.status()
+        return cast(dict, self.query_sink.status())

@@ -53,7 +53,9 @@ class QuerySink:
             return 0.0
         return len(words1 & words2) / len(words1 | words2)
 
-    def _find_similar_hash(self, content_store: dict, new_answer: str) -> str | None:
+    def _find_similar_hash(
+        self, content_store: dict[str, str], new_answer: str
+    ) -> str | None:
         """Find a hash in content_store with similarity >= threshold."""
         new_clean = self._normalize_for_hash(new_answer).strip()
         for hash_val, existing in content_store.items():
@@ -131,12 +133,12 @@ class QuerySink:
 
         result: dict[str, dict] = {}
         for name in page_names:
-            sink_file = sink_files.get(name)
-            if sink_file is None:
+            found = sink_files.get(name)
+            if found is None:
                 result[name] = {"has_sink": False, "sink_entries": 0}
                 continue
             try:
-                content = sink_file.read_text(encoding="utf-8")
+                content = found.read_text(encoding="utf-8")
                 result[name] = {
                     "has_sink": True,
                     "sink_entries": self._count_entries(content),
@@ -620,7 +622,7 @@ class QuerySink:
         entry_count = len(entry_log)
         now_str = self._now()
 
-        def update_fm(m) -> Any:
+        def update_fm(m: re.Match[str]) -> Any:
             fm = m.group(1)
             lines = fm.split("\n")
             new_lines = []
@@ -766,7 +768,7 @@ class QuerySink:
                 "sinks": [],
                 "message": "No sink directory",
             }
-        sinks = []
+        sinks: list[dict[str, Any]] = []
         total_entries = 0
         now = datetime.now(timezone.utc)
         for sink_file in sorted(self.sink_dir.glob("*.sink.md")):

@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Any, Protocol
+from typing import Any, Protocol, cast
 
 logger = logging.getLogger(__name__)
 
@@ -306,7 +306,7 @@ def _resolve_minimax_key_from_llm_config() -> str | None:
         data = _json.loads(config_file.read_text(encoding="utf-8"))
         llm_cfg = data.get("llm", {})
         if llm_cfg.get("provider") == "minimax":
-            return llm_cfg.get("api_key")
+            return cast(str | None, llm_cfg.get("api_key"))
     except Exception:
         pass
     return None

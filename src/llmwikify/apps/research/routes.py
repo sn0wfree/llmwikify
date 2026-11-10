@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from collections.abc import AsyncIterator
 from typing import Any
 
 from fastapi import APIRouter, Request
@@ -130,7 +131,7 @@ async def stream_autoresearch(session_id: str) -> Any:
     if not session:
         return {"error": f"Session {session_id} not found"}
 
-    async def event_gen() -> None:
+    async def event_gen() -> AsyncIterator[dict[str, Any]]:
         tm = get_task_manager()
         try:
             async for event in tm.get_event_stream(session_id):
@@ -271,7 +272,7 @@ async def get_events(
     session_id: str,
     since_ts: float | None = None,
     limit: int = 500,
-):
+) -> dict[str, Any]:
     """Get the persisted event log for a session.
 
     Issue#15: optional ``since_ts`` cursor for incremental fetches.

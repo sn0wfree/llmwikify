@@ -25,7 +25,7 @@ def _open_app_db(wiki: Any) -> Any:
     return AppDatabase(_resolve_data_dir(wiki))
 
 
-def _get_db_stats(app_db: Any) -> dict:
+def _get_db_stats(app_db: Any) -> dict | None:
     """Compute DB statistics across all 3 facades."""
     db_path = app_db.db_path
     if not db_path.exists():
@@ -64,7 +64,7 @@ def _get_wiki_stats(app_db: Any, wiki_id: str) -> dict:
     }
     with sqlite3.connect(db_path, timeout=5.0) as conn:
 
-        def count(sql) -> Any:
+        def count(sql: str) -> Any:
             r = conn.execute(sql, (wiki_id,)).fetchone()
             return r[0] if r else 0
 

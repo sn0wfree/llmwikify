@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import os
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from fastapi import APIRouter, FastAPI, HTTPException
 
@@ -105,7 +105,7 @@ def _load_research_config() -> dict[str, Any] | None:
         return None
     try:
         data = _json.loads(config_file.read_text(encoding="utf-8"))
-        return data.get("research")
+        return cast("dict[str, Any] | None", data.get("research"))
     except Exception:
         return None
 
@@ -229,13 +229,11 @@ def _register_agent_routes(
     agent_service = AgentService(registry, data_dir, provider=provider)
     set_agent_service(agent_service)
 
-    # Register /api/autoresearch/* routes (router exists, never mounted)
-    from llmwikify.apps.chat.research_engine.routes import (
-        router as autoresearch_router,
-    )
-    from llmwikify.apps.chat.research_engine.routes import (
-        set_autoresearch_deps,
-    )
+    # Register /api/autoresearch/* routes (router exists, never mounted).
+    # research_engine.routes is a sys.modules shim aliasing the canonical
+    # module, so import the canonical path (same module object at runtime).
+    from llmwikify.apps.research.routes import router as autoresearch_router
+    from llmwikify.apps.research.routes import set_autoresearch_deps
     from llmwikify.apps.research.six_step_config import merge_six_step_config
 
     db = agent_service.app_db.chat

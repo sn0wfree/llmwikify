@@ -23,7 +23,7 @@ import json
 import logging
 import uuid
 from collections.abc import AsyncIterator
-from typing import Any
+from typing import Any, cast
 
 from llmwikify.apps.chat.agent.unified.core import (
     StepResult,
@@ -183,7 +183,7 @@ class ToolActor(StreamingHandler):
         raw_args = tc.get("args", {}) or {}
         if isinstance(raw_args, str):
             try:
-                return json.loads(raw_args)
+                return cast("dict[str, Any]", json.loads(raw_args))
             except (TypeError, ValueError):
                 return {"_raw": raw_args}
         return raw_args
@@ -232,7 +232,7 @@ class ToolActor(StreamingHandler):
         if not getattr(spec, "microcompact", False):
             return json.dumps(result, ensure_ascii=False, default=str), False, 0
 
-        compactable = getattr(spec, "microcompact_compactable_tools", set())
+        compactable: Any = getattr(spec, "microcompact_compactable_tools", set())
         if tool_name not in compactable:
             return json.dumps(result, ensure_ascii=False, default=str), False, 0
 

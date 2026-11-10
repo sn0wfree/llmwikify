@@ -275,7 +275,7 @@ class AgentService:
         self,
         task_name: str,
         interval_seconds: float,
-        tick_fn,
+        tick_fn: Any,
         success_log: str | None = None,
     ) -> Any:
         """Schedule an asyncio sleep-loop that calls ``tick_fn`` every
@@ -378,7 +378,7 @@ class AgentService:
             ttl_minutes=ttl_minutes,
         )
 
-        def _auto_compact_tick():
+        def _auto_compact_tick() -> Any:
             return self.auto_compact.check_expired(
                 active_session_keys=self._active_session_keys(),
             )

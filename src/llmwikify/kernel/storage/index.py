@@ -7,7 +7,7 @@ import sqlite3
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import jieba
 
@@ -777,7 +777,7 @@ class WikiIndex:
         )
         row = cursor.fetchone()
         if row:
-            return row["file_path"]
+            return cast(str, row["file_path"])
         cursor = self.conn.execute(
             "SELECT file_path FROM pages WHERE page_name = ? COLLATE NOCASE LIMIT 1",
             (page_name,),

@@ -28,8 +28,9 @@ import random
 import threading
 import time
 import uuid
+from collections.abc import AsyncIterator, Iterator
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Literal, cast
 
 from ..llm_client import LLMClient, _legacy_fallback_enabled
 from .budget_decorator import check_token_budget
@@ -1193,7 +1194,8 @@ class StreamableLLMClient(LLMClient):
                 context_window=context_window,
                 base_url=self.base_url,
                 api_key=api_key,
-                on_exceed=budget_on_exceed,
+                # budget_on_exceed 为 str（配置来源）；cast 无运行时开销。
+                on_exceed=cast(Literal["warn", "raise"], budget_on_exceed),
             )
         )
 
@@ -1212,10 +1214,12 @@ class StreamableLLMClient(LLMClient):
 
         meta = get_provider_metadata(provider)
         if meta.get("base_url"):
-            return meta["base_url"]
+            return cast(str, meta["base_url"])
         # Fallback for unknown providers
         openai_meta = get_provider_metadata("openai")
-        return openai_meta.get("base_url", "https://api.openai.com/v1")
+        return cast(
+            str, openai_meta.get("base_url", "https://api.openai.com/v1")
+        )
 
     @classmethod
     def from_config(cls, config: dict[str, Any]) -> StreamableLLMClient:
@@ -1419,7 +1423,7 @@ class StreamableLLMClient(LLMClient):
         messages: list[dict[str, str]],
         tools: list[dict[str, Any]] | None = None,
         **generation_params: Any,
-    ):
+    ) -> Iterator[dict[str, Any]]:
         """Streaming chat completion (yield chunks) — sync version using httpx.
 
         Yields:
@@ -1569,7 +1573,7 @@ class StreamableLLMClient(LLMClient):
         messages: list[dict[str, str]],
         tools: list[dict[str, Any]] | None = None,
         **generation_params: Any,
-    ):
+    ) -> AsyncIterator[dict[str, Any]]:
         """Async streaming chat completion using httpx.
 
         Yields:
@@ -1736,6 +1740,6 @@ class StreamableLLMClient(LLMClient):
                 if resp.status_code >= 400:
                     raise _format_http_error(resp.status_code, url, resp.content)
                 data = resp.json()
-                return data["choices"][0]["message"]["content"]
+                return cast(str, data["choices"][0]["message"]["content"])
             finally:
                 await resp.aclose()

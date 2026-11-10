@@ -6,7 +6,7 @@ import asyncio
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, cast
 
 from llmwikify.apps.research.db import AutoResearchDatabase
 from llmwikify.apps.research.harness.source_filter import SourceFilter
@@ -53,7 +53,7 @@ class WikiStrategy(SourceStrategy):
     """Gather from local wiki pages."""
 
     def can_handle(self, sq: dict[str, Any], gatherer: SourceGatherer) -> bool:
-        return sq["source_type"] == "wiki"
+        return cast(bool, sq["source_type"] == "wiki")
 
     async def gather(self, ctx: GatherContext, gatherer: SourceGatherer) -> None:
         sq = ctx.sq
@@ -509,7 +509,7 @@ class SourceGatherer:
                 if threshold_reached and pending:
                     if now - last_grace_progress_ts >= GRACE_PROGRESS_INTERVAL:
                         last_grace_progress_ts = now
-                        remaining = max(0.0, grace_deadline - now)
+                        grace_remaining = max(0.0, cast(float, grace_deadline) - now)
                         events.append(
                             {
                                 "type": "progress",
@@ -517,14 +517,14 @@ class SourceGatherer:
                                 "completed": done_count,
                                 "total": total,
                                 "in_grace": True,
-                                "grace_remaining_s": int(remaining),
+                                "grace_remaining_s": int(grace_remaining),
                                 "message": (
                                     f"Waiting for {len(pending)} straggler(s) — "
-                                    f"{int(remaining)}s left"
+                                    f"{int(grace_remaining)}s left"
                                 ),
                             }
                         )
-                    if now >= grace_deadline:
+                    if now >= cast(float, grace_deadline):
                         logger.info(
                             "Grace expired, cancelling %d remaining tasks", len(pending)
                         )
@@ -556,7 +556,11 @@ class SourceGatherer:
         """Gather content for a single sub-query using the selected strategy."""
         sq_id = sub_query["id"]
         session_id = self.session_manager.session_id
-        ctx = GatherContext(sq=sub_query, seen_urls=seen_urls, session_id=session_id)
+        ctx = GatherContext(
+            sq=sub_query,
+            seen_urls=seen_urls,
+            session_id=cast(str, session_id),
+        )
 
         try:
             strategy = self._select_strategy(sub_query)

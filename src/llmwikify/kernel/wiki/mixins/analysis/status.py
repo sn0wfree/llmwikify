@@ -1,6 +1,8 @@
 """Wiki status mixin — wiki status reporting, orphan detection config."""
 
 import logging
+from pathlib import Path
+from typing import cast
 
 from llmwikify._version import __version__
 from llmwikify.kernel.storage.backend import is_path_excluded
@@ -13,7 +15,7 @@ logger = logging.getLogger(__name__)
 class WikiStatusMixin(WikiProtocol):
     """Wiki status reporting and orphan detection configuration."""
 
-    def _should_exclude_orphan(self, page_name: str, page_path) -> bool:
+    def _should_exclude_orphan(self, page_name: str, page_path: Path) -> bool:
         """Check if a page should be excluded from orphan detection."""
         import re
 
@@ -102,11 +104,11 @@ class WikiStatusMixin(WikiProtocol):
 
         Delegates to the cached WikiAnalyzer — single source of truth.
         """
-        return self._analyzer.recommend()
+        return cast(dict, self._analyzer.recommend())
 
     def hint(self) -> dict:
         """Generate smart suggestions for wiki improvement.
 
         Deprecated: Use `lint(format="brief")` instead.
         """
-        return self._analyzer.hint()
+        return cast(dict, self._analyzer.hint())

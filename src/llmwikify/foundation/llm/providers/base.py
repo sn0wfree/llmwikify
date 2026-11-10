@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, cast, runtime_checkable
 
 if TYPE_CHECKING:
     from llmwikify.foundation.llm.streamable import StreamableLLMClient
@@ -63,10 +63,11 @@ class BaseLLMProvider:
         return get_provider_metadata(self._PROVIDER_ID)
 
     def default_base_url(self) -> str:
-        return self._metadata().get("base_url", "")
+        # metadata 为 Any 值 dict；cast 无运行时开销，契约仍为 str。
+        return cast(str, self._metadata().get("base_url", ""))
 
     def default_model(self) -> str:
-        return self._metadata().get("default_model", "")
+        return cast(str, self._metadata().get("default_model", ""))
 
     def supported_models(self) -> list[str]:
         return list(self._metadata().get("supported_models", []))
@@ -136,11 +137,11 @@ class BaseLLMProvider:
         if isinstance(api_key, str) and api_key.startswith("env:"):
             api_key = os.environ.get(api_key[4:], "")
         api_key = os.environ.get("LLM_API_KEY", api_key)
-        return api_key
+        return cast(str, api_key)
 
     def _resolve_field(self, config: dict, field: str, default: str) -> str:
         """Resolve a field from config with environment variable override."""
         env_key = f"LLM_{field.upper()}"
         import os
 
-        return os.environ.get(env_key, config.get(field, default))
+        return cast(str, os.environ.get(env_key, config.get(field, default)))

@@ -11,7 +11,7 @@ import logging
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 logger = logging.getLogger(__name__)
 
@@ -52,8 +52,11 @@ class WikiDreamProposalManager:
         The in-memory list is only a cache for the no-DB case.
         """
         if self.db and self.wiki_id:
-            return self.db.get_dream_proposals(
-                self.wiki_id, status=None, limit=self._max_size
+            return cast(
+                list[dict[str, Any]],
+                self.db.get_dream_proposals(
+                    self.wiki_id, status=None, limit=self._max_size
+                ),
             )
         return list(self._proposals)
 
@@ -163,7 +166,7 @@ class WikiDreamProposalManager:
 
     def get_stats(self) -> dict:
         if self.db and self.wiki_id:
-            return self.db.get_dream_proposal_stats(self.wiki_id)
+            return cast(dict, self.db.get_dream_proposal_stats(self.wiki_id))
         stats = {
             "pending": 0,
             "approved": 0,

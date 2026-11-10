@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import asdict, dataclass
+from typing import Any, cast
 
 import jwt
 
@@ -90,12 +91,14 @@ class TokenClaims:
         # forward-compat with tokens that omit it.
         wikis_raw = data.get("wikis", [])
         wikis = list(wikis_raw) if isinstance(wikis_raw, list) else []
+        # PyJWT 值为 object；cast 无运行时开销，int() 语义不变。
+        exp = int(cast(Any, data["exp"]))
         return cls(
             sub=str(data["sub"]),
             scope=str(data["scope"]),
             wikis=wikis,
-            exp=int(data["exp"]),
-            iat=int(data.get("iat", data["exp"] - DEFAULT_TTL_SECONDS)),
+            exp=exp,
+            iat=int(cast(Any, data.get("iat", exp - DEFAULT_TTL_SECONDS))),
             aud=str(data.get("aud", AUDIENCE)),
             iss=str(data.get("iss", ISSUER)),
         )

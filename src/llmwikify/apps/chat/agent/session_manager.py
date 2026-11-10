@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any
+from typing import Any, cast
 
 logger = logging.getLogger(__name__)
 
@@ -46,17 +46,17 @@ class SessionManager:
     def delete_session(self, session_id: str) -> bool:
         """Delete a session from DB and evict its in-memory context."""
         self._context_manager.remove(session_id)
-        return self._db.delete_chat_session(session_id)
+        return cast("bool", self._db.delete_chat_session(session_id))
 
     def revert_session(self, session_id: str, message_id: str) -> int:
         """Rewind a session to a historical message; returns rows affected."""
         count = self._db.revert_to_message(session_id, message_id)
         self._context_manager.remove(session_id)
-        return count
+        return cast("int", count)
 
     def edit_message(self, message_id: str, new_content: str) -> bool:
         """Edit a stored chat message in place."""
-        return self._db.update_chat_message(message_id, new_content)
+        return cast("bool", self._db.update_chat_message(message_id, new_content))
 
     def abort_session(self, session_id: str) -> bool:
         """Signal abort for an active session via its asyncio.Event.

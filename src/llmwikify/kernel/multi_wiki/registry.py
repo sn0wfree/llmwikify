@@ -6,7 +6,7 @@ import logging
 import sqlite3
 import threading
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from .discovery import WikiDiscovery
 from .instance import WikiInstance, WikiStatus, WikiType
@@ -283,7 +283,8 @@ class WikiRegistry:
         # Import here to avoid circular imports
         from ..wiki import Wiki
 
-        wiki = Wiki(instance.root)
+        # local 实例 root 必为 Path（None 仅出现在 REMOTE，已在上方抛错）
+        wiki = Wiki(cast(Path, instance.root))
         self._wiki_objects[wiki_id] = wiki
 
         # Update page count
@@ -484,7 +485,7 @@ class WikiRegistry:
 
         # Local wiki
         wiki = self.get_wiki(wiki_id)
-        return wiki.status()
+        return cast(dict[str, Any], wiki.status())
 
     def reload_wiki(self, wiki_id: str) -> dict[str, Any]:
         """Re-index a wiki (rebuild FTS5).

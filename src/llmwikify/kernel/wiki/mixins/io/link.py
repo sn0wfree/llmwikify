@@ -42,7 +42,7 @@ class WikiLinkMixin(WikiProtocol):
             return direct
 
         try:
-            file_path = self.index.resolve_by_name(target)
+            file_path: str | None = self.index.resolve_by_name(target)
             if file_path:
                 if file_path.startswith("raw/"):
                     return self.root / file_path
@@ -155,7 +155,7 @@ class WikiLinkMixin(WikiProtocol):
             page_name: Target page name
             include_context: If True, read source files for context around links
         """
-        links = self.index.get_inbound_links(page_name)
+        links: list = self.index.get_inbound_links(page_name)
 
         if include_context:
             for link in links:
@@ -172,7 +172,7 @@ class WikiLinkMixin(WikiProtocol):
             page_name: Source page name
             include_context: If True, read source files for context around links
         """
-        links = self.index.get_outbound_links(page_name)
+        links: list = self.index.get_outbound_links(page_name)
 
         if include_context:
             for link in links:

@@ -17,7 +17,7 @@ import logging
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, cast
 
 from llmwikify.apps.chat.agent.context_store import ContextStore
 from llmwikify.foundation.llm.token_estimator import count_messages
@@ -221,7 +221,7 @@ class ContextManager:
                 if session and session.get("wiki_id"):
                     ctx.set_recent_wiki(session["wiki_id"])
             self._contexts.set(session_id, ctx)
-        return self._contexts.get(session_id)
+        return cast("AgentContext", self._contexts.get(session_id))
 
     async def prepare_messages(
         self,
@@ -370,7 +370,8 @@ class ContextManager:
                 if msg is kept[0]:
                     break
                 if msg.get("role") == "assistant" and msg.get("tool_calls"):
-                    if any(tc.get("id") == target_id for tc in msg["tool_calls"]):
+                    tool_calls = cast("list[dict[str, Any]]", msg["tool_calls"])
+                    if any(tc.get("id") == target_id for tc in tool_calls):
                         kept.insert(0, msg)
                         kept_tokens += count_messages([msg], model_name)
                     break
@@ -398,17 +399,17 @@ class ContextManager:
         if self._llm_client is not None:
             name = getattr(self._llm_client, "model", None)
             if name is not None:
-                return name
+                return cast("str", name)
         return "unknown"
 
     def _compute_budget(self) -> int:
         """Compute available token budget (shared by compact/truncate)."""
-        reserve = self.config.get("context_reserve_tokens", 4096)
-        override = self.config.get("context_window_override", 0)
+        reserve: int = self.config.get("context_reserve_tokens", 4096)
+        override: int = self.config.get("context_window_override", 0)
         if override > 0:
             return override - reserve
         if self._llm_client is not None:
             budget_checker = getattr(self._llm_client, "_budget_checker", None)
             if budget_checker is not None:
-                return budget_checker.context_window - reserve
+                return cast("int", budget_checker.context_window) - reserve
         return 128_000 - reserve

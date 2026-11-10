@@ -37,7 +37,7 @@ class QueryPageOverlapRule(Rule):
         if not wiki.wiki_dir.exists():
             return []
 
-        query_pages = []
+        query_pages: list[dict[str, Any]] = []
         for page in wiki.wiki_dir.rglob("*.md"):
             if ".sink" in str(page):
                 continue

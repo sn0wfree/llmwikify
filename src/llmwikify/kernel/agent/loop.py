@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import AsyncIterator, Callable
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from llmwikify.foundation.utils import maybe_await as _maybe_await
 
@@ -56,7 +56,8 @@ class UnifiedAgentLoop:
 
     async def run_stream(self, spec: BaseSpec) -> AsyncIterator[dict[str, Any]]:
         ctx = UnifiedContext(spec=spec)
-        spec._last_ctx = ctx  # 让 run_to_completion 能访问 ctx
+        # _last_ctx 为运行时动态附加字段（见 run_to_completion）；cast 无运行时开销。
+        cast(Any, spec)._last_ctx = ctx
 
         # ── SESSION_INIT（Chat 流式模式）──
         if self._hook.wants_streaming():
@@ -102,7 +103,8 @@ class UnifiedAgentLoop:
                     if ctx.error:
                         break
                 else:
-                    result = await self._reasoner.handle(ctx.messages, spec, ctx)
+                    # Any：ACT 阶段 result 复用为 actor output（非 StepResult）。
+                    result: Any = await self._reasoner.handle(ctx.messages, spec, ctx)
                     for ev in result.events:
                         yield ev
                     if not result.success:

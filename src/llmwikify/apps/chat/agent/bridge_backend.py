@@ -27,7 +27,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import AsyncIterator
-from typing import Any
+from typing import Any, cast
 
 logger = logging.getLogger(__name__)
 
@@ -86,11 +86,16 @@ class ChatBridgeBackend:
         self, messages: list[dict[str, Any]], max_messages: int | None = None
     ) -> list[dict[str, Any]]:
         """Truncate messages to fit the model's context window."""
-        return self._context_manager.truncate(messages, max_messages=max_messages)
+        return cast(
+            "list[dict[str, Any]]",
+            self._context_manager.truncate(messages, max_messages=max_messages),
+        )
 
     def _get_toolspec(self, tool_registry: Any) -> list[dict[str, Any]]:
         """Build OpenAI-format tool spec from registry."""
-        return self._tool_executor.get_toolspec(tool_registry)
+        return cast(
+            "list[dict[str, Any]]", self._tool_executor.get_toolspec(tool_registry)
+        )
 
     async def _llm_stream_with_retry(
         self,

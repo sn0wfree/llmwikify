@@ -100,7 +100,7 @@ class Wiki(
         ref_index_name = self.config.get("reference_index", {}).get(
             "name", "reference_index.json"
         )
-        self._ref_index_name = ref_index_name
+        self._ref_index_name: str = ref_index_name
 
         # Orphan detection configuration
         orphan_config = self.config.get("orphan_detection", {})

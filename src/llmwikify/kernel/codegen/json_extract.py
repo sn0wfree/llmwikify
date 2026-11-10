@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+from typing import cast
 
 logger = logging.getLogger(__name__)
 
@@ -28,14 +29,14 @@ def extract_json_from_response(text: str) -> dict | None:
     fence_match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
     if fence_match:
         try:
-            return json.loads(fence_match.group(1))
+            return cast(dict | None, json.loads(fence_match.group(1)))
         except json.JSONDecodeError as exc:
             logger.warning("[codegen_utils] fenced JSON parse failed: %s", exc)
 
     obj_match = re.search(r"\{[\s\S]*\}", text)
     if obj_match:
         try:
-            return json.loads(obj_match.group(0))
+            return cast(dict | None, json.loads(obj_match.group(0)))
         except json.JSONDecodeError as exc:
             logger.warning("[codegen_utils] raw JSON parse failed: %s", exc)
 

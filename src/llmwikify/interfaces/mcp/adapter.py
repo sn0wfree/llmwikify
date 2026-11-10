@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any
+from collections.abc import Awaitable
+from typing import Any, cast
 
 from fastmcp import FastMCP
 
@@ -35,7 +36,7 @@ class MCPAdapter:
     ):
         # Support both single Wiki and WikiRegistry
         if isinstance(wiki, WikiRegistry):
-            self.registry = wiki
+            self.registry: WikiRegistry | None = wiki
             self.wiki = wiki.get_default_wiki() if wiki.get_default_wiki_id() else None
             self.name = (
                 name or (config.get("name") if config else None) or "llmwikify-multi"
@@ -66,15 +67,19 @@ class MCPAdapter:
 
     async def run_stdio(self) -> None:
         """Run MCP server in stdio mode (for desktop integration)."""
-        await self._mcp.run(transport="stdio")
+        await cast("Awaitable[None]", self._mcp.run(transport="stdio"))
 
     async def run_http(self, host: str = "127.0.0.1", port: int = 8765) -> None:
         """Run MCP server in HTTP mode (for network access)."""
-        await self._mcp.run(transport="http", host=host, port=port)
+        await cast(
+            "Awaitable[None]", self._mcp.run(transport="http", host=host, port=port)
+        )
 
     async def run_sse(self, host: str = "127.0.0.1", port: int = 8765) -> None:
         """Run MCP server in SSE mode."""
-        await self._mcp.run(transport="sse", host=host, port=port)
+        await cast(
+            "Awaitable[None]", self._mcp.run(transport="sse", host=host, port=port)
+        )
 
     async def call_tool(self, name: str, arguments: dict[str, Any]) -> Any:
         """Call an MCP tool programmatically (for MCP protocol use only)."""

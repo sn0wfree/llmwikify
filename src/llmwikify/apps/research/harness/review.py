@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, cast
 
 from llmwikify.apps.research.llm_step import run_prompt
 from llmwikify.apps.research.prompts import _review_fallback
@@ -75,7 +75,7 @@ class ResearchReviewer:
         ``_review_fallback`` from ``prompts.py``.
         """
         try:
-            result = await run_prompt(
+            result: dict[str, Any] = await run_prompt(
                 self._as_ctx(),
                 "research_review",
                 six_step_context=six_step_context,
@@ -138,10 +138,13 @@ class ResearchRevisor:
                 f"[{h}] {s.get('source_type', '')}: {s.get('title', '')} — {s.get('url', '')}"
             )
 
-        return await run_prompt(
-            self._as_ctx(),
-            "research_revise",
-            issues_text=issues_text,
-            source_refs="\n".join(source_refs),
-            report=report,
+        return cast(
+            str,
+            await run_prompt(
+                self._as_ctx(),
+                "research_revise",
+                issues_text=issues_text,
+                source_refs="\n".join(source_refs),
+                report=report,
+            ),
         )

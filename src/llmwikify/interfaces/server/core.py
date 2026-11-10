@@ -6,6 +6,7 @@ Combines MCP protocol, REST API, and WebUI into a single FastAPI application.
 from __future__ import annotations
 
 import logging
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
@@ -210,7 +211,7 @@ class WikiServer:
         mcp_asgi_app = self.mcp.asgi_app if self.mcp is not None else None
 
         @asynccontextmanager
-        async def _wiki_lifespan(app: FastAPI) -> None:
+        async def _wiki_lifespan(app: FastAPI) -> AsyncIterator[None]:
             """Phase 7+9+40 lifespan: start DreamScheduler + AutoCompact
             + ConfirmationsCleanup on startup, stop on shutdown. Always
             closes the registry on shutdown.
@@ -401,9 +402,10 @@ class WikiServer:
             try:
                 yield
             finally:
-                if getattr(self, "_wiki_cache_watcher", None) is not None:
+                watcher = getattr(self, "_wiki_cache_watcher", None)
+                if watcher is not None:
                     try:
-                        self._wiki_cache_watcher.stop()
+                        watcher.stop()
                     except Exception:
                         logger.warning(
                             "WikiServer: wiki cache watcher stop failed",
@@ -453,7 +455,7 @@ class WikiServer:
                     self.wiki.close()
 
         @asynccontextmanager
-        async def lifespan(app: FastAPI) -> None:
+        async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             """Combined lifespan (2026-10-14).
 
             Enter FastMCP's ASGI-app lifespan FIRST so its
@@ -539,7 +541,7 @@ class WikiServer:
 
         # Request logging middleware - logs every request for debugging
         @app.middleware("http")
-        async def log_requests(request: Request, call_next) -> Any:
+        async def log_requests(request: Request, call_next: Any) -> Any:
             response = await call_next(request)
             if response.status_code >= 400:
                 client = get_client_ip(request)

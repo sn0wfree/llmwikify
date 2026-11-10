@@ -18,7 +18,7 @@ import sqlite3
 from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import jieba
 import jieba.analyse
@@ -141,7 +141,9 @@ def _merge_candidates(
     freq: Counter, tfidf: Counter, top_n: int = _MAX_FAST_TERMS
 ) -> list[tuple[str, int]]:
     """Weighted merge: TF-IDF × 2, frequency × 1."""
-    scores: Counter = Counter()
+    # Counter 值槽位类型为 int，但本函数按加权分数累加 float（运行时合法，
+    # 输出 freq 保持 float 文本）；Any + cast 仅为消除误报，无运行时开销。
+    scores: Any = Counter()
     for word, f in freq.items():
         if f >= _MIN_TERM_FREQ and _is_cjk_word(word) and len(word) >= 2:
             if word not in _STOP_WORDS:
@@ -150,7 +152,7 @@ def _merge_candidates(
         if _is_cjk_word(word) and len(word) >= 2:
             if word not in _STOP_WORDS:
                 scores[word] += f * 2.0
-    return scores.most_common(top_n)
+    return cast(list[tuple[str, int]], scores.most_common(top_n))
 
 
 def _write_dict(path: Path, candidates: list[tuple[str, int]]) -> int:

@@ -25,6 +25,7 @@ from __future__ import annotations
 import atexit
 import sqlite3
 import threading
+from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
@@ -125,7 +126,8 @@ class ManagedConnection:
         synchronous: str = "NORMAL",
     ):
         self._db_path = str(db_path)
-        self._pragmas = {
+        # Any：展开为 connect() 的异构 keyword 参数（bool/int/str）。
+        self._pragmas: dict[str, Any] = {
             "row_factory": row_factory,
             "foreign_keys": foreign_keys,
             "wal": wal,
@@ -149,7 +151,7 @@ class ManagedConnection:
         return c
 
     @contextmanager
-    def transaction(self) -> None:
+    def transaction(self) -> Iterator[sqlite3.Connection]:
         """Transaction context manager (auto-commit/rollback).
 
         Usage::

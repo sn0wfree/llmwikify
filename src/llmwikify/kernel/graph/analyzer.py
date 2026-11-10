@@ -55,7 +55,7 @@ class GraphAnalyzer:
         # users see a misleading "no pages" message when their KB has
         # hundreds of pages but networkx isn't installed.
         try:
-            import networkx as nx  # type: ignore[import-untyped]  # noqa: F401  (used by _build_graph etc.)
+            import networkx as nx  # noqa: F401  (used by _build_graph etc.)
         except ImportError:
             return {
                 "status": "missing_dependency",

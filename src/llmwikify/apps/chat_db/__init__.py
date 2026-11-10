@@ -18,6 +18,8 @@ Backward compat re-exports:
   - ``DB_SIZE_WARNING_MB`` — re-exported from apps.db_base
 """
 
+from typing import Any
+
 from ._facade import (
     DB_SIZE_WARNING_MB,
     ChatDatabase,
@@ -50,7 +52,7 @@ __all__ = [
 ]
 
 
-def __getattr__(name: str):
+def __getattr__(name: str) -> Any:
     """AutoResearchDatabase moved to apps/research/db.py (lazy re-export).
 
     Imported on demand so ``apps.research.db`` (which imports

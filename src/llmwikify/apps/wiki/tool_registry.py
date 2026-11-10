@@ -13,7 +13,7 @@ import logging
 import re
 from collections.abc import Callable
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, cast
 
 from llmwikify.apps.wiki_db import WikiDatabase
 
@@ -543,21 +543,21 @@ class WikiToolRegistry:
             )
         return result
 
-    def _graph_action(self, args: dict) -> dict:
+    def _graph_action(self, args: dict) -> dict | list[dict] | None:
         from llmwikify.kernel.wiki.engines.relation import RelationEngine
 
         engine = RelationEngine(self.wiki.index, wiki_root=self.wiki.root)
         action = args.get("action", "query")
         if action == "query":
             return engine.get_neighbors(
-                concept=args.get("concept"),
+                concept=cast(str, args.get("concept")),
                 direction=args.get("direction", "both"),
                 confidence=args.get("confidence"),
             )
         elif action == "path":
             return engine.get_path(
-                source=args.get("source"),
-                target=args.get("target"),
+                source=cast(str, args.get("source")),
+                target=cast(str, args.get("target")),
                 max_length=args.get("max_length", 5),
             )
         elif action == "stats":
@@ -569,7 +569,9 @@ class WikiToolRegistry:
                 r.setdefault("confidence", "EXTRACTED")
                 if source_file and "source_file" not in r:
                     r["source_file"] = source_file
-            return self.wiki.write_relations(relations, source_file=source_file)
+            return cast(
+                dict, self.wiki.write_relations(relations, source_file=source_file)
+            )
         return {"status": "error", "error": f"Unknown action: {action}"}
 
     def _classify_page_group(self, arguments: dict) -> str:
@@ -651,7 +653,7 @@ class WikiToolRegistry:
         if total == 0 or not link_map:
             return report_md
 
-        def replacer(m: re.Match) -> str:
+        def replacer(m: re.Match[str]) -> str:
             h = m.group(1)
             meta = link_map.get(h)
             if not meta:

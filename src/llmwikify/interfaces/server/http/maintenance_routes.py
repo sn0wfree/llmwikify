@@ -8,6 +8,7 @@ attached to ``app.state.maintenance_manager``. All endpoints degrade to
 from __future__ import annotations
 
 import logging
+from typing import Any, cast
 
 from fastapi import APIRouter, HTTPException, Request
 
@@ -16,7 +17,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/maintenance", tags=["maintenance"])
 
 
-def _get_manager(request: Request):
+def _get_manager(request: Request) -> Any:
     manager = getattr(request.app.state, "maintenance_manager", None)
     if manager is None:
         raise HTTPException(
@@ -27,25 +28,25 @@ def _get_manager(request: Request):
 
 
 @router.get("/health")
-async def maintenance_health(request: Request) -> dict:
+async def maintenance_health(request: Request) -> dict[str, Any]:
     """Aggregated health report: per-wiki status + history trend."""
-    return _get_manager(request).health_report()
+    return cast("dict[str, Any]", _get_manager(request).health_report())
 
 
 @router.get("/status")
-async def maintenance_status(request: Request) -> dict:
+async def maintenance_status(request: Request) -> dict[str, Any]:
     """Current task runtime status (no history)."""
-    return _get_manager(request).status()
+    return cast("dict[str, Any]", _get_manager(request).status())
 
 
 @router.post("/trigger")
-async def maintenance_trigger(request: Request, task: str = "all") -> dict:
+async def maintenance_trigger(request: Request, task: str = "all") -> dict[str, Any]:
     """Manually trigger a maintenance task: gaps | db | lint | all."""
     manager = _get_manager(request)
     result = await manager.trigger(task)
     if result.get("error"):
         raise HTTPException(status_code=400, detail=result["error"])
-    return result
+    return cast("dict[str, Any]", result)
 
 
 @router.get("/proposals")
@@ -107,6 +108,6 @@ async def maintenance_reject_proposals(request: Request) -> dict:
     return {"rejected": rejected, "total": len(proposal_ids)}
 
 
-def register_maintenance_routes(app) -> None:
+def register_maintenance_routes(app: Any) -> None:
     """Mount maintenance routes (called from routes.py)."""
     app.include_router(router)

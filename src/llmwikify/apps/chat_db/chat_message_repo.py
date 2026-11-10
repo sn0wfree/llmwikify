@@ -37,6 +37,7 @@ import json
 import logging
 import sqlite3
 import uuid
+from collections.abc import Callable
 from typing import Any
 
 from .base import ChatDBBase
@@ -180,7 +181,9 @@ class ChatMessageRepository(ChatDBBase):
         self,
         session_id: str,
         message_id: str,
-        tool_call_delete_after_rowid: callable = None,
+        tool_call_delete_after_rowid: (
+            Callable[[sqlite3.Connection, str, int], Any] | None
+        ) = None,
     ) -> int:
         """Mark all messages after ``message_id`` as reverted.
 

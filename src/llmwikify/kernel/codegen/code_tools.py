@@ -23,7 +23,7 @@ import re
 import threading
 from typing import Any
 
-import polars as pl  # type: ignore[import-not-found]
+import polars as pl
 
 # ─── Compiled regex ────────────────────────────────────────────────
 

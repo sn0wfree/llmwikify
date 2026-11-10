@@ -32,7 +32,7 @@ Design ref: ``v0.32-skill-restructure.md`` §3.1 (#23)
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, cast
 
 from llmwikify.apps.chat.skills.actions._helpers import wiki_from_ctx
 from llmwikify.apps.chat.skills.base import (
@@ -41,6 +41,7 @@ from llmwikify.apps.chat.skills.base import (
     SkillContext,
     SkillResult,
 )
+from llmwikify.kernel.skills.types import AsyncHandler
 
 logger = logging.getLogger(__name__)
 
@@ -128,7 +129,10 @@ async def _gather(args: dict, ctx: SkillContext) -> SkillResult:
                                 extract_skill,
                             )
 
-                            er = await extract_skill.actions["extract"].handler(
+                            er = await cast(
+                                "AsyncHandler",
+                                extract_skill.actions["extract"].handler,
+                            )(
                                 {"url_or_path": s["url"]},
                                 ctx,
                             )

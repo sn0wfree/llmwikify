@@ -15,6 +15,7 @@ import logging
 import time
 from collections.abc import Iterator
 from contextlib import contextmanager
+from typing import cast
 from urllib.parse import urlparse
 
 from fastapi import HTTPException
@@ -40,7 +41,7 @@ def load_wiki_config() -> dict:
     """
     from llmwikify.foundation.config import Config
 
-    return Config().get("wiki", {"allowed_remote_hosts": ["*"]})
+    return cast("dict", Config().get("wiki", {"allowed_remote_hosts": ["*"]}))
 
 
 def check_remote_wiki_config(allowed_hosts: list[str]) -> None:
@@ -114,7 +115,7 @@ def write_page(
     page_name: str,
     content: str,
     confirm_token: str | None = None,
-    db: object | None = None,
+    db: WikiDatabase | None = None,
     wiki_id: str | None = None,
 ) -> dict:
     """写页面 + 校验 + token-based 二次确认。

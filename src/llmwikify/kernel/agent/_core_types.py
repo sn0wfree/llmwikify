@@ -41,7 +41,7 @@ class StepResult:
         return StepResult(output=output, events=events or [])
 
     @staticmethod
-    def fail(error: str, events: list[dict[str, Any]] | None = None) -> StepResult:
+    def fail(error: str | None, events: list[dict[str, Any]] | None = None) -> StepResult:
         return StepResult(success=False, error=error, events=events or [])
 
 
@@ -93,7 +93,6 @@ class StreamingHandler(ABC):
     ) -> AsyncIterator[dict[str, Any] | StepResult]:
         """yield SSE events，最后一个 yield StepResult(output=结果)。"""
         ...
-        yield StepResult()  # pragma: no cover  # type: ignore[misc]
 
 
 # ─── Pipeline — Steps 串行组合 ──────────────────────────

@@ -69,8 +69,11 @@ class ResearchObserver:
             state.sources = self._db.get_sources(state.session_id) or []
             state._cached_source_count = current_source_count
         if subqueries_changed:
-            state.sub_queries_raw = self._db.get_sub_queries(state.session_id) or []
-            state._cached_subq_count = current_subq_count
+            # Dynamic attrs (not dataclass fields) so asdict snapshots stay
+            # unchanged; setattr avoids mypy attr-defined without fields.
+            sub_queries_raw = self._db.get_sub_queries(state.session_id) or []
+            setattr(state, "sub_queries_raw", sub_queries_raw)  # noqa: B010
+            setattr(state, "_cached_subq_count", current_subq_count)  # noqa: B010
             # Rebuild sub_queries list from DB only when we re-read.
             state.sub_queries = [
                 {
@@ -80,7 +83,7 @@ class ResearchObserver:
                     "url": sq.get("url"),
                     "status": sq.get("status", "pending"),
                 }
-                for sq in state.sub_queries_raw
+                for sq in sub_queries_raw
             ]
 
         state.total_sources = current_source_count

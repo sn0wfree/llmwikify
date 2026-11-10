@@ -8,6 +8,7 @@ Design principle: "LLM does analysis, human makes decisions"
 
 import re
 from pathlib import Path
+from typing import Any, cast
 
 from llmwikify.kernel.storage.backend import is_path_excluded
 
@@ -28,7 +29,7 @@ class SynthesisEngine:
         # knowledge_gaps, suggested_updates
     """
 
-    def __init__(self, wiki) -> None:
+    def __init__(self, wiki: Any) -> None:
         self.wiki = wiki
 
     def analyze_new_source(
@@ -76,7 +77,7 @@ class SynthesisEngine:
 
     def _get_existing_source_analyses(self) -> list[dict]:
         """Get analysis data from existing Source pages."""
-        analyses = []
+        analyses: list[dict] = []
         sources_dir = self.wiki.wiki_dir / "sources"
         if not sources_dir.exists():
             return analyses
@@ -108,10 +109,10 @@ class SynthesisEngine:
             self.wiki._find_source_summary_page("") or Path("")
         )
         if cached:
-            return cached.get("data")
+            return cast(dict | None, cached.get("data"))
 
         # Fallback: parse from page content
-        analysis = {
+        analysis: dict[str, Any] = {
             "claims": [],
             "entities": [],
             "topics": [],
@@ -136,7 +137,7 @@ class SynthesisEngine:
 
     def _get_existing_entities(self) -> set[str]:
         """Get all entity names from existing wiki pages."""
-        entities = set()
+        entities: set[str] = set()
         entities_dir = self.wiki.wiki_dir / "entities"
         if not entities_dir.exists():
             return entities

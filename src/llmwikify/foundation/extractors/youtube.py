@@ -2,6 +2,7 @@
 
 import concurrent.futures
 import logging
+from typing import Any
 
 from .base import ExtractedContent
 
@@ -85,7 +86,7 @@ def _extract_youtube(
     # Run the blocking fetch in a thread so we can enforce a timeout. If
     # the network is unreachable or the API is slow, future.result(
     # timeout=...) raises TimeoutError instead of hanging the caller.
-    def _fetch_transcript(video_id: str = video_id):
+    def _fetch_transcript(video_id: str = video_id) -> list[dict[str, Any]]:
         # 2026-10-14: 兼容 youtube-transcript-api >=1.0（实例 API；静态
         # get_transcript 已在 1.0 移除）。1.x fetch() 返回 FetchedTranscript，
         # to_raw_data() 还原旧版 list[dict{text,start,duration}] 结构。

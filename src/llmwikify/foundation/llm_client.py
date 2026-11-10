@@ -5,7 +5,7 @@ import json
 import os
 import re
 import threading
-from typing import Any
+from typing import Any, Literal, cast
 
 from .llm.budget_decorator import check_token_budget
 from .llm.errors import LLMNotConfiguredError
@@ -111,7 +111,8 @@ class LLMClient:
                 context_window=context_window,
                 base_url=self.base_url,
                 api_key=api_key,
-                on_exceed=budget_on_exceed,
+                # budget_on_exceed 为 str（配置来源）；cast 无运行时开销。
+                on_exceed=cast(Literal["warn", "raise"], budget_on_exceed),
             )
         )
 
@@ -258,7 +259,7 @@ class LLMClient:
             "Authorization": f"Bearer {self.api_key}",
         }
 
-        payload = {
+        payload: dict[str, Any] = {
             "model": self.model,
             "messages": messages,
         }
@@ -286,7 +287,7 @@ class LLMClient:
             if content is None or (isinstance(content, str) and not content.strip()):
                 # Some providers park the answer in reasoning_content.
                 content = message.get("reasoning_content") or ""
-            return content
+            return cast(str, content)
         except requests.exceptions.RequestException as e:
             raise ConnectionError(f"LLM API request failed: {e}") from e
         except (KeyError, IndexError) as e:

@@ -31,7 +31,7 @@ import logging
 import re
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol, cast
 
 from ...foundation.config import get_db_path, get_directory, load_config
 
@@ -280,7 +280,7 @@ class LocalFileBackend:
             content = path.read_text(encoding="utf-8")
             match = re.search(r"<!-- llmwikify:analysis (.*?) -->", content, re.DOTALL)
             if match:
-                return json.loads(match.group(1))
+                return cast(dict[str, Any], json.loads(match.group(1)))
         except (OSError, json.JSONDecodeError) as e:
             logger.warning("Failed to parse cached analysis for %s: %s", key, e)
         return None
@@ -376,7 +376,7 @@ def _parse_h2_sections(content: str) -> list[tuple[str, str]]:
     comments, and deeper headers. Returns list of tuples
     ``("Section Name", "section content without header")``.
     """
-    sections: list[tuple[str, list[str]]] = []
+    sections: list[tuple[str, str]] = []
     current_header: str | None = None
     current_body: list[str] = []
     in_code_block = False

@@ -58,7 +58,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from llmwikify.apps.chat_db.admin_stats_repo import AdminStatsRepository
 from llmwikify.apps.chat_db.base import DB_SIZE_WARNING_MB, get_chat_db_path
@@ -254,7 +254,7 @@ class ChatDatabase(BaseDatabase):
             return ""
         stored = session.get("title")
         if stored:
-            return stored
+            return cast(str, stored)
         # Fallback: derive from first user message
         messages = self._messages.get_chat_messages(session_id, limit=2)
         for m in messages:
@@ -271,7 +271,7 @@ class ChatDatabase(BaseDatabase):
     def set_session_metadata(self, session_id: str, metadata: dict) -> None:
         return self._sessions.set_session_metadata(session_id, metadata)
 
-    def update_session_metadata(self, session_id: str, **patch) -> dict:
+    def update_session_metadata(self, session_id: str, **patch: Any) -> dict:
         return self._sessions.update_session_metadata(session_id, **patch)
 
     # ─── Chat messages (4 → ChatMessageRepository) ──────────────
@@ -651,7 +651,7 @@ class ChatDatabase(BaseDatabase):
     def mark_notification_read(self, notification_id: str) -> None:
         return self._wiki.mark_notification_read(notification_id)
 
-    def get_unread_count(self, wiki_id: str) -> dict:
+    def get_unread_count(self, wiki_id: str) -> int:
         return self._wiki.get_unread_count(wiki_id)
 
     def save_confirmation(self, c: dict) -> None:

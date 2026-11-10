@@ -44,7 +44,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, cast
 
 from llmwikify.apps.chat.agent.agent_runner import AgentRunner
 from llmwikify.apps.chat.agent.runner_v2 import ChatRunnerV2
@@ -144,9 +144,12 @@ class SubagentManager:
             # copy** (ChatRunnerV2.execution_context always allocates
             # a new dataclass), so the parent's hook / memory are
             # untouched.
-            parent_ctx = self._parent.execution_context()
             from llmwikify.kernel.agent.execution_context import (
                 AgentExecutionContext,
+            )
+
+            parent_ctx = cast(
+                "AgentExecutionContext", self._parent.execution_context()
             )
 
             child_ctx = AgentExecutionContext(

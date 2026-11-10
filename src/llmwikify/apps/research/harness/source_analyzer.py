@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import logging
-from typing import Any
+from typing import Any, cast
 
 from llmwikify.apps.research.session import ResearchSessionManager
 
@@ -64,7 +64,7 @@ class SourceAnalyzer:
             if isinstance(r, Exception):
                 events.append({"type": "source_analysis_failed", "error": str(r)})
             elif r is not None:
-                events.append(r)
+                events.append(cast(dict[str, Any], r))
 
         return events
 
@@ -94,7 +94,7 @@ class SourceAnalyzer:
 
         rel_path = f"raw/research/{content_hash}.txt"
         try:
-            analysis = self.wiki.analyze_source(rel_path)
+            analysis: dict[str, Any] = self.wiki.analyze_source(rel_path)
             return analysis
         except Exception as e:
             logger.warning("wiki.analyze_source failed for %s: %s", rel_path, e)

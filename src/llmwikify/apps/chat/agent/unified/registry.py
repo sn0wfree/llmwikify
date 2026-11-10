@@ -23,7 +23,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, cast
 
 from llmwikify.kernel.agent import (
     BaseSpec,
@@ -117,7 +117,7 @@ def _resolve_handler(
 ) -> StepHandler | StreamingHandler:
     """解析 handler：如果是工厂函数则调用，否则直接返回。"""
     if callable(handler) and not isinstance(handler, (StepHandler, StreamingHandler)):
-        return handler(**kwargs)
+        return cast("StepHandler | StreamingHandler", handler(**kwargs))
     return handler
 
 
@@ -143,7 +143,7 @@ def _chat_precheck(ctx: Any) -> bool:
 
 def _chat_finalize(ctx: Any) -> str | None:
     """Chat mode finalize：返回 final_content。"""
-    return ctx.final_content
+    return cast("str | None", ctx.final_content)
 
 
 def _register_chat_mode() -> None:

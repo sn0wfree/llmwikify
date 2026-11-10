@@ -12,6 +12,8 @@ a fast way to see the full picture::
 
 from __future__ import annotations
 
+from typing import Any
+
 from .._base import COMMAND_REGISTRY, Command
 
 # Subcommand aliases — populated by main() at startup.
@@ -27,7 +29,7 @@ class HelpCommand(Command):
     name = "help"
     help = "List all available commands and aliases"
 
-    def setup_parser(self, subparsers) -> None:
+    def setup_parser(self, subparsers: Any) -> None:
         from argparse import _SubParsersAction
 
         if not isinstance(subparsers, _SubParsersAction):
@@ -40,7 +42,7 @@ class HelpCommand(Command):
             help="Show only subcommand aliases",
         )
 
-    def run(self, args, wiki, config) -> int:
+    def run(self, args: Any, wiki: Any, config: dict) -> int:
         if getattr(args, "aliases", False):
             return self._print_aliases_only()
         return self._print_full()

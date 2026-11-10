@@ -153,7 +153,7 @@ def resolve_dollar_refs(
                 for r in rest:
                     if not isinstance(cur, Mapping):
                         raise KeyError(f"$item.{rest[0]!r} not navigable")
-                    cur = cur[r]  # type: ignore[index]
+                    cur = cur[r]
                 return cur
             if root == "env":
                 if not rest:
@@ -168,7 +168,7 @@ def resolve_dollar_refs(
                 for r in rest:
                     if not isinstance(cur, Mapping):
                         raise KeyError(f"$ref path {path!r} not navigable at {r!r}")
-                    cur = cur[r]  # type: ignore[index]
+                    cur = cur[r]
                 return cur
             # Unknown root: surface the placeholder, do not raise.
             # The executor's _execute_phase will catch the literal
@@ -926,7 +926,7 @@ def _wait_first(
         return set(done), set(not_done)
     except ImportError:  # pragma: no cover
         # Python 3.7 fallback (very unlikely on supported versions)
-        done: set[Future[Any]] = set()
+        done = set()
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline and not done:
             for f in futures:

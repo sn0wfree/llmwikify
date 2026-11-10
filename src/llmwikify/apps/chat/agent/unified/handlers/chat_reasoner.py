@@ -21,7 +21,7 @@ from __future__ import annotations
 import inspect
 import logging
 from collections.abc import AsyncIterator
-from typing import Any
+from typing import Any, cast
 
 from llmwikify.apps.chat.agent.unified.core import (
     StepResult,
@@ -160,13 +160,18 @@ class ChatReasoner(StreamingHandler):
                     user_message="",
                     session_id=getattr(spec, "session_id", ""),
                 )
-                return await self._prompt_builder.build_with_context(ctx)
+                return cast(
+                    "str", await self._prompt_builder.build_with_context(ctx)
+                )
             if hasattr(self._prompt_builder, "build"):
-                return await self._prompt_builder.build(
+                return cast(
+                    "str",
+                    await self._prompt_builder.build(
                     wiki_id=getattr(spec, "wiki_id", None),
                     user_message="",
                     session_id=getattr(spec, "session_id", ""),
                     workspace=getattr(spec, "workspace", None),
+                    ),
                 )
         except Exception:
             logger.warning("prompt_builder failed", exc_info=True)

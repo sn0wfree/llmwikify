@@ -21,8 +21,8 @@ logger = logging.getLogger(__name__)
 
 
 def build_visualization_data(
-    index,
-    wiki,
+    index: Any,
+    wiki: Any,
     current_page: str | None = None,
     mode: str = "auto",
 ) -> dict[str, Any]:
@@ -48,8 +48,8 @@ def build_visualization_data(
 
 
 def _build_visualization_data_uncached(
-    index,
-    wiki,
+    index: Any,
+    wiki: Any,
     current_page: str | None = None,
     mode: str = "auto",
 ) -> dict[str, Any]:
@@ -87,7 +87,7 @@ def _build_visualization_data_uncached(
                 if e["target"] == current_page:
                     neighbors.add(e["source"])
             # Add hub nodes (high degree nodes)
-            degree_count = {}
+            degree_count: dict[Any, int] = {}
             for e in edges:
                 degree_count[e["source"]] = degree_count.get(e["source"], 0) + 1
                 degree_count[e["target"]] = degree_count.get(e["target"], 0) + 1

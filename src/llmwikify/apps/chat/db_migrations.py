@@ -28,7 +28,7 @@ LEGACY_SHARED_COLUMNS: list[tuple[str, str]] = [
 ]
 
 
-def init_autoresearch_db(db_path) -> None:
+def init_autoresearch_db(db_path: str | Path) -> None:
     """Idempotently create the autoresearch schema.
 
     Args:
@@ -55,7 +55,7 @@ def init_autoresearch_db(db_path) -> None:
 
 
 def migrate_research_six_step_columns(
-    old_db_path,
+    old_db_path: str | Path,
     drop_columns: bool = True,
 ) -> int:
     """Optional: clean up the legacy autoresearch columns from research_sessions.
@@ -112,7 +112,7 @@ def migrate_research_six_step_columns(
         return dropped
 
 
-def migrate_v3_add_events_column(ar_db_path) -> bool:
+def migrate_v3_add_events_column(ar_db_path: str | Path) -> bool:
     """Idempotently add the `events_json` column to autoresearch_sessions.
 
     New sessions get the column via the CREATE TABLE schema. This helper
@@ -156,7 +156,7 @@ FRAMEWORK_FIELDS = (
 )
 
 
-def migrate_v3_mark_partial_sessions(ar_db_path) -> list[str]:
+def migrate_v3_mark_partial_sessions(ar_db_path: str | Path) -> list[str]:
     """Backfill: mark 'done' sessions as 'incomplete' if 6-step fields are missing.
 
     Fixes the bug pattern observed in session 7fe6f04f-9cab-...: engine

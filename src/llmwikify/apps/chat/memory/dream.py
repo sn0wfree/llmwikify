@@ -39,6 +39,7 @@ import asyncio
 import logging
 import re
 import time
+from collections.abc import Iterator
 from dataclasses import dataclass
 from functools import cached_property
 from pathlib import Path
@@ -374,7 +375,7 @@ class Dream:
     # ─── helpers ───────────────────────────────────────────────
 
     @staticmethod
-    def _batched(items: list, size: int) -> None:
+    def _batched(items: list, size: int) -> Iterator[list]:
         """Yield successive ``size``-sized chunks from ``items``."""
         for i in range(0, len(items), size):
             yield items[i : i + size]

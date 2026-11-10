@@ -5,7 +5,7 @@ import logging
 import re
 from difflib import SequenceMatcher
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from llmwikify.kernel.storage.backend import is_path_excluded
 
@@ -180,7 +180,7 @@ class RelationEngine:
         NOT a true prefix relationship).
         """
         best_match = None
-        best_score = 0
+        best_score: float = 0
         normalized_name = self._normalize_name(name)
         name_len = len(normalized_name)
 
@@ -274,7 +274,7 @@ class RelationEngine:
         )
         row = cursor.fetchone()
         if row:
-            return row["canonical"]
+            return cast(str, row["canonical"])
 
         # Also check original name (case-sensitive alias)
         cursor = self.index.conn.execute(
@@ -283,7 +283,7 @@ class RelationEngine:
         )
         row = cursor.fetchone()
         if row:
-            return row["canonical"]
+            return cast(str, row["canonical"])
 
         # 3. Fuzzy match against existing entities
         candidates = wiki_pages.copy()
@@ -438,7 +438,7 @@ class RelationEngine:
             ).fetchone()
 
         if existing:
-            return existing[0]
+            return cast(int, existing[0])
 
         cursor = self.index.conn.execute(
             """INSERT INTO relations (source, target, relation, confidence, source_file, context, wiki_pages)
@@ -454,7 +454,8 @@ class RelationEngine:
             ),
         )
         self.index.conn.commit()
-        return cursor.lastrowid
+        # lastrowid 类型为 int | None；契约返回 int，cast 保持原运行时值。
+        return cast(int, cursor.lastrowid)
 
     def add_relations(self, relations: list[dict]) -> int:
         """Batch add relations.

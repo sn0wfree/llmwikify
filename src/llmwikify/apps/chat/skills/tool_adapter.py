@@ -346,7 +346,7 @@ class CompositeToolRegistry:
 
     def reject_execution(self, confirmation_id: str) -> dict[str, Any]:
         for registry in self.registries:
-            result = registry.reject_execution(confirmation_id)
+            result: dict[str, Any] = registry.reject_execution(confirmation_id)
             if not self._is_unknown_confirmation(result):
                 return result
         return {

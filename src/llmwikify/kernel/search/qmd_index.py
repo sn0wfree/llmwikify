@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +32,7 @@ class QmdIndex:
         self.port = qmd_config.get("port", 8181)
         self.auto_start = qmd_config.get("auto_start", False)
 
-        self._client = None
+        self._client: Any = None
         self._available: bool | None = None  # Cached availability state
 
     @property
@@ -108,7 +108,9 @@ class QmdIndex:
             return []
 
         try:
-            return self.client.search(query, limit=limit, mode=mode)
+            return cast(
+                list[dict[str, Any]], self.client.search(query, limit=limit, mode=mode)
+            )
         except Exception as e:
             logger.warning("QMD search failed: %s", e)
             return []
@@ -119,7 +121,7 @@ class QmdIndex:
             return {"status": "error", "error": "QMD server not available"}
 
         try:
-            return self.client.embed()
+            return cast(dict[str, Any], self.client.embed())
         except Exception as e:
             logger.warning("QMD embed failed: %s", e)
             return {"status": "error", "error": str(e)}
@@ -127,11 +129,12 @@ class QmdIndex:
     def get_install_guide(self) -> str:
         """Return QMD installation instructions."""
         if self.client:
-            return self.client.get_install_guide()
+            return cast(str, self.client.get_install_guide())
         # Fallback if client not loaded
         try:
             from .qmd_client import QmdClient
 
-            return QmdClient.get_install_guide(QmdClient)
+            # get_install_guide 为实例方法但不读 self；传类对象保持原运行时行为。
+            return QmdClient.get_install_guide(cast(QmdClient, QmdClient))
         except Exception:
             return "Could not load QMD installation guide."

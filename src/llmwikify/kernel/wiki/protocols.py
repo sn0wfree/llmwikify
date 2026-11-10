@@ -22,7 +22,9 @@ class WikiProtocol:
     raw_dir: Path
     db_path: Path
     index_file: Path
-    ref_index_path: Path
+    # wiki.py 以 cached_property 实现（只读），声明为 property 以通过 override 检查
+    @property
+    def ref_index_path(self) -> Path: ...  # type: ignore[empty-body]
     wiki_md_file: Path
     log_file: Path
     sink_dir: Path
@@ -109,6 +111,11 @@ class WikiProtocol:
     # Methods - wiki.md schema (implemented in wiki.py, used by core/init mixin)
     def _get_wiki_md_content(self) -> str: ...  # type: ignore[empty-body]
 
+    # Cross-mixin methods (implemented in wiki.py)
+    def _ensure_raw_dir(self) -> None: ...
+
+    def _get_page_type_mapping(self) -> dict[str, str]: ...  # type: ignore[empty-body]
+
     def _write_wiki_md_content(self, content: str) -> None: ...
 
     def _merge_wiki_md_content(self, existing: str, new: str) -> str: ...  # type: ignore[empty-body]
@@ -117,6 +124,8 @@ class WikiProtocol:
     def append_log(self, operation: str, details: str) -> str: ...  # type: ignore[empty-body]
 
     def write_page(self, name: str, content: str, page_type: str | None = None) -> str: ...  # type: ignore[empty-body]
+
+    def _resolve_page_path(self, page_name: str, page_type: str | None = None) -> str: ...  # type: ignore[empty-body]
 
     def get_relation_engine(self) -> RelationEngine: ...  # type: ignore[empty-body]
 

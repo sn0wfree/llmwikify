@@ -27,7 +27,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from typing import Any
+from typing import Any, cast
 
 
 def _repair_truncated_json(text: str) -> Any | None:
@@ -200,11 +200,14 @@ async def chat_json(
     """
 
     def _sync() -> str:
-        return llm.chat(
-            messages,
-            json_mode=json_mode,
-            max_tokens=max_tokens,
-            temperature=temperature,
+        return cast(
+            str,
+            llm.chat(
+                messages,
+                json_mode=json_mode,
+                max_tokens=max_tokens,
+                temperature=temperature,
+            ),
         )
 
     raw = await asyncio.to_thread(_sync)

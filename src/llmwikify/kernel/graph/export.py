@@ -423,7 +423,7 @@ def detect_communities(
         modularity = _compute_modularity(G, partition)
 
     # Invert partition: community_id -> [nodes]
-    communities = {}
+    communities: dict[Any, list[Any]] = {}
     for node, cid in partition.items():
         if cid not in communities:
             communities[cid] = []
@@ -439,7 +439,7 @@ def detect_communities(
 
 
 def compute_surprise_score(
-    G,
+    G: Any,
     source: str,
     target: str,
     edge_data: dict,
@@ -583,7 +583,7 @@ def _build_networkx(graph: dict) -> Any:
     return G
 
 
-def _louvain_partition(G, resolution: float = 1.0) -> dict:
+def _louvain_partition(G: Any, resolution: float = 1.0) -> dict:
     """Louvain communities via networkx (bundled since 3.0).
 
     ``seed=0`` keeps the partition reproducible run to run.
@@ -596,7 +596,7 @@ def _louvain_partition(G, resolution: float = 1.0) -> dict:
     return {node: cid for cid, comm in enumerate(comms) for node in comm}
 
 
-def _greedy_modularity_communities(G) -> Any:
+def _greedy_modularity_communities(G: Any) -> Any:
     """Simple greedy modularity communities using networkx."""
     from networkx.algorithms.community import greedy_modularity_communities
 
@@ -604,7 +604,7 @@ def _greedy_modularity_communities(G) -> Any:
     return {node: cid for cid, comm in enumerate(communities) for node in comm}
 
 
-def _compute_modularity(G, partition) -> Any:
+def _compute_modularity(G: Any, partition: Any) -> Any:
     """Compute modularity of a ``{node: community_id}`` partition."""
     try:
         import community as community_louvain

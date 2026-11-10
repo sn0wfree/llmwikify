@@ -60,7 +60,7 @@ class ConfirmationManager:
         for (_, cached_wiki_id), registry in self._tool_registries.items():
             if wiki_id and cached_wiki_id != wiki_id:
                 continue
-            result = registry.confirm_execution(confirmation_id, arguments)
+            result: dict = registry.confirm_execution(confirmation_id, arguments)
             if not self.is_unknown_confirmation(result):
                 return result
         return {
@@ -77,7 +77,7 @@ class ConfirmationManager:
         for (_, cached_wiki_id), registry in self._tool_registries.items():
             if wiki_id and cached_wiki_id != wiki_id:
                 continue
-            result = registry.reject_execution(confirmation_id)
+            result: dict = registry.reject_execution(confirmation_id)
             if not self.is_unknown_confirmation(result):
                 return result
         return {

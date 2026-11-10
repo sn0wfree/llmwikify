@@ -1050,7 +1050,7 @@ class AutoResearchDatabase(ChatDatabase):
     instantiated so all tables exist in the shared DB file.
     """
 
-    def __init__(self, data_dir) -> None:
+    def __init__(self, data_dir: Path | str) -> None:
         super().__init__(data_dir)
         from llmwikify.apps.wiki_db import WikiDatabase
 

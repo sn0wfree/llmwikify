@@ -77,7 +77,8 @@ class PermissionRepository(ChatDBBase):
                    AND (session_id IS NULL OR session_id = ? OR session_id = '')""",
                 (tool_name, session_id),
             ).fetchone()
-            return row["cnt"] > 0
+            cnt: int = row["cnt"]
+            return cnt > 0
 
 
 __all__ = ["PermissionRepository"]

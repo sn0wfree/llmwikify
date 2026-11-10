@@ -420,7 +420,7 @@ class LlmClientDriver(AgentDriver):
             "the executor/ChatOrchestrator before calling run_subagent"
         )
 
-    def _build_from_spec(self, spec, model: str) -> Any:
+    def _build_from_spec(self, spec: Any, model: str) -> Any:
         """Build a client from a spec, applying the model override."""
         # Treat "inherit" as a no-op alias (back-compat for existing
         # YAMLs; PR 3 will reject it). Empty / None also means
@@ -1019,6 +1019,8 @@ def _build_web_search_config(request: SubagentRequest | None) -> dict[str, Any]:
         return config
 
     spec = request.llm
+    if spec is None:
+        return config
     if getattr(spec, "api_key", None):
         config["minimax_api_key"] = spec.api_key
     host = getattr(spec, "base_url", "") or ""
