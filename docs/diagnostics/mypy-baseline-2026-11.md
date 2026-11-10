@@ -48,8 +48,8 @@
 |---|---|---:|---:|---|
 | 1 | top 10 文件 | 222 | 31% | ✅ **2026-11-10 完成**：摘豁免后修至 0；全量 702→约 61 错（含级联收益） |
 | 2 | top 11–30 | 184 | 46% | ✅ **2026-11-10 完成**：20 模块摘豁免修至 0；全量 → **55 错 / 24 文件** |
-| 3 | top 31–80 | 205 | 73% | 分 2–3 个 commit |
-| 4 | 其余 67 文件长尾 | 91 | 100% | 单文件多为 1–2 错 |
+| 3 | 仍豁免 ≥3 错 + 非豁免 55 | ~218 | ~78% | **计划（2026-11-10）**：原 top31–80 排名已过期，按现仍豁免错误数重划；见 §批 3 |
+| 4 | 长尾 1–2 错 | ~66 | 100% | 单文件多为 1–2 错 |
 
 **节奏**：每批 = 从豁免清单摘除该批模块 → 修到 0 → `mypy` 复验 → 独立 commit（可单独回滚）。任一批修不完就停在该批，清单保持可回滚状态。
 
@@ -76,6 +76,47 @@
 | C apps | `orchestrator` arg-type；`middleware`/`webui`/`config`/`resolver` no-any-return；`auto_ingest` union-attr；`engine`/`builtin_commands`/`reasoner` 逐条 |
 
 **批 2 后基线**：豁免生效 mypy = **55 错 / 24 文件**（批 1 前 141 → 批 2 后 55）。
+
+### 批 3 计划（2026-11-10 开工）
+
+**背景**：原「top 31–80 ≈ 205」基于 702 全量排名，批 1–2 后已过期。实测（批 2 后）：
+
+| 口径 | 数量 |
+|---|---|
+| 豁免生效 | 55 错 / 24 文件（**全部非豁免**，`tool_registry` 7 · `gatherer` 6 · `_facade` 5 …） |
+| 仍豁免（摘除后暴露） | 223 错 / 81 文件 |
+| 全量 noexempt | 284 错 |
+
+**范围定义**：
+1. **仍豁免且 ≥3 错**的模块（约 35 个，~163 错）→ 摘 `ignore_errors`
+2. **已暴露的非豁免 55 错**（24 文件）→ 一并修到 0
+3. 合计约 **218 错**；1–2 错长尾留给批 4
+
+**仍豁免 ≥3 错清单**（按错误数降序）：
+
+| 错 | 模块 | 构成要点 |
+|---:|---|---|
+| 10 | `kernel.graph.export` | no-untyped-def + import-* |
+| 7 | `interfaces.mcp.adapter` | func-returns-value + assignment |
+| 6 | `kernel.wiki.engines.relation` | no-any-return / return-value |
+| 6 | `interfaces.server.core` | FastAPI 相关 + misc |
+| 6 | `foundation.llm.streamable` | no-any-return / no-untyped-def |
+| 6 | `apps.chat.skills.pipelines.ingest_skill` | SkillResult misc |
+| 6 | `apps.chat.agent.context_manager` | no-any-return / attr-defined |
+| 5 | `mixins.analysis.query` · `lint.rules.query_page_overlap` · `engines.synthesis` · `storage.query_sink` · `search.qmd_index` · `http.maintenance_routes` · `foundation.llm_client` · `foundation.db` | 各 5 |
+| 4 | `mixins.io.link` · `mixins.io.ingest` · `storage.jieba_dict_gen` · `storage.backend` · `agent.loop` · `http.wiki._wiki_ops` · `llm.providers.base` · `research.routes` · `chat.db_migrations` · `chat.agent.subagent_manager` | 各 4 |
+| 3 | `analysis.status` · `graph.visualizer` · `http.routes` · `auth.prompt` · `auth._jwt` · `research.observer` · `skills.workflows.executor` · `memory.dream` · `agent.session_manager` | 各 3 |
+
+**非豁免 55 错（24 文件，一并修）**：`tool_registry` 7 · `gatherer` 6 · `chat_db/_facade` 5 · `chat_message_repo` 4 · `synthesizer`/`chat_session_repo`/`wiki.notifications`/`foundation.web.search` 各 3 · 其余 1–2。
+
+**分组执行**：
+| 组 | 范围 |
+|---|---|
+| A | 非豁免 24 文件（55 错） |
+| B | 仍豁免 kernel + foundation（export/relation/streamable/query/…） |
+| C | 仍豁免 apps + interfaces（adapter/core/ingest_skill/context_manager/routes/…） |
+
+**约束**：不改运行时行为；不用 `ignore_errors` 回退；可选三方允许模块级 `ignore_missing_imports`；批内 mypy 0 → ruff → 架构 → 相关测试 → 独立 commit。
 
 ## 5. Top 30 文件
 
