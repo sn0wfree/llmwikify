@@ -4,6 +4,8 @@ import json
 import logging
 from typing import Any
 
+from llmwikify.kernel.storage.backend import portable_path
+
 from ...protocols import WikiProtocol
 
 logger = logging.getLogger(__name__)
@@ -325,7 +327,7 @@ class WikiLLMMixin(WikiProtocol):
 
         source_page_data = []
         for page_name in source_pages or []:
-            page_path = self.wiki_dir / f"{page_name}.md"
+            page_path = self.wiki_dir / f"{portable_path(page_name)}.md"
             if page_path.exists():
                 source_page_data.append(
                     {

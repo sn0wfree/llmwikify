@@ -249,7 +249,7 @@ class WikiAnalyzer:
             not_analyzed = []
 
             for f in sorted(raw_files)[:limit]:
-                rel = str(f.relative_to(self.wiki.root))
+                rel = f.relative_to(self.wiki.root).as_posix()
                 source_page = self.wiki._find_source_summary_page(rel)
 
                 if source_page and source_page.exists():

@@ -79,7 +79,7 @@ DL uses neural networks.
 
     yield wiki, tmp
 
-    shutil.rmtree(tmp)
+    shutil.rmtree(tmp, ignore_errors=True)
 
 
 class TestGraphAnalyzerCache:

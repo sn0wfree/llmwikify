@@ -70,14 +70,14 @@ class TestDuplicateDetection:
         wiki = Wiki(temp_wiki)
         wiki.init()
 
-        wiki.write_page("Query: Test", "# Query: Test\n\nContent")
+        wiki.write_page("Query - Test", "# Query - Test\n\nContent")
 
         sink = wiki.query_sink
-        sink.append_to_sink("Query: Test", "Q1", "Same answer content.", [], [])
-        sink.append_to_sink("Query: Test", "Q2", "Same answer content.", [], [])
+        sink.append_to_sink("Query - Test", "Q1", "Same answer content.", [], [])
+        sink.append_to_sink("Query - Test", "Q2", "Same answer content.", [], [])
 
         # Read and check
-        result = sink.read("Query: Test")
+        result = sink.read("Query - Test")
         assert result["total_entries"] == 2
         assert result["unique_count"] == 1
         assert result["entries"][0]["answer"] == result["entries"][1]["answer"]
@@ -89,14 +89,14 @@ class TestDuplicateDetection:
         wiki = Wiki(temp_wiki)
         wiki.init()
 
-        wiki.write_page("Query: Test", "# Query: Test\n\nContent")
+        wiki.write_page("Query - Test", "# Query - Test\n\nContent")
 
         sink = wiki.query_sink
-        sink.append_to_sink("Query: Test", "Q1", "Gold mining is extraction.", [], [])
+        sink.append_to_sink("Query - Test", "Q1", "Gold mining is extraction.", [], [])
         # Near-duplicate: just a period difference (normalized to same hash)
-        sink.append_to_sink("Query: Test", "Q2", "Gold mining  is extraction.", [], [])
+        sink.append_to_sink("Query - Test", "Q2", "Gold mining  is extraction.", [], [])
 
-        result = sink.read("Query: Test")
+        result = sink.read("Query - Test")
         assert result["total_entries"] == 2
         assert result["unique_count"] == 1
         assert (
@@ -110,15 +110,15 @@ class TestDuplicateDetection:
         wiki = Wiki(temp_wiki)
         wiki.init()
 
-        wiki.write_page("Query: Test", "# Query: Test\n\nContent")
+        wiki.write_page("Query - Test", "# Query - Test\n\nContent")
 
         sink = wiki.query_sink
-        sink.append_to_sink("Query: Test", "Q1", "Gold mining is extraction.", [], [])
+        sink.append_to_sink("Query - Test", "Q1", "Gold mining is extraction.", [], [])
         sink.append_to_sink(
-            "Query: Test", "Q2", "Photosynthesis is how plants grow.", [], []
+            "Query - Test", "Q2", "Photosynthesis is how plants grow.", [], []
         )
 
-        result = sink.read("Query: Test")
+        result = sink.read("Query - Test")
         assert result["total_entries"] == 2
         assert result["unique_count"] == 2
         assert result["entries"][0]["answer"] != result["entries"][1]["answer"]
@@ -133,9 +133,9 @@ class TestContentStoreFormat:
         wiki = Wiki(temp_wiki)
         wiki.init()
 
-        sink_file = temp_wiki / "wiki" / ".sink" / "Query: Test.sink.md"
+        sink_file = temp_wiki / "wiki" / ".sink" / "Query - Test.sink.md"
         sink_file.write_text(
-            '---\nformal_page: "Query: Test"\n---\n\n'
+            '---\nformal_page: "Query - Test"\n---\n\n'
             "# Query Sink: Test\n\n"
             "---\n\n## Content Store\n\n"
             "### a1b2c3d4 — 2026-04-10\nGold mining is extraction.\n\n"
@@ -158,9 +158,9 @@ class TestContentStoreFormat:
         wiki = Wiki(temp_wiki)
         wiki.init()
 
-        sink_file = temp_wiki / "wiki" / ".sink" / "Query: Test.sink.md"
+        sink_file = temp_wiki / "wiki" / ".sink" / "Query - Test.sink.md"
         sink_file.write_text(
-            '---\nformal_page: "Query: Test"\n---\n\n'
+            '---\nformal_page: "Query - Test"\n---\n\n'
             "# Query Sink: Test\n\n"
             "---\n\n## Content Store\n\n### a1b2c3d4 — 2026-04-10\nA1\n\n"
             "---\n\n## Entry Log\n\n"
@@ -183,9 +183,9 @@ class TestContentStoreFormat:
         wiki = Wiki(temp_wiki)
         wiki.init()
 
-        sink_file = temp_wiki / "wiki" / ".sink" / "Query: Test.sink.md"
+        sink_file = temp_wiki / "wiki" / ".sink" / "Query - Test.sink.md"
         sink_file.write_text(
-            '---\nformal_page: "Query: Test"\n---\n\n'
+            '---\nformal_page: "Query - Test"\n---\n\n'
             "# Query Sink: Test\n\n"
             "---\n\n## Content Store\n\n### a1b2c3d4 — 2026-04-10\nGold mining is extraction.\n\n"
             "---\n\n## Entry Log\n\n"
@@ -195,7 +195,7 @@ class TestContentStoreFormat:
             "| 2 | 2026-04-10 11:00 | Q2 | `a1b2c3d4` | near-dup of #1 |\n"
         )
 
-        result = wiki.query_sink.read("Query: Test")
+        result = wiki.query_sink.read("Query - Test")
         assert result["total_entries"] == 2
         assert result["entries"][0]["answer"] == "Gold mining is extraction."
         assert result["entries"][1]["answer"] == "Gold mining is extraction."
@@ -212,15 +212,18 @@ class TestLegacyMigration:
         wiki = Wiki(temp_wiki)
         wiki.init()
 
-        sink_file = temp_wiki / "wiki" / ".sink" / "Query: Test.sink.md"
+        sink_file = temp_wiki / "wiki" / ".sink" / "Query - Test.sink.md"
         sink_file.write_text(
-            '---\nformal_page: "Query: Test"\n---\n\n'
+            '---\nformal_page: "Query - Test"\n---\n\n'
             "# Query Sink: Test\n\n"
+            # Legacy entry-log format: the header text is parsed by a regex
+            # that expects the literal "Query: " — it is file content, not a
+            # page name, so it keeps its colon.
             "---\n\n## [2026-04-10 10:00] Query: Q1\n\nAnswer one.\n\n"
             "---\n\n## [2026-04-10 11:00] Query: Q2\n\nAnswer two.\n"
         )
 
-        result = wiki.query_sink.read("Query: Test")
+        result = wiki.query_sink.read("Query - Test")
 
         assert result["status"] == "ok"
         assert result["total_entries"] == 2
@@ -233,9 +236,9 @@ class TestLegacyMigration:
         wiki = Wiki(temp_wiki)
         wiki.init()
 
-        sink_file = temp_wiki / "wiki" / ".sink" / "Query: Test.sink.md"
+        sink_file = temp_wiki / "wiki" / ".sink" / "Query - Test.sink.md"
         original = (
-            '---\nformal_page: "Query: Test"\n---\n\n'
+            '---\nformal_page: "Query - Test"\n---\n\n'
             "# Query Sink: Test\n\n"
             "---\n\n## Content Store\n\n### a1b2c3d4 — 2026-04-10\nAnswer.\n\n"
             "---\n\n## Entry Log\n\n"
@@ -245,7 +248,7 @@ class TestLegacyMigration:
         )
         sink_file.write_text(original)
 
-        wiki.query_sink.read("Query: Test")
+        wiki.query_sink.read("Query - Test")
 
         assert sink_file.read_text() == original
         wiki.close()

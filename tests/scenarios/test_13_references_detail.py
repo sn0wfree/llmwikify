@@ -17,6 +17,7 @@ mode for full link metadata, section-level references with
 """
 
 import subprocess
+import sys
 
 
 class TestReferencesDetail:
@@ -52,7 +53,7 @@ class TestReferencesDetail:
         wiki.build_index()
 
         result = subprocess.run(
-            ["python3", "-m", "llmwikify", "references", "page-a", "--detail"],
+            [sys.executable, "-m", "llmwikify", "references", "page-a", "--detail"],
             capture_output=True,
             text=True,
             cwd=str(wiki.root),

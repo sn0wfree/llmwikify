@@ -312,7 +312,7 @@ class WikiIngestMixin(WikiProtocol):
             original_path = Path(source).resolve()
             try:
                 original_path.relative_to(self.raw_dir.resolve())
-                source_name = str(original_path.relative_to(self.raw_dir))
+                source_name = original_path.relative_to(self.raw_dir).as_posix()
                 saved_to_raw = False
                 hint = f"Source is already in raw/{source_name}"
             except ValueError:

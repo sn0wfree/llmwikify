@@ -102,7 +102,7 @@ class WikiLinkMixin(WikiProtocol):
                             "link": target,
                             "status": "ambiguous",
                             "matches": [
-                                str(m.relative_to(self.wiki_dir)) for m in matches
+                                m.relative_to(self.wiki_dir).as_posix() for m in matches
                             ],
                         }
                     )

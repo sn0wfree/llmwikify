@@ -361,12 +361,85 @@ class LocalFileBackend:
 
         ``name`` is the relative path within ``wiki_dir`` minus the
         ``.md`` suffix (e.g. ``"concepts/Factor Investing"`` or
-        ``"index"``).
+        ``"index"``). The name is mapped through :func:`portable_path`
+        first — see that function for why.
+
+        Wikis written before that mapping existed stored the name verbatim
+        (``"Query: X.md"``), which is creatable on POSIX but not on
+        Windows. If such a file is already on disk it wins, so existing
+        wikis keep resolving; Windows probes report it as absent and fall
+        through to the portable name.
         """
-        return (self.wiki_dir / f"{name}.md").resolve()
+        portable = (self.wiki_dir / f"{portable_path(name)}.md").resolve()
+        if not portable.exists():
+            legacy = (self.wiki_dir / f"{name}.md").resolve()
+            if legacy.exists():
+                return legacy
+        return portable
 
 
 # === Module-level helpers (shared between backend and Wiki mixins) ===
+
+
+# Characters illegal in a filename on Windows/macOS. "/" is deliberately
+# absent: it is the directory separator of a logical page name, so the
+# sanitiser splits on it and treats each component separately.
+_ILLEGAL_FILENAME_CHARS = '<>:"\\|?*'
+
+# Windows reserved device names (case-insensitive, with or without extension).
+# Shared with the wiki slug generator so there is a single source of truth.
+WINDOWS_RESERVED_NAMES: frozenset[str] = frozenset(
+    {"con", "prn", "aux", "nul"}
+    | {f"com{i}" for i in range(1, 10)}
+    | {f"lpt{i}" for i in range(1, 10)}
+)
+
+# Logical page-name prefix used by auto-generated query pages. ":" is
+# illegal in a Windows filename, so writes sanitise it to "-"; readers must
+# accept both the logical and the portable spelling.
+QUERY_PAGE_PREFIXES = ("Query: ", "Query - ")
+
+
+def portable_component(name: str) -> str:
+    """Map a single path component to a filename valid on every platform.
+
+    ``": "`` becomes ``" - "`` so a logical name such as ``"Query: Gold"``
+    maps to ``"Query - Gold"`` — the same spelling the query-page generator
+    emits — rather than the unreadable ``"Query- Gold"``.
+    """
+    out = name.replace(": ", " - ")
+    out = "".join("-" if c in _ILLEGAL_FILENAME_CHARS else c for c in out)
+    # Windows: no trailing dot or space in a filename.
+    out = out.rstrip(". ")
+    if out.split(".", 1)[0].lower() in WINDOWS_RESERVED_NAMES:
+        out = f"{out}-"
+    return out
+
+
+def portable_path(name: str) -> str:
+    """Map a POSIX logical path to a filesystem path valid on every platform.
+
+    Keeps "/" as the directory separator and sanitises each component, so a
+    logical name such as ``"concepts/Foo"`` or ``"Query: Gold"`` stays
+    readable as a wiki page name while still being creatable on Windows —
+    which would otherwise silently write to an NTFS alternate data stream
+    and lose the content.
+    """
+    return "/".join(portable_component(p) for p in name.split("/"))
+
+
+def is_query_page_name(name: str) -> bool:
+    """True for an auto-generated query page name, logical or portable."""
+    return name.startswith(QUERY_PAGE_PREFIXES)
+
+
+def strip_query_prefix(name: str) -> str:
+    """Drop the query-page prefix from a name, for display."""
+    for prefix in QUERY_PAGE_PREFIXES:
+        if name.startswith(prefix):
+            return name[len(prefix) :]
+    return name
+
 
 
 def _parse_h2_sections(content: str) -> list[tuple[str, str]]:

@@ -23,6 +23,7 @@ graph LR
 """
 
 import subprocess
+import sys
 
 import pytest
 
@@ -89,7 +90,7 @@ class TestKnowledgeGraph:
         )
 
         result = subprocess.run(
-            ["python3", "-m", "llmwikify", "knowledge-gaps"],
+            [sys.executable, "-m", "llmwikify", "knowledge-gaps"],
             capture_output=True,
             text=True,
             cwd=str(wiki.root),
@@ -108,7 +109,7 @@ class TestKnowledgeGraph:
         wiki.build_index()
 
         result = subprocess.run(
-            ["python3", "-m", "llmwikify", "graph-analyze", "--json"],
+            [sys.executable, "-m", "llmwikify", "graph-analyze", "--json"],
             capture_output=True,
             text=True,
             cwd=str(wiki.root),
@@ -127,7 +128,7 @@ class TestKnowledgeGraph:
         output_path = temp_dir / "graph.html"
         result = subprocess.run(
             [
-                "python3",
+                sys.executable,
                 "-m",
                 "llmwikify",
                 "export-graph",

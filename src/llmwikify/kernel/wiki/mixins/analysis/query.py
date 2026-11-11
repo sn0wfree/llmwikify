@@ -7,6 +7,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, cast
 
+from llmwikify.kernel.storage.backend import (
+    is_query_page_name,
+    portable_path,
+    strip_query_prefix,
+)
+
 from ...constants import (
     MAX_KEY_TOPICS,
     MAX_QUERY_TOPIC_LENGTH,
@@ -68,7 +74,7 @@ class WikiQueryMixin(WikiProtocol):
         if similar_page and mode == "update":
             similar_name = similar_page["page_name"]
             page_name = similar_name
-            page_path = self.wiki_dir / f"{page_name}.md"
+            page_path = self.wiki_dir / f"{portable_path(page_name)}.md"
 
             if auto_link:
                 answer = self._append_sources_section(
@@ -108,7 +114,7 @@ class WikiQueryMixin(WikiProtocol):
                 ),
                 "options": [
                     f"Read the existing page: wiki_read_page('{similar_name}')",
-                    f"Read pending entries: wiki_read_page('wiki/.sink/{similar_name}.sink.md')",
+                    f"Read pending entries: wiki_read_page('wiki/.sink/{portable_path(similar_name)}.sink.md')",
                     "Update formal page: wiki_synthesize(..., mode='update')",
                     "Or let the sink accumulate for later review during lint",
                 ],
@@ -122,13 +128,13 @@ class WikiQueryMixin(WikiProtocol):
 
         else:
             page_name = page_name or self._generate_query_page_name(query)
-            page_path = self.wiki_dir / f"{page_name}.md"
+            page_path = self.wiki_dir / f"{portable_path(page_name)}.md"
 
             counter = 1
             while page_path.exists():
                 base = page_name
                 page_name = f"{base} ({counter})"
-                page_path = self.wiki_dir / f"{page_name}.md"
+                page_path = self.wiki_dir / f"{portable_path(page_name)}.md"
                 counter += 1
 
             self._create_query_page(
@@ -146,7 +152,10 @@ class WikiQueryMixin(WikiProtocol):
         logged = False
         if auto_log:
             if status == "sunk" and similar_page is not None:
-                log_detail = f"{query} → [sink] (see wiki/.sink/{similar_page['page_name']}.sink.md)"
+                log_detail = (
+                    f"{query} → [sink] "
+                    f"(see wiki/.sink/{portable_path(similar_page['page_name'])}.sink.md)"
+                )
             elif status == "updated":
                 log_detail = f"{query} → [[{page_name}]] ({status})"
             else:
@@ -170,12 +179,16 @@ class WikiQueryMixin(WikiProtocol):
     def _generate_query_page_name(self, query: str) -> str:
         """Generate a page name from a query string.
 
-        Extracts topic (first 50 chars, slugified) and prefixes with 'Query: '.
+        Extracts topic (first 50 chars, slugified) and prefixes with
+        ``Query - ``. The separator is ``" - "`` rather than ``": "`` because
+        ":" is illegal in a Windows filename — a page written as
+        ``Query: X.md`` would land as an NTFS alternate data stream and be
+        invisible to the wiki.
         """
         topic = query.strip()[:MAX_QUERY_TOPIC_LENGTH].strip()
         topic = topic.title()
         topic = topic.rstrip(".,;:!?")
-        return f"Query: {topic}"
+        return portable_path(f"Query - {topic}")
 
     def _find_similar_query_page(self, query: str) -> dict | None:
         """Find an existing query page with similar topic.
@@ -205,12 +218,12 @@ class WikiQueryMixin(WikiProtocol):
         for page in self._wiki_pages():
             page_name = page.stem
 
-            if not page_name.startswith("Query:"):
+            if not is_query_page_name(page_name):
                 continue
 
             page_keywords = {
                 w.lower().strip(".,;:!?\"'()[]{}")
-                for w in page_name.replace("Query:", "").split()
+                for w in strip_query_prefix(page_name).split()
                 if w.lower() not in STOP_WORDS and len(w) > MIN_KEYWORD_LENGTH
             }
 

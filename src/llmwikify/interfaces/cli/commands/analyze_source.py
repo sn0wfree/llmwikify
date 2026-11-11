@@ -36,7 +36,7 @@ def run_analyze_source(wiki: Any, args: Any) -> int:
         force = getattr(args, "force", False)
 
         for i, f in enumerate(sources, 1):
-            rel = str(f.relative_to(wiki.root))
+            rel = f.relative_to(wiki.root).as_posix()
             print(f"[{i}/{len(sources)}] Analyzing: {rel}...", end=" ")
 
             try:

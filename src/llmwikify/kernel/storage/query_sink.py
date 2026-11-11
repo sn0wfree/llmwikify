@@ -6,6 +6,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from .backend import portable_path, strip_query_prefix
+
 
 class QuerySink:
     """Manages query sink buffers with content-addressable storage.
@@ -105,9 +107,17 @@ class QuerySink:
 
     # -- Public interface --
 
+    def _sink_file(self, page_name: str) -> Path:
+        """Resolve a logical page name to its sink file.
+
+        The page name is mapped through :func:`portable_path` so the sink
+        filename is creatable on every platform (see that function).
+        """
+        return self.sink_dir / f"{portable_path(page_name)}.sink.md"
+
     def get_info_for_page(self, page_name: str) -> dict:
         """Get sink status for a wiki page."""
-        sink_file = self.sink_dir / f"{page_name}.sink.md"
+        sink_file = self._sink_file(page_name)
         if not sink_file.exists():
             return {"has_sink": False, "sink_entries": 0}
         try:
@@ -133,7 +143,7 @@ class QuerySink:
 
         result: dict[str, dict] = {}
         for name in page_names:
-            found = sink_files.get(name)
+            found = sink_files.get(portable_path(name))
             if found is None:
                 result[name] = {"has_sink": False, "sink_entries": 0}
                 continue
@@ -148,18 +158,18 @@ class QuerySink:
         return result
 
     def _find_or_create_sink_file(self, page_name: str) -> Path:
-        sink_file = self.sink_dir / f"{page_name}.sink.md"
+        sink_file = self._sink_file(page_name)
         if not sink_file.exists():
             content = (
                 f"---\n"
                 f'formal_page: "{page_name}"\n'
-                f"formal_path: wiki/{page_name}.md\n"
+                f"formal_path: wiki/{portable_path(page_name)}.md\n"
                 f"created: {self._now()}\n"
                 f"unique_count: 0\n"
                 f"entry_count: 0\n"
                 f"last_updated: {self._now()}\n"
                 f"---\n\n"
-                f"# Query Sink: {page_name.replace('Query: ', '')}\n\n"
+                f"# Query Sink: {strip_query_prefix(page_name)}\n\n"
                 f"> Pending entries for [[{page_name}]]\n\n"
                 f"---\n\n"
                 f"## Content Store\n\n"
@@ -169,7 +179,7 @@ class QuerySink:
                 f"*(No entries yet)*\n"
             )
             sink_file.write_text(content, encoding="utf-8", newline="\n")
-            formal_path = self.wiki_dir / f"{page_name}.md"
+            formal_path = self.wiki_dir / f"{portable_path(page_name)}.md"
             if formal_path.exists():
                 self._update_page_sink_meta(formal_path, sink_file)
         else:
@@ -251,7 +261,7 @@ class QuerySink:
 
                 new_content = (
                     f"{header}\n\n"
-                    f"# Query Sink: {fm_dict.get('formal_page', 'Unknown').replace('Query: ', '')}\n\n"
+                    f"# Query Sink: {strip_query_prefix(fm_dict.get('formal_page', 'Unknown'))}\n\n"
                     f"> Pending entries for [[{fm_dict.get('formal_page', 'Unknown')}]]\n\n"
                     f"---\n\n"
                     f"## Content Store\n\n"
@@ -307,7 +317,7 @@ class QuerySink:
 
             # Build new format
             lines = [header, ""]
-            lines.append(f"# Query Sink: {formal_page.replace('Query: ', '')}")
+            lines.append(f"# Query Sink: {strip_query_prefix(formal_page)}")
             lines.append("")
             lines.append(f"> Pending entries for [[{formal_page}]]")
             lines.append("")
@@ -461,7 +471,7 @@ class QuerySink:
 
     def _analyze_query_patterns(self, query: str, page_name: str) -> list[str]:
         suggestions: list[str] = []
-        sink_file = self.sink_dir / f"{page_name}.sink.md"
+        sink_file = self._sink_file(page_name)
         if not sink_file.exists():
             return suggestions
         content = sink_file.read_text(encoding="utf-8")
@@ -514,7 +524,7 @@ class QuerySink:
                     f"New Concepts: Mentions {', '.join(sorted(new_concepts)[:3])} "
                     f"not in formal page. Consider if any deserve their own page."
                 )
-        sink_file = self.sink_dir / f"{page_name}.sink.md"
+        sink_file = self._sink_file(page_name)
         if sink_file.exists():
             negation_words = re.findall(
                 r"\b(not|never|no longer|however|contrary|contradicts?)\b",
@@ -654,7 +664,7 @@ class QuerySink:
         # Extract title line (preserve original if possible)
         title_match = re.search(r"^# Query Sink: (.+)$", original, re.MULTILINE)
         title = (
-            title_match.group(1) if title_match else page_name.replace("Query: ", "")
+            title_match.group(1) if title_match else strip_query_prefix(page_name)
         )
 
         # Extract description line
@@ -717,7 +727,7 @@ class QuerySink:
 
     def read(self, page_name: str) -> dict:
         """Read all entries from a query sink file, resolving hash references."""
-        sink_file = self.sink_dir / f"{page_name}.sink.md"
+        sink_file = self._sink_file(page_name)
         if not sink_file.exists():
             return {
                 "status": "empty",

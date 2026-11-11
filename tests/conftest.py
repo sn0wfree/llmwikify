@@ -98,8 +98,8 @@ def wiki_instance(temp_wiki):
     if (temp_wiki / "wiki").exists():
         import shutil
 
-        shutil.rmtree(temp_wiki / "wiki")
-        shutil.rmtree(temp_wiki / "raw")
+        shutil.rmtree(temp_wiki / "wiki", ignore_errors=True)
+        shutil.rmtree(temp_wiki / "raw", ignore_errors=True)
 
     (temp_wiki / "raw").mkdir()
     (temp_wiki / "wiki").mkdir()

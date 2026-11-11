@@ -186,7 +186,7 @@ AI is a broad field of computer science focused on creating intelligent machines
 
     yield wiki, tmp
 
-    shutil.rmtree(tmp)
+    shutil.rmtree(tmp, ignore_errors=True)
 
 
 class TestSynthesisEngine:

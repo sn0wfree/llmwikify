@@ -28,6 +28,7 @@ Wiki pages with auto-linking
 
 import shutil
 import subprocess
+import sys
 
 import pytest
 
@@ -63,7 +64,7 @@ class TestIngestWorkflow:
         shutil.copy(sample_markdown_file, dest)
 
         result = subprocess.run(
-            ["python3", "-m", "llmwikify", "ingest", str(dest), "--dry-run"],
+            [sys.executable, "-m", "llmwikify", "ingest", str(dest), "--dry-run"],
             capture_output=True,
             text=True,
             cwd=str(wiki.root),
@@ -82,7 +83,7 @@ class TestIngestWorkflow:
         shutil.copytree(batch_dir, dest, dirs_exist_ok=True)
 
         result = subprocess.run(
-            ["python3", "-m", "llmwikify", "batch", str(dest)],
+            [sys.executable, "-m", "llmwikify", "batch", str(dest)],
             capture_output=True,
             text=True,
             cwd=str(wiki.root),
@@ -143,7 +144,7 @@ class TestIngestWorkflow:
         shutil.copytree(batch_dir, dest, dirs_exist_ok=True)
 
         result = subprocess.run(
-            ["python3", "-m", "llmwikify", "batch", str(dest), "--self-create"],
+            [sys.executable, "-m", "llmwikify", "batch", str(dest), "--self-create"],
             capture_output=True,
             text=True,
             cwd=str(wiki.root),

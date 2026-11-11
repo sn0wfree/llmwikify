@@ -6,6 +6,8 @@ import logging
 import re
 from typing import TYPE_CHECKING, Any
 
+from llmwikify.kernel.storage.backend import is_query_page_name
+
 from ...constants import (
     MAX_CROSS_REF_HINTS,
     MAX_MISSING_DISPLAY,
@@ -132,7 +134,7 @@ class MissingCrossRefsRule(CrossPageRule):
         candidates = sorted(
             c
             for c in existing_pages
-            if len(c.rsplit("/", 1)[-1]) >= 3 and not c.startswith("Query:")
+            if len(c.rsplit("/", 1)[-1]) >= 3 and not is_query_page_name(c)
         )
         title_patterns: dict[str, re.Pattern] = {}
         path_patterns: dict[str, re.Pattern] = {}

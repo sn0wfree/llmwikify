@@ -13,6 +13,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, cast
 
+from llmwikify.kernel.storage.backend import portable_path
+
 logger = logging.getLogger(__name__)
 
 
@@ -280,7 +282,7 @@ class WikiDreamEditor:
         if not entries:
             return
 
-        wiki_page = self.wiki.wiki_dir / f"{page_name}.md"
+        wiki_page = self.wiki.wiki_dir / f"{portable_path(page_name)}.md"
 
         if wiki_page.exists():
             self._propose_update_existing_page(page_name, wiki_page, entries)
@@ -428,17 +430,17 @@ class WikiDreamEditor:
 
     def _apply_create_page(self, page_name: str, content: str) -> None:
         """Create a new wiki page."""
-        page_path = self.wiki.wiki_dir / f"{page_name}.md"
+        page_path = self.wiki.wiki_dir / f"{portable_path(page_name)}.md"
         page_path.parent.mkdir(parents=True, exist_ok=True)
         page_path.write_text(content, encoding="utf-8", newline="\n")
         self.wiki.index.upsert_page(
-            page_name, content, str(page_path.relative_to(self.wiki.wiki_dir))
+            page_name, content, page_path.relative_to(self.wiki.wiki_dir).as_posix()
         )
         self.wiki.append_log("dream_create", f"Created {page_name} from Dream proposal")
 
     def _apply_append(self, page_name: str, content: str) -> None:
         """Append content to an existing wiki page."""
-        page_path = self.wiki.wiki_dir / f"{page_name}.md"
+        page_path = self.wiki.wiki_dir / f"{portable_path(page_name)}.md"
         if not page_path.exists():
             raise FileNotFoundError(f"Page not found: {page_name}")
 
@@ -446,7 +448,7 @@ class WikiDreamEditor:
         new_content = existing.rstrip() + "\n\n" + content + "\n"
         page_path.write_text(new_content, encoding="utf-8", newline="\n")
         self.wiki.index.upsert_page(
-            page_name, new_content, str(page_path.relative_to(self.wiki.wiki_dir))
+            page_name, new_content, page_path.relative_to(self.wiki.wiki_dir).as_posix()
         )
         self.wiki.append_log(
             "dream_edit", f"Appended to {page_name} from Dream proposal"
@@ -456,7 +458,7 @@ class WikiDreamEditor:
         self, page_name: str, content: str, marker: str, position: str
     ) -> None:
         """Insert content before or after a marker."""
-        page_path = self.wiki.wiki_dir / f"{page_name}.md"
+        page_path = self.wiki.wiki_dir / f"{portable_path(page_name)}.md"
         if not page_path.exists():
             raise FileNotFoundError(f"Page not found: {page_name}")
 
@@ -471,7 +473,7 @@ class WikiDreamEditor:
 
         page_path.write_text(new_content, encoding="utf-8", newline="\n")
         self.wiki.index.upsert_page(
-            page_name, new_content, str(page_path.relative_to(self.wiki.wiki_dir))
+            page_name, new_content, page_path.relative_to(self.wiki.wiki_dir).as_posix()
         )
         self.wiki.append_log(
             "dream_edit", f"Inserted into {page_name} from Dream proposal"
@@ -481,7 +483,7 @@ class WikiDreamEditor:
         self, page_name: str, content: str, start_marker: str, end_marker: str
     ) -> None:
         """Replace content between markers."""
-        page_path = self.wiki.wiki_dir / f"{page_name}.md"
+        page_path = self.wiki.wiki_dir / f"{portable_path(page_name)}.md"
         if not page_path.exists():
             raise FileNotFoundError(f"Page not found: {page_name}")
 
@@ -495,7 +497,7 @@ class WikiDreamEditor:
 
         page_path.write_text(new_content, encoding="utf-8", newline="\n")
         self.wiki.index.upsert_page(
-            page_name, new_content, str(page_path.relative_to(self.wiki.wiki_dir))
+            page_name, new_content, page_path.relative_to(self.wiki.wiki_dir).as_posix()
         )
         self.wiki.append_log(
             "dream_edit", f"Replaced section in {page_name} from Dream proposal"

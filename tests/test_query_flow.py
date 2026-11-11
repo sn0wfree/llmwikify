@@ -22,7 +22,7 @@ class TestSynthesizeQueryBasic:
         )
 
         assert result["status"] == "created"
-        assert result["page_name"].startswith("Query:")
+        assert result["page_name"].startswith("Query - ")
         assert "Gold Mining" in result["page_name"]
 
         page_path = temp_wiki / "wiki" / f"{result['page_name']}.md"
@@ -223,12 +223,12 @@ class TestSynthesizeLogging:
         wiki.synthesize_query(
             query="Compare A and B",
             answer="# Comparison",
-            page_name="Query: A vs B",
+            page_name="Query - A vs B",
         )
 
         log = (temp_wiki / "wiki" / "log.md").read_text()
         assert "query | Compare A and B" in log
-        assert "[[Query: A vs B]]" in log
+        assert "[[Query - A vs B]]" in log
 
         wiki.close()
 
@@ -320,7 +320,7 @@ class TestSynthesizeDuplicateDetection:
         wiki.synthesize_query(
             query="Compare gold and silver mining profitability",
             answer="# Gold vs Silver",
-            page_name="Query: Gold vs Silver Mining",
+            page_name="Query - Gold vs Silver Mining",
         )
 
         # Similar but not identical query
@@ -343,7 +343,7 @@ class TestSynthesizeDuplicateDetection:
         # Create a Query page in a subdirectory
         subdir = temp_wiki / "wiki" / "queries"
         subdir.mkdir(parents=True)
-        (subdir / "Query: Gold Mining Methods.md").write_text(
+        (subdir / "Query - Gold Mining Methods.md").write_text(
             "# Gold Mining Methods\n\nOverview of mining methods.\n\n- Keywords: gold, mining, methods"
         )
 
@@ -374,7 +374,7 @@ class TestSynthesizeDuplicateDetection:
 
         # No hint about existing pages
         assert result["hint"] == ""
-        assert result["page_name"] == "Query: How Does Photosynthesis Work"
+        assert result["page_name"] == "Query - How Does Photosynthesis Work"
 
         wiki.close()
 
@@ -406,7 +406,7 @@ class TestQueryPageNaming:
             answer="# Mining Economics",
         )
 
-        assert "Query:" in result["page_name"]
+        assert "Query - " in result["page_name"]
         assert "Compare" in result["page_name"] or "Gold" in result["page_name"]
 
         wiki.close()
@@ -423,7 +423,7 @@ class TestQueryPageNaming:
         )
 
         # Topic portion should be <= 50 chars
-        topic = result["page_name"].replace("Query: ", "")
+        topic = result["page_name"].replace("Query - ", "")
         assert len(topic) <= 50
 
         wiki.close()
@@ -441,7 +441,7 @@ class TestQueryPageNaming:
         )
 
         assert result["status"] == "sunk"
-        sink_file = temp_wiki / "wiki" / ".sink" / "Query: Test Page.sink.md"
+        sink_file = temp_wiki / "wiki" / ".sink" / "Query - Test Page.sink.md"
         assert sink_file.exists()
 
         wiki.close()

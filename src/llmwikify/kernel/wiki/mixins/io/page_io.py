@@ -5,6 +5,8 @@ import re
 from pathlib import Path
 from typing import Any
 
+from llmwikify.kernel.storage.backend import portable_component, portable_path
+
 from ...protocols import WikiProtocol
 
 logger = logging.getLogger(__name__)
@@ -81,7 +83,7 @@ class WikiPageIOMixin(WikiProtocol):
         if "\\t" in content:
             content = content.replace("\\t", "\t")
 
-        page_path = (self.wiki_dir / f"{full_path}.md").resolve()
+        page_path = (self.wiki_dir / f"{portable_path(full_path)}.md").resolve()
 
         try:
             page_path.relative_to(self.wiki_dir.resolve())
@@ -113,7 +115,7 @@ class WikiPageIOMixin(WikiProtocol):
             page_name = page_name.replace("sink/", ".sink/", 1)
 
         if page_name.startswith(".sink/") or page_name.startswith("wiki/.sink/"):
-            sink_name = page_name.rsplit("/", 1)[-1]
+            sink_name = portable_component(page_name.rsplit("/", 1)[-1])
             sink_file = self.sink_dir / sink_name
             if not sink_file.exists() and not sink_name.endswith(".md"):
                 sink_file = self.sink_dir / f"{sink_name}.md"
@@ -147,7 +149,7 @@ class WikiPageIOMixin(WikiProtocol):
         else:
             full_path = page_name
 
-        page_path = self.wiki_dir / f"{full_path}.md"
+        page_path = self.wiki_dir / f"{portable_path(full_path)}.md"
 
         if not page_path.exists():
             return {"error": f"Page not found: {full_path}"}
@@ -413,8 +415,10 @@ class WikiPageIOMixin(WikiProtocol):
         summary_cache = self.__dict__.setdefault("_summary_cache", {})
 
         page_list = sorted(self._backend.list_page_paths())
+        # as_posix(): page names are logical (POSIX) identifiers — the sink
+        # index and the wiki index both key on forward-slash names.
         page_names = [
-            str(p.relative_to(self.wiki_dir).with_suffix("")) for p in page_list
+            p.relative_to(self.wiki_dir).with_suffix("").as_posix() for p in page_list
         ]
         # One directory listing for the whole wiki instead of a stat per page.
         try:

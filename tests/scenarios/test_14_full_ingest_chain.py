@@ -27,6 +27,7 @@ graph LR
 
 import shutil
 import subprocess
+import sys
 
 import pytest
 
@@ -84,7 +85,7 @@ class TestFullIngestChain:
         shutil.copytree(batch_dir, dest, dirs_exist_ok=True)
 
         result = subprocess.run(
-            ["python3", "-m", "llmwikify", "batch", str(dest), "--self-create"],
+            [sys.executable, "-m", "llmwikify", "batch", str(dest), "--self-create"],
             capture_output=True,
             text=True,
             cwd=str(wiki.root),

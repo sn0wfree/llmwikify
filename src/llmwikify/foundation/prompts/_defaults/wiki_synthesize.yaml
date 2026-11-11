@@ -25,7 +25,7 @@ system: |
   {% endif %}
 
   **Sink Mechanism:**
-  - When a similar "Query: Topic" page already exists, new answers go to the sink buffer
+  - When a similar "Query - Topic" page already exists, new answers go to the sink buffer
   - The sink uses content-addressable storage: duplicate answers are auto-compressed
   - Before answering: read the formal page + sink entries for context
   - Use mode="update" to update the formal page with a comprehensive answer

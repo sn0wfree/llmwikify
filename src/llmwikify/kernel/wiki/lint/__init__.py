@@ -35,6 +35,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from llmwikify.kernel.storage.backend import is_query_page_name
+
 if TYPE_CHECKING:
     from ..wiki import Wiki
 
@@ -88,7 +90,7 @@ class Rule:
     def _iter_pages(self, wiki: Wiki):
         """Yield non-Query pages. Override for custom iteration."""
         for page in wiki._wiki_pages():
-            if not wiki._page_display_name(page).startswith("Query:"):
+            if not is_query_page_name(wiki._page_display_name(page)):
                 yield page
 
     def _load_pages(self, wiki: Wiki) -> dict[str, str]:
@@ -99,7 +101,7 @@ class Rule:
         pages: dict[str, str] = {}
         for page in wiki._wiki_pages():
             name = wiki._page_display_name(page)
-            if not name.startswith("Query:"):
+            if not is_query_page_name(name):
                 try:
                     pages[name] = page.read_text(encoding="utf-8")
                 except TypeError:

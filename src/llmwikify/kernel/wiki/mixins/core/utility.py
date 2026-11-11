@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from llmwikify.kernel.storage.backend import is_path_excluded
+from llmwikify.kernel.storage.backend import WINDOWS_RESERVED_NAMES, is_path_excluded
 
 if TYPE_CHECKING:
     from ...prompt_registry import PromptRegistry
@@ -24,14 +24,6 @@ logger = logging.getLogger(__name__)
 # to reach ``llmwikify/``, then descends into ``foundation/``.
 TEMPLATES_DIR = (
     Path(__file__).parent.parent.parent.parent.parent / "foundation" / "templates"
-)
-
-# Windows reserved device names — a file named "con.md" (or "CON", "com1")
-# cannot be opened on Windows. Slugs matching these get a "-" suffix.
-_WINDOWS_RESERVED_NAMES = frozenset(
-    {"con", "prn", "aux", "nul"}
-    | {f"com{i}" for i in range(1, 10)}
-    | {f"lpt{i}" for i in range(1, 10)}
 )
 
 
@@ -61,7 +53,7 @@ class WikiUtilityMixin(WikiProtocol):
         # Windows: no trailing dot / space in filenames
         text = text.rstrip(". ")
         # Windows: reserved device names (with or without extension)
-        if text.split(".", 1)[0].lower() in _WINDOWS_RESERVED_NAMES:
+        if text.split(".", 1)[0].lower() in WINDOWS_RESERVED_NAMES:
             text = f"{text}-"
         return text
 
@@ -165,7 +157,7 @@ class WikiUtilityMixin(WikiProtocol):
         if not self.wiki_dir.exists():
             return []
         return [
-            str(p.relative_to(self.wiki_dir))
+            p.relative_to(self.wiki_dir).as_posix()
             for p in self.wiki_dir.rglob("*.md")
             if p.stem not in (self._index_page_name, self._log_page_name)
             and ".sink" not in str(p)

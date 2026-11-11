@@ -4,7 +4,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from llmwikify.kernel.storage.backend import is_path_excluded
+from llmwikify.kernel.storage.backend import (
+    is_path_excluded,
+    is_query_page_name,
+    strip_query_prefix,
+)
 
 from ...constants import (
     JACCARD_OVERLAP_THRESHOLD,
@@ -44,12 +48,12 @@ class QueryPageOverlapRule(Rule):
             if is_path_excluded(page):
                 continue
             page_name = page.stem
-            if not page_name.startswith("Query:"):
+            if not is_query_page_name(page_name):
                 continue
 
             keywords = {
                 w.lower().strip(".,;:!?\"'()[]{}")
-                for w in page_name.replace("Query:", "").split()
+                for w in strip_query_prefix(page_name).split()
                 if w.lower() not in STOP_WORDS and len(w) > MIN_KEYWORD_LENGTH
             }
 

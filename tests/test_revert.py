@@ -47,7 +47,7 @@ class TestRevert:
             assert msgs[0]["content"] == "hello"
             assert msgs[1]["content"] == "hi"
         finally:
-            shutil.rmtree(tmpdir)
+            shutil.rmtree(tmpdir, ignore_errors=True)
 
     def test_revert_first_message(self):
         db, sid, tmpdir = _make_db()
@@ -68,7 +68,7 @@ class TestRevert:
             assert len(msgs) == 1
             assert msgs[0]["content"] == "hello"
         finally:
-            shutil.rmtree(tmpdir)
+            shutil.rmtree(tmpdir, ignore_errors=True)
 
     def test_revert_nonexistent_message(self):
         db, sid, tmpdir = _make_db()
@@ -81,7 +81,7 @@ class TestRevert:
             msgs = db.get_chat_messages(sid)
             assert len(msgs) == 1
         finally:
-            shutil.rmtree(tmpdir)
+            shutil.rmtree(tmpdir, ignore_errors=True)
 
     def test_include_reverted(self):
         db, sid, tmpdir = _make_db()
@@ -107,7 +107,7 @@ class TestRevert:
             msgs = db.get_chat_messages(sid, include_reverted=True)
             assert len(msgs) == 3
         finally:
-            shutil.rmtree(tmpdir)
+            shutil.rmtree(tmpdir, ignore_errors=True)
 
 
 class TestAutoNaming:
@@ -121,7 +121,7 @@ class TestAutoNaming:
             title = db.get_chat_session_title(sid)
             assert title == "My Chat Title"
         finally:
-            shutil.rmtree(tmpdir)
+            shutil.rmtree(tmpdir, ignore_errors=True)
 
     def test_title_falls_back_to_first_message(self):
         db, sid, tmpdir = _make_db()
@@ -132,7 +132,7 @@ class TestAutoNaming:
             title = db.get_chat_session_title(sid)
             assert title == "hello world"
         finally:
-            shutil.rmtree(tmpdir)
+            shutil.rmtree(tmpdir, ignore_errors=True)
 
     def test_title_prefers_stored_over_derived(self):
         db, sid, tmpdir = _make_db()
@@ -144,4 +144,4 @@ class TestAutoNaming:
             title = db.get_chat_session_title(sid)
             assert title == "Custom Title"
         finally:
-            shutil.rmtree(tmpdir)
+            shutil.rmtree(tmpdir, ignore_errors=True)

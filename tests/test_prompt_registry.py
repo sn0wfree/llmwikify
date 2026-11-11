@@ -421,7 +421,7 @@ class TestBuiltInTemplates:
         result = registry.render_document("wiki_schema", version="0.17.0")
 
         # v2.0 schema uses {Topic} instead of {{Topic}} (no Jinja2 raw blocks)
-        assert "Query: {Topic}" in result or "Query: " in result
+        assert "Query - {Topic}" in result or "Query - " in result
         assert "v0.17.0" in result
         assert "# Wiki Schema" in result
 

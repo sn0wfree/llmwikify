@@ -143,7 +143,7 @@ class RelationEngine:
         for page in wiki_dir.rglob("*.md"):
             if is_path_excluded(page):
                 continue
-            page_name = str(page.relative_to(wiki_dir).with_suffix(""))
+            page_name = page.relative_to(wiki_dir).with_suffix("").as_posix()
             pages.append(page_name)
         return pages
 

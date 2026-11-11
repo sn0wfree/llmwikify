@@ -921,7 +921,7 @@ def _handle_glob(
             p for p in candidates if p.is_file() and _is_within(worktree_root, p.resolve())
         )[:_GLOB_MAX_FILES]
         return {
-            "files": [str(p.relative_to(worktree_root)) for p in files],
+            "files": [p.relative_to(worktree_root).as_posix() for p in files],
             "count": len(files),
             "truncated": len(files) >= _GLOB_MAX_FILES,
         }

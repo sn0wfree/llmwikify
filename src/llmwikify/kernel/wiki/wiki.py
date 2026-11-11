@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from ...foundation.config import load_config
-from ..storage.backend import LocalFileBackend, WikiBackend
+from ..storage.backend import LocalFileBackend, WikiBackend, portable_path
 from ..storage.index import WikiIndex
 from ..storage.query_sink import QuerySink
 from .engines.analyzer import WikiAnalyzer
@@ -394,7 +394,7 @@ class Wiki(
         """
         if not self.wiki_dir.exists():
             return []
-        return list(self.wiki_dir.rglob(f"{name}.md"))
+        return list(self.wiki_dir.rglob(f"{portable_path(name)}.md"))
 
     def _get_page_type_mapping(self) -> dict[str, str]:
         """Read page type → directory mapping from wiki.md."""

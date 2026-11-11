@@ -145,7 +145,7 @@ class SynthesisEngine:
         for page in entities_dir.rglob("*.md"):
             if is_path_excluded(page):
                 continue
-            page_name = str(page.relative_to(self.wiki.wiki_dir))[:-3]
+            page_name = page.relative_to(self.wiki.wiki_dir).as_posix()[:-3]
             entities.add(page_name)
 
             # Also extract entities from content

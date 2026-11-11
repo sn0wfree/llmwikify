@@ -160,7 +160,7 @@ def _legacy_index_content(wiki) -> str:
             continue
         if page.name in ("index.md", "log.md"):
             continue
-        page_name = str(page_path.with_suffix(""))
+        page_name = page_path.with_suffix("").as_posix()
         subdir = page_path.parts[0] if len(page_path.parts) > 1 else ""
         label = (
             dir_labels.get(subdir, subdir.capitalize())

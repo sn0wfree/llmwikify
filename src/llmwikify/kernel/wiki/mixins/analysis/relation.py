@@ -9,6 +9,8 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from ...engines.relation import RelationEngine
 
+from llmwikify.kernel.storage.backend import portable_path
+
 from ...protocols import WikiProtocol
 
 logger = logging.getLogger(__name__)
@@ -116,9 +118,9 @@ class WikiRelationMixin(WikiProtocol):
             for op in write_ops:
                 page_name = op.get("page_name", "")
                 if page_name:
-                    page_path = self.wiki_dir / f"{page_name}.md"
+                    page_path = self.wiki_dir / f"{portable_path(page_name)}.md"
                     if page_path.exists():
-                        snapshot_path = snapshot_dir / f"{page_name}.md"
+                        snapshot_path = snapshot_dir / f"{portable_path(page_name)}.md"
                         snapshot_path.parent.mkdir(parents=True, exist_ok=True)
                         shutil.copy2(page_path, snapshot_path)
                         page_snapshots[page_name] = snapshot_path
@@ -192,7 +194,7 @@ class WikiRelationMixin(WikiProtocol):
             )
             for page_name, snapshot_path in page_snapshots.items():
                 try:
-                    page_path = self.wiki_dir / f"{page_name}.md"
+                    page_path = self.wiki_dir / f"{portable_path(page_name)}.md"
                     if snapshot_path.exists():
                         shutil.copy2(snapshot_path, page_path)
                     elif page_path.exists():

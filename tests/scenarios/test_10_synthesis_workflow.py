@@ -26,6 +26,7 @@ outdated / missing / redundant
 """
 
 import subprocess
+import sys
 
 import pytest
 
@@ -88,7 +89,7 @@ class TestSynthesisWorkflow:
         )
 
         result = subprocess.run(
-            ["python3", "-m", "llmwikify", "knowledge-gaps", "--json"],
+            [sys.executable, "-m", "llmwikify", "knowledge-gaps", "--json"],
             capture_output=True,
             text=True,
             cwd=str(wiki.root),
@@ -109,7 +110,7 @@ class TestSynthesisWorkflow:
         wiki.build_index()
 
         result = subprocess.run(
-            ["python3", "-m", "llmwikify", "graph-analyze", "--json"],
+            [sys.executable, "-m", "llmwikify", "graph-analyze", "--json"],
             capture_output=True,
             text=True,
             cwd=str(wiki.root),
@@ -133,7 +134,7 @@ class TestSynthesisWorkflow:
         html_path = temp_dir / "graph.html"
         result_html = subprocess.run(
             [
-                "python3",
+                sys.executable,
                 "-m",
                 "llmwikify",
                 "export-graph",

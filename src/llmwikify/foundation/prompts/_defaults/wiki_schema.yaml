@@ -77,7 +77,7 @@ document: |
   | Comparison | `wiki/comparisons/{a}-vs-{b}.md` | Side-by-side analysis of two entities/concepts |
   | Synthesis | `wiki/synthesis/{topic}.md` | Cross-source analysis on a theme or question |
   | Claim | `wiki/claims/{slug}.md` | Specific factual claim with supporting/contradicting evidence |
-  | Query | `wiki/Query: {Topic}.md` | Persistent answer to a user query |
+  | Query | `wiki/Query - {Topic}.md` | Persistent answer to a user query |
   | Overview | `wiki/overview.md` | Top-level narrative of the entire knowledge base |
 
   ### Custom Page Types
@@ -322,7 +322,7 @@ document: |
 
   **Decision flow:**
   - If search returns results → read pages → synthesize → save
-  - If "Query: Topic" page already exists → use mode="sink" or mode="update"
+  - If "Query - Topic" page already exists → use mode="sink" or mode="update"
   - mode="sink" → answer goes to sink (duplicates auto-compressed)
   - mode="update" → update the formal page with comprehensive answer
 
@@ -530,8 +530,9 @@ document: |
 
   ## Query Page Naming
 
-  - Auto-generated: `Query: {Topic}` (first 50 chars of query, title-cased)
-  - If similar query exists: `Query: {Topic} (YYYY-MM-DD)` (date suffix)
+  - Auto-generated: `Query - {Topic}` (first 50 chars of query, title-cased)
+  - If similar query exists: `Query - {Topic} (YYYY-MM-DD)` (date suffix)
+  - The separator is ` - `, not `: ` — ":" is illegal in a Windows filename
   - Override with `page_name` parameter in `wiki_synthesize`
   - Use `update_existing=True` to revise an existing query page
 
@@ -539,11 +540,11 @@ document: |
 
   When a query page already exists, new answers go to `wiki/.sink/` instead of creating duplicates.
 
-  - Sink files: `wiki/.sink/Query: Topic.sink.md`
+  - Sink files: `wiki/.sink/Query - Topic.sink.md`
   - Format: chronological entries with timestamp, query, answer, sources
   - During health checks: use `wiki_sink_status()` to find sinks with pending entries
-  - Read sinks: `wiki_read_page("wiki/.sink/Query: Topic.sink.md")`
-  - After merging: clear with `wiki_write_page("wiki/.sink/Query: Topic.sink.md", content="")`
+  - Read sinks: `wiki_read_page("wiki/.sink/Query - Topic.sink.md")`
+  - After merging: clear with `wiki_write_page("wiki/.sink/Query - Topic.sink.md", content="")`
 
   ## Claims Tracking
 

@@ -75,12 +75,12 @@ class WikiStatusMixin(WikiProtocol):
             sub_path = self.wiki_dir / subdir
             if sub_path.exists():
                 pages_by_type[subdir] = sorted(
-                    str(p.relative_to(self.wiki_dir))[:-3]
+                    p.relative_to(self.wiki_dir).as_posix()[:-3]
                     for p in sub_path.rglob("*.md")
                     if not is_path_excluded(p)
                 )
         root_pages = [
-            str(p.relative_to(self.wiki_dir))[:-3]
+            p.relative_to(self.wiki_dir).as_posix()[:-3]
             for p in self.wiki_dir.glob("*.md")
             if p.stem not in ("index", "log") and not is_path_excluded(p)
         ]

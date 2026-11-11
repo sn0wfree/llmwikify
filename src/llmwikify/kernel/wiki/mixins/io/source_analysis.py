@@ -55,7 +55,9 @@ class WikiSourceAnalysisMixin(WikiProtocol):
         of the analysis HTML comment.
         """
         try:
-            key = str(page_path.relative_to(self.wiki_dir))[:-3]
+            # as_posix(): the key is persisted in the DB, so it must not
+            # depend on the host path separator.
+            key = page_path.relative_to(self.wiki_dir).as_posix()[:-3]
             self._backend.put_source_cache(key, content_hash, analysis)
         except (ValueError, OSError) as e:
             logger.warning("Failed to cache source analysis for %s: %s", page_path, e)
@@ -67,7 +69,9 @@ class WikiSourceAnalysisMixin(WikiProtocol):
         analysis HTML comment.
         """
         try:
-            key = str(page_path.relative_to(self.wiki_dir))[:-3]
+            # as_posix(): the key is persisted in the DB, so it must not
+            # depend on the host path separator.
+            key = page_path.relative_to(self.wiki_dir).as_posix()[:-3]
             return self._get_source_cache(key)
         except (ValueError, OSError) as e:
             logger.warning("Failed to parse cached analysis for %s: %s", page_path, e)

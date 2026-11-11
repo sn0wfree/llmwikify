@@ -55,7 +55,7 @@ class WikiSynthesisMixin(WikiProtocol):
             analyzed_count = 0
 
             for source_file in sources:
-                rel_path = str(source_file.relative_to(self.root))
+                rel_path = source_file.relative_to(self.root).as_posix()
                 try:
                     analysis = self.analyze_source(rel_path)
                     if analysis.get("status") not in ("error", "skipped"):
