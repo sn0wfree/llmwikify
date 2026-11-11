@@ -330,9 +330,9 @@ class TestDoctorWikiRootFlag:
                 text=True,
                 cwd=str(REPO_ROOT),
                 env={
-                **os.environ,
-                "LLMWIKIFY_HOME": str(_home_with_min_config(tmp_path)),
-            },
+                    **os.environ,
+                    "LLMWIKIFY_HOME": str(_home_with_min_config(tmp_path)),
+                },
             )
             data = json.loads(result.stdout)
             wiki_check = next(c for c in data["checks"] if c["category"] == "wiki")
@@ -372,9 +372,9 @@ class TestFixDictPresent:
                 text=True,
                 cwd=str(REPO_ROOT),
                 env={
-                **os.environ,
-                "LLMWIKIFY_HOME": str(_home_with_min_config(tmp_path)),
-            },
+                    **os.environ,
+                    "LLMWIKIFY_HOME": str(_home_with_min_config(tmp_path)),
+                },
             )
             data = json.loads(result.stdout)
             wiki_check = next(c for c in data["checks"] if c["category"] == "wiki")
