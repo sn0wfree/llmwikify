@@ -1,35 +1,21 @@
-"""Backward-compat shim: 15 个 Step classes 已迁 kernel.agent.steps.
+"""Backward-compat shim: Step classes 已迁 kernel.agent.steps.
 
-历史: 15 个无状态 StepHandler 已从 apps/chat/agent/unified/steps/ 搬到
-kernel/agent/steps/ (commit 1 of G+Y)。本文件保留为 backward-compat re-export,
-让旧 import path 仍工作:
-    from llmwikify.apps.chat.agent.unified.steps import CheckSuccessStep
-    from llmwikify.apps.chat.agent.unified.steps import LLMCallStep
+历史: 无状态 StepHandler 已从 apps/chat/agent/unified/steps/ 搬到
+kernel/agent/steps/。本文件保留为 backward-compat re-export。
 
-新代码应直接:
-    from llmwikify.kernel.agent.steps import (
-        BuildFeedbackStep, CheckEmptyStep, CheckFieldStep, CheckSuccessStep,
-        CheckToolCallsStep, CodeExecResult, ExecuteCodeStep, ExtractCodeStep,
-        ExtractJSONStep, LLMCallStep, MapStep, TruncateStep,
-        ValidateAndExecuteStep, ValidateSafetyStep, ValidateSyntaxStep, WrapStep,
-    )
+因子执行 Steps（ExecuteCode / ValidateSafety / BuildFeedback 等）已删除。
 """
 
 from llmwikify.kernel.agent.steps import (
-    BuildFeedbackStep,
     CheckEmptyStep,
     CheckFieldStep,
     CheckSuccessStep,
     CheckToolCallsStep,
-    CodeExecResult,
-    ExecuteCodeStep,
     ExtractCodeStep,
     ExtractJSONStep,
     LLMCallStep,
     MapStep,
     TruncateStep,
-    ValidateAndExecuteStep,
-    ValidateSafetyStep,
     ValidateSyntaxStep,
     WrapStep,
 )
@@ -39,14 +25,9 @@ __all__ = [
     "LLMCallStep",
     "ExtractJSONStep",
     # code
-    "CodeExecResult",
     "ExtractCodeStep",
     "ValidateSyntaxStep",
-    "ValidateSafetyStep",
-    "ExecuteCodeStep",
-    "ValidateAndExecuteStep",
     # feedback
-    "BuildFeedbackStep",
     "TruncateStep",
     # checks
     "CheckFieldStep",

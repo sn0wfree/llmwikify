@@ -48,7 +48,6 @@ all = [ "llmwikify[extractors,mcp,config,watch,graph,web,agent]",]
 dev = [
     "llmwikify[all]",
     "pytest>=7.0.0", "pytest-cov>=4.0.0", "pytest-asyncio>=0.23,<2",
-    "polars>=1.0,<2",
     "black>=23.0.0", "ruff>=0.1.0", "mypy>=1.0.0",
     "types-PyYAML>=6.0", "types-requests>=2.30",
     "build>=0.10.0",
@@ -162,6 +161,7 @@ module = [
 ignore_missing_imports = true
 
 # T59 批3 A 组: 可选三方依赖 (缺失时有 fallback, 见各调用点 try/except)
+# polars 已随因子编译路径删除，不再需要 override。
 [[tool.mypy.overrides]]
 module = [
     "tiktoken",
@@ -171,7 +171,6 @@ module = [
     "ddgs",
     "apscheduler",
     "apscheduler.*",
-    "polars",
     "youtube_transcript_api"
 ]
 ignore_missing_imports = true

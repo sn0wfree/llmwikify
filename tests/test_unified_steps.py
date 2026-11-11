@@ -1,4 +1,4 @@
-"""Tests for unified/steps/ — 15 个预置 Steps 逐个测试。"""
+"""Tests for unified/steps/ — 预置 Steps 逐个测试。"""
 
 from __future__ import annotations
 
@@ -6,12 +6,10 @@ import pytest
 
 from llmwikify.apps.chat.agent.unified.spec import ActResult, ReasonResponse
 from llmwikify.kernel.agent.steps import (
-    BuildFeedbackStep,
     CheckEmptyStep,
     CheckFieldStep,
     CheckSuccessStep,
     CheckToolCallsStep,
-    CodeExecResult,
     ExtractCodeStep,
     MapStep,
     TruncateStep,
@@ -186,28 +184,3 @@ async def test_truncate_step_long():
     result = await step.handle("a" * 100, None, None)
     assert len(result.output) < 100
     assert "truncated" in result.output
-
-
-# ── BuildFeedbackStep ─────────────────────────────────────
-
-
-@pytest.mark.asyncio
-async def test_build_feedback_step_success():
-    step = BuildFeedbackStep()
-    result = await step.handle(CodeExecResult(success=True), None, None)
-    assert result.success is True
-    assert result.output is None
-
-
-@pytest.mark.asyncio
-async def test_build_feedback_step_failure():
-    step = BuildFeedbackStep()
-    cr = CodeExecResult(
-        success=False, code="bad code", error="SyntaxError", error_kind="syntax_error"
-    )
-    result = await step.handle(cr, None, None)
-    assert result.success is True
-    assert isinstance(result.output, dict)
-    assert result.output["role"] == "user"
-    assert "SyntaxError" in result.output["content"]
-    assert "bad code" in result.output["content"]

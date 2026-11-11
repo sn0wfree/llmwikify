@@ -10,8 +10,8 @@
 
     register_mode(AgentModeConfig(
         name="validator",
-        reasoner=Pipeline(ReadCodeStep(), ExtractCodeStep()),
-        actor=ValidateAndExecuteStep(),
+        reasoner=...,
+        actor=...,
         deciders={"after_act": CheckFieldStep("success")},
     ))
 
@@ -187,32 +187,5 @@ def _make_chat_hook(**kwargs: Any) -> UnifiedHook:
     return AgentHookAdapter(kwargs.get("hook"))
 
 
-def _register_codegen_mode() -> None:
-    """注册 codegen mode（延迟导入，Phase 4 实现后可用）。"""
-    try:
-        from llmwikify.kernel.agent import (
-            CodeActor,
-        )
-        from llmwikify.kernel.agent.steps import CheckSuccessStep
-
-        register_mode(
-            AgentModeConfig(
-                name="codegen",
-                reasoner=_make_codegen_reasoner,
-                actor=CodeActor(),
-                deciders={"after_act": CheckSuccessStep()},
-            )
-        )
-    except ImportError:
-        pass  # Phase 4 未实现时跳过
-
-
-def _make_codegen_reasoner(**kwargs: Any) -> Any:
-    from llmwikify.kernel.agent import CodegenReasoner
-
-    return CodegenReasoner(kwargs.get("llm_client"))
-
-
 # 预注册（模块加载时执行）
 _register_chat_mode()
-_register_codegen_mode()

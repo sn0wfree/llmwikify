@@ -7,11 +7,10 @@ ChatSpec 保留在本文件 (chat-specific, 继承 BaseSpec)。
 
 本文件保留为 backward-compat re-export, 让旧 import path 仍工作:
     from llmwikify.apps.chat.agent.unified.spec import ChatSpec, BaseSpec
-    from llmwikify.apps.chat.agent.unified.spec import CodegenSpec, UnifiedResult
 
 新代码应直接:
     from llmwikify.kernel.agent import (
-        BaseSpec, CodegenSpec, ReasonResponse, ActResult, UnifiedResult,
+        BaseSpec, ReasonResponse, ActResult, UnifiedResult,
     )
     from llmwikify.apps.chat.agent.unified.spec import ChatSpec
 """
@@ -26,7 +25,6 @@ from typing import Any
 from llmwikify.kernel.agent.spec import (
     ActResult,
     BaseSpec,
-    CodegenSpec,
     ReasonResponse,
     UnifiedResult,
 )
@@ -84,7 +82,6 @@ class ChatSpec(BaseSpec):
 __all__ = [
     "BaseSpec",
     "ChatSpec",
-    "CodegenSpec",
     "ReasonResponse",
     "ActResult",
     "UnifiedResult",

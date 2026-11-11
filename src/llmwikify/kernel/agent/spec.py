@@ -2,13 +2,14 @@
 
 定义所有 mode 共用的 spec / response / result 类型 (ChatSpec 留 apps/chat/agent/spec.py):
 
-- BaseSpec / CodegenSpec: 输入规格（继承，不用 God Object）
+- BaseSpec: 输入规格（继承，不用 God Object）
 - ReasonResponse: Reasoner 统一输出
 - ActResult: Actor 统一输出
 - UnifiedResult: Loop 最终输出
 
 历史: 从 apps/chat/agent/unified/spec.py 拆分。
 ChatSpec 留在 apps/chat/agent/spec.py（chat-specific）。
+CodegenSpec（因子编译）已删除。
 """
 
 from __future__ import annotations
@@ -28,19 +29,6 @@ class BaseSpec:
     timeout_seconds: float = 0
     temperature: float = 0.3
 
-
-@dataclass
-class CodegenSpec(BaseSpec):
-    """Codegen mode 专用。"""
-
-    df: Any = None  # pl.DataFrame
-    factor_name: str = ""
-    formula_brief: str = ""
-    max_repair_rounds: int = 3
-    system_prompt: str = ""
-
-
-# ─── ReasonResponse — Reasoner 输出 ──────────────────────
 
 
 @dataclass

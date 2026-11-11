@@ -1,35 +1,18 @@
-"""代码执行相关 Steps.
+"""代码提取 / 语法检查 Steps（纯文本，无因子执行）。
 
 - ExtractCodeStep: 从 LLM 响应提取 Python 代码
 - ValidateSyntaxStep: Python 语法检查
-- ValidateSafetyStep: CodeSandbox 安全检查
-- ExecuteCodeStep: 执行 compute_factor 代码
-- ValidateAndExecuteStep: 完整验证+执行流水线
-- CodeExecResult: 代码执行结果
 
 历史: 从 apps/chat/agent/unified/steps/code.py 搬迁。
+因子执行路径（ExecuteCode / ValidateSafety / CodeSandbox）已随
+本项目不再做因子编译而删除（2026-11-10）。
 """
 
 from __future__ import annotations
 
-import logging
-from dataclasses import dataclass
 from typing import Any
 
-from llmwikify.kernel.agent._core_types import Pipeline, StepHandler, StepResult
-
-logger = logging.getLogger(__name__)
-
-
-@dataclass
-class CodeExecResult:
-    """代码执行结果 — CodeActor 和 CodegenReasoner 共用。"""
-
-    success: bool
-    code: str = ""
-    series: Any = None  # pl.Series
-    error: str | None = None
-    error_kind: str = "none"
+from llmwikify.kernel.agent._core_types import StepHandler, StepResult
 
 
 class ExtractCodeStep(StepHandler):
@@ -64,87 +47,3 @@ class ValidateSyntaxStep(StepHandler):
         if not ok:
             return StepResult.fail(f"SyntaxError: {err}")
         return StepResult.ok(code)
-
-
-class ValidateSafetyStep(StepHandler):
-    """CodeSandbox 安全检查。
-
-    输入: code (str)
-    输出: code (str) — 通过时原样返回
-    """
-
-    async def handle(self, input: Any, spec: Any, ctx: Any) -> StepResult:
-        from llmwikify.kernel.codegen import validate_safety
-
-        code = input
-        ok, err = validate_safety(code)
-        if not ok:
-            return StepResult.fail(f"SafetyError: {err}")
-        return StepResult.ok(code)
-
-
-class ExecuteCodeStep(StepHandler):
-    """执行 compute_factor 代码。
-
-    输入: code (str)
-    输出: CodeExecResult
-
-    从 spec 取 df (CodegenSpec.df)。
-    """
-
-    async def handle(self, input: Any, spec: Any, ctx: Any) -> StepResult:
-        from llmwikify.kernel.codegen import execute_code
-
-        code = input
-        df = getattr(spec, "df", None)
-
-        try:
-            series = execute_code(code, df)
-        except Exception as exc:
-            import traceback
-
-            return StepResult.ok(
-                CodeExecResult(
-                    success=False,
-                    code=code,
-                    error=f"{type(exc).__name__}: {exc}\n{traceback.format_exc()}",
-                    error_kind="execute_error",
-                )
-            )
-
-        import polars as pl
-
-        if not isinstance(series, pl.Series):
-            return StepResult.ok(
-                CodeExecResult(
-                    success=False,
-                    code=code,
-                    error=f"expected pl.Series, got {type(series).__name__}",
-                    error_kind="output_invalid",
-                )
-            )
-
-        return StepResult.ok(
-            CodeExecResult(
-                success=True,
-                code=code,
-                series=series,
-            )
-        )
-
-
-class ValidateAndExecuteStep(Pipeline):
-    """代码验证+执行流水线。
-
-    输入: code (str)
-    输出: CodeExecResult
-
-    流程: ValidateSyntaxStep → ValidateSafetyStep → ExecuteCodeStep
-    """
-
-    def __init__(self) -> None:
-        super().__init__(
-            ValidateSyntaxStep(),
-            ValidateSafetyStep(),
-            ExecuteCodeStep(),
-        )

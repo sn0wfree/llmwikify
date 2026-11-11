@@ -1,8 +1,8 @@
 """apps/chat/agent/unified — 通用框架 backward-compat + chat-specific agent.
 
 架构说明:
-- 通用框架 (UnifiedHook / UnifiedAgentLoop / StepHandler / Spec / Steps /
-  generate_factor_code) 已迁 kernel.agent。本包作为 backward-compat 层。
+- 通用框架 (UnifiedHook / UnifiedAgentLoop / StepHandler / Spec / Steps)
+  已迁 kernel.agent。本包作为 backward-compat 层。
 - chat-specific 部分 (events / hook_adapter / registry / handlers) 保留本包。
 
 新代码应直接:
@@ -10,22 +10,11 @@
     from llmwikify.apps.chat.agent.unified.handlers import ChatReasoner, ToolActor
     from llmwikify.apps.chat.agent.unified import registry, events, hook_adapter
 
-shim 设计:
-- 顶层 __init__.py: 统一 re-export (统一从 kernel.agent)
-- 子目录 pipelines/ 和 steps/: 保留 __init__.py shim (被广泛 import)
-- 子目录 steps/{checks,code,feedback,llm,transforms}.py: 已删除 (内容在 kernel.agent.steps/)
-- 子目录 pipelines/codegen.py: 已删除 (内容在 kernel.agent.codegen_pipeline.py)
-
-历史: G+Y commit 2 (apps/unified/ 维度 A 拆解)。
-
 状态标记 (2026-11-06):
-- **生产零入口** — 导入图 BFS 只达测试 (9 个 test_unified_*.py); chat 主链路走
-  ChatRunnerV2, 不实例化 UnifiedAgentLoop。
-- **与生产侧重复** — events.py 是 apps/chat/agent/events.py 的超集 (21 vs 16);
-  handlers/ 与 ChatRunnerV2 有 6 组同名方法各写一遍 (_build_system_prompt /
-  _safe_truncate / _get_tool_specs / _stream_llm / _execute_tool / microcompact)。
-- 处置方案与分阶段计划: docs/designs/unified-loop-merge-plan.md。
-  未获授权前不改动本包; 确需新增能力时只写一处, 不要再做平行实现。
+- **生产零入口** — 导入图 BFS 只达测试; chat 主链路走 ChatRunnerV2。
+- 处置方案: docs/designs/unified-loop-merge-plan.md。
+- 因子编译路径 (CodegenReasoner / generate_factor_code / ExecuteCodeStep 等)
+  已于 2026-11-10 删除；本项目不做因子编译。
 """
 
 # 通用框架 re-export (from kernel.agent)
@@ -33,9 +22,6 @@ from llmwikify.foundation.utils import maybe_await as _maybe_await
 from llmwikify.kernel.agent import (
     ActResult,
     BaseSpec,
-    CodeActor,
-    CodegenReasoner,
-    CodegenSpec,
     Pipeline,
     ReasonResponse,
     StepHandler,
@@ -45,24 +31,17 @@ from llmwikify.kernel.agent import (
     UnifiedContext,
     UnifiedHook,
     UnifiedResult,
-    generate_factor_code,
-    generate_factor_code_sync,
 )
 from llmwikify.kernel.agent.steps import (
-    BuildFeedbackStep,
     CheckEmptyStep,
     CheckFieldStep,
     CheckSuccessStep,
     CheckToolCallsStep,
-    CodeExecResult,
-    ExecuteCodeStep,
     ExtractCodeStep,
     ExtractJSONStep,
     LLMCallStep,
     MapStep,
     TruncateStep,
-    ValidateAndExecuteStep,
-    ValidateSafetyStep,
     ValidateSyntaxStep,
     WrapStep,
 )
@@ -113,32 +92,21 @@ __all__ = [
     "UnifiedContext",
     "BaseSpec",
     "ChatSpec",
-    "CodegenSpec",
     "ReasonResponse",
     "ActResult",
     "UnifiedResult",
     "UnifiedAgentLoop",
     "_maybe_await",
-    # Codegen pipeline
-    "CodegenReasoner",
-    "CodeActor",
-    "generate_factor_code",
-    "generate_factor_code_sync",
     # Steps
-    "BuildFeedbackStep",
     "CheckEmptyStep",
     "CheckFieldStep",
     "CheckSuccessStep",
     "CheckToolCallsStep",
-    "CodeExecResult",
-    "ExecuteCodeStep",
     "ExtractCodeStep",
     "ExtractJSONStep",
     "LLMCallStep",
     "MapStep",
     "TruncateStep",
-    "ValidateAndExecuteStep",
-    "ValidateSafetyStep",
     "ValidateSyntaxStep",
     "WrapStep",
     # Chat-specific
@@ -152,7 +120,7 @@ __all__ = [
     "get_mode_config",
     "list_modes",
     "create_agent_loop",
-    # Events (from .events import *)
+    # Events
     "SESSION_CREATED",
     "SESSION_INIT",
     "USER_MESSAGE",

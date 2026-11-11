@@ -1,13 +1,14 @@
 """Tests for kernel/agent/ (Phase 1 of G+Y: 通用框架拆解).
 
 Covers:
-  - hook: UnifiedHook 16 methods all no-op
+  - hook: UnifiedHook methods all no-op
   - context: UnifiedContext dataclass + properties
   - _core_types: StepResult.ok/fail, Pipeline serial composition, _maybe_await
-  - spec: BaseSpec / CodegenSpec / ReasonResponse / ActResult / UnifiedResult
-  - loop: UnifiedAgentLoop 5-step state machine (PRECHECK → REASON → ACT → OBSERVE → FINALIZE)
-  - codegen_pipeline: CodegenReasoner / CodeActor / generate_factor_code (async + sync)
-  - steps: 15 Step classes instantiate and have handle()
+  - spec: BaseSpec / ReasonResponse / ActResult / UnifiedResult
+  - loop: UnifiedAgentLoop state machine
+  - steps: remaining Step classes instantiate and have handle()
+
+因子编译相关 Steps / CodegenSpec / generate_factor_code 已删除（2026-11-10）。
 """
 
 from __future__ import annotations
@@ -21,9 +22,6 @@ from llmwikify.foundation.utils import maybe_await as _maybe_await
 from llmwikify.kernel.agent import (
     ActResult,
     BaseSpec,
-    CodeActor,
-    CodegenReasoner,
-    CodegenSpec,
     Pipeline,
     ReasonResponse,
     StepHandler,
@@ -32,24 +30,17 @@ from llmwikify.kernel.agent import (
     UnifiedContext,
     UnifiedHook,
     UnifiedResult,
-    generate_factor_code,
-    generate_factor_code_sync,
 )
 from llmwikify.kernel.agent.steps import (
-    BuildFeedbackStep,
     CheckEmptyStep,
     CheckFieldStep,
     CheckSuccessStep,
     CheckToolCallsStep,
-    CodeExecResult,
-    ExecuteCodeStep,
     ExtractCodeStep,
     ExtractJSONStep,
     LLMCallStep,
     MapStep,
     TruncateStep,
-    ValidateAndExecuteStep,
-    ValidateSafetyStep,
     ValidateSyntaxStep,
     WrapStep,
 )
@@ -61,7 +52,6 @@ class TestUnifiedHook:
     def test_all_methods_noop(self):
         hook = UnifiedHook()
         ctx = UnifiedContext(spec=BaseSpec(messages=[]))
-        # 16 hook methods, all no-op
         assert hook.wants_streaming() is False
         hook.before_iteration(ctx)
         hook.on_reason_start(ctx)
@@ -194,14 +184,6 @@ class TestSpec:
         assert spec.max_iterations == 10
         assert spec.temperature == 0.3
 
-    def test_codegen_spec(self):
-        spec = CodegenSpec(
-            messages=[], factor_name="alpha-001", formula_brief="rank(volume)"
-        )
-        assert spec.df is None
-        assert spec.factor_name == "alpha-001"
-        assert spec.max_repair_rounds == 3
-
     def test_unified_result_to_dict(self):
         r = UnifiedResult(
             code="x = 1", stop_reason="completed", iterations=2, elapsed_sec=1.5
@@ -225,27 +207,25 @@ class TestSpec:
 
 class TestUnifiedAgentLoop:
     def test_basic_loop(self):
-        async def reasoner(input, spec, ctx):
-            return StepResult.ok(ReasonResponse(raw_content="hello", code="x = 1"))
-
-        async def actor(input, spec, ctx):
-            return StepResult.ok(ActResult(success=True, output="ok", code=input.code))
-
-        class ReasonerHandler(StepHandler):
-            async def handle(self, input, spec, ctx):
-                return await reasoner(input, spec, ctx)
-
-        class ActorHandler(StepHandler):
-            async def handle(self, input, spec, ctx):
-                return await actor(input, spec, ctx)
-
         async def run():
+            class ReasonerHandler(StepHandler):
+                async def handle(self, input, spec, ctx):
+                    return StepResult.ok(
+                        ReasonResponse(raw_content="hello", code="x = 1")
+                    )
+
+            class ActorHandler(StepHandler):
+                async def handle(self, input, spec, ctx):
+                    return StepResult.ok(
+                        ActResult(success=True, output="ok", code="x = 1")
+                    )
+
             loop = UnifiedAgentLoop(
                 reasoner=ReasonerHandler(),
                 actor=ActorHandler(),
                 deciders={"after_act": CheckSuccessStep()},
             )
-            return await loop.run_to_completion(CodegenSpec(messages=[]))
+            return await loop.run_to_completion(BaseSpec(messages=[]))
 
         result = asyncio.run(run())
         assert result.stop_reason in ("completed", "success")
@@ -268,11 +248,10 @@ class TestUnifiedAgentLoop:
                 actor=AlwaysFailActor(),
             )
             return await loop.run_to_completion(
-                CodegenSpec(messages=[], max_iterations=2)
+                BaseSpec(messages=[], max_iterations=2)
             )
 
         result = asyncio.run(run())
-        # Loop runs max_iterations=2 times then breaks
         assert result.iterations == 2
 
 
@@ -289,12 +268,8 @@ class TestSteps:
             (CheckToolCallsStep, {}),
             (ExtractCodeStep, {}),
             (ValidateSyntaxStep, {}),
-            (ValidateSafetyStep, {}),
-            (ExecuteCodeStep, {}),
-            (ValidateAndExecuteStep, {}),
             (LLMCallStep, {"llm_client": None}),
             (ExtractJSONStep, {}),
-            (BuildFeedbackStep, {}),
             (TruncateStep, {}),
             (MapStep, {"fn": lambda x: x}),
             (WrapStep, {"cls": dict}),
@@ -345,98 +320,33 @@ class TestSteps:
         assert asyncio.run(run()).output == 10
 
 
-# ─── codegen_pipeline ───────────────────────────────────────
-
-
-class TestCodegenPipeline:
-    def test_codegen_reasoner_init(self, monkeypatch):
-        # Just instantiate (no LLM call); stub 默认 client 构建,
-        # 使测试不依赖本机 ~/.llmwikify 配置 (CI 无 config)
-        monkeypatch.setattr(
-            "llmwikify.foundation.llm.client.build_llm_client",
-            lambda *a, **k: object(),
-        )
-        reasoner = CodegenReasoner(llm_client=None)
-        assert isinstance(reasoner, Pipeline)
-
-    def test_code_actor_init(self):
-        actor = CodeActor()
-        assert hasattr(actor, "_executor")
-        assert hasattr(actor, "_feedback")
-
-    @pytest.mark.llm
-    def test_generate_factor_code_sync(self):
-        import polars as pl
-
-        df = pl.DataFrame({"x": [1, 2, 3]})
-        result = generate_factor_code_sync(
-            "test-factor",
-            "return df['x'] * 2",
-            df,
-        )
-        # Without LLM, it should fail gracefully
-        assert result.stop_reason in ("error", "completed", "success")
-
-    @pytest.mark.llm
-    def test_generate_factor_code_async(self):
-        import polars as pl
-
-        df = pl.DataFrame({"x": [1, 2, 3]})
-
-        async def run():
-            return await generate_factor_code(
-                "test-factor",
-                "return df['x'] * 2",
-                df,
-            )
-
-        result = asyncio.run(run())
-        assert result.stop_reason in ("error", "completed", "success")
-
-
-# ─── 15 step classes count ──────────────────────────────────
-
-
-def test_all_15_steps_exported():
-    """确保 15 个 step classes 全部可 import."""
+def test_step_classes_exported():
+    """确保保留的 step classes 全部可 import."""
     from llmwikify.kernel.agent.steps import (
-        BuildFeedbackStep,
         CheckEmptyStep,
         CheckFieldStep,
         CheckSuccessStep,
         CheckToolCallsStep,
-        ExecuteCodeStep,
         ExtractCodeStep,
         ExtractJSONStep,
         LLMCallStep,
         MapStep,
         TruncateStep,
-        ValidateAndExecuteStep,
-        ValidateSafetyStep,
         ValidateSyntaxStep,
         WrapStep,
     )
 
-    assert (
-        len(
-            [
-                BuildFeedbackStep,
-                CheckEmptyStep,
-                CheckFieldStep,
-                CheckSuccessStep,
-                CheckToolCallsStep,
-                CodeExecResult,
-                ExecuteCodeStep,
-                ExtractCodeStep,
-                ExtractJSONStep,
-                LLMCallStep,
-                MapStep,
-                TruncateStep,
-                ValidateAndExecuteStep,
-                ValidateSafetyStep,
-                ValidateSyntaxStep,
-                WrapStep,
-            ]
-        )
-        == 16
-    )  # 15 Step classes + 1 dataclass (CodeExecResult)
+    classes = [
+        CheckEmptyStep,
+        CheckFieldStep,
+        CheckSuccessStep,
+        CheckToolCallsStep,
+        ExtractCodeStep,
+        ExtractJSONStep,
+        LLMCallStep,
+        MapStep,
+        TruncateStep,
+        ValidateSyntaxStep,
+        WrapStep,
+    ]
+    assert len(classes) == 11

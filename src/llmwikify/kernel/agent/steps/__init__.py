@@ -1,12 +1,13 @@
-"""kernel/agent/steps — 15 个无状态 StepHandler.
+"""kernel/agent/steps — 无状态 StepHandler.
 
 - checks: CheckFieldStep / CheckEmptyStep / CheckToolCallsStep / CheckSuccessStep
-- code: ExtractCodeStep / ValidateSyntaxStep / ValidateSafetyStep / ExecuteCodeStep / ValidateAndExecuteStep / CodeExecResult
-- feedback: BuildFeedbackStep / TruncateStep
+- code: ExtractCodeStep / ValidateSyntaxStep
+- feedback: TruncateStep
 - llm: LLMCallStep / ExtractJSONStep
 - transforms: MapStep / WrapStep
 
 历史: 从 apps/chat/agent/unified/steps/ 搬迁。
+因子执行 Steps（ExecuteCode / ValidateSafety / BuildFeedback 等）已删除。
 """
 
 from .checks import (
@@ -16,15 +17,10 @@ from .checks import (
     CheckToolCallsStep,
 )
 from .code import (
-    CodeExecResult,
-    ExecuteCodeStep,
     ExtractCodeStep,
-    ValidateAndExecuteStep,
-    ValidateSafetyStep,
     ValidateSyntaxStep,
 )
 from .feedback import (
-    BuildFeedbackStep,
     TruncateStep,
 )
 from .llm import (
@@ -41,14 +37,9 @@ __all__ = [
     "LLMCallStep",
     "ExtractJSONStep",
     # code
-    "CodeExecResult",
     "ExtractCodeStep",
     "ValidateSyntaxStep",
-    "ValidateSafetyStep",
-    "ExecuteCodeStep",
-    "ValidateAndExecuteStep",
     # feedback
-    "BuildFeedbackStep",
     "TruncateStep",
     # checks
     "CheckFieldStep",
