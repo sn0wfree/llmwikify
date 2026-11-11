@@ -21,6 +21,8 @@ import os
 import stat
 from pathlib import Path
 
+from ..config import global_config_home
+
 # Loopback literals. We check these as well as the parsed ipaddress
 # form, because hosts may be passed as DNS names that we should NOT
 # treat as local (e.g. "localhost.example.com" should still go through
@@ -82,8 +84,7 @@ def local_token_path() -> Path:
 
     Honors $LLMWIKIFY_HOME for tests / non-standard layouts.
     """
-    home = os.environ.get("LLMWIKIFY_HOME", "").strip() or os.path.expanduser("~")
-    return Path(home) / ".llmwikify" / "local_token"
+    return global_config_home() / "local_token"
 
 
 def chmod_600(path: Path) -> None:
@@ -112,8 +113,7 @@ def pat_file_path() -> Path:
 
     Honors $LLMWIKIFY_HOME for tests / non-standard layouts.
     """
-    home = os.environ.get("LLMWIKIFY_HOME", "").strip() or os.path.expanduser("~")
-    return Path(home) / ".llmwikify" / "pat"
+    return global_config_home() / "pat"
 
 
 def save_pat(pat: str) -> None:

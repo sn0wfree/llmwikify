@@ -35,6 +35,7 @@ from pathlib import Path
 import keyring
 import keyring.errors
 
+from ..config import global_config_home
 from ._errors import AuthError
 
 logger = logging.getLogger(__name__)
@@ -44,8 +45,16 @@ KEYRING_SERVICE = "llmwikify"
 KEYRING_USER = "jwt_secret"
 SECRET_BYTES = 32  # 256 bits, matches HS256 minimum
 
-# File fallback path.
-_SECRET_FILE = Path("~/.llmwikify/jwt_secret").expanduser()
+
+def _secret_file() -> Path:
+    """Fallback file path, resolved at call time.
+
+    Resolved per call rather than cached in a module constant so
+    ``$LLMWIKIFY_HOME`` is honoured — this file is written with the
+    user's real signing key, and a cached ``expanduser("~")`` path would
+    ignore the override on every platform.
+    """
+    return global_config_home() / "jwt_secret"
 
 # Environment variable to refuse to load unsafe files instead of warning.
 _STRICT_ENV_VAR = "LLMWIKIFY_SECRET_STRICT"
@@ -124,33 +133,35 @@ def _check_secret_file_permissions(path: Path) -> bool:
 
 def _read_file_secret() -> bytes:
     """Read secret from fallback file. Returns empty if not found."""
-    if not _SECRET_FILE.exists():
+    secret_file = _secret_file()
+    if not secret_file.exists():
         return b""
     try:
-        raw = _SECRET_FILE.read_text(encoding="utf-8").strip()
+        raw = secret_file.read_text(encoding="utf-8").strip()
         secret = bytes.fromhex(raw)
     except (ValueError, OSError):
         return b""
 
     # Permission check happens AFTER a successful read so a malformed
     # file doesn't trigger a confusing permission warning.
-    _check_secret_file_permissions(_SECRET_FILE)
+    _check_secret_file_permissions(secret_file)
     return secret
 
 
 def _write_file_secret(secret: bytes) -> None:
     """Write secret to fallback file with chmod 600 + parent dir 700."""
-    _SECRET_FILE.parent.mkdir(parents=True, exist_ok=True)
-    _SECRET_FILE.write_text(secret.hex(), encoding="utf-8", newline="\n")
+    secret_file = _secret_file()
+    secret_file.parent.mkdir(parents=True, exist_ok=True)
+    secret_file.write_text(secret.hex(), encoding="utf-8", newline="\n")
     try:
-        os.chmod(_SECRET_FILE, 0o600)
+        os.chmod(secret_file, 0o600)
     except OSError:
         pass
     # Best-effort parent-dir lockdown so other local users can't
     # symlink-swap the file or list its sibling files.
     if not _is_windows():
         try:
-            os.chmod(_SECRET_FILE.parent, 0o700)
+            os.chmod(secret_file.parent, 0o700)
         except OSError:
             pass
 

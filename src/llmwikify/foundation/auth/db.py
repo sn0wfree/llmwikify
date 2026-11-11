@@ -33,12 +33,12 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
+from ..config import global_config_home
 from ._errors import AuthError
 
 logger = logging.getLogger(__name__)
 
 APP_AUTH_FILENAME = ".llmwikify_auth.db"
-APP_AUTH_DIR = ".llmwikify"
 
 
 def auth_db_path() -> Path:
@@ -49,8 +49,7 @@ def auth_db_path() -> Path:
     pre-create here (let the caller decide when it's safe to touch
     the filesystem).
     """
-    home = os.environ.get("LLMWIKIFY_HOME", "").strip() or os.path.expanduser("~")
-    return Path(home) / APP_AUTH_DIR / "auth.db"
+    return global_config_home() / "auth.db"
 
 
 def _derive_username(email: str) -> str:
