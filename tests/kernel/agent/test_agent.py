@@ -106,7 +106,8 @@ class TestUnifiedContext:
         ctx = UnifiedContext(spec=BaseSpec(messages=[]))
         import time
 
-        time.sleep(0.01)
+        # Windows 默认定时器精度 ~15.6ms，sleep(0.01) 可能不推进 monotonic
+        time.sleep(0.05)
         assert ctx.elapsed_sec >= 0.01
 
     def test_tools_empty(self):

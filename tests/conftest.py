@@ -44,6 +44,37 @@ def _isolate_llmwikify_data_dir() -> str:
         pass
 
 
+# Windows: ManagedConnection 单例（get_connection）在测试结束后仍持有
+# SQLite 文件句柄，TemporaryDirectory.__exit__ 的 rmtree 会撞
+# WinError 32。给临时目录默认 ignore_cleanup_errors=True（py3.10+），
+# 并在每个测试结束后关闭全部单例连接，避免句柄跨测试泄漏。
+_OrigTempDir = tempfile.TemporaryDirectory
+
+
+class _TolerantTemporaryDirectory(_OrigTempDir):  # type: ignore[misc,valid-type]
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault("ignore_cleanup_errors", True)
+        super().__init__(*args, **kwargs)
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _patch_temporary_directory():
+    tempfile.TemporaryDirectory = _TolerantTemporaryDirectory  # type: ignore[misc]
+    yield
+    tempfile.TemporaryDirectory = _OrigTempDir  # type: ignore[misc]
+
+
+@pytest.fixture(autouse=True)
+def _close_db_connections_after_test():
+    yield
+    try:
+        from llmwikify.foundation.db import close_all
+
+        close_all()
+    except Exception:
+        pass
+
+
 @pytest.fixture
 def temp_wiki():
     """Create a temporary wiki directory for testing."""
@@ -57,7 +88,7 @@ def temp_wiki():
     yield wiki_root
 
     # Cleanup
-    shutil.rmtree(temp_dir)
+    shutil.rmtree(temp_dir, ignore_errors=True)
 
 
 @pytest.fixture
