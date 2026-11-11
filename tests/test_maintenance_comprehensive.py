@@ -549,9 +549,12 @@ def test_on_watch_event_deleted_removes_from_pending(tmp_path):
         config=AutoIngestConfig(),
         llm_semaphore=asyncio.Semaphore(1),
     )
-    svc._pending["/some/path.md"] = (1.0, 100)
+    # Key must be str(Path) — that is what _on_watch_event pops. A raw
+    # POSIX literal is a different string on Windows ("\some\path.md").
+    pending_key = str(Path("/some/path.md"))
+    svc._pending[pending_key] = (1.0, 100)
     svc._on_watch_event("deleted", Path("/some/path.md"))
-    assert "/some/path.md" not in svc._pending
+    assert pending_key not in svc._pending
 
 
 def test_on_watch_event_no_loop(tmp_path):

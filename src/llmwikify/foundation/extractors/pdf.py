@@ -19,14 +19,24 @@ def _extract_pdf(path: Path) -> ExtractedContent:
             },
         )
 
-    with pymupdf.open(path) as doc:
-        pages = []
-        page_count = len(doc)
+    # A malformed or truncated PDF raises out of ``pymupdf.open``; the
+    # contract for extract() is an ``error`` result, not an exception.
+    try:
+        with pymupdf.open(path) as doc:
+            pages = []
+            page_count = len(doc)
 
-        for page_num in range(page_count):
-            page = doc[page_num]
-            text = page.get_text()
-            pages.append(f"--- Page {page_num + 1} ---\n{text}")
+            for page_num in range(page_count):
+                page = doc[page_num]
+                text = page.get_text()
+                pages.append(f"--- Page {page_num + 1} ---\n{text}")
+    except (pymupdf.FileDataError, pymupdf.FileNotFoundError, OSError) as e:
+        return ExtractedContent(
+            text="",
+            source_type="error",
+            title=path.stem,
+            metadata={"error": f"Failed to read PDF: {e}"},
+        )
 
     full_text = "\n\n".join(pages)
 

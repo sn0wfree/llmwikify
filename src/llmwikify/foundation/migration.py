@@ -36,6 +36,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
+from .config import global_config_home
+
 logger = logging.getLogger(__name__)
 
 
@@ -168,8 +170,10 @@ def _load_yaml(path: Path) -> dict[str, Any] | None:
 
 def _load_global_config() -> dict[str, Any]:
     """Load ``~/.llmwikify/llmwikify.json``. Returns empty dict if missing."""
-    # Compute path at call time so monkeypatching HOME works in tests.
-    global_path = Path.home() / ".llmwikify" / "llmwikify.json"
+    # Resolved at call time via the shared helper so tests can redirect it
+    # with LLMWIKIFY_HOME (``Path.home()`` ignores env overrides on both
+    # Windows and Linux).
+    global_path = global_config_home() / "llmwikify.json"
 
     if not global_path.exists():
         return {}
@@ -182,7 +186,7 @@ def _load_global_config() -> dict[str, Any]:
 
 def _save_global_config(config: dict[str, Any]) -> None:
     """Save ``~/.llmwikify/llmwikify.json``."""
-    global_path = Path.home() / ".llmwikify" / "llmwikify.json"
+    global_path = global_config_home() / "llmwikify.json"
     global_path.parent.mkdir(parents=True, exist_ok=True)
     global_path.write_text(
         json.dumps(config, indent=2, ensure_ascii=False),

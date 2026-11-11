@@ -363,9 +363,12 @@ class TestConsolidatorMarkdownWrite:
             data_dir=tmp_path,
             config=ConsolidatorConfig(enable_md_write=True),
         )
-        # Force mkdir to fail by setting a read-only parent
-        # (Easier: make _memory_sessions_dir unwritable)
-        consol._memory_sessions_dir = Path("/nonexistent_path/xyz/blocked")
+        # Force mkdir to fail by pointing the markdown dir under an existing
+        # FILE. A bare "/nonexistent_path/..." is a POSIX-only trick — on
+        # Windows it resolves to C:\nonexistent_path\... and may be creatable.
+        blocker = tmp_path / "not_a_dir"
+        blocker.write_text("x")
+        consol._memory_sessions_dir = blocker / "blocked"
         result = await consol.maybe_consolidate(
             "s1",
             _make_messages(20),

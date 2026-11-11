@@ -32,6 +32,10 @@ def _home_with_min_config(tmp_path: Path) -> Path:
 
     开发机/CI 上未必存在 ~/.llmwikify/llmwikify.json；无配置时 doctor
     以 rc=2 早退（只输出 config 检查），依赖 wiki 检查的断言会失效。
+
+    子进程必须通过 ``LLMWIKIFY_HOME`` 指到这里 —— 设置 ``HOME`` 不起作用：
+    ``os.path.expanduser("~")`` 在 Windows 上看 ``USERPROFILE``，而其它测试
+    模块还会在 import 期泄漏 ``LLMWIKIFY_HOME``，其优先级更高。
     """
     home = tmp_path / "fake-home"
     (home / ".llmwikify").mkdir(parents=True, exist_ok=True)
@@ -286,7 +290,10 @@ class TestDoctorWikiRootFlag:
             capture_output=True,
             text=True,
             cwd=str(REPO_ROOT),
-            env={**os.environ, "HOME": str(_home_with_min_config(tmp_path))},
+            env={
+                **os.environ,
+                "LLMWIKIFY_HOME": str(_home_with_min_config(tmp_path)),
+            },
         )
         data = json.loads(result.stdout)
         wiki_check = next(c for c in data["checks"] if c["category"] == "wiki")
@@ -322,7 +329,10 @@ class TestDoctorWikiRootFlag:
                 capture_output=True,
                 text=True,
                 cwd=str(REPO_ROOT),
-                env={**os.environ, "HOME": str(_home_with_min_config(tmp_path))},
+                env={
+                **os.environ,
+                "LLMWIKIFY_HOME": str(_home_with_min_config(tmp_path)),
+            },
             )
             data = json.loads(result.stdout)
             wiki_check = next(c for c in data["checks"] if c["category"] == "wiki")
@@ -361,7 +371,10 @@ class TestFixDictPresent:
                 capture_output=True,
                 text=True,
                 cwd=str(REPO_ROOT),
-                env={**os.environ, "HOME": str(_home_with_min_config(tmp_path))},
+                env={
+                **os.environ,
+                "LLMWIKIFY_HOME": str(_home_with_min_config(tmp_path)),
+            },
             )
             data = json.loads(result.stdout)
             wiki_check = next(c for c in data["checks"] if c["category"] == "wiki")
@@ -379,9 +392,11 @@ class TestFixDictPresent:
         JSON emission entirely → scripts (e2e 00_install_check) got
         empty stdout and failed to parse.
         """
-        # Force a missing config by pointing HOME to an empty dir.
+        # Force a missing config by pointing the config home at an empty dir.
         # monkeypatch only works in-process; subprocess needs env dict.
-        env = {**os.environ, "HOME": str(tmp_path)}
+        # LLMWIKIFY_HOME is the product's own override; HOME is ignored by
+        # os.path.expanduser("~") on Windows.
+        env = {**os.environ, "LLMWIKIFY_HOME": str(tmp_path)}
         result = subprocess.run(
             [sys.executable, "-m", "llmwikify", "doctor", "--json"],
             capture_output=True,

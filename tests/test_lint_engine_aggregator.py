@@ -202,6 +202,9 @@ def test_wiki_mixin_lint_is_pure_delegation():
             and " -> " not in line
             and not line.startswith("=")  # KW-only arg defaults
             and "import " not in line
+            # A bare ")" is a continuation closer of a wrapped call, not a
+            # statement — otherwise every multi-line delegate trips this.
+            and line.strip().strip("()[]{},").strip()
         ]
         assert (
             len(inline_logic) <= 1

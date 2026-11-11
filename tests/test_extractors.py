@@ -1,7 +1,10 @@
 """Tests for content extractors."""
 
+import importlib.util
 import sys
 from pathlib import Path
+
+import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -12,6 +15,10 @@ from llmwikify.foundation.extractors import (
 )
 from llmwikify.foundation.extractors.base import ExtractedContent
 from llmwikify.kernel.storage.index import WikiIndex
+
+# The missing-dependency branch of the PDF extractor can only be exercised
+# when pymupdf is genuinely absent.
+_PYMUPDF_INSTALLED = importlib.util.find_spec("pymupdf") is not None
 
 
 class TestDetectSourceType:
@@ -141,12 +148,24 @@ class TestErrorHandling:
         assert result.source_type == "error"
         assert "File not found" in result.metadata["error"]
 
+    @pytest.mark.skipif(
+        _PYMUPDF_INSTALLED,
+        reason="pymupdf installed — missing-dependency branch unreachable",
+    )
     def test_pdf_missing_dep_returns_error(self, temp_wiki):
         """PDF extractor returns error type when pymupdf not available."""
         test_file = temp_wiki / "test.pdf"
         test_file.write_text("fake pdf content")
 
         result = extract(str(test_file))
-        # If pymupdf not installed, should return error type
-        if result.source_type == "error":
-            assert "pymupdf" in result.metadata["error"].lower()
+        assert result.source_type == "error"
+        assert "pymupdf" in result.metadata["error"].lower()
+
+    def test_malformed_pdf_returns_error(self, temp_wiki):
+        """A PDF that pymupdf cannot parse yields an error result, not a raise."""
+        test_file = temp_wiki / "test.pdf"
+        test_file.write_text("fake pdf content")
+
+        result = extract(str(test_file))
+        assert result.source_type == "error"
+        assert result.metadata["error"]

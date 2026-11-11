@@ -31,8 +31,15 @@ def _read_yaml(path: Path) -> dict:
 
 
 def _patch_home(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
-    """Redirect HOME to tmp_path so llmwikify.json is created there."""
-    monkeypatch.setenv("HOME", str(tmp_path))
+    """Redirect the config home to tmp_path so llmwikify.json is created there.
+
+    ``LLMWIKIFY_HOME`` is the product's own override and is consulted first
+    by ``foundation/config.py`` / ``foundation/auth``. Patching ``HOME``
+    instead is not portable: ``os.path.expanduser("~")`` ignores ``HOME``
+    on Windows and resolves ``USERPROFILE``, so the config silently landed
+    in the real home and the tests raised FileNotFoundError.
+    """
+    monkeypatch.setenv("LLMWIKIFY_HOME", str(tmp_path))
     return tmp_path
 
 

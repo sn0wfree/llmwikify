@@ -18,13 +18,27 @@ import time
 from pathlib import Path
 from typing import Any
 
+from llmwikify.foundation.config import global_config_home
 from llmwikify.foundation.io import read_json
 
 from .._base import Command
 from .._output import ICON_SUCCESS
 
-CONFIG_DIR = Path.home() / ".llmwikify"
-CONFIG_PATH = CONFIG_DIR / "llmwikify.json"
+
+def _config_dir() -> Path:
+    """Resolve ``~/.llmwikify`` at call time, honouring ``$LLMWIKIFY_HOME``.
+
+    Must be a function, not a module constant: the path is read after
+    ``--json`` starts, and tests redirect the config home per-process via
+    the environment.
+    """
+    return global_config_home()
+
+
+def _config_path() -> Path:
+    return _config_dir() / "llmwikify.json"
+
+
 LLM_TEST_TIMEOUT = 5.0
 
 
@@ -41,7 +55,7 @@ def _check(label: str, ok: bool, detail: str = "", silent: bool = False) -> bool
 
 def _check_config(silent: bool = False) -> tuple[bool, dict]:
     """Check ~/.llmwikify/llmwikify.json. Returns (ok, data_for_json)."""
-    if not CONFIG_PATH.exists():
+    if not _config_path().exists():
         _check(
             "~/.llmwikify/llmwikify.json",
             False,
@@ -50,7 +64,7 @@ def _check_config(silent: bool = False) -> tuple[bool, dict]:
         )
         return False, {
             "category": "config",
-            "name": str(CONFIG_PATH),
+            "name": str(_config_path()),
             "status": "missing",
             "fix": {
                 "commands": ["llmwikify init-llm"],
@@ -63,12 +77,12 @@ def _check_config(silent: bool = False) -> tuple[bool, dict]:
         }
 
     try:
-        data = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+        data = json.loads(_config_path().read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError) as e:
         _check("~/.llmwikify/llmwikify.json", False, f"parse error: {e}", silent=silent)
         return False, {
             "category": "config",
-            "name": str(CONFIG_PATH),
+            "name": str(_config_path()),
             "status": "error",
             "detail": str(e),
             "fix": {
@@ -91,7 +105,7 @@ def _check_config(silent: bool = False) -> tuple[bool, dict]:
         )
         return True, {
             "category": "config",
-            "name": str(CONFIG_PATH),
+            "name": str(_config_path()),
             "status": "ok",
             "enabled": False,
         }
@@ -106,7 +120,7 @@ def _check_config(silent: bool = False) -> tuple[bool, dict]:
     )
     return True, {
         "category": "config",
-        "name": str(CONFIG_PATH),
+        "name": str(_config_path()),
         "status": "ok",
         "enabled": True,
         "provider": provider,
@@ -218,10 +232,10 @@ def _check_llm_connectivity() -> tuple[bool, float, str]:
     Returns:
         (ok, latency_seconds, detail_string)
     """
-    if not CONFIG_PATH.exists():
+    if not _config_path().exists():
         return False, 0.0, "config not found"
 
-    data = read_json(CONFIG_PATH)
+    data = read_json(_config_path())
     if data is None:
         return False, 0.0, "config parse error"
 
@@ -382,8 +396,8 @@ def _check_wiki_dir(wiki: Any, silent: bool = False) -> dict[str, Any]:
 def _check_permissions(wiki_root: Path, silent: bool = False) -> bool:
     """Check write permissions for config dir and wiki root."""
     ok = True
-    if CONFIG_DIR.exists():
-        test_file = CONFIG_DIR / ".doctor_test"
+    if _config_dir().exists():
+        test_file = _config_dir() / ".doctor_test"
         try:
             test_file.write_text("test", encoding="utf-8", newline="\n")
             test_file.unlink()

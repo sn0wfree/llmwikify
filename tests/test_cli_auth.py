@@ -95,11 +95,14 @@ class TestAuthInitInteractive:
             rc = run_auth_init(wiki=None, config={}, args=args)
         assert rc == 0
 
-        # Verify local_token was written with chmod 600.
+        # Verify local_token was written with chmod 600. Windows does not
+        # model POSIX permission bits — stat().st_mode reports the default
+        # ACL-backed mode — so the assertion only applies on POSIX.
         token_path = Path(os.environ["LLMWIKIFY_HOME"]) / ".llmwikify" / "local_token"
         assert token_path.exists()
-        mode = token_path.stat().st_mode & 0o777
-        assert mode == 0o600, f"local_token mode {oct(mode)} != 0o600"
+        if os.name != "nt":
+            mode = token_path.stat().st_mode & 0o777
+            assert mode == 0o600, f"local_token mode {oct(mode)} != 0o600"
 
         # Verify user was created.
         repo = UserRepository()

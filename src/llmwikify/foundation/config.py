@@ -91,6 +91,19 @@ DEFAULT_CONFIG: dict[str, Any] = {
 _DEFAULT_TEMPLATE_PATH = Path(__file__).parent / "templates" / "llmwikify.default.json"
 
 
+def global_config_home() -> Path:
+    """Resolve the ``.llmwikify`` directory holding the global config.
+
+    ``$LLMWIKIFY_HOME`` wins when set; otherwise the user's home. The
+    env var is the only override that works on every platform —
+    ``os.path.expanduser("~")`` ignores ``$HOME`` on Windows (it resolves
+    ``USERPROFILE``) and ``Path.home()`` ignores it on Linux (it consults
+    ``/etc/passwd``). Computed at call time so tests can redirect it.
+    """
+    home = os.environ.get("LLMWIKIFY_HOME", "").strip() or os.path.expanduser("~")
+    return Path(home) / ".llmwikify"
+
+
 # ─── Config Singleton ────────────────────────────────────────────
 
 
@@ -125,12 +138,7 @@ class Config:
         if self._initialized:
             return
         self._initialized = True
-        self._home = (
-            Path(
-                os.environ.get("LLMWIKIFY_HOME", "").strip() or os.path.expanduser("~")
-            )
-            / ".llmwikify"
-        )
+        self._home = global_config_home()
         self._path = self._home / "llmwikify.json"
         self._cache: dict[str, Any] | None = None
         self._wiki_cache: dict[str, dict[str, Any]] = {}

@@ -110,8 +110,65 @@ POSIX 上已有的 `Query: X.md` 继续可读可写；Windows 探测字面名恒
 
 ## 5. 遗留
 
-- 剩余 15 条失败是预存的非平台问题（迁移 / 提取器 / CLI / 计时 flaky），另案处理。
 - `kernel/storage/backend.py` 与 `kernel/wiki/mixins/core/utility.py` 曾各自
   持有一份 `_WINDOWS_RESERVED_NAMES`，已收敛为 `backend.WINDOWS_RESERVED_NAMES` 单一来源。
 - `interfaces/server` 返回的绝对路径字段（如 lint issue 的 `file`）保持 OS 原生 —
   绝对路径本就平台相关，转 POSIX 反而错。
+
+## 6. 第二轮：清零剩余失败（2026-11-11）
+
+上一轮结束时余 15 条失败。逐条定根因后**全数修完**，
+全量基线由 `49 failed / 26 errors` 降至 **`0 failed / 0 errors`**（5048 passed）。
+
+### 6.1 根因归类
+
+| 根因 | 条数 | 修法 | 层 |
+|---|---:|---|---|
+| 测试只设 `HOME`，产品读不到 | 6 | 改设 `LLMWIKIFY_HOME` | 测试 |
+| `_extract_pdf` 只 catch `ImportError`，坏 PDF 触发 `pymupdf.FileDataError` 穿透 | 3 | 捕获解析失败 → `source_type="error"` | **产品** |
+| `migration.py` / `doctor_cmd.py` 用 `Path.home()`，绕过 `LLMWIKIFY_HOME` | 3 | 抽 `global_config_home()` 统一解析 | **产品** |
+| 测试用 POSIX 假路径/字符串当 dict 键 | 2 | 键用 `str(Path(...))`；失败条件改「父级是文件」 | 测试 |
+| Windows 忽略 `chmod 0o600` | 1 | 权限断言仅在 POSIX 执行 | 测试 |
+| `lint()` 折行后行数断言 `<= 1` 过脆 | 1 | 放行纯闭括号续行 | 测试 |
+
+计时 flaky（`test_autoresearch::TestEventsCursor`）本轮未复现，属 flaky 而非恒失败。
+
+### 6.2 关键发现：`LLMWIKIFY_HOME` 是唯一可靠的 home 覆盖
+
+三个 home 解析入口行为不一致，是本批失败的共同根源：
+
+| 入口 | 原实现 | `LLMWIKIFY_HOME` | `$HOME`（Linux） | `USERPROFILE`（Windows） |
+|---|---|---|---|---|
+| `foundation/config.py` | `expanduser("~")` | ✓ 优先 | ✓ | ✓ |
+| `foundation/migration.py` | `Path.home()` | ✗ 被忽略 | ✗ 看 `/etc/passwd` | ✓ |
+| `interfaces/.../doctor_cmd.py` | `Path.home()`，**模块级常量** | ✗ 被忽略 | ✗ | ✓ |
+
+`Path.home()` 与 `os.path.expanduser("~")` 都**不看 `$HOME`**（前者看
+`/etc/passwd` / `USERPROFILE`，后者在 Windows 上看 `USERPROFILE`），
+所以测试里 `monkeypatch.setenv("HOME", ...)` 是无效的。
+已统一为 `config.global_config_home()`，并在 doctor 侧把模块级常量改成
+按调用时解析的函数 —— 模块级路径常量会在 import 期定死，无法被测试重定向。
+
+### 6.3 测试隔离隐患（**未处理，建议跟进**）
+
+`test_cli_auth.py` / `test_cli_serve_auth.py` / `test_foundation_auth.py`
+在**模块导入期**写 `os.environ["LLMWIKIFY_HOME"]` 且不还原：
+
+```python
+os.environ.setdefault("LLMWIKIFY_HOME", tempfile.mkdtemp(...))   # cli_auth / cli_serve_auth
+os.environ["LLMWIKIFY_HOME"] = str(TEST_HOME)                    # foundation_auth（无条件覆盖）
+```
+
+pytest 收集阶段 import 模块 → 变量泄漏到整个进程。doctor 修复前
+（用 `Path.home()`）对它免疫；修复后 doctor 正确读了该变量，
+于是 `test_cli_auth` 跑在 `test_doctor_layout` 前面就会让后者挂掉
+（`next(...)` 抛 `StopIteration`）。已让 doctor 侧测试显式传
+`LLMWIKIFY_HOME` 屏蔽掉泄漏，但**泄漏本身仍在**。
+
+根治方向二选一：
+1. `foundation/auth` 改为按调用时解析配置路径（与 `doctor_cmd` 同样的教训），
+   测试即可用 `monkeypatch` 正常隔离；
+2. 或在 `tests/conftest.py` 加 session 级 `LLMWIKIFY_HOME` 隔离
+   （照 `_isolate_llmwikify_data_dir` 的做法），并把 `foundation_auth`
+   的无条件赋值改成 `setdefault`。
+
