@@ -44,6 +44,31 @@ def _isolate_llmwikify_data_dir() -> str:
         pass
 
 
+# Same rationale as _isolate_llmwikify_data_dir, for the config home.
+#
+# Without this, tests only stay out of the real ``~/.llmwikify`` by
+# accident: some modules (test_cli_auth / test_foundation_auth) set
+# ``LLMWIKIFY_HOME`` at import time, so a full run happens to isolate
+# everything that follows. Running a single module breaks that, and the
+# product falls back to the developer's real config — which is how test
+# data ended up in ``~/.llmwikify/llmwikify.json`` and why test outcomes
+# drifted with whatever config the machine happened to have.
+#
+# Session-scoped so it is set once, before any test body runs. Tests that
+# need their own home can still ``monkeypatch.setenv`` it locally.
+@pytest.fixture(autouse=True, scope="session")
+def _isolate_llmwikify_home() -> str:
+    import os
+
+    tmp_root = Path(tempfile.mkdtemp(prefix="llmwikify_test_home_"))
+    os.environ["LLMWIKIFY_HOME"] = str(tmp_root)
+    yield str(tmp_root)
+    try:
+        shutil.rmtree(tmp_root, ignore_errors=True)
+    except Exception:
+        pass
+
+
 # Windows: ManagedConnection 单例（get_connection）在测试结束后仍持有
 # SQLite 文件句柄，TemporaryDirectory.__exit__ 的 rmtree 会撞
 # WinError 32。给临时目录默认 ignore_cleanup_errors=True（py3.10+），
