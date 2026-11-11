@@ -62,8 +62,9 @@ class TestSynthesizeQueryBasic:
         )
 
         assert "page_path" in result
-        assert result["page_path"].startswith("wiki/")
-        assert result["page_path"].endswith(".md")
+        # 平台无关：OS 相对路径归一为 posix 后再断言
+        assert Path(result["page_path"]).as_posix().startswith("wiki/")
+        assert Path(result["page_path"]).suffix == ".md"
 
         wiki.close()
 

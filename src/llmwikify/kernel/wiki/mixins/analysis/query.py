@@ -77,7 +77,7 @@ class WikiQueryMixin(WikiProtocol):
 
             page_path.write_text(answer, encoding="utf-8", newline="\n")
 
-            rel_path = str(page_path.relative_to(self.wiki_dir))
+            rel_path = page_path.relative_to(self.wiki_dir).as_posix()
             self.index.upsert_page(rel_path[:-3], answer, rel_path)
             self._update_index_file()
 
@@ -159,7 +159,7 @@ class WikiQueryMixin(WikiProtocol):
         return {
             "status": status,
             "page_name": page_name,
-            "page_path": str(page_path.relative_to(self.root)),
+            "page_path": page_path.relative_to(self.root).as_posix(),
             "source_pages": source_pages,
             "raw_sources": raw_sources,
             "logged": logged,
@@ -289,7 +289,7 @@ class WikiQueryMixin(WikiProtocol):
 
         page_path.write_text(content, encoding="utf-8", newline="\n")
 
-        rel_path = str(page_path.relative_to(self.wiki_dir))
+        rel_path = page_path.relative_to(self.wiki_dir).as_posix()
         self.index.upsert_page(rel_path[:-3], content, rel_path)
         self._update_index_file()
 

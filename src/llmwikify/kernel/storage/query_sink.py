@@ -193,7 +193,7 @@ class QuerySink:
                     for line in lines:
                         if line.startswith("sink_path:"):
                             new_lines.append(
-                                f"sink_path: {str(sink_file.relative_to(self.root))}"
+                                f"sink_path: {sink_file.relative_to(self.root).as_posix()}"
                             )
                             has_sink_path = True
                         elif line.startswith("sink_entries:") or line.startswith(
@@ -204,12 +204,12 @@ class QuerySink:
                             new_lines.append(line)
                     if not has_sink_path:
                         new_lines.append(
-                            f"sink_path: {str(sink_file.relative_to(self.root))}"
+                            f"sink_path: {sink_file.relative_to(self.root).as_posix()}"
                         )
                     new_frontmatter = "\n".join(new_lines)
                     page_path.write_text(f"---\n{new_frontmatter}\n---{body}", encoding="utf-8", newline="\n")
             else:
-                sink_path = str(sink_file.relative_to(self.root))
+                sink_path = sink_file.relative_to(self.root).as_posix()
                 new_content = (
                     f"---\n"
                     f"sink_path: {sink_path}\n"
@@ -600,7 +600,7 @@ class QuerySink:
         if formal_path.exists():
             self._update_page_sink_meta(formal_path, sink_file)
 
-        return str(sink_file.relative_to(self.root))
+        return sink_file.relative_to(self.root).as_posix()
 
     def _rebuild_sink_file(
         self,
@@ -752,7 +752,7 @@ class QuerySink:
         return {
             "status": "ok",
             "page_name": page_name,
-            "file": str(sink_file.relative_to(self.root)),
+            "file": sink_file.relative_to(self.root).as_posix(),
             "entries": entries,
             "total_entries": len(entries),
             "unique_count": len(content_store),
@@ -824,7 +824,7 @@ class QuerySink:
             sinks.append(
                 {
                     "page_name": page_name,
-                    "file": str(sink_file.relative_to(self.root)),
+                    "file": sink_file.relative_to(self.root).as_posix(),
                     "entry_count": entry_count,
                     "oldest_entry": oldest,
                     "newest_entry": newest,
