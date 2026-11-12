@@ -31,6 +31,7 @@ import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 
 from ..config import global_config_home
@@ -39,6 +40,82 @@ from ._errors import AuthError
 logger = logging.getLogger(__name__)
 
 APP_AUTH_FILENAME = ".llmwikify_auth.db"
+
+
+def _backup_auth_db(conn: sqlite3.Connection, db_path: Path) -> Path | None:
+    """Copy ``auth.db`` next to itself before a destructive migration.
+
+    Uses SQLite's backup API so it is safe while ``conn`` is open.
+    Returns the backup path, or ``None`` if the copy failed (the caller
+    logs and continues — a failed backup must not block the migration,
+    but a *successful* one is what makes the migration non-destructive).
+    """
+    try:
+        if not db_path.exists():
+            return None
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        backup = db_path.with_name(f"{db_path.name}.pre-pat-{stamp}")
+        dst = sqlite3.connect(backup)
+        try:
+            conn.backup(dst)
+        finally:
+            dst.close()
+        return backup
+    except (OSError, sqlite3.Error) as exc:
+        logger.warning(
+            "[auth] could not back up %s before migration: %s", db_path, exc
+        )
+        return None
+
+
+def _migrate_pre_pat_schema(conn: sqlite3.Connection, db_path: Path) -> None:
+    """Migrate a pre-PAT ``users`` schema (v0.30-era) in place.
+
+    The only difference between that schema and the current one is the
+    obsolete ``password_hash`` column, so we drop just that column and
+    keep every row.
+
+    This used to run ``DROP TABLE IF EXISTS api_keys; DROP TABLE IF EXISTS
+    users;`` — silent, unbacked-up data loss on upgrade (P0-3 in
+    ``docs/llmwikify-auth-缺陷清单.md``). Two further guards:
+
+    * ``api_keys`` is left untouched. It was introduced *with* the PAT
+      change, so a pre-PAT database has no api_keys table at all, and an
+      existing one must not be destroyed.
+    * A copy of the DB is written next to it (``auth.db.pre-pat-<ts>``)
+      before anything changes, and the migration is logged with the
+      number of preserved rows.
+
+    Returns without doing anything when the schema is already current.
+    """
+    cols = {
+        row[1] for row in conn.execute("PRAGMA table_info(users)").fetchall()
+    }
+    if "password_hash" not in cols:
+        return
+
+    backup = _backup_auth_db(conn, db_path)
+    # SQLite >= 3.35 supports DROP COLUMN; the project requires 3.10+
+    # Python which ships a far newer SQLite in practice. Falls back to a
+    # warn-only path on engines that predate it.
+    try:
+        conn.execute("ALTER TABLE users DROP COLUMN password_hash")
+    except sqlite3.OperationalError as exc:
+        logger.error(
+            "[auth] could not drop password_hash (%s); the pre-PAT schema "
+            "was NOT migrated. Data is untouched. Backup: %s",
+            exc,
+            backup,
+        )
+        return
+    kept = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+    logger.warning(
+        "[auth] pre-PAT users schema migrated: dropped password_hash, "
+        "kept %d user row(s). Password auth was removed in v0.30 — PAT-only "
+        "now; old password hashes are unusable. Backup: %s",
+        kept,
+        backup,
+    )
 
 
 def auth_db_path() -> Path:
@@ -126,14 +203,9 @@ class UserRepository:
 
     def _init_schema(self) -> None:
         with self._connect() as conn:
-            # Phase 2.5 migration: detect old schema with password_hash column.
-            columns = {
-                row[1] for row in conn.execute("PRAGMA table_info(users)").fetchall()
-            }
-            if "password_hash" in columns:
-                conn.executescript(
-                    "DROP TABLE IF EXISTS api_keys; DROP TABLE IF EXISTS users;"
-                )
+            # P0-3: migrate a pre-PAT schema in place (drop only the
+            # obsolete password_hash column, back up first, keep rows).
+            _migrate_pre_pat_schema(conn, self.db_path)
             conn.executescript("""
                 CREATE TABLE IF NOT EXISTS users (
                     id TEXT PRIMARY KEY,
@@ -323,14 +395,9 @@ class ApiKeyRepository:
 
     def _init_schema(self) -> None:
         with self._connect() as conn:
-            # Phase 2.5 migration: detect old schema with password_hash column.
-            columns = {
-                row[1] for row in conn.execute("PRAGMA table_info(users)").fetchall()
-            }
-            if "password_hash" in columns:
-                conn.executescript(
-                    "DROP TABLE IF EXISTS api_keys; DROP TABLE IF EXISTS users;"
-                )
+            # P0-3: migrate a pre-PAT schema in place (drop only the
+            # obsolete password_hash column, back up first, keep rows).
+            _migrate_pre_pat_schema(conn, self.db_path)
             conn.executescript("""
                 CREATE TABLE IF NOT EXISTS users (
                     id TEXT PRIMARY KEY,

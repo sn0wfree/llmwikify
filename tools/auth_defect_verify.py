@@ -115,21 +115,38 @@ def probe_p0_3() -> tuple[bool, str]:
     try:
         db_path = home / "auth.db"
         conn = sqlite3.connect(db_path)
-        # Old v0.30-era schema the migration is supposed to detect.
+        # The real pre-PAT schema (git: be1a909d^) — `users` differs from
+        # today's only by the obsolete password_hash column. An api_keys
+        # table is included to prove the migration does not destroy one
+        # that already exists.
         conn.executescript(
             """
             CREATE TABLE users (
                 id TEXT PRIMARY KEY,
                 email TEXT UNIQUE NOT NULL,
-                password_hash TEXT NOT NULL
+                username TEXT UNIQUE,
+                password_hash TEXT NOT NULL,
+                is_first_admin INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                last_login_at TEXT
             );
             CREATE TABLE api_keys (
                 id TEXT PRIMARY KEY,
-                user_id TEXT NOT NULL,
-                key_hash TEXT NOT NULL
+                key_prefix TEXT NOT NULL,
+                key_hash TEXT UNIQUE NOT NULL,
+                user_id TEXT NOT NULL REFERENCES users(id),
+                name TEXT,
+                scopes TEXT NOT NULL DEFAULT 'write',
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                last_used_at TEXT,
+                expires_at TEXT,
+                revoked_at TEXT
             );
-            INSERT INTO users VALUES ('u1', 'old@example.com', 'x');
-            INSERT INTO api_keys VALUES ('k1', 'u1', 'y');
+            INSERT INTO users VALUES
+                ('u1', 'old@example.com', 'olduser', 'x', 1, '2026-01-01', NULL);
+            INSERT INTO api_keys VALUES
+                ('k1', 'llmw_abcdefg', 'deadbeef', 'u1', 'cli-init', 'write',
+                 '2026-01-01', NULL, NULL, NULL);
             """
         )
         conn.commit()
@@ -138,12 +155,20 @@ def probe_p0_3() -> tuple[bool, str]:
         UserRepository(db_path=db_path)  # triggers the migration
 
         conn = sqlite3.connect(db_path)
-        users = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+        users = conn.execute(
+            "SELECT COUNT(*) FROM users WHERE id = 'u1'"
+        ).fetchone()[0]
         keys = conn.execute("SELECT COUNT(*) FROM api_keys").fetchone()[0]
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(users)").fetchall()}
         conn.close()
         if users == 0 and keys == 0:
-            return True, "users 1→0, api_keys 1→0 — silent data loss"
-        return False, f"users={users}, api_keys={keys} — data survived"
+            return True, "users 1→0, api_keys 1→0 — silent data loss (defect reproduced)"
+        if users == 1 and keys == 1 and "password_hash" not in cols:
+            return False, (
+                "NOT reproduced — data preserved: users 1→1, api_keys 1→1, "
+                "password_hash dropped, backup written next to auth.db"
+            )
+        return False, f"unexpected state: users={users}, api_keys={keys}, cols={sorted(cols)}"
     except Exception as exc:  # noqa: BLE001
         return False, f"harness error: {type(exc).__name__}: {exc}"
     finally:
