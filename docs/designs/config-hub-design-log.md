@@ -692,20 +692,90 @@ github.com/ClickHouse/ClickHouse/blob/master/src/Core/Settings.cpp
 
 ---
 
-## 6. 实现计划草案（**未执行**，待设计定案后重排）
+## 6. 实现计划与状态
 
 | 步 | 内容 | 风险 | 状态 |
 |---|---|---|---|
-| 1 | 登记表 + `DEFAULT_CONFIG` 派生 + `get_param()` + 一致性测试 | **低**（零行为变更） | ✅ **已提交** `880e6f07` |
-| 2 | 登记表补全到 ~388 + `Param.layer/mutable/alias_of/user_key` 字段 | 低（纯新增） | ⬜ |
-| 3 | 4 个 `@dataclass_transform` 子类 + 契约测试 | 低（新增视图） | ⬜ |
-| 4 | `ParamRegistry` 父类：解析链 + 溯源 + `reload()`/`on_change()` | 中（动中枢） | ⬜ |
-| 5 | 迁移消费点，消灭 5 个默认值家族的漂移 | 中（改行为，需回归） | ⬜ |
-| 6 | 最小 diff YAML 编辑 + 写回 API（只 L4 导出） | 中 | ⬜ |
+| 1 | 登记表 + `DEFAULT_CONFIG` 派生 + `get_param()` + 一致性测试 | **低**（零行为变更） | ✅ `880e6f07` |
+| 2 | `Param` 加 `layer`/`hot_reloadable`/`deprecated` + 81 条标注归属层 | 低 | ✅ `2037bffd` `011bfacf` |
+| 3 | **4 个视图 + `nest()` + 生成式 `params.pyi` + 5 条契约测试**（方案 C） | 低 | ✅ `c7189831` |
+| 4 | `ParamRegistry` 父类：解析链 + `reload()` + `on_change()` | 中（动中枢） | ⬜ 下一步 |
+| 5 | 迁移消费点，消灭默认值家族漂移 | 中（改行为，需回归） | ⬜ 依赖 Q1/Q2 |
+| 6 | 最小 diff YAML 编辑（`Config.save` 路径，**不建 `set_param`**） | 中 | ⬜ 依赖 D3 |
 
-**当前覆盖率**：登记表 85 条 / ~388 ≈ **22%**。
+**当前覆盖率**：登记表 81 条 / ~388 ≈ **21%**。
 已镜像旧默认源：模板 JSON 38 / research YAML 7 / six-step YAML 9 = 54 条。
 （覆盖率棘轮测试见 `tests/test_foundation_params.py`）
+
+---
+
+## 6.1 已实现的 API（步 1–3）
+
+### 登记表 `foundation/params.py`
+
+```python
+from llmwikify.foundation.params import (
+    PARAMS, Param, param_default, param_spec, has_param,
+    params_under, defaults_for_prefix, section_defaults, nest,
+    FoundationParams, KernelParams, AppsParams, InterfacesParams,
+)
+
+# 取默认值 / 规格
+param_default("llm.timeout")            # 120
+param_spec("wiki.similarity_threshold") # Param(default=0.3, type=float, layer="kernel", ...)
+
+# 按层取视图（动态嵌套，零字段声明）
+p = KernelParams()
+p.wiki.similarity_threshold             # 0.3
+p.search.qmd.port                       # 8181（两层嵌套）
+p.directories.raw                       # "raw"
+KernelParams.layer_keys()               # frozenset，该层的 47 个 key
+```
+
+**`Param` 字段**（含业界先例标注，见 S4）：
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `default` | `Any` | **唯一**默认值出处 |
+| `type` | `type \| None` | 校验用 |
+| `doc` | `str` | 一行描述 |
+| `layer` | `str` | `foundation`/`kernel`/`apps`/`interfaces`（实际层名，非编号） |
+| `env` | `str \| None` | 可被 env 覆盖（hub-specific） |
+| `hot_reloadable` | `bool` | **手维护**（照 ClickHouse `changeable_without_restart` 的做法） |
+| `deprecated` | `bool` | D5 的 (iii) 弃用别名用 |
+
+**归属层分布**：`kernel` 47 · `apps` 20 · `foundation` 8 · `interfaces` 6 = 81
+
+**`hot_reloadable=False`（9 条，结构性设置）**：`mcp.{name,host,port,transport}`、
+`web.{port,host}`、`search.backend`、`search.qmd.{host,port}`
+
+### 类型 stub `foundation/params.pyi`（生成物，勿手改）
+
+- **由 `scripts/gen_params_stub.py` 从 `PARAMS` 生成**（251 行）
+- 20 个 section 类 + 4 个视图类
+- **sibling `.pyi` 会遮蔽运行时 `.py` 给 mypy** —— 所以 stub 必须声明**全部**运行时导出名
+  （漏一个，全仓调用该名字的代码都会类型报错）
+- 重新生成：`python scripts/gen_params_stub.py`
+
+### 5 条契约测试 `tests/test_foundation_params.py`
+
+| 测试 | 作用 |
+|---|---|
+| `test_generated_stub_is_current` | **主漂移门禁**：重跑 `build()` 与磁盘 `.pyi` 比对 |
+| `test_stub_declares_every_runtime_export` | **防 `.pyi` 遮蔽 `.py`**：断言 stub 声明了 `params.__all__` ∪ `{PARAMS}` |
+| `test_nested_view_attribute_access` | 运行时嵌套属性可用 |
+| `test_layer_views_expose_only_their_layer` | 每个视图只暴露本层参数 |
+| `test_nest_rejects_leaf_section_collision` | key 既是叶又是段前缀 → 明确报错 |
+| `test_registry_matches_*`（3 条） | 登记表 ↔ 模板 JSON / YAML 无漂移 |
+| `test_coverage_does_not_regress` | 覆盖率棘轮 |
+| `test_embedded_default_config_unchanged` | `DEFAULT_CONFIG` 与冻结快照逐字节相等 |
+
+### 过程中抓到并修掉的两个坑
+
+1. **`.pyi` 遮蔽 `.py`** —— 生成的 stub 漏声明 `section_defaults`，mypy 改读 stub 后
+   `config.py` 报「无此属性」。→ stub 必须声明全部导出名 + 上表第 2 条测试
+2. **`type: type | None`** —— 字段名 `type` 遮蔽内建 `type`，mypy 报 `valid-type`。
+   → stub 里写 `builtins.type | None`
 
 ---
 
