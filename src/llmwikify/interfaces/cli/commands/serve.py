@@ -265,11 +265,23 @@ def run_serve(wiki: Any, config: dict, args: Any) -> int:
     server_local_mode = local_mode
     # 2026-10-14: wire the previously hardcoded public_read flag to an env
     # switch so deployments can require authentication for reads too.
-    # Default stays True (backward compatible). Set
-    # LLMWIKIFY_PUBLIC_READ=false to make token-less GETs return 401.
-    server_public_read = os.environ.get(
-        "LLMWIKIFY_PUBLIC_READ", "true"
-    ).strip().lower() not in {"0", "false", "no", "off"}
+    # 2026-11-12 (P0-2): the default is no longer "true" unconditionally —
+    # token-less reads are only allowed on a loopback bind. Binding to a
+    # non-loopback address without an explicit LLMWIKIFY_PUBLIC_READ=true
+    # means every GET requires a token. Decision 1 (read-open) is preserved
+    # for local development; the remote case is no longer open by accident.
+    _public_read_env = os.environ.get("LLMWIKIFY_PUBLIC_READ")
+    if _public_read_env is not None:
+        server_public_read = (
+            _public_read_env.strip().lower() not in {"0", "false", "no", "off"}
+        )
+    else:
+        server_public_read = local_mode
+    logger.info(
+        "llmwikify serve: public_read=%s (set LLMWIKIFY_PUBLIC_READ=true/false "
+        "to override; default is loopback-only)",
+        server_public_read,
+    )
 
     try:
         # Check if multi-wiki mode is enabled

@@ -80,7 +80,7 @@ class WikiServer:
         enable_confirmations_cleanup: bool = True,
         enable_maintenance: bool = True,
         *,
-        public_read: bool = True,
+        public_read: bool = False,
         local_mode: bool = False,
     ):
         # Unified architecture: always use WikiRegistry
@@ -134,6 +134,9 @@ class WikiServer:
         self._maintenance_manager: Any = None
         # Phase 2a: public_read + local_mode flags drive the new
         # JWTAuthMiddleware. Defaults match decision 12 + decision 1.
+        # 2026-11-12 (P0-2): public_read now defaults to False (fail-closed).
+        # `serve` computes the effective value from the bind host (loopback
+        # → True) and logs it; direct constructors must opt in explicitly.
         self.public_read = public_read
         self.local_mode = local_mode
         self.mcp: MCPAdapter | None = None

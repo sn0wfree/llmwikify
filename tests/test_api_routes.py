@@ -214,7 +214,9 @@ class TestWikiServerConfiguration:
 
     def test_server_with_agent(self, wiki_instance):
         """Test server exposes agent routes returning idle state."""
-        server = WikiServer(wiki_instance, enable_webui=False)
+        # public_read=True: decision 1 (read-open) for loopback. Since
+        # P0-2 the constructor default is False, so it must be explicit.
+        server = WikiServer(wiki_instance, enable_webui=False, public_read=True)
         client = TestClient(server.app)
 
         # Agent routes are registered and return gracefully
@@ -239,7 +241,10 @@ class TestWikiServerConfiguration:
         ``api_key`` parameter has no effect on the HTTP layer.
         """
         server = WikiServer(
-            wiki_instance, api_key="test-secret-key", enable_webui=False
+            wiki_instance,
+            api_key="test-secret-key",
+            enable_webui=False,
+            public_read=True,
         )
         client = TestClient(server.app)
 

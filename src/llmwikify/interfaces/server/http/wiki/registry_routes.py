@@ -27,11 +27,25 @@ def register_registry_routes(app, registry: WikiRegistry) -> None:
     wikis_router = APIRouter(prefix="/api/wikis", tags=["wikis"])
 
     @wikis_router.get("")
-    async def list_wikis() -> dict[str, Any]:
-        """List all registered wikis."""
+    async def list_wikis(request: Request) -> dict[str, Any]:
+        """List registered wikis visible to the caller.
+
+        P0-1 + P0-5: the response used to include every wiki and each
+        wiki's absolute ``root`` path, unauthenticated, because the
+        ``wikis`` claim is only enforced for ``/api/wiki/...`` paths.
+        The list is now filtered by the claim, and ``root`` is omitted —
+        it is a server filesystem path and has no business in an API
+        response (the caller already knows the wiki_id).
+        """
+        claims = getattr(request.state, "auth_claims", None)
         wikis = registry.list_wikis()
+        if claims is not None and "*" not in claims.wikis:
+            allowed = set(claims.wikis)
+            wikis = [w for w in wikis if w.wiki_id in allowed]
         return {
-            "wikis": [w.to_dict() for w in wikis],
+            "wikis": [
+                {k: v for k, v in w.to_dict().items() if k != "root"} for w in wikis
+            ],
             "default_wiki_id": registry.get_default_wiki_id(),
         }
 

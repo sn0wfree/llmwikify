@@ -27,8 +27,11 @@ class TestWikiServerInit:
 
     def test_init_with_rest_disabled(self, wiki_instance):
         """Test initializing with REST disabled."""
-        # With REST disabled, there should be no /api/wiki routes
-        server = WikiServer(wiki_instance, enable_rest=False, enable_webui=False)
+        # With REST disabled, there should be no /api/wiki routes.
+        # public_read=True: the 404 must come from routing, not auth.
+        server = WikiServer(
+            wiki_instance, enable_rest=False, enable_webui=False, public_read=True
+        )
         client = TestClient(server.app)
         response = client.get("/api/wiki/status")
         # Should return 404 when REST is disabled
