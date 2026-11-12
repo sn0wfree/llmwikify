@@ -8,83 +8,46 @@ import os
 from pathlib import Path
 from typing import Any
 
+from .params import param_default, section_defaults
+
 logger = logging.getLogger(__name__)
 
-# Default configuration (embedded for zero-dependency)
+# Sentinel for "key not present in this scope" — None is a legal value.
+_MISSING = object()
+
+
+def _lookup_path(container: Any, dotted: str) -> Any:
+    """Walk a dotted path through nested dicts.
+
+    Returns ``_MISSING`` when any step is absent.
+    """
+    cursor = container
+    for part in dotted.split("."):
+        if not isinstance(cursor, dict) or part not in cursor:
+            return _MISSING
+        cursor = cursor[part]
+    return cursor
+
+# Sections exposed by the embedded default config. The *values* come from
+# the parameter registry (foundation/params.py) — they are never written
+# twice. The list only fixes which sections are part of the embedded
+# default document.
+_DEFAULT_CONFIG_SECTIONS = (
+    "directories",
+    "database",
+    "reference_index",
+    "orphan_detection",
+    "performance",
+    "llm",
+    "mcp",
+    "web",
+    "prompts",
+    "search",
+    "wikis",
+)
+
 DEFAULT_CONFIG: dict[str, Any] = {
-    "directories": {
-        "raw": "raw",
-        "wiki": "wiki",
-    },
-    "database": {
-        "name": ".llmwikify.db",
-    },
-    "reference_index": {
-        "name": "reference_index.json",
-        "auto_export": True,
-    },
-    "orphan_detection": {
-        "default_exclude_patterns": [],
-        "exclude_frontmatter": [],
-        "archive_directories": [],
-    },
-    "performance": {
-        "batch_size": 100,
-    },
-    "llm": {
-        # LAL (PR 4): all fields are None / False by default. The
-        # legacy hardcoded gpt-4 / openai / localhost:11434 values
-        # are removed; LLMNotConfiguredError is raised when LLM
-        # code tries to use these defaults.
-        "enabled": False,
-        "provider": None,
-        "model": None,
-        "base_url": None,
-        "api_key": "",
-        "timeout": 120,
-        "context_window": None,
-        "budget_on_exceed": "warn",
-    },
-    "mcp": {
-        "name": None,
-        "host": "127.0.0.1",
-        "port": 8765,
-        "transport": "stdio",
-    },
-    "web": {
-        "port": 8766,
-        "host": "127.0.0.1",
-    },
-    "prompts": {
-        "custom_dir": None,
-    },
-    "search": {
-        "backend": "fts5",  # "fts5" (default) or "qmd"
-        "qmd": {
-            "host": "127.0.0.1",
-            "port": 8181,
-            "auto_start": False,
-        },
-    },
-    "wikis": {
-        "default": None,
-        "local": [],
-        "remote": [],
-        "discovery": {
-            "enabled": False,
-            "scan_paths": ["."],
-            "scan_depth": 2,
-            "exclude_patterns": [
-                "node_modules",
-                ".git",
-                "__pycache__",
-                ".venv",
-                "venv",
-            ],
-            "auto_register": False,
-            "scan_interval": 3600,
-        },
-    },
+    section: section_defaults(section) for section in _DEFAULT_CONFIG_SECTIONS
 }
 
 # Template default config path (package-relative)
@@ -203,6 +166,45 @@ class Config:
 
             self._template_cache = read_json(_DEFAULT_TEMPLATE_PATH, {})
         return copy.deepcopy(self._template_cache.get(section, {}))
+
+    def get_param(
+        self,
+        key: str,
+        *,
+        wiki_root: Path | str | None = None,
+    ) -> Any:
+        """Resolve one parameter through the documented scopes.
+
+        per-wiki ``.wiki-config.yaml``  >  global ``~/.llmwikify/llmwikify.json``
+        >  the registry default (``foundation.params``).
+
+        Args:
+            key: Dotted parameter key, e.g. ``"llm.timeout"`` or
+                ``"wikis.discovery.scan_depth"``. A bare section name
+                (``"llm"``) returns the whole section as a dict.
+            wiki_root: When given, the per-wiki scope is consulted first.
+
+        Returns:
+            The resolved value, or the registry default when nothing
+            overrides it. Unknown keys resolve to ``None`` rather than
+            raising — use :func:`llmwikify.foundation.params.param_spec`
+            when a missing declaration must be loud.
+        """
+        section, _, rest = key.partition(".")
+        if not rest:
+            return copy.deepcopy(section_defaults(section))
+
+        if wiki_root is not None:
+            found = _lookup_path(self.get_wiki_config(wiki_root), key)
+            if found is not _MISSING:
+                return found
+
+        global_cfg = self.get()
+        found = _lookup_path(global_cfg.get(section, {}), rest)
+        if found is not _MISSING:
+            return found
+
+        return param_default(key)
 
     def save(self, data: dict[str, Any], section: str | None = None) -> None:
         """Save config to the global config file.
