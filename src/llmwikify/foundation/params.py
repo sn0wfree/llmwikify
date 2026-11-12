@@ -57,11 +57,13 @@ class Param:
         type: Declared type, used for coercion and for the consistency
             test. ``None`` means "unconstrained" (e.g. union types).
         doc: One-line description.
-        layer: Owning architecture layer — ``"L1"`` foundation,
-            ``"L2"`` kernel, ``"L3"`` apps, ``"L4"`` interfaces. Drives
-            which per-layer view exposes the parameter. Hub-specific:
-            industry config registries express ownership structurally
-            (separate declaration files / families), not per setting.
+        layer: Owning architecture layer — ``"foundation"`` (L1),
+            ``"kernel"`` (L2), ``"apps"`` (L3), ``"interfaces"`` (L4).
+            Drives which per-layer view exposes the parameter. The value is
+            the layer's real name, not a number — no lookup table needed.
+            Hub-specific: industry config registries express ownership
+            structurally (separate declaration files / families), not per
+            setting.
         env: Environment variable that overrides this parameter, when the
             parameter is meant to be settable from the environment.
         hot_reloadable: Whether the value can change while the process
@@ -91,55 +93,55 @@ class Param:
 
 PARAMS: dict[str, Param] = {
     # ── directories（L2：kernel/wiki 读取）──────────────────────────
-    "directories.raw": Param("raw", str, "源文件目录名", "L2"),
-    "directories.wiki": Param("wiki", str, "wiki 页面目录名", "L2"),
+    "directories.raw": Param("raw", str, "源文件目录名", "kernel"),
+    "directories.wiki": Param("wiki", str, "wiki 页面目录名", "kernel"),
     # ── database（L2）───────────────────────────────────────────────
-    "database.name": Param(".llmwikify.db", str, "SQLite 数据库文件名", "L2"),
+    "database.name": Param(".llmwikify.db", str, "SQLite 数据库文件名", "kernel"),
     # ── reference_index（L2）────────────────────────────────────────
-    "reference_index.name": Param("reference_index.json", str, "引用索引导出文件名", "L2"),
-    "reference_index.auto_export": Param(True, bool, "构建后自动导出引用索引", "L2"),
+    "reference_index.name": Param("reference_index.json", str, "引用索引导出文件名", "kernel"),
+    "reference_index.auto_export": Param(True, bool, "构建后自动导出引用索引", "kernel"),
     # ── orphan_detection（L2）───────────────────────────────────────
-    "orphan_detection.default_exclude_patterns": Param([], list, "默认排除的页名正则", "L2"),
-    "orphan_detection.exclude_frontmatter": Param([], list, "标记排除的 frontmatter 键", "L2"),
-    "orphan_detection.archive_directories": Param([], list, "归档目录名", "L2"),
+    "orphan_detection.default_exclude_patterns": Param([], list, "默认排除的页名正则", "kernel"),
+    "orphan_detection.exclude_frontmatter": Param([], list, "标记排除的 frontmatter 键", "kernel"),
+    "orphan_detection.archive_directories": Param([], list, "归档目录名", "kernel"),
     # ── performance（L2）────────────────────────────────────────────
-    "performance.batch_size": Param(100, int, "索引构建每批文件数", "L2"),
+    "performance.batch_size": Param(100, int, "索引构建每批文件数", "kernel"),
     # ── llm（L1：foundation/llm 定义与使用）────────────────────────
     # LAL (PR 4): all fields are None / False by default. The legacy
     # hardcoded gpt-4 / openai / localhost:11434 values are removed;
     # LLMNotConfiguredError is raised when LLM code tries to use them.
-    "llm.enabled": Param(False, bool, "是否启用 LLM", "L1"),
-    "llm.provider": Param(None, str, "LLM provider（openai/anthropic/minimax/...）", "L1"),
-    "llm.model": Param(None, str, "模型名", "L1"),
-    "llm.base_url": Param(None, str, "OpenAI 兼容端点", "L1"),
-    "llm.api_key": Param("", str, "API key（支持 env:VAR 引用）", "L1"),
-    "llm.timeout": Param(120, int, "单次 LLM 调用超时（秒）", "L1"),
-    "llm.context_window": Param(None, int, "上下文窗口大小（token）", "L1"),
-    "llm.budget_on_exceed": Param("warn", str, "超预算行为 warn/raise/truncate", "L1"),
+    "llm.enabled": Param(False, bool, "是否启用 LLM", "foundation"),
+    "llm.provider": Param(None, str, "LLM provider（openai/anthropic/minimax/...）", "foundation"),
+    "llm.model": Param(None, str, "模型名", "foundation"),
+    "llm.base_url": Param(None, str, "OpenAI 兼容端点", "foundation"),
+    "llm.api_key": Param("", str, "API key（支持 env:VAR 引用）", "foundation"),
+    "llm.timeout": Param(120, int, "单次 LLM 调用超时（秒）", "foundation"),
+    "llm.context_window": Param(None, int, "上下文窗口大小（token）", "foundation"),
+    "llm.budget_on_exceed": Param("warn", str, "超预算行为 warn/raise/truncate", "foundation"),
     # ── mcp（L4）────────────────────────────────────────────────────
-    "mcp.name": Param(None, str, "MCP server 名称", "L4", hot_reloadable=False),
-    "mcp.host": Param("127.0.0.1", str, "MCP 监听地址", "L4", hot_reloadable=False),
-    "mcp.port": Param(8765, int, "MCP 监听端口", "L4", hot_reloadable=False),
+    "mcp.name": Param(None, str, "MCP server 名称", "interfaces", hot_reloadable=False),
+    "mcp.host": Param("127.0.0.1", str, "MCP 监听地址", "interfaces", hot_reloadable=False),
+    "mcp.port": Param(8765, int, "MCP 监听端口", "interfaces", hot_reloadable=False),
     "mcp.transport": Param(
-        "stdio", str, "MCP 传输方式 stdio/http/sse", "L4", hot_reloadable=False
+        "stdio", str, "MCP 传输方式 stdio/http/sse", "interfaces", hot_reloadable=False
     ),
     # ── web（L4）────────────────────────────────────────────────────
-    "web.port": Param(8766, int, "Web UI 端口", "L4", hot_reloadable=False),
-    "web.host": Param("127.0.0.1", str, "Web UI 监听地址", "L4", hot_reloadable=False),
+    "web.port": Param(8766, int, "Web UI 端口", "interfaces", hot_reloadable=False),
+    "web.host": Param("127.0.0.1", str, "Web UI 监听地址", "interfaces", hot_reloadable=False),
     # ── prompts（L2）────────────────────────────────────────────────
-    "prompts.custom_dir": Param(None, str, "自定义 prompt 目录", "L2"),
+    "prompts.custom_dir": Param(None, str, "自定义 prompt 目录", "kernel"),
     # ── search（L2：kernel/search）──────────────────────────────────
-    "search.backend": Param("fts5", str, "检索后端 fts5/qmd", "L2", hot_reloadable=False),
-    "search.qmd.host": Param("127.0.0.1", str, "QMD 服务地址", "L2", hot_reloadable=False),
-    "search.qmd.port": Param(8181, int, "QMD 服务端口", "L2", hot_reloadable=False),
-    "search.qmd.auto_start": Param(False, bool, "是否自动拉起 QMD", "L2"),
+    "search.backend": Param("fts5", str, "检索后端 fts5/qmd", "kernel", hot_reloadable=False),
+    "search.qmd.host": Param("127.0.0.1", str, "QMD 服务地址", "kernel", hot_reloadable=False),
+    "search.qmd.port": Param(8181, int, "QMD 服务端口", "kernel", hot_reloadable=False),
+    "search.qmd.auto_start": Param(False, bool, "是否自动拉起 QMD", "kernel"),
     # ── wikis（L2：kernel/multi_wiki）───────────────────────────────
-    "wikis.default": Param(None, str, "默认 wiki id", "L2"),
-    "wikis.local": Param([], list, "本地 wiki 列表", "L2"),
-    "wikis.remote": Param([], list, "远程 wiki 列表", "L2"),
-    "wikis.discovery.enabled": Param(False, bool, "是否自动发现 wiki", "L2"),
-    "wikis.discovery.scan_paths": Param(["."], list, "扫描路径", "L2"),
-    "wikis.discovery.scan_depth": Param(2, int, "扫描深度", "L2"),
+    "wikis.default": Param(None, str, "默认 wiki id", "kernel"),
+    "wikis.local": Param([], list, "本地 wiki 列表", "kernel"),
+    "wikis.remote": Param([], list, "远程 wiki 列表", "kernel"),
+    "wikis.discovery.enabled": Param(False, bool, "是否自动发现 wiki", "kernel"),
+    "wikis.discovery.scan_paths": Param(["."], list, "扫描路径", "kernel"),
+    "wikis.discovery.scan_depth": Param(2, int, "扫描深度", "kernel"),
     "wikis.discovery.exclude_patterns": Param(
         [
             "node_modules",
@@ -150,33 +152,33 @@ PARAMS: dict[str, Param] = {
         ],
         list,
         "扫描排除目录名",
-        "L2",
+        "kernel",
     ),
-    "wikis.discovery.auto_register": Param(False, bool, "发现后是否自动注册", "L2"),
-    "wikis.discovery.scan_interval": Param(3600, int, "扫描间隔（秒）", "L2"),
+    "wikis.discovery.auto_register": Param(False, bool, "发现后是否自动注册", "kernel"),
+    "wikis.discovery.scan_interval": Param(3600, int, "扫描间隔（秒）", "kernel"),
     # ── research（L3）───────────────────────────────────────────────
-    "research.enabled": Param(True, bool, "是否启用 research", "L3"),
-    "research.search_provider": Param("auto", str, "搜索 provider auto/minimax/tavily/searxng", "L3"),
-    "research.minimax_api_key": Param("", str, "Minimax 搜索 API key", "L3"),
-    "research.minimax_api_host": Param("", str, "Minimax 搜索 host", "L3"),
+    "research.enabled": Param(True, bool, "是否启用 research", "apps"),
+    "research.search_provider": Param("auto", str, "搜索 provider auto/minimax/tavily/searxng", "apps"),
+    "research.minimax_api_key": Param("", str, "Minimax 搜索 API key", "apps"),
+    "research.minimax_api_host": Param("", str, "Minimax 搜索 host", "apps"),
     # ── chat_mutable（L3，用户可改）─────────────────────────────────
-    "chat_mutable.max_chat_rounds": Param(4, int, "对话最大轮数", "L3"),
-    "chat_mutable.max_messages": Param(50, int, "历史消息上限", "L3"),
-    "chat_mutable.observation_limit": Param(10, int, "observation 上限", "L3"),
-    "chat_mutable.llm_retry_max_attempts": Param(3, int, "LLM 重试次数", "L3"),
-    "chat_mutable.llm_retry_base_delay": Param(2.0, float, "LLM 重试基础延迟（秒）", "L3"),
-    "chat_mutable.llm_retry_call_timeout": Param(120.0, float, "LLM 重试单次超时（秒）", "L3"),
-    "chat_mutable.llm_retry_max_delay": Param(30.0, float, "LLM 重试最大延迟（秒）", "L3"),
-    "chat_mutable.chat_db_retry_max_attempts": Param(3, int, "chat DB 重试次数", "L3"),
-    "chat_mutable.chat_db_retry_base_delay": Param(0.2, float, "chat DB 重试基础延迟（秒）", "L3"),
+    "chat_mutable.max_chat_rounds": Param(4, int, "对话最大轮数", "apps"),
+    "chat_mutable.max_messages": Param(50, int, "历史消息上限", "apps"),
+    "chat_mutable.observation_limit": Param(10, int, "observation 上限", "apps"),
+    "chat_mutable.llm_retry_max_attempts": Param(3, int, "LLM 重试次数", "apps"),
+    "chat_mutable.llm_retry_base_delay": Param(2.0, float, "LLM 重试基础延迟（秒）", "apps"),
+    "chat_mutable.llm_retry_call_timeout": Param(120.0, float, "LLM 重试单次超时（秒）", "apps"),
+    "chat_mutable.llm_retry_max_delay": Param(30.0, float, "LLM 重试最大延迟（秒）", "apps"),
+    "chat_mutable.chat_db_retry_max_attempts": Param(3, int, "chat DB 重试次数", "apps"),
+    "chat_mutable.chat_db_retry_base_delay": Param(0.2, float, "chat DB 重试基础延迟（秒）", "apps"),
     # ── research_mutable（L3，用户可改）─────────────────────────────
-    "research_mutable.search_provider": Param("auto", str, "搜索 provider", "L3"),
-    "research_mutable.max_sub_queries": Param(20, int, "子查询上限", "L3"),
-    "research_mutable.research_timeout_minutes": Param(30, int, "research 超时（分钟）", "L3"),
-    "research_mutable.max_parallel_gathering": Param(5, int, "并行抓取上限", "L3"),
-    "research_mutable.web_search_results_per_query": Param(5, int, "每查询搜索结果数", "L3"),
-    "research_mutable.max_retry_attempts": Param(3, int, "最大重试次数", "L3"),
-    "research_mutable.max_review_rounds": Param(2, int, "评审轮数上限", "L3"),
+    "research_mutable.search_provider": Param("auto", str, "搜索 provider", "apps"),
+    "research_mutable.max_sub_queries": Param(20, int, "子查询上限", "apps"),
+    "research_mutable.research_timeout_minutes": Param(30, int, "research 超时（分钟）", "apps"),
+    "research_mutable.max_parallel_gathering": Param(5, int, "并行抓取上限", "apps"),
+    "research_mutable.web_search_results_per_query": Param(5, int, "每查询搜索结果数", "apps"),
+    "research_mutable.max_retry_attempts": Param(3, int, "最大重试次数", "apps"),
+    "research_mutable.max_review_rounds": Param(2, int, "评审轮数上限", "apps"),
 }
 
 
@@ -190,30 +192,30 @@ PARAMS: dict[str, Param] = {
 PARAMS.update(
     {
         # ── wiki 阈值（L2：kernel/wiki）────────────────────────────
-        "wiki.similarity_threshold": Param(0.3, float, "页面相似度阈值", "L2"),
-        "wiki.min_keyword_length": Param(3, int, "参与匹配的关键词最小长度", "L2"),
-        "wiki.jaccard_overlap_threshold": Param(0.85, float, "query 页重叠阈值", "L2"),
-        "wiki.min_missing_ref_count": Param(2, int, "触发缺失引用的最小提及次数", "L2"),
-        "wiki.max_dated_claim_hints": Param(3, int, "过期声明提示上限", "L2"),
-        "wiki.max_query_overlap_hints": Param(2, int, "query 重叠提示上限", "L2"),
-        "wiki.max_cross_ref_hints": Param(3, int, "交叉引用提示上限", "L2"),
-        "wiki.max_contradictions": Param(3, int, "矛盾提示上限", "L2"),
-        "wiki.min_assertion_length": Param(21, int, "断言最小长度", "L2"),
-        "wiki.min_assertions_for_gap": Param(3, int, "构成知识缺口的最少断言数", "L2"),
-        "wiki.outdated_year_gap": Param(2, int, "内容过期年份差", "L2"),
-        "wiki.year_gap_threshold": Param(3, int, "年份差告警阈值", "L2"),
-        "wiki.min_year_threshold": Param(2018, int, "不过期的最早年份", "L2"),
-        "wiki.max_missing_display": Param(5, int, "缺失引用展示上限", "L2"),
-        "wiki.max_summary_items": Param(5, int, "摘要条目上限", "L2"),
-        "wiki.max_key_topics": Param(5, int, "关键词主题上限", "L2"),
-        "wiki.max_query_topic_length": Param(50, int, "query 页名主题长度上限", "L2"),
-        "wiki.max_content_chars": Param(8000, int, "单页参与分析的最大字符数", "L2"),
-        "wiki.hash_truncate_length": Param(16, int, "内容哈希截断长度", "L2"),
-        "wiki.max_suggested_updates": Param(10, int, "建议更新条目上限", "L2"),
-        "wiki.small_wiki_threshold": Param(5, int, "小 wiki 页数阈值", "L2"),
-        "wiki.growing_wiki_threshold": Param(20, int, "成长中 wiki 页数阈值", "L2"),
-        "wiki.claim_overlap_threshold": Param(0.4, float, "声明重叠阈值", "L2"),
-        "wiki.contradiction_overlap_threshold": Param(0.5, float, "矛盾重叠阈值", "L2"),
+        "wiki.similarity_threshold": Param(0.3, float, "页面相似度阈值", "kernel"),
+        "wiki.min_keyword_length": Param(3, int, "参与匹配的关键词最小长度", "kernel"),
+        "wiki.jaccard_overlap_threshold": Param(0.85, float, "query 页重叠阈值", "kernel"),
+        "wiki.min_missing_ref_count": Param(2, int, "触发缺失引用的最小提及次数", "kernel"),
+        "wiki.max_dated_claim_hints": Param(3, int, "过期声明提示上限", "kernel"),
+        "wiki.max_query_overlap_hints": Param(2, int, "query 重叠提示上限", "kernel"),
+        "wiki.max_cross_ref_hints": Param(3, int, "交叉引用提示上限", "kernel"),
+        "wiki.max_contradictions": Param(3, int, "矛盾提示上限", "kernel"),
+        "wiki.min_assertion_length": Param(21, int, "断言最小长度", "kernel"),
+        "wiki.min_assertions_for_gap": Param(3, int, "构成知识缺口的最少断言数", "kernel"),
+        "wiki.outdated_year_gap": Param(2, int, "内容过期年份差", "kernel"),
+        "wiki.year_gap_threshold": Param(3, int, "年份差告警阈值", "kernel"),
+        "wiki.min_year_threshold": Param(2018, int, "不过期的最早年份", "kernel"),
+        "wiki.max_missing_display": Param(5, int, "缺失引用展示上限", "kernel"),
+        "wiki.max_summary_items": Param(5, int, "摘要条目上限", "kernel"),
+        "wiki.max_key_topics": Param(5, int, "关键词主题上限", "kernel"),
+        "wiki.max_query_topic_length": Param(50, int, "query 页名主题长度上限", "kernel"),
+        "wiki.max_content_chars": Param(8000, int, "单页参与分析的最大字符数", "kernel"),
+        "wiki.hash_truncate_length": Param(16, int, "内容哈希截断长度", "kernel"),
+        "wiki.max_suggested_updates": Param(10, int, "建议更新条目上限", "kernel"),
+        "wiki.small_wiki_threshold": Param(5, int, "小 wiki 页数阈值", "kernel"),
+        "wiki.growing_wiki_threshold": Param(20, int, "成长中 wiki 页数阈值", "kernel"),
+        "wiki.claim_overlap_threshold": Param(0.4, float, "声明重叠阈值", "kernel"),
+        "wiki.contradiction_overlap_threshold": Param(0.5, float, "矛盾重叠阈值", "kernel"),
     }
 )
 
