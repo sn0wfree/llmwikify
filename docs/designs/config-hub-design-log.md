@@ -699,7 +699,7 @@ github.com/ClickHouse/ClickHouse/blob/master/src/Core/Settings.cpp
 | 1 | 登记表 + `DEFAULT_CONFIG` 派生 + `get_param()` + 一致性测试 | **低**（零行为变更） | ✅ `880e6f07` |
 | 2 | `Param` 加 `layer`/`hot_reloadable`/`deprecated` + 81 条标注归属层 | 低 | ✅ `2037bffd` `011bfacf` |
 | 3 | **4 个视图 + `nest()` + 生成式 `params.pyi` + 5 条契约测试**（方案 C） | 低 | ✅ `c7189831` |
-| 4 | `ParamRegistry` 父类：解析链 + `reload()` + `on_change()` | 中（动中枢） | ⬜ 下一步 |
+| 4 | `ParamRegistry` 父类：解析链 + `reload()` + `on_change()` | 中（动中枢） | ✅ `9c05ab3e` |
 | 5 | 迁移消费点，消灭默认值家族漂移 | 中（改行为，需回归） | ⬜ 依赖 Q1/Q2 |
 | 6 | 最小 diff YAML 编辑（`Config.save` 路径，**不建 `set_param`**） | 中 | ⬜ 依赖 D3 |
 
@@ -776,6 +776,45 @@ KernelParams.layer_keys()               # frozenset，该层的 47 个 key
    `config.py` 报「无此属性」。→ stub 必须声明全部导出名 + 上表第 2 条测试
 2. **`type: type | None`** —— 字段名 `type` 遮蔽内建 `type`，mypy 报 `valid-type`。
    → stub 里写 `builtins.type | None`
+
+### 6.2 `ParamRegistry`（步 4，commit `9c05ab3e`）
+
+**解析链**（高 → 低）：
+
+```
+env  >  per-wiki .wiki-config.yaml  >  global llmwikify.json  >  registry default
+```
+
+**API**：
+
+```python
+from llmwikify.foundation.config import ParamRegistry, registry_for
+
+reg = registry_for(wiki_root)          # 每 wiki 一个（单例缓存）
+reg.get("llm.timeout")                 # 解析后的值
+reg.source("llm.timeout")              # "env" | "wiki" | "global" | "registry"
+reg.for_layer("kernel")                # 该层的 {key: value}
+reg.foundation() / .kernel() / .apps() / .interfaces()   # 分层视图
+reg.reload()                           # 重解析，返回变更键集合，通知监听器
+unsub = reg.on_change(fn)              # 注册监听，返回退订函数
+```
+
+**S2 落地**：`reload()` 先重解析、失败保旧（nginx 式），成功后把**变更键集合**交给
+`on_change` 监听器（Spring `EnvironmentChangeEvent` 形状）。值在用时读（pull），
+只有昂贵派生对象（LLM client）才注册回调。
+
+**⚠️ 又抓到一个 import 期捕获 bug（同型第 3 处）**：
+`Config.__init__` 原先 `self._home = global_config_home()` —— `Config` 是模块级单例，
+在 import 时创建，`$LLMWIKIFY_HOME` 在此之前设的值**永远不会生效**。
+表现为 `ParamRegistry` 读到开发者真实的 `~/.llmwikify/llmwikify.json`
+（`max_chat_rounds` 返回 8 而非 4）。已改为 `home`/`path` **属性、调用时解析**。
+
+同型清单（全部已修）：
+| 位置 | 症状 |
+|---|---|
+| `interfaces/cli/commands/doctor_cmd.py:26` `CONFIG_PATH` | 不认 `LLMWIKIFY_HOME` |
+| `foundation/auth/_keyring.py:48` `_SECRET_FILE` | 同上 + 真实写盘 |
+| **`foundation/config.py` `Config._home/_path`** | **单例冻结，测试读到真实配置** |
 
 ---
 
