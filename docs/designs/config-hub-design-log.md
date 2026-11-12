@@ -200,7 +200,7 @@ docs.djangoproject.com/en/stable/internals/deprecation/
 
 ## 3. 建议待确认
 
-### S1 · 子类实现：B（手写 + 契约测试）+ `@dataclass_transform`
+### S1 · 子类实现：B（手写 + 契约测试）+ `@dataclass_transform` ✅ **已确认**
 
 **依据（E1 业界调研）**：见 §5.1。结论是 **Python 业界规范是 B**；A（纯动态生成）
 成熟项目几乎从不单独用；C（动态 + `.pyi`）是「给动态库 API 发类型」的规范，
@@ -240,11 +240,11 @@ def test_kernel_view_matches_registry():
 | 工具链 | 无 | 无 | 生成脚本 + stub 过期检测 |
 | 报错时机 | 运行时 `AttributeError` | **写代码时** | 写代码时 |
 
-**状态**：**建议已给出，用户尚未拍板**（用户只要求调研，未表态）。
+**用户表态**：「S1：B + @dataclass_transform」 ✅
 
 ---
 
-### S2 · H2（配置变更通知）最小模型
+### S2 · H2（配置变更通知）最小模型 ✅ **已确认**
 
 **依据（E2 业界调研）**：见 §5.2。
 
@@ -264,7 +264,13 @@ config.on_change(fn) -> unsub   # reload 成功后回调，参数 = 变更键集
 | 派生对象贵、要精确失效 | **Push / 事件** | LLM client 重建 |
 | 结构性设置 | **Restart-only** | 端口、transport、`mcp.host` |
 
-**状态**：**建议已给出，用户尚未拍板**（用户要求调研，我给了调研 + 建议）。
+**⚠️ 关键补充（用户指出）**：ClickHouse 的 `changeable_without_restart` 是**唯一手维护**的部分
+（`collectChangeableServerSettings()` map，带开发者注释要求手工更新）——
+**连 1000+ 参数的项目都没能把「可变性」完全 codegen**。
+→ **`hot_reloadable` 字段必须手写，不要试图从声明推导。**
+
+**用户表态**：「S2:就是我 S2 的内容，有依据。注意：ClickHouse 的 changeable_without_restart 是手维护的…
+说明 hot_reloadable 字段应该手写，不要试图从声明推导」 ✅
 
 ---
 
@@ -287,26 +293,81 @@ config.on_change(fn) -> unsub   # reload 成功后回调，参数 = 变更键集
 
 ---
 
-### S4 · 声明字段
+### S3 · 写回（`set_param`）→ 业界建议：**不要建通用 `set_param`** ✅ **调研完成**
 
-```python
-@dataclass(frozen=True)
-class Param:
-    key: str                 # "chat.max_chat_rounds"（登记表内唯一）
-    default: Any             # 唯一默认值出处
-    type: type | None        # 用于 coercion + 校验
-    doc: str
-    layer: Literal["L1","L2","L3","L4"]   # 归属层 → 决定落在哪个子类
-    mutable: bool            # True=用户可改；False=不可变/常量
-    env: str | None = None   # 可被 env 覆盖（仅当 mutable）
-    user_key: str | None = None  # 配置文件里的路径；None = 不出现在配置文件
-    alias_of: str | None = None  # 语义待定（见 D5）
-```
+**依据（E7 业界调研）**：见 §5.7。
 
-**要点**：`mutable=False` 就是「不可变参数或常量」——它们同样进登记表，只是没有 `env`、
-没有 `user_key`，用户改不了，但**默认值和类型仍由中枢管理**。这样「常量」和「参数」不再分家。
+**核心结论**：**业界绝大多数系统根本没有程序化写回。**
 
-**状态**：字段清单为建议，随 D5 / S1 定案一起确认。
+| 系统 | 有写回？ | 谁写 |
+|---|---|---|
+| Django settings | **无** | 只有人改 settings 文件 |
+| Prometheus | **无** | 人改 YAML；`/-/reload`、SIGHUP **只重读** |
+| Spring Cloud Config | **无** | server **只读** git，文档原话「never makes changes to the remote」 |
+| nginx | **无** | 人改；HUP 重读 + 语法检查 + 失败回滚 |
+| OpenTelemetry SDK | **无** | 初始化时读 |
+| K8s ConfigMap（应用侧） | **无** | 控制面/kubectl 经 API；pod 是 `readOnly=true` 挂载；env 需重启 |
+| **K8s API / SSA** | **有** | **CLI/UI/controller**（`fieldManager`），**不是工作负载应用** |
+| VS Code settings.json | **有** | 设置编辑器 / UI |
+| Terraform / Consul / Ansible | **有** | **CLI / 控制面**，**不是应用代码** |
+
+**Django 的措辞最强（业界最明确的「应用不得写回」规则）**：
+
+> *「You shouldn't alter settings in your applications at runtime… The only place you
+> should assign to settings is in a settings file.」*
+
+**技术规则**（若将来要写）：
+- **原子性**：`os.replace` 是 Python 标准（同文件系统要求；跨设备失败；Windows 上优于 `rename`）
+- **写前校验**：类型/范围/未知键 —— Prometheus 拒绝坏 reload、Spring 校验 git、pydantic/JSON Schema 编码约束
+- **备份/审计**：用 git（Spring「for auditing changes」）或 K8s `managedFields`，**不是 `.bak`**
+- **并发**：last-writer-wins 或乐观 CAS（K8s 冲突、Consul CAS）；小工具很少用文件锁
+
+**→ 结论：不建通用 `set_param`。** 保留 `Config.save()` 作唯一写路径（现有 CLI/UI 调用点够用）。
+若将来要暴露，强制四条：校验 → 保留未知键 → 同目录原子 `os.replace` → last-writer-wins + 审计日志。
+
+**用户表态**：上一轮要求「写回场景重点讨论」，本轮业界给出「不要建」的结论。
+
+---
+
+### S4 · `Param` 字段集 ✅ **调研完成**（`layer` 用户已要求保留）
+
+**依据（E7 业界调研）**：见 §5.7。
+
+**关键发现**：**业界没有标准的 owner/layer 字段。**
+
+| 系统 | 字段列表 | 有 owner/layer？ |
+|---|---|---|
+| ClickHouse `DECLARE` | type, name, default, description, flags(成熟度 tier \| IMPORTANT), alias, history | **无**（flags 只有 tier） |
+| pydantic `Field` | default, alias/validation_alias, title, description, examples, deprecated, ge/le/gt/lt, pattern, … | 无 |
+| Spring `spring-configuration-metadata.json` | name, type, description, sourceType, defaultValue, deprecation{level,reason,replacement,since}, hints | **无**（sourceType 是声明类，不是 layer） |
+| JSON Schema 2020-12 | title, description, default, examples, deprecated, readOnly/writeOnly, enum, min/max | 无 |
+| K8s API field | description, default, format, enum, deprecated；运行时归属靠 `managedFields` 的 **writer** | 无（writer ≠ config layer） |
+| `pg_settings` | name, setting, unit, category, context, vartype, source, min/max, enumvals, … | 无（category/context 是文档+运行时） |
+| VS Code contribution | type, default, description, enum, **scope**(user/workspace/application), deprecationMessage | scope ≈ **在哪可设**，不是 owner |
+
+**归属在业界用结构化表达**（独立的声明文件/家族/命名空间）。最接近的：
+PG `category`（逻辑分组）、Spring `groups`（命名空间）、VS Code `scope`（设置位置）、Envoy `category`（文档分组）。
+
+**字段集判定（含先例标注）**
+
+| 字段 | 先例 | 判定 |
+|---|---|---|
+| `key` | 普遍 | ✅ 必备 |
+| `default` | 普遍 | ✅ 必备 |
+| `type` | CH/pydantic/Spring/JSON Schema | ✅ 必备 |
+| `doc` | 普遍 | ✅ 必备 |
+| constraints（enum/range/pattern） | pydantic/JSON Schema/PG | ✅ 建议加 |
+| `deprecated` + replacement | Spring/JSON Schema | ✅ 建议加（D5 的 (iii) 需要） |
+| `mutable` / context | **部分** —— PG `context`、JSON Schema `readOnly` | ✅ 有先例 |
+| **`layer`** | **不常见** —— 无标准；Spring `groups` 只是命名空间 | ⚠️ **hub-specific，但用户明确要求保留** |
+| **`env`** | **不常见作元数据** —— 业界把 env 当 **source** 而非字段属性 | ⚠️ hub-specific（对我们有用） |
+| `user_key` / `alias_of` | **部分** —— pydantic `alias` | ✅ 有先例（改名场景） |
+| `scope`（可选） | VS Code | 可选 |
+
+**→ 建议**：保留 `key, default, type, doc`；**加** constraints + deprecated；
+`layer`/`env` 标注为 hub-specific（业界无先例，但对我们有价值）；`alias_of` ≈ pydantic alias。
+
+**用户表态**：「然后S4 需要layer」 ✅ `layer` 保留。
 
 ---
 
@@ -319,7 +380,8 @@ class Param:
 | **Q3** | **`user_key` 映射规则** | 待设计（父类处理） | — | 写回落点、D2 层归属 |
 | **Q4** | **多层共用参数的归属** | 待设计（须符合 L4→L1） | — | **与 D2 冲突**，见 §2 D4 复核点 |
 | **Q5** | `alias_of` 语义 (i)/(ii) 是否过复杂 | ✅ **已解决** | 调研后改用 (iii)（见 D5） | — |
-| **Q6** | **`layer` 字段是否过度**（E6 发现业界归属用结构化表达，很少见 per-setting owner 元数据） | 保留 `layer` / 改用 family 分组 / 由 `prefix` 推导 | 倾向「由 prefix 推导」，`layer` 仅作校验 | S4 字段设计 |
+| **Q6** | **`layer` 字段是否过度** | 保留 `layer` / 改用 family 分组 / 由 `prefix` 推导 | ✅ **已解决**：用户「S4 需要 layer」→ **保留**；E7 确认业界无此标准，标为 hub-specific | — |
+| **Q7** | **是否建通用 `set_param`** | 建 / 不建 | ✅ **已解决**：E7 业界几乎都**没有**程序化写回（Django 明确禁止）→ **不建**，保留 `Config.save()` | — |
 
 ---
 
@@ -578,6 +640,55 @@ opentelemetry.io/docs/specs/otel/configuration/api/
 /concepts/features/configuration/settings/constraints-on-settings ·
 github.com/ClickHouse/ClickHouse/blob/master/src/Core/Settings.cpp ·
 github.com/ClickHouse/clickhouse-docs/blob/main/scripts/settings/autogenerate-settings.sh
+
+### 5.7 E7 · 写回机制与登记表字段的业界调研
+
+**A. 程序化写回**（结论见 S3）
+
+| 系统 | 有写回？ | 谁写 | 原子？ | 保留未知键？ | 注释？ |
+|---|---|---|---|---|---|
+| Django settings | **无** | 只有人改 settings 文件 | — | — | Python 文件 |
+| Prometheus | **无** | 人改 YAML；`/-/reload` **只重读** | — | 否（拒绝畸形） | YAML 注释保留（文件不重写） |
+| Spring Cloud Config | **无** | server **只读** git；「never makes changes to the remote」 | — | — | git 历史 |
+| nginx | **无** | 人改；HUP 重读 + 语法检查 + 失败回滚 | — | 否 | 文件保留 |
+| OpenTelemetry SDK | **无** | 初始化时读 | — | — | — |
+| K8s ConfigMap（应用侧） | **无** | 控制面/kubectl 经 API；pod `readOnly=true`；env 需重启 | API server | 类型化 schema 会裁剪未知字段 | — |
+| **K8s API / SSA** | **有** | **CLI/UI/controller**（`fieldManager`），**非应用** | API server | 未拥有字段被删除/默认化 | — |
+| VS Code settings.json | **有** | 设置编辑器 / UI | 编辑器写 | ⚠️ 未完全验证 | JSONC 保留 |
+| Terraform / Consul / Ansible | **有** | **CLI / 控制面**，**非应用代码** | plan/apply、KV CAS | IaC 合并语义 | HCL 注释 |
+
+**写的技术规则**：
+- **原子**：`os.replace` 是 Python 标准（同文件系统要求，跨设备失败；Windows 上优于 `rename`）
+- **写前校验**：类型/范围/未知键
+- **备份/审计**：git 或 K8s `managedFields`，**不是 `.bak`**
+- **并发**：last-writer-wins 或乐观 CAS
+
+**B. 登记表字段**（结论见 S4）
+
+| 系统 | 字段 | owner/layer？ |
+|---|---|---|
+| ClickHouse `DECLARE` | type, name, default, description, flags(tier \| IMPORTANT), alias, history | **无** |
+| pydantic `Field` | default, alias, title, description, examples, deprecated, ge/le/gt/lt, pattern, … | 无 |
+| Spring `spring-configuration-metadata.json` | name, type, description, sourceType, defaultValue, deprecation{level,reason,replacement,since}, hints | **无** |
+| JSON Schema 2020-12 | title, description, default, examples, deprecated, readOnly/writeOnly, enum, min/max | 无 |
+| K8s API field | description, default, format, enum, deprecated；运行时归属靠 `managedFields.writer` | 无 |
+| `pg_settings` | name, setting, unit, category, context, vartype, source, min/max, enumvals, … | 无 |
+| VS Code contribution | type, default, description, enum, **scope**, deprecationMessage | scope ≈ **在哪可设**，非 owner |
+
+**没有标准 owner/layer 字段**。归属用结构化表达（独立声明文件/家族/命名空间）。
+
+**URL**：docs.djangoproject.com/en/stable/topics/settings/ ·
+prometheus.io/docs/prometheus/latest/configuration/configuration/ ·
+kubernetes.io/docs/concepts/configuration/configmap/ ·
+docs.spring.io/spring-cloud-config/reference/server/environment-repository/git-backend.html ·
+nginx.org/en/docs/control.html ·
+docs.python.org/3/library/os.html#os.replace ·
+docs.spring.io/spring-boot/specification/configuration-metadata/format.html ·
+docs.pydantic.dev/latest/api/fields/ ·
+www.postgresql.org/docs/current/view-pg-settings.html ·
+json-schema.org/understanding-json-schema/reference/annotations ·
+kubernetes.io/docs/reference/using-api/server-side-apply/ ·
+github.com/ClickHouse/ClickHouse/blob/master/src/Core/Settings.cpp
 
 ---
 
