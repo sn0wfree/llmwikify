@@ -700,7 +700,7 @@ github.com/ClickHouse/ClickHouse/blob/master/src/Core/Settings.cpp
 | 2 | `Param` 加 `layer`/`hot_reloadable`/`deprecated` + 81 条标注归属层 | 低 | ✅ `2037bffd` `011bfacf` |
 | 3 | **4 个视图 + `nest()` + 生成式 `params.pyi` + 5 条契约测试**（方案 C） | 低 | ✅ `c7189831` |
 | 4 | `ParamRegistry` 父类：解析链 + `reload()` + `on_change()` | 中（动中枢） | ✅ `9c05ab3e` |
-| 5 | 迁移消费点，消灭默认值家族漂移 | 中（改行为，需回归） | ⬜ 依赖 Q1/Q2 |
+| 5 | 迁移消费点，消灭默认值家族漂移 | 中（改行为，需回归） | ✅ `dcdd49d8` |
 | 6 | 最小 diff YAML 编辑（`Config.save` 路径，**不建 `set_param`**） | 中 | ⬜ 依赖 D3 |
 
 **当前覆盖率**：登记表 81 条 / ~388 ≈ **21%**。
@@ -815,6 +815,28 @@ unsub = reg.on_change(fn)              # 注册监听，返回退订函数
 | `interfaces/cli/commands/doctor_cmd.py:26` `CONFIG_PATH` | 不认 `LLMWIKIFY_HOME` |
 | `foundation/auth/_keyring.py:48` `_SECRET_FILE` | 同上 + 真实写盘 |
 | **`foundation/config.py` `Config._home/_path`** | **单例冻结，测试读到真实配置** |
+
+### 6.3 步 5：迭代上限家族收敛（commit `dcdd49d8`）
+
+**「同一概念 7 个名字、5 个默认值」→ 1 规范键 + 2 独立 scope。**
+
+| 原名 | 原默认 | 现在 |
+|---|---:|---|
+| `chat_mutable.max_chat_rounds`（配置文件） | 4 | `alias_of=agent.max_iterations`（用户可写别名） |
+| `ChatRunSpec.max_iterations` | 10 | `param_default("agent.max_iterations")` → **4** |
+| `BaseSpec.max_iterations`（kernel） | 10 | 同上 → **4** |
+| `DEFAULT_MAX_TOOL_ITERATIONS`（chat base） | 8 | 同上 → **4** |
+| `orchestrator` 兜底 `config.get("max_chat_rounds", 10)` | 10 | 兜底改读规范键 → **4** |
+| `subagent_manager.max_iterations` | 5 | **独立键** `subagent.max_iterations`（子 agent 刻意更少） |
+| `dream.max_iterations` | 10 | **独立键** `dream.max_iterations` |
+
+3 条**把旧默认值写死在断言里**的测试同步改为读登记表（不再重新编码字面量）：
+`test_agent.py::test_base_spec`、`test_apps_chat_agent_runner_v2.py::test_16_max_iterations_default_10`
+（改名去掉 `_10`）、`test_apps_chat_base_skill_integration.py::test_default_max_iterations`。
+
+**行为变更**：`max_iterations` 默认 10 → 4、`DEFAULT_MAX_TOOL_ITERATIONS` 8 → 4
+（与用户可见旋钮 `max_chat_rounds=4` 对齐，消除 10 vs 4 矛盾）。
+全量 **5079 passed / 0 failed / 0 errors**。
 
 ---
 
