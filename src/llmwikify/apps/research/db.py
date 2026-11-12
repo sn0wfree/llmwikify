@@ -656,10 +656,24 @@ class ResearchDatabase(BaseDatabase):
             return 0
         import time as _time
 
-        now_ts = _time.time()
+        now_ts = _time.time_ns() / 1_000_000_000
         with self._connect() as conn:
-            # New table: O(1) bulk insert
-            conn.execute("BEGIN")
+            # New table: O(1) bulk insert. IMMEDIATE takes the write lock
+            # up front so the MAX(ts) read below cannot race a concurrent
+            # append_events on another connection.
+            conn.execute("BEGIN IMMEDIATE")
+            # ts must be strictly increasing per session. The wall clock
+            # advances in ~1ms steps here, so two batches written in the
+            # same tick would otherwise share a timestamp and a client
+            # polling with get_events_since(cursor) would never see the
+            # later batch — permanent event loss for incremental fetches.
+            prev = conn.execute(
+                "SELECT MAX(ts) FROM autoresearch_events WHERE session_id = ?",
+                (session_id,),
+            ).fetchone()
+            prev_ts = float(prev[0]) if prev and prev[0] is not None else 0.0
+            if now_ts <= prev_ts:
+                now_ts = prev_ts + 0.0001
             try:
                 conn.executemany(
                     """INSERT INTO autoresearch_events
