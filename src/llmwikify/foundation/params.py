@@ -32,8 +32,10 @@ namespace instead: ``"agent.max_iterations"``, ``"maintenance.debounce_seconds"`
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any
+from types import SimpleNamespace
+from typing import Any, ClassVar
 
 __all__ = [
     "Param",
@@ -44,6 +46,11 @@ __all__ = [
     "params_under",
     "defaults_for_prefix",
     "section_defaults",
+    "nest",
+    "FoundationParams",
+    "KernelParams",
+    "AppsParams",
+    "InterfacesParams",
 ]
 
 
@@ -307,3 +314,105 @@ def section_defaults(prefix: str) -> dict[str, Any]:
             cursor = nxt
         cursor[parts[-1]] = spec.default
     return section
+
+
+# ─────────────────────────────────────────────────────────────────────
+# Dynamic nested views (option C)
+#
+# The per-layer views expose attribute access (``params.wiki.similarity_threshold``)
+# without hand-written field declarations: values are nested from the dotted
+# keys at construction time. Static types come from the generated
+# ``params.pyi`` (see scripts/gen_params_stub.py); drift between the two is
+# caught by tests/test_foundation_params.py.
+# ─────────────────────────────────────────────────────────────────────
+
+
+def nest(values: Mapping[str, Any]) -> Any:
+    """Build a nested namespace from dotted keys.
+
+    ``{"wiki.similarity_threshold": 0.3, "llm.timeout": 120}`` becomes an
+    object with ``.wiki.similarity_threshold`` and ``.llm.timeout``.
+
+    Keys are the registry keys, so the nesting mirrors the config-file
+    shape and is unique by construction. A key that is both a leaf and a
+    section prefix (``llm`` and ``llm.timeout``) is a registry bug — it
+    raises rather than silently clobbering one of them.
+    """
+    root = SimpleNamespace()
+    for key, value in values.items():
+        parts = key.split(".")
+        node = root
+        for part in parts[:-1]:
+            existing = getattr(node, part, None)
+            if existing is None:
+                existing = SimpleNamespace()
+                setattr(node, part, existing)
+            elif not isinstance(existing, SimpleNamespace):
+                raise ValueError(
+                    f"Parameter key {key!r} collides with leaf "
+                    f"{part!r} — a key cannot be both a section and a value"
+                )
+            node = existing
+        leaf = parts[-1]
+        if hasattr(node, leaf) and isinstance(getattr(node, leaf), SimpleNamespace):
+            raise ValueError(
+                f"Parameter key {key!r} collides with section {leaf!r}"
+            )
+        setattr(node, leaf, value)
+    return root
+
+
+def _layer_values(layer: str, values: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    """Resolve every key owned by ``layer``, or a caller-supplied subset."""
+    if values is not None:
+        return dict(values)
+    return {k: param_default(k) for k, p in PARAMS.items() if p.layer == layer}
+
+
+class _ParamView:
+    """Thin per-layer view over :func:`nest`.
+
+    Subclasses only declare which layer they expose; the attribute
+    structure is derived from the registry. Static types for the
+    attributes come from the generated ``params.pyi``.
+    """
+
+    LAYER: ClassVar[str] = ""
+
+    def __init__(self, values: Mapping[str, Any] | None = None) -> None:
+        self._view = nest(_layer_values(self.LAYER, values))
+
+    def __getattr__(self, name: str) -> Any:
+        # Only reached for names not found on the instance/class, i.e.
+        # the nested sections and leaves.
+        return getattr(self._view, name)
+
+    @classmethod
+    def layer_keys(cls) -> frozenset[str]:
+        """Registry keys this view exposes."""
+        return frozenset(k for k, p in PARAMS.items() if p.layer == cls.LAYER)
+
+
+class FoundationParams(_ParamView):
+    """L1 (foundation) view — ``llm.*``."""
+
+    LAYER = "foundation"
+
+
+class KernelParams(_ParamView):
+    """L2 (kernel) view — ``wiki.*``, ``directories.*``, ``search.*``, …"""
+
+    LAYER = "kernel"
+
+
+class AppsParams(_ParamView):
+    """L3 (apps) view — ``chat_mutable.*``, ``research*``."""
+
+    LAYER = "apps"
+
+
+class InterfacesParams(_ParamView):
+    """L4 (interfaces) view — ``mcp.*``, ``web.*``."""
+
+    LAYER = "interfaces"
+

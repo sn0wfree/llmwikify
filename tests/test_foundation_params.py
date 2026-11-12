@@ -15,6 +15,7 @@ current coverage numbers.
 
 from __future__ import annotations
 
+import importlib.util
 import json
 from pathlib import Path
 from typing import Any
@@ -300,3 +301,122 @@ def test_get_param_reads_nested_paths(key: str) -> None:
     cfg._cache = None
     assert cfg.get_param(key) == param_default(key)
     cfg._cache = None
+
+
+# ── Generated type stub (option C) ─────────────────────────────────
+
+
+def _load_stub_builder() -> Any:
+    """Import scripts/gen_params_stub.py by path (scripts/ is not on sys.path)."""
+    script = REPO_ROOT / "scripts" / "gen_params_stub.py"
+    spec = importlib.util.spec_from_file_location("gen_params_stub", script)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_generated_stub_is_current() -> None:
+    """params.pyi on disk matches what the generator would emit now.
+
+    This is the drift gate for option C: the registry is the source of
+    truth, the stub is derived, and this test fails when they diverge.
+    Regenerate with ``python scripts/gen_params_stub.py``.
+    """
+    module = _load_stub_builder()
+    expected = module.build()
+    stub_path = REPO_ROOT / "src" / "llmwikify" / "foundation" / "params.pyi"
+    actual = stub_path.read_text(encoding="utf-8")
+    assert actual == expected, (
+        "params.pyi is stale — run: python scripts/gen_params_stub.py"
+    )
+
+
+def test_stub_declares_every_runtime_export() -> None:
+    """A sibling ``.pyi`` *shadows* the runtime ``.py`` for mypy.
+
+    If the stub omits a name the runtime exports, every caller of that
+    name fails type checking even though the code is correct. This test
+    pins the stub's declared names against ``params.__all__`` + ``PARAMS``.
+    """
+    import llmwikify.foundation.params as params_mod
+
+    stub_path = REPO_ROOT / "src" / "llmwikify" / "foundation" / "params.pyi"
+    text = stub_path.read_text(encoding="utf-8")
+
+    required = set(params_mod.__all__) | {"PARAMS"}
+    missing = sorted(
+        name
+        for name in required
+        # `class X:` or `def x(` or `X: ` at line start
+        if not any(
+            line.startswith(f"class {name}:")
+            or line.startswith(f"def {name}(")
+            or line.startswith(f"{name}:")
+            for line in text.splitlines()
+        )
+    )
+    assert not missing, f"params.pyi is missing declarations: {missing}"
+
+
+def test_nested_view_attribute_access() -> None:
+    """Runtime views expose nested attribute access derived from the keys."""
+    from llmwikify.foundation.params import (
+        AppsParams,
+        FoundationParams,
+        InterfacesParams,
+        KernelParams,
+        param_default,
+    )
+
+    kernel = KernelParams()
+    assert kernel.wiki.similarity_threshold == param_default(
+        "wiki.similarity_threshold"
+    )
+    assert kernel.search.qmd.port == param_default("search.qmd.port")
+    assert kernel.directories.raw == param_default("directories.raw")
+
+    foundation = FoundationParams()
+    assert foundation.llm.timeout == param_default("llm.timeout")
+
+    apps = AppsParams()
+    assert apps.chat_mutable.max_chat_rounds == param_default(
+        "chat_mutable.max_chat_rounds"
+    )
+
+    interfaces = InterfacesParams()
+    assert interfaces.mcp.port == param_default("mcp.port")
+
+
+def test_layer_views_expose_only_their_layer() -> None:
+    """Each view resolves only the keys owned by its layer."""
+    from llmwikify.foundation.params import (
+        AppsParams,
+        FoundationParams,
+        InterfacesParams,
+        KernelParams,
+    )
+
+    for cls in (FoundationParams, KernelParams, AppsParams, InterfacesParams):
+        view = cls()
+        for key in cls.layer_keys():
+            spec = PARAMS[key]
+            assert spec.layer == cls.LAYER, key
+        # Cross-layer keys must not be reachable on this view.
+        foreign = [k for k, p in PARAMS.items() if p.layer != cls.LAYER]
+        assert foreign, "registry should have keys in more than one layer"
+        # Sanity: a known foreign key's first segment is absent unless
+        # another key in this layer shares that section name.
+        for key in foreign:
+            top = key.split(".")[0]
+            own_tops = {k.split(".")[0] for k in cls.layer_keys()}
+            if top not in own_tops:
+                assert not hasattr(view, top), f"{cls.__name__}.{top}"
+
+
+def test_nest_rejects_leaf_section_collision() -> None:
+    """A key that is both a leaf and a section prefix is a registry bug."""
+    from llmwikify.foundation.params import nest
+
+    with pytest.raises(ValueError, match="collides"):
+        nest({"llm": 1, "llm.timeout": 2})
