@@ -319,6 +319,7 @@ class Param:
 | **Q3** | **`user_key` 映射规则** | 待设计（父类处理） | — | 写回落点、D2 层归属 |
 | **Q4** | **多层共用参数的归属** | 待设计（须符合 L4→L1） | — | **与 D2 冲突**，见 §2 D4 复核点 |
 | **Q5** | `alias_of` 语义 (i)/(ii) 是否过复杂 | ✅ **已解决** | 调研后改用 (iii)（见 D5） | — |
+| **Q6** | **`layer` 字段是否过度**（E6 发现业界归属用结构化表达，很少见 per-setting owner 元数据） | 保留 `layer` / 改用 family 分组 / 由 `prefix` 推导 | 倾向「由 prefix 推导」，`layer` 仅作校验 | S4 字段设计 |
 
 ---
 
@@ -489,6 +490,94 @@ opentelemetry.io/docs/specs/otel/configuration/api/
 - **术语**：`alias`（输入别名）、`relaxed binding`（格式变体）、`deprecated property`（改名 + BC）
 
 **URL**：见 D5 末尾。
+
+### D6 · 「一个文件装所有」的现实边界（依据 E6 ClickHouse 调研）
+
+**内容**
+
+**单一真相源是「声明/注册表」，不是「文件布局」。** 1000+ 参数的项目**没有一个把所有参数装进一个文件**：
+
+| 项目 | 声明收在哪 | 配置文件怎么分 |
+|---|---|---|
+| **ClickHouse**（1000+） | X-macro 列表 `src/Core/Settings.cpp` 的 `COMMON_SETTINGS(DECLARE, ...)` | `config.xml` + `config.d/`（服务端）· `users.xml` + `users.d/`（用户/配额）· `<profiles>` · session `SET` · per-query `SETTINGS` |
+| **PostgreSQL**（~300） | GUC C 条目 + 文档 | `postgresql.conf` → `ALTER SYSTEM` → session `SET` |
+| **VS Code**（~2000） | `package.json` 的 `contributes.configuration` | user → workspace → remote |
+| **Spark**（~400） | `SQLConf`/`SparkConf` 的 `ConfigEntry` | spark-defaults → `--conf` → SQL |
+
+**规则**：按**归属作用域**拆文件（服务端全局 / 每用户 / 每次运行），底下共用一个注册表。
+
+**对本项目的推论**：`foundation/params.py` 是**声明/注册表**（唯一真相源），
+不是「所有参数都只在一个文件里」——配置文件仍按作用域分（全局 json / 每 wiki yaml / runtime 覆盖）。
+**D2 的「下沉 L1」指的是声明收在一处，不是文件只有一份。**
+
+**另两条**：
+1. **归属用结构化表达**（每个 family 一份声明列表、嵌套配置路径、scope 列），
+   显式的 per-setting「owner」元数据在业界**很少见** —— 与 D2 的 `layer` 字段有张力，需复核
+2. **`changeable`（热更/需重启）是 ClickHouse 唯一手维护的部分**（`collectChangeableServerSettings()` map，
+   带开发者注释要求手工更新）—— **连 1000+ 参数的项目都没能把「可变性」完全 codegen**，
+   我们的 `hot_reloadable` 字段同样应手维护
+
+**状态**：**建议待确认**（与 D2 的 `layer` 字段复核项见上）。
+
+---
+
+### 5.6 E6 · 大项目参数管理调研（ClickHouse 深挖）
+
+**ClickHouse（已验证）**
+
+- **单源声明**：X-macro 列表，`src/Core/Settings.cpp` 的 `COMMON_SETTINGS(DECLARE, DECLARE_WITH_ALIAS)` + `OBSOLETE_SETTINGS`。每条形如
+  `DECLARE(Type, name, default, R"(markdown 描述)", flags[, alias][, {"版本", 旧默认, 新默认, 理由}...])`。
+  Settings.cpp 内约 1400+ 条 `DECLARE(`，另有 server/format/MergeTree 各自的列表 →「1000+」成立
+- **`system.settings` 是生成的**：`Settings::dumpToSystemSettingsColumns()` **在查询时遍历宏列表**生成，无第二份手维护表。
+  列：`name, value, changed, description, min, max, disallowed_values, readonly, type, default, alias_for, is_obsolete, tier`
+  （`tier` 为 Enum8：Production/Obsolete/Experimental/Beta/PrivatePreview）
+- **热更标志**：`system.server_settings.changeable_without_restart` = Enum8 `No=0, IncreaseOnly=1, DecreaseOnly=2, Yes=3`
+  （**4 个值，不是 0/1/2**）。**关键**：它**不在 DECLARE 列表里**，是手维护的
+  `collectChangeableServerSettings()` map，注释写着 *「If you add a setting which can be updated at runtime,
+  please update the 'changeable_settings' map」* —— 不在 map 里一律报 `No`（需重启/重载）
+- **分层**：`config.xml` + `config.d/*.xml` 字典序合并（带 `replace`/`remove` 属性）；
+  `users.xml` + `users.d/`；`<profiles>`（可继承，「latest defined is used」）；
+  `SET profile='x'` → session `SET` → per-query `SETTINGS` 覆盖。
+  ⚠️ 文档**未给出**一条完整优先级链
+- **变更历史**：`SettingsChangesHistory` = 每个 DECLARE 的可选尾部元组 `{"24.4", 旧默认, 新默认, "理由"}`，
+  聚合成 `system.settings_changes`，驱动 `compatibility` 设置（回放旧默认值）
+- **内省与文档**：`system.settings` / `system.server_settings` / `system.settings_changes` /
+  `system.settings_profiles` / `SHOW SETTINGS`；**503 页 settings 文档由源码自动生成**
+  （`clickhouse-docs/scripts/settings/autogenerate-settings.sh`）
+- **校验**：类型来自 DECLARE；运行时边界走 profile 的 `<constraints>`（`min`/`max`/`disallowed`/`readonly`/`const`），
+  违反抛 Code 452；flags 字段带 tier（EXPERIMENTAL/OBSOLETE）+ IMPORTANT
+
+**对照表** ⚠️ 除 ClickHouse 外，其余行**本轮未重新验证一手来源**，仅作线索
+
+| 项目 | ~参数数 | 声明机制 | 生成元数据 | 热更/需重启 | 分层覆盖 | 内省 |
+|---|---:|---|---|---|---|---|
+| **ClickHouse** ✅ | 1000+ | X-macro `DECLARE` | ✅ system 表 + 文档脚本 | `changeable_without_restart`（**手维护 map**） | config.d → users.d → profiles → SET → SETTINGS | `system.settings*`, `SHOW SETTINGS` |
+| PostgreSQL ⚠️ | ~300 | GUC C 条目 | `pg_settings` 视图 | `context` 列 | postgresql.conf → ALTER SYSTEM → SET | `pg_settings`, `SHOW ALL` |
+| Redis ⚠️ | ~200 | `redis.conf` + src 参数表 | 部分（`CONFIG GET`） | 逐参数 dynamic 标志 | config → `CONFIG SET` → CLI flags | `INFO`, `CONFIG GET/SET` |
+| Envoy ⚠️ | 1000+ | protobuf `bootstrap.yaml` schema | 由 proto 生成 | 多数经 xDS 热更 | 静态 bootstrap + 动态 LDS/CDS | `/config_dump` |
+| Nginx ⚠️ | ~300 | `ngx_command_t` 数组 | 文档手写 | SIGHUP 重载 vs 全重启 | conf.d/ include 链，后者胜 | `nginx -T` |
+| Spark ⚠️ | ~400 | `SQLConf`/`SparkConf` 的 `ConfigEntry` | 文档半生成 | 多数运行时，少数需重启 | spark-defaults → `--conf` → SQL | `spark.conf`, UI |
+| VS Code ⚠️ | ~2000 | `contributes.configuration` | JSON schema + 设置 UI | 逐项「requires reload」标注 | user → workspace → remote | 设置 UI, schema |
+
+**五个综合问题的答案**
+
+1. **主流模式**：**从单一声明列表生成的注册表**。ClickHouse、Spark、VS Code、Envoy 都是；
+   **没人手工维护并行表** —— 例外正是 ClickHouse 的 changeable map（公认弱点）
+2. **多面不可避免**：1000+ 参数下**没人「一个文件装所有」**。**单一真相源是「声明/注册表」，不是「文件布局」**
+3. **归属**用结构化表达（每个 family 一份宏列表、嵌套配置路径、scope 列）；
+   显式 per-setting「owner」元数据很少见
+4. **工具**：从声明生成的内省表、`SHOW` 命令、同源文档自动生成、变更历史注册表、约束校验、tier/废弃标志
+5. **对 388 旋钮的可移植建议**：① 一个 Python 注册表作唯一源 ② **其余全部生成** —— CLI flags、
+   JSON schema、文档表、内省命令 ③ **2-3 个作用域层**（global/wiki/session），**不是 7 个 ad-hoc 面**
+   ④ 一个轻量改名/默认值变更历史表。
+   **过度工程**：四值可变性枚举、兼容回放机制、per-setting XML 路径、生成 C++ 静态结构体
+
+**URL**：clickhouse.com/docs/en/operations/system-tables/settings ·
+/operations/system-tables/server_settings · /operations/system-tables/settings_changes ·
+/operations/configuration-files · /operations/settings/settings-profiles ·
+/concepts/features/configuration/settings/constraints-on-settings ·
+github.com/ClickHouse/ClickHouse/blob/master/src/Core/Settings.cpp ·
+github.com/ClickHouse/clickhouse-docs/blob/main/scripts/settings/autogenerate-settings.sh
 
 ---
 
