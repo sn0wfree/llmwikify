@@ -15,9 +15,7 @@ current coverage numbers.
 
 from __future__ import annotations
 
-import ast
 import json
-import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -55,20 +53,66 @@ def _flatten(data: Any, prefix: str = "") -> dict[str, Any]:
     return out
 
 
-def _legacy_default_config() -> dict[str, Any]:
-    """The DEFAULT_CONFIG literal as it was before the registry existed."""
-    src = subprocess.run(
-        ["git", "show", "HEAD:src/llmwikify/foundation/config.py"],
-        capture_output=True,
-        check=True,
-    ).stdout.decode("utf-8")
-    for node in ast.parse(src).body:
-        if (
-            isinstance(node, ast.AnnAssign)
-            and getattr(node.target, "id", None) == "DEFAULT_CONFIG"
-        ):
-            return ast.literal_eval(node.value)
-    raise AssertionError("DEFAULT_CONFIG not found in HEAD")
+def _expected_default_config() -> dict[str, Any]:
+    """The hand-written DEFAULT_CONFIG literal, frozen as a snapshot.
+
+    ``DEFAULT_CONFIG`` is now *derived* from the registry. This snapshot
+    pins the derivation to the values the hand-written literal had before
+    the registry existed — so a registry edit that would silently change
+    a default fails here instead of shipping.
+    """
+    return {
+        "directories": {"raw": "raw", "wiki": "wiki"},
+        "database": {"name": ".llmwikify.db"},
+        "reference_index": {"name": "reference_index.json", "auto_export": True},
+        "orphan_detection": {
+            "default_exclude_patterns": [],
+            "exclude_frontmatter": [],
+            "archive_directories": [],
+        },
+        "performance": {"batch_size": 100},
+        "llm": {
+            "enabled": False,
+            "provider": None,
+            "model": None,
+            "base_url": None,
+            "api_key": "",
+            "timeout": 120,
+            "context_window": None,
+            "budget_on_exceed": "warn",
+        },
+        "mcp": {
+            "name": None,
+            "host": "127.0.0.1",
+            "port": 8765,
+            "transport": "stdio",
+        },
+        "web": {"port": 8766, "host": "127.0.0.1"},
+        "prompts": {"custom_dir": None},
+        "search": {
+            "backend": "fts5",
+            "qmd": {"host": "127.0.0.1", "port": 8181, "auto_start": False},
+        },
+        "wikis": {
+            "default": None,
+            "local": [],
+            "remote": [],
+            "discovery": {
+                "enabled": False,
+                "scan_paths": ["."],
+                "scan_depth": 2,
+                "exclude_patterns": [
+                    "node_modules",
+                    ".git",
+                    "__pycache__",
+                    ".venv",
+                    "venv",
+                ],
+                "auto_register": False,
+                "scan_interval": 3600,
+            },
+        },
+    }
 
 
 # ── No drift ───────────────────────────────────────────────────────
@@ -144,9 +188,9 @@ def test_embedded_default_config_unchanged() -> None:
     """DEFAULT_CONFIG is still exactly what it was before the registry.
 
     It is now *derived* from the registry, so this pins the derivation
-    to the hand-written literal it replaced.
+    to a frozen snapshot of the hand-written literal it replaced.
     """
-    assert config_mod.DEFAULT_CONFIG == _legacy_default_config()
+    assert config_mod.DEFAULT_CONFIG == _expected_default_config()
 
 
 # ── Coverage ratchet ───────────────────────────────────────────────
