@@ -208,6 +208,15 @@ PARAMS: dict[str, Param] = {
     "agent.max_iterations": Param(
         4, int, "agent 迭代上限（规范键；别名见 chat_mutable.max_chat_rounds）", "apps"
     ),
+    # Independent scopes — deliberately NOT aliases of agent.max_iterations:
+    # a subagent is meant to run fewer rounds than its parent, and a dream
+    # task is a different loop entirely.
+    "subagent.max_iterations": Param(
+        5, int, "子 agent 迭代上限（独立 scope，刻意小于主 agent）", "apps"
+    ),
+    "dream.max_iterations": Param(
+        10, int, "dream 任务迭代上限（独立 scope）", "apps"
+    ),
 }
 
 

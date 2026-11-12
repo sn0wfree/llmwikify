@@ -28,6 +28,7 @@ from typing import Any, cast
 from llmwikify.apps.chat.agent import events
 from llmwikify.apps.chat.agent.context_manager import AgentContext
 from llmwikify.foundation.callback import AgentHook
+from llmwikify.foundation.params import param_default
 
 logger = logging.getLogger(__name__)
 
@@ -814,7 +815,9 @@ class ChatOrchestrator:
             tool_registry=parent_tool_registry,
             session_id=session_id,
             wiki_id=ctx.wiki_id,
-            max_iterations=self.config.get("max_chat_rounds", 10),
+            max_iterations=self.config.get(
+                "max_chat_rounds", param_default("agent.max_iterations")
+            ),
             microcompact=True,
             goal_active_predicate=lambda: goal_active_predicate(self.db, session_id),
         )

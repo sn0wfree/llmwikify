@@ -17,6 +17,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from llmwikify.foundation.params import param_default
+
 DEFAULT_COMPACTABLE_TOOLS: frozenset[str] = frozenset(
     {
         "read_file",
@@ -39,7 +41,7 @@ class ChatRunSpec:
     # foundation.llm.resolver.resolve_chat_llm() — code should not
     # hardcode model names here.
     model: str = ""
-    max_iterations: int = 10
+    max_iterations: int = param_default("agent.max_iterations")
     max_tool_result_chars: int = 50000
     temperature: float | None = None
     max_tokens: int | None = None

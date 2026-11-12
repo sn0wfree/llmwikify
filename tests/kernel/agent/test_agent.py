@@ -18,6 +18,7 @@ import inspect
 
 import pytest
 
+from llmwikify.foundation.params import param_default
 from llmwikify.foundation.utils import maybe_await as _maybe_await
 from llmwikify.kernel.agent import (
     ActResult,
@@ -181,7 +182,7 @@ class TestMaybeAwait:
 class TestSpec:
     def test_base_spec(self):
         spec = BaseSpec(messages=[{"role": "user", "content": "x"}])
-        assert spec.max_iterations == 10
+        assert spec.max_iterations == param_default("agent.max_iterations")
         assert spec.temperature == 0.3
 
     def test_unified_result_to_dict(self):

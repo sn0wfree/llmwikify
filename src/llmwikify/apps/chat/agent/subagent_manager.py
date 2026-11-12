@@ -50,6 +50,7 @@ from llmwikify.apps.chat.agent.agent_runner import AgentRunner
 from llmwikify.apps.chat.agent.runner_v2 import ChatRunnerV2
 from llmwikify.apps.chat.agent.spec import ChatRunSpec
 from llmwikify.foundation.callback import NoOpHook
+from llmwikify.foundation.params import param_default
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +71,7 @@ class SubagentSpec:
     initial_messages: list[dict[str, Any]]
     tool_registry: Any
     parent_session_id: str
-    max_iterations: int = 5
+    max_iterations: int = param_default("subagent.max_iterations")
     inherit_wiki_id: str | None = None
     timeout_seconds: float = 120.0
 

@@ -93,6 +93,7 @@ import pytest
 from llmwikify.apps.chat.agent.runner_v2 import ChatRunnerV2, _RunContext
 from llmwikify.apps.chat.agent.spec import ChatRunResult, ChatRunSpec
 from llmwikify.foundation.callback import AgentHook, NoOpHook
+from llmwikify.foundation.params import param_default
 
 
 class _StubService:
@@ -4931,9 +4932,9 @@ def test_16_max_iterations_1_no_tool_done() -> None:
     assert result.stop_reason == "completed"
 
 
-def test_16_max_iterations_default_10() -> None:
+def test_16_max_iterations_default() -> None:
     spec = _make_spec()
-    assert spec.max_iterations == 10
+    assert spec.max_iterations == param_default("agent.max_iterations")
 
 
 def test_16_max_iterations_exhausted_yields_done() -> None:

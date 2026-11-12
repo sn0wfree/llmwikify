@@ -17,6 +17,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from llmwikify.foundation.params import param_default
+
 # ─── Spec（继承，不用 God Object）─────────────────────────
 
 
@@ -25,7 +27,7 @@ class BaseSpec:
     """所有 mode 共用的基础字段。"""
 
     messages: list[dict[str, Any]]
-    max_iterations: int = 10
+    max_iterations: int = param_default("agent.max_iterations")
     timeout_seconds: float = 0
     temperature: float = 0.3
 

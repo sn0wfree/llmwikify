@@ -41,6 +41,7 @@ from llmwikify.apps.chat.skills.registry import (
     default_registry,
 )
 from llmwikify.apps.chat.skills.research_skill import research_skill
+from llmwikify.foundation.params import param_default
 
 # ─── Stub LLM clients ─────────────────────────────────────────────
 
@@ -148,7 +149,7 @@ class TestConstruction:
         assert cb.skill_runtime is rt
 
     def test_default_max_iterations(self) -> None:
-        assert DEFAULT_MAX_TOOL_ITERATIONS == 8
+        assert DEFAULT_MAX_TOOL_ITERATIONS == param_default("agent.max_iterations")
 
 
 # ─── register_skills (Phase 10 core) ───────────────────────────────

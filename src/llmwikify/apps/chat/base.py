@@ -65,6 +65,7 @@ from llmwikify.apps.chat.skills.registry import (
     default_registry,
 )
 from llmwikify.apps.chat.skills.runtime import SkillRuntime
+from llmwikify.foundation.params import param_default
 
 logger = logging.getLogger(__name__)
 
@@ -101,9 +102,10 @@ class ChatSession:
         return msg
 
 
-# Default upper bound on the tool-call loop (matches
-# OpenAI's recommended max_iterations behavior).
-DEFAULT_MAX_TOOL_ITERATIONS = 8
+# Default upper bound on the tool-call loop. Mirrors the canonical
+# ``agent.max_iterations`` (D5 iii) — the old literal 8 here was one of
+# five different defaults for the same concept.
+DEFAULT_MAX_TOOL_ITERATIONS = param_default("agent.max_iterations")
 
 
 class ChatBase:

@@ -60,6 +60,11 @@ class DirectoriesSection:
     raw: str
     wiki: str
 
+class DreamSection:
+    """dream section."""
+
+    max_iterations: int
+
 class LlmSection:
     """llm section."""
 
@@ -134,6 +139,11 @@ class SearchQmdSection:
     auto_start: bool
     host: str
     port: int
+
+class SubagentSection:
+    """subagent section."""
+
+    max_iterations: int
 
 class WebSection:
     """web section."""
@@ -226,8 +236,10 @@ class AppsParams:
 
     agent: AgentSection
     chat_mutable: ChatMutableSection
+    dream: DreamSection
     research: ResearchSection
     research_mutable: ResearchMutableSection
+    subagent: SubagentSection
 
     def __init__(self, values: Mapping[str, Any] | None = None) -> None: ...
     def __getattr__(self, name: str) -> Any: ...

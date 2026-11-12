@@ -51,6 +51,7 @@ from llmwikify.apps.chat.memory.consolidation_store import (
 from llmwikify.apps.chat.memory.facts_store import (
     MemoryFactsStore,
 )
+from llmwikify.foundation.params import param_default
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +61,7 @@ class DreamConfig:
     """Configuration for Dream background processor."""
 
     max_batch_size: int = 20
-    max_iterations: int = 10
+    max_iterations: int = param_default("dream.max_iterations")
     enable_md_write: bool = True
     stale_threshold_days: int = 14
     timeout_seconds: float = 300.0
