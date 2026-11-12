@@ -5,10 +5,20 @@ from __future__ import annotations
 import copy
 import logging
 import os
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from .params import param_default, section_defaults
+from .params import (
+    PARAMS,
+    AppsParams,
+    FoundationParams,
+    InterfacesParams,
+    KernelParams,
+    Param,
+    param_default,
+    section_defaults,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -101,21 +111,26 @@ class Config:
         if self._initialized:
             return
         self._initialized = True
-        self._home = global_config_home()
-        self._path = self._home / "llmwikify.json"
         self._cache: dict[str, Any] | None = None
         self._wiki_cache: dict[str, dict[str, Any]] = {}
         self._template_cache: dict[str, Any] | None = None
 
     @property
     def home(self) -> Path:
-        """~/.llmwikify directory."""
-        return self._home
+        """``~/.llmwikify`` directory.
+
+        Resolved at **call time**, not cached at import: ``Config`` is a
+        singleton created when this module is first imported, so caching
+        the path there would freeze ``$LLMWIKIFY_HOME`` before a test (or
+        any later re-pointing) can take effect — the same import-time
+        capture bug as ``doctor_cmd.CONFIG_PATH`` and ``_keyring._SECRET_FILE``.
+        """
+        return global_config_home()
 
     @property
     def path(self) -> Path:
-        """~/.llmwikify/llmwikify.json path."""
-        return self._path
+        """``~/.llmwikify/llmwikify.json`` path."""
+        return self.home / "llmwikify.json"
 
     def get(self, section: str | None = None, default: Any = None) -> Any:
         """Get config section or full config.
@@ -130,7 +145,7 @@ class Config:
         if self._cache is None:
             from llmwikify.foundation.io import read_json
 
-            self._cache = read_json(self._path, {})
+            self._cache = read_json(self.path, {})
         if section is None:
             return self._cache
         return self._cache.get(section, default if default is not None else {})
@@ -220,9 +235,9 @@ class Config:
             # Load existing, merge section, save
             existing = self.get()
             existing[section] = data
-            write_json(self._path, existing)
+            write_json(self.path, existing)
         else:
-            write_json(self._path, data)
+            write_json(self.path, data)
         self._cache = None  # Invalidate cache
 
     def reload(self) -> None:
@@ -233,7 +248,174 @@ class Config:
 
     def ensure_dir(self) -> None:
         """Ensure ~/.llmwikify directory exists."""
-        self._home.mkdir(parents=True, exist_ok=True)
+        self.home.mkdir(parents=True, exist_ok=True)
+
+
+def _coerce(raw: str, target: type | None) -> Any:
+    """Convert an env-var string to the parameter's declared type."""
+    if target is None or target is str:
+        return raw
+    if target is bool:
+        return raw.strip().lower() in ("1", "true", "yes", "on")
+    try:
+        return target(raw)
+    except (TypeError, ValueError):
+        return raw
+
+
+class ParamRegistry:
+    """Resolves every declared parameter through the documented scopes.
+
+    Scopes, highest first::
+
+        env  >  per-wiki .wiki-config.yaml  >  global llmwikify.json  >  registry default
+
+    One instance per ``wiki_root`` (see :func:`registry_for`). Resolves
+    lazily and caches until :meth:`reload`; :meth:`reload` re-resolves,
+    returns the changed keys, and notifies :meth:`on_change` listeners —
+    the push/pull split from S2 (pull for cheap values, callback only for
+    expensive derived objects such as an LLM client).
+    """
+
+    def __init__(
+        self,
+        *,
+        wiki_root: Path | str | None = None,
+        config: Config | None = None,
+    ) -> None:
+        self._wiki_root = Path(wiki_root) if wiki_root is not None else None
+        self._config = config if config is not None else Config()
+        self._listeners: list[Callable[[set[str]], None]] = []
+        self._cache: dict[str, Any] | None = None
+        self._sources: dict[str, str] | None = None
+
+    # ── Resolution ───────────────────────────────────────────────
+
+    def resolve(self) -> dict[str, Any]:
+        """Resolve every registered key. Cached until :meth:`reload`."""
+        if self._cache is None:
+            cache: dict[str, Any] = {}
+            sources: dict[str, str] = {}
+            for key in PARAMS:
+                value, source = self._resolve_one(key)
+                cache[key] = value
+                sources[key] = source
+            self._cache = cache
+            self._sources = sources
+        return self._cache
+
+    def _resolve_one(self, key: str) -> tuple[Any, str]:
+        spec: Param | None = PARAMS.get(key)
+        default = spec.default if spec is not None else None
+
+        # 1. env (deployment override; only params that declare an env var)
+        if spec is not None and spec.env:
+            raw = os.environ.get(spec.env)
+            if raw is not None and raw != "":
+                return _coerce(raw, spec.type), "env"
+
+        section, _, rest = key.partition(".")
+        if not rest:
+            # A bare section name: the whole section, registry defaults.
+            return section_defaults(section), "registry"
+
+        # 2. per-wiki .wiki-config.yaml
+        if self._wiki_root is not None:
+            found = _lookup_path(self._config.get_wiki_config(self._wiki_root), key)
+            if found is not _MISSING:
+                return found, "wiki"
+
+        # 3. global ~/.llmwikify/llmwikify.json
+        found = _lookup_path(self._config.get().get(section, {}), rest)
+        if found is not _MISSING:
+            return found, "global"
+
+        # 4. registry default
+        return default, "registry"
+
+    def get(self, key: str) -> Any:
+        """Resolved value for ``key`` (``None`` if unregistered)."""
+        return self.resolve().get(key)
+
+    def for_layer(self, layer: str) -> dict[str, Any]:
+        """Resolved values for every key owned by ``layer``."""
+        return {
+            k: v for k, v in self.resolve().items() if PARAMS[k].layer == layer
+        }
+
+    def source(self, key: str) -> str:
+        """Which scope supplied ``key``'s value: env/wiki/global/registry."""
+        self.resolve()
+        return (self._sources or {}).get(key, "registry")
+
+    # ── Layer views ──────────────────────────────────────────────
+
+    def foundation(self) -> FoundationParams:
+        return FoundationParams(self.for_layer("foundation"))
+
+    def kernel(self) -> KernelParams:
+        return KernelParams(self.for_layer("kernel"))
+
+    def apps(self) -> AppsParams:
+        return AppsParams(self.for_layer("apps"))
+
+    def interfaces(self) -> InterfacesParams:
+        return InterfacesParams(self.for_layer("interfaces"))
+
+    # ── Lifecycle (S2) ───────────────────────────────────────────
+
+    def reload(self) -> set[str]:
+        """Re-resolve, return changed keys, and notify listeners.
+
+        Values are re-read *before* anything is applied, so a failure
+        leaves the previous cache intact (nginx-style: bad config keeps
+        the old one).
+        """
+        old = self._cache
+        self._cache = None
+        self._sources = None
+        try:
+            new = self.resolve()
+        except Exception:
+            # Keep serving the previous values on a bad re-read.
+            self._cache = old
+            self._sources = None
+            raise
+        if old is None:
+            return set()
+        changed = {k for k in new if old.get(k) != new[k]}
+        if changed:
+            for fn in list(self._listeners):
+                fn(changed)
+        return changed
+
+    def on_change(self, fn: Callable[[set[str]], None]) -> Callable[[], None]:
+        """Register a listener called with the changed keys after :meth:`reload`.
+
+        Returns an unsubscribe callable. Consumers that hold expensive
+        derived objects (an LLM client) register here; cheap values are
+        read through :meth:`get` on each use instead.
+        """
+        self._listeners.append(fn)
+
+        def _unsub() -> None:
+            if fn in self._listeners:
+                self._listeners.remove(fn)
+
+        return _unsub
+
+
+# One registry per wiki_root — a process-wide singleton would break
+# multi-wiki (each wiki has its own .wiki-config.yaml).
+_registry_cache: dict[str, ParamRegistry] = {}
+
+
+def registry_for(wiki_root: Path | str | None = None) -> ParamRegistry:
+    """Return the (cached) :class:`ParamRegistry` for ``wiki_root``."""
+    cache_key = str(wiki_root) if wiki_root is not None else ""
+    if cache_key not in _registry_cache:
+        _registry_cache[cache_key] = ParamRegistry(wiki_root=wiki_root)
+    return _registry_cache[cache_key]
 
 
 # Module-level singleton instance

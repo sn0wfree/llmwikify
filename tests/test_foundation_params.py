@@ -420,3 +420,151 @@ def test_nest_rejects_leaf_section_collision() -> None:
 
     with pytest.raises(ValueError, match="collides"):
         nest({"llm": 1, "llm.timeout": 2})
+
+
+# ── ParamRegistry (step 4) ────────────────────────────────────────
+
+
+@pytest.fixture(autouse=True)
+def _reset_config_singleton() -> Any:
+    """Reset the ``Config`` singleton's caches around every test.
+
+    ``Config`` is a process-wide singleton (``__new__`` returns the same
+    instance), so a test that writes ``cfg._cache`` would otherwise leak
+    into the next one — the "hidden global singleton makes tests
+    order-dependent" failure mode the design research called out.
+    """
+    from llmwikify.foundation.config import Config
+
+    cfg = Config()
+    cfg._cache = None
+    cfg._wiki_cache.clear()
+    yield cfg
+    cfg._cache = None
+    cfg._wiki_cache.clear()
+
+
+class TestParamRegistry:
+    """Resolution chain, provenance, layer views, reload + on_change."""
+
+    def _fresh(self, tmp_path: Path) -> Any:
+        from llmwikify.foundation.config import ParamRegistry
+
+        return ParamRegistry(wiki_root=tmp_path)
+
+    def test_resolution_chain_wiki_over_global_over_registry(self, tmp_path: Path) -> None:
+
+        reg = self._fresh(tmp_path)
+        cfg = reg._config
+
+        # registry default
+        assert reg.get("llm.timeout") == param_default("llm.timeout")
+        assert reg.source("llm.timeout") == "registry"
+
+        # global scope wins — the registry caches its resolution, so a
+        # changed source file only takes effect after reload()
+        cfg._cache = {"llm": {"timeout": 42}}
+        assert reg.reload() == {"llm.timeout"}
+        assert reg.get("llm.timeout") == 42
+        assert reg.source("llm.timeout") == "global"
+
+        # wiki scope wins over global
+        (tmp_path / ".wiki-config.yaml").write_text(
+            "llm:\n  timeout: 7\n", encoding="utf-8"
+        )
+        cfg._wiki_cache.clear()
+        assert reg.reload() == {"llm.timeout"}
+        assert reg.get("llm.timeout") == 7
+        assert reg.source("llm.timeout") == "wiki"
+
+        cfg._cache = None
+        cfg._wiki_cache.clear()
+
+    def test_env_scope_wins_over_everything(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        # Declare a param with an env var, inject it into the registry.
+        from llmwikify.foundation import params as params_mod
+        from llmwikify.foundation.params import Param
+
+        original = dict(params_mod.PARAMS)
+        try:
+            params_mod.PARAMS["llm.timeout"] = Param(
+                120, int, "timeout", "foundation", env="LLM_TEST_TIMEOUT"
+            )
+            monkeypatch.setenv("LLM_TEST_TIMEOUT", "9")
+            reg = self._fresh(tmp_path)
+            assert reg.get("llm.timeout") == 9
+            assert reg.source("llm.timeout") == "env"
+        finally:
+            params_mod.PARAMS.clear()
+            params_mod.PARAMS.update(original)
+
+    def test_env_coercion(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        from llmwikify.foundation import params as params_mod
+        from llmwikify.foundation.params import Param
+
+        original = dict(params_mod.PARAMS)
+        try:
+            params_mod.PARAMS["llm.timeout"] = Param(
+                120, int, "timeout", "foundation", env="LLM_TEST_TIMEOUT"
+            )
+            monkeypatch.setenv("LLM_TEST_TIMEOUT", "8765")
+            reg = self._fresh(tmp_path)
+            assert reg.get("llm.timeout") == 8765  # str → int
+        finally:
+            params_mod.PARAMS.clear()
+            params_mod.PARAMS.update(original)
+
+    def test_for_layer_filters_by_layer(self, tmp_path: Path) -> None:
+        reg = self._fresh(tmp_path)
+        kernel = reg.for_layer("kernel")
+        assert "wiki.similarity_threshold" in kernel
+        assert "llm.timeout" not in kernel
+        assert "mcp.port" not in kernel
+
+    def test_layer_views(self, tmp_path: Path) -> None:
+        reg = self._fresh(tmp_path)
+        assert reg.foundation().llm.timeout == param_default("llm.timeout")
+        assert reg.kernel().wiki.similarity_threshold == param_default(
+            "wiki.similarity_threshold"
+        )
+        assert reg.apps().chat_mutable.max_chat_rounds == param_default(
+            "chat_mutable.max_chat_rounds"
+        )
+        assert reg.interfaces().mcp.port == param_default("mcp.port")
+
+    def test_reload_notifies_listeners_with_changed_keys(self, tmp_path: Path) -> None:
+
+        reg = self._fresh(tmp_path)
+        cfg = reg._config
+        cfg._cache = {"llm": {"timeout": 42}}
+        reg.resolve()
+
+        seen: list[set[str]] = []
+        unsub = reg.on_change(seen.append)
+
+        # Change the global config, then reload.
+        cfg._cache = {"llm": {"timeout": 99}}
+        changed = reg.reload()
+        assert changed == {"llm.timeout"}
+        assert seen == [{"llm.timeout"}]
+
+        # Unsubscribed listener is not called again.
+        cfg._cache = {"llm": {"timeout": 100}}
+        unsub()
+        reg.reload()
+        assert seen == [{"llm.timeout"}]
+
+        cfg._cache = None
+
+    def test_reload_returns_empty_on_first_call(self, tmp_path: Path) -> None:
+        reg = self._fresh(tmp_path)
+        assert reg.reload() == set()  # no previous snapshot to diff
+
+    def test_registry_for_caches_per_wiki_root(self, tmp_path: Path) -> None:
+        from llmwikify.foundation.config import registry_for
+
+        a = registry_for(tmp_path)
+        b = registry_for(tmp_path)
+        assert a is b
+        other = registry_for(tmp_path / "other")
+        assert other is not a
