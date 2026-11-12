@@ -128,39 +128,73 @@
 
 ---
 
-### D5 · `alias_of` 语义 (i) vs (ii) → 本轮判定「过复杂，暂停」
+### D5 · `alias_of` 语义 —— 业界调研后**两项均判反模式，改用第三框架 (iii)**
+
+> ⚠️ **本节已修订**。原记录为「(i)/(ii) 对比，用户判定过复杂暂停」。
+> 后续业界调研（E5）显示 (i) 与 (ii) **都不是业界做法**，现改录第三框架。
 
 **内容**
 
-| | (i) 纯去重 | (ii) 解析穿透 |
+业界实际有**三种机制**，我们上一轮把它们混为一谈：
+
+| | 机制 | 代表系统 | 冲突处理 |
+|---|---|---|---|
+| **M1** | 名字规范化 / relaxed binding | Spring（`first-name` ≡ `firstName` ≡ `first_name`） | 规范化后**一个规范键**；按 source 优先级（后写覆盖），不是双键 |
+| **M2** | **输入别名** | pydantic `AliasChoices` / Click 多 flag / argparse `dest` / clap `alias` | pydantic：**`AliasChoices` 里第一个赢**；Click：source 层级 > 显式默认 > 最后声明 |
+| **M3** | **跨键解析穿透**（读 A 时去查独立键 B） | **未在任何一手资料中找到** | 无标准规则 |
+
+**M3 判定：不存在 / 反模式。** 主流框架从不保留两个独立注册键、共享默认值后还让它们各自走一遍解析链。
+
+**我们的 (i) 与 (ii) 分别对应**：
+
+| 我们的选项 | 对应 | 判定 |
 |---|---|---|
-| 一句话 | 7 个旋钮共享一个默认值 | 7 个名字 = 1 个旋钮 |
-| 默认值定义 | 1 处，alias 引用 | 1 处，alias 引用 |
-| 用户改 `chat_mutable.max_chat_rounds=10` 后 | `max_chat_rounds`=10，`ChatRunSpec.max_iterations` 仍 **4** | 两个都 = **10** |
-| 同一概念在进程里有几个值 | **2 个** | **1 个** |
-| 能否按层单独调 | ✅ 可以 | ❌ 不能（族内共享） |
-| 需要定义 | 仅 canonical | 族 + 族内优先级 + 冲突规则 + 写回落点 |
-| 消灭的漂移 | 默认值重复 | 默认值重复 + 双值矛盾 |
+| **(i)** 共享默认值，键各自解析 | — | **反模式**。同一概念在进程里有两个活值，正是「两个配置键表示同一设置」「改名后的键被静默忽略」这类 bug 报告的成因 |
+| **(ii)** 读规范键时穿透查别名 | M3 | **目标对，框架错**。真实系统是「**一个注册项 + 若干输入别名**，**加载时一次性解析成一个值**」，不是读时两个键互相窥探 |
 
-**关键反例（族不能乱划）**
+**第三框架 (iii)：规范键 + 弃用别名，加载时解析**
 
-那 7 个「轮次」名字里有几个**故意不同**：
+| 步 | 行为 |
+|---|---|
+| 1 | 注册**一个规范键**（canonical），默认值只写在这里 |
+| 2 | 旧名/别名登记为 **deprecated alias**，加载时**一次性**解析进规范键 |
+| 3 | 使用旧名时**告警**（pydantic `Field(deprecated=...)` / Spring `@DeprecatedConfigurationProperty` / K8s Warning header） |
+| 4 | 新旧同时存在 → **规范键或第一个别名赢**（pydantic），或**显式报错**；**不做 last-writer-wins**、**不静默存成两个真值** |
+| 5 | 公告窗口后移除（K8s：GA ≥12 个月或 2 个版本；Django：多版本弃用时间线） |
 
-| 键 | 默认 | 语义 |
+**(iii) 与 (ii) 的关键区别**：解析发生在**加载时**而非读时。加载后每个概念只有一个值，
+无需「族 + 读时优先级」这套机制，调试只需看一个键。这正是 (ii) 想要的效果，但成本低得多。
+
+**对本项目 7 个「轮次」名字的落法**
+
+| 键 | 默认 | 处理 |
 |---|---:|---|
-| `chat_mutable.max_chat_rounds` | 4 | 主 agent 对话轮数 |
-| **`subagent_manager.max_iterations`** | **5** | **子 agent —— 故意比主 agent 少** |
-| **`dream.max_iterations`** | **10** | **dream 后台任务** |
-| `DEFAULT_MAX_TOOL_ITERATIONS` | 8 | 工具调用轮数 |
+| `chat_mutable.max_chat_rounds` | 4 | → **规范键的用户可写别名**（写回落这里） |
+| `ChatRunSpec.max_iterations` | 10 | → 弃用别名，加载时解析进规范键 |
+| `BaseSpec.max_iterations` | 10 | → 弃用别名 |
+| `DEFAULT_MAX_TOOL_ITERATIONS` | 8 | → 弃用别名 |
+| `orchestrator` 兜底 10 | 10 | → **删掉硬编码兜底**，改读规范键 |
+| **`subagent_manager.max_iterations`** | **5** | → **独立键**（不同 scope，不是别名） |
+| **`dream.max_iterations`** | **10** | → **独立键**（不同 scope） |
 
-把 `subagent_manager.max_iterations` 划进主 agent 的族 = 取消「子 agent 单独调小」这个能力。
+规范键 `agent.max_iterations` 默认取 **4**（用户可见旋钮的值），顺带消灭 10 vs 4、30 vs 120 两处矛盾。
 
-**结论**：(ii) 成立的前提是**族只包含真正可互换的键**；族划分规则正是 D4「多层共用参数」
-要讨论的内容，两者耦合。
+**关键反例（族不能乱划）** —— `subagent_manager.max_iterations=5` 是**刻意**小于主 agent 的 4；
+把它划成主 agent 规范键的别名 = 取消「子 agent 单独调小」这个能力。
 
-**用户表态**：「感觉这里面越来越复杂了，需要仔细的重新评估，需要单独讨论」
+**术语**：业界最标准的是 **alias**（pydantic `AliasChoices`、clap `Arg::alias`）指输入别名；
+**relaxed binding / name normalization**（Spring）指格式变体；
+**deprecated property**（Spring/Django/K8s）指改名 + 向后兼容。
+`alias_of` 作登记表字段名没问题，但文档应写成「规范键 + 加载时解析的别名」。
 
-**复核点**：重新评估时应先定「族」的划分规则，再回来看 (i)/(ii)。
+**URL**：docs.spring.io/spring-boot/reference/features/external-config.html ·
+docs.pydantic.dev/latest/concepts/alias/ ·
+docs.pydantic.dev/latest/concepts/settings/ ·
+click.palletsprojects.com/en/stable/options/ ·
+kubernetes.io/docs/reference/using-api/deprecation-policy/ ·
+docs.djangoproject.com/en/stable/internals/deprecation/
+
+**状态**：**调研完成，(i)/(ii) 判死，(iii) 待用户确认**。
 
 ---
 
@@ -280,11 +314,11 @@ class Param:
 
 | # | 问题 | 选项 | 倾向 | 阻塞什么 |
 |---|---|---|---|---|
-| **Q1** | **`alias_of` 语义** | (i) 纯去重 / (ii) 解析穿透 | 先 (i) | 登记表字段设计 |
-| **Q2** | **族的划分规则** | 待设计 | — | Q1 的 (ii)、D4 多层共用 |
+| **Q1** | **`alias_of` 语义** | ~~(i) 纯去重~~ / ~~(ii) 解析穿透~~ / **(iii) 规范键 + 弃用别名，加载时解析** | **(iii)**（见 D5，业界调研后 (i)(ii) 均判反模式） | 登记表字段设计、D5 落地 |
+| **Q2** | **族的划分规则** | ~~待设计~~ | **(iii) 下大幅简化**：无需「读时族 + 优先级」，只需判断「哪些键是规范键的弃用别名」vs「哪些是独立 scope 的键」 | Q1 落地 |
 | **Q3** | **`user_key` 映射规则** | 待设计（父类处理） | — | 写回落点、D2 层归属 |
 | **Q4** | **多层共用参数的归属** | 待设计（须符合 L4→L1） | — | **与 D2 冲突**，见 §2 D4 复核点 |
-| **Q5** | `alias_of` 语义 (i)/(ii) 是否过复杂 | 重新评估 | 暂停 | 全局 |
+| **Q5** | `alias_of` 语义 (i)/(ii) 是否过复杂 | ✅ **已解决** | 调研后改用 (iii)（见 D5） | — |
 
 ---
 
@@ -440,6 +474,21 @@ opentelemetry.io/docs/specs/otel/configuration/api/
 |---|---|
 | `section_defaults` 前缀切片 | 用未归一化 `"llm"` 而非 `"llm."`，多出一层 `{"": {...}}` → 由 `DEFAULT_CONFIG` 等价性校验抓到 |
 | `get_param` wiki 作用域查错路径 | 查 `rest`（`timeout`）而非完整点号路径（`llm.timeout`），漏 section 层 → 由解析顺序测试抓到 |
+
+### 5.5 E5 · 多名同义配置的业界调研（`alias_of` 依据）
+
+调研 Spring、pydantic(-settings)、Click、argparse、clap、K8s、Django、Dynaconf 一手文档。
+**结论见 D5**。要点：
+
+- **M3（跨键解析穿透）不存在** —— 未在任何一手资料中找到；作为设计特性是反模式
+- **业界标准做法是 M2（输入别名）+ 弃用改名**：一个注册项、若干输入别名，**加载时一次性解析成一个值**
+- **冲突处理**：规范键或第一个别名赢（pydantic）、source 层级优先（Click/Spring）；
+  **不是** last-writer-wins，**不**静默存成两个真值
+- **弃用窗口**：K8s GA ≥12 个月或 2 个版本、废弃 CLI **必须告警**；Django 多版本时间线；
+  pydantic `Field(deprecated=...)` 运行时告警 + JSON Schema 标注
+- **术语**：`alias`（输入别名）、`relaxed binding`（格式变体）、`deprecated property`（改名 + BC）
+
+**URL**：见 D5 末尾。
 
 ---
 
