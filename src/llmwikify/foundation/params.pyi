@@ -18,6 +18,7 @@ class Param:
     env: str | None
     hot_reloadable: bool
     deprecated: bool
+    alias_of: str | None
     def __init__(
         self,
         default: Any,
@@ -27,7 +28,13 @@ class Param:
         env: str | None = ...,
         hot_reloadable: bool = ...,
         deprecated: bool = ...,
+        alias_of: str | None = ...,
     ) -> None: ...
+
+class AgentSection:
+    """agent section."""
+
+    max_iterations: int
 
 class ChatMutableSection:
     """chat_mutable section."""
@@ -217,6 +224,7 @@ class AppsParams:
 
     LAYER: ClassVar[str]
 
+    agent: AgentSection
     chat_mutable: ChatMutableSection
     research: ResearchSection
     research_mutable: ResearchMutableSection
@@ -247,5 +255,7 @@ def has_param(key: str) -> bool: ...
 def params_under(prefix: str) -> dict[str, Param]: ...
 def defaults_for_prefix(prefix: str) -> dict[str, Any]: ...
 def section_defaults(prefix: str) -> dict[str, Any]: ...
+def canonical_key(key: str) -> str: ...
+def aliases_of(key: str) -> list[str]: ...
 def nest(values: Mapping[str, Any]) -> Any: ...
 

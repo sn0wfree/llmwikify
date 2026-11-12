@@ -16,6 +16,8 @@ from .params import (
     InterfacesParams,
     KernelParams,
     Param,
+    aliases_of,
+    canonical_key,
     param_default,
     section_defaults,
 )
@@ -305,30 +307,49 @@ class ParamRegistry:
         return self._cache
 
     def _resolve_one(self, key: str) -> tuple[Any, str]:
-        spec: Param | None = PARAMS.get(key)
+        # D5 (iii): every key in an alias family resolves through its
+        # canonical, so one concept has one value. The canonical's own
+        # scopes win; a deprecated alias's user setting is consulted
+        # only when the canonical has none.
+        canonical = canonical_key(key)
+        spec: Param | None = PARAMS.get(canonical)
         default = spec.default if spec is not None else None
 
-        # 1. env (deployment override; only params that declare an env var)
+        # 1. env on the canonical (deployment override)
         if spec is not None and spec.env:
             raw = os.environ.get(spec.env)
             if raw is not None and raw != "":
                 return _coerce(raw, spec.type), "env"
 
-        section, _, rest = key.partition(".")
+        section, _, rest = canonical.partition(".")
         if not rest:
             # A bare section name: the whole section, registry defaults.
             return section_defaults(section), "registry"
 
-        # 2. per-wiki .wiki-config.yaml
+        wiki_cfg: dict[str, Any] | None = None
         if self._wiki_root is not None:
-            found = _lookup_path(self._config.get_wiki_config(self._wiki_root), key)
+            wiki_cfg = self._config.get_wiki_config(self._wiki_root)
+
+        # 2. canonical's own per-wiki / global setting
+        if wiki_cfg is not None:
+            found = _lookup_path(wiki_cfg, canonical)
             if found is not _MISSING:
                 return found, "wiki"
-
-        # 3. global ~/.llmwikify/llmwikify.json
         found = _lookup_path(self._config.get().get(section, {}), rest)
         if found is not _MISSING:
             return found, "global"
+
+        # 3. a deprecated alias the user still sets (first one in
+        #    sorted-key order, so the choice is deterministic)
+        for alias in aliases_of(canonical):
+            a_section, _, a_rest = alias.partition(".")
+            if wiki_cfg is not None:
+                found = _lookup_path(wiki_cfg, alias)
+                if found is not _MISSING:
+                    return found, "wiki"
+            found = _lookup_path(self._config.get().get(a_section, {}), a_rest)
+            if found is not _MISSING:
+                return found, "global"
 
         # 4. registry default
         return default, "registry"

@@ -129,6 +129,7 @@ def build() -> str:
         "    env: str | None",
         "    hot_reloadable: bool",
         "    deprecated: bool",
+        "    alias_of: str | None",
         "    def __init__(",
         "        self,",
         "        default: Any,",
@@ -138,6 +139,7 @@ def build() -> str:
         "        env: str | None = ...,",
         "        hot_reloadable: bool = ...,",
         "        deprecated: bool = ...,",
+        "        alias_of: str | None = ...,",
         "    ) -> None: ...",
         "",
     ]
@@ -187,6 +189,8 @@ def build() -> str:
             "def params_under(prefix: str) -> dict[str, Param]: ...",
             "def defaults_for_prefix(prefix: str) -> dict[str, Any]: ...",
             "def section_defaults(prefix: str) -> dict[str, Any]: ...",
+            "def canonical_key(key: str) -> str: ...",
+            "def aliases_of(key: str) -> list[str]: ...",
             "def nest(values: Mapping[str, Any]) -> Any: ...",
             "",
         ]

@@ -46,6 +46,8 @@ __all__ = [
     "params_under",
     "defaults_for_prefix",
     "section_defaults",
+    "canonical_key",
+    "aliases_of",
     "nest",
     "FoundationParams",
     "KernelParams",
@@ -80,6 +82,11 @@ class Param:
             asking developers to update it manually.
         deprecated: When set, the parameter still resolves but should
             stop being used; the replacement is named in ``alias_of``.
+        alias_of: Canonical key this parameter is a deprecated alias of.
+            D5 (iii): the default lives **only** on the canonical; aliases
+            resolve through it at load time so one concept has one value.
+            A key that is both a canonical and an alias (a cycle) is a
+            registry bug and raises.
     """
 
     default: Any
@@ -89,6 +96,7 @@ class Param:
     env: str | None = None
     hot_reloadable: bool = True
     deprecated: bool = False
+    alias_of: str | None = None
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -169,7 +177,13 @@ PARAMS: dict[str, Param] = {
     "research.minimax_api_key": Param("", str, "Minimax 搜索 API key", "apps"),
     "research.minimax_api_host": Param("", str, "Minimax 搜索 host", "apps"),
     # ── chat_mutable（L3，用户可改）─────────────────────────────────
-    "chat_mutable.max_chat_rounds": Param(4, int, "对话最大轮数", "apps"),
+    # max_chat_rounds is a deprecated *name* for agent.max_iterations
+    # (D5 iii): the default lives on the canonical key, and the user's
+    # setting on this alias flows through to it at load time.
+    "chat_mutable.max_chat_rounds": Param(
+        None, int, "对话最大轮数（规范键 agent.max_iterations 的别名）", "apps",
+        alias_of="agent.max_iterations",
+    ),
     "chat_mutable.max_messages": Param(50, int, "历史消息上限", "apps"),
     "chat_mutable.observation_limit": Param(10, int, "observation 上限", "apps"),
     "chat_mutable.llm_retry_max_attempts": Param(3, int, "LLM 重试次数", "apps"),
@@ -186,6 +200,14 @@ PARAMS: dict[str, Param] = {
     "research_mutable.web_search_results_per_query": Param(5, int, "每查询搜索结果数", "apps"),
     "research_mutable.max_retry_attempts": Param(3, int, "最大重试次数", "apps"),
     "research_mutable.max_review_rounds": Param(2, int, "评审轮数上限", "apps"),
+    # ── 规范键（D5 iii）────────────────────────────────────────────
+    # One canonical per concept; deprecated names point here via alias_of.
+    # agent.max_iterations is the canonical for the agent iteration cap —
+    # seven different names used to carry five different defaults
+    # (4/5/8/10). See docs/designs/config-hub-design-log.md D5.
+    "agent.max_iterations": Param(
+        4, int, "agent 迭代上限（规范键；别名见 chat_mutable.max_chat_rounds）", "apps"
+    ),
 }
 
 
@@ -255,14 +277,38 @@ def param_spec(key: str) -> Param:
         ) from None
 
 
-def param_default(key: str, fallback: Any = None) -> Any:
-    """Return the declared default for ``key``.
+def canonical_key(key: str) -> str:
+    """Follow ``alias_of`` to the root (canonical) key.
 
-    Unlike :func:`param_spec` this never raises: an unknown key yields
-    ``fallback`` (default ``None``). Use it where a key is genuinely
-    optional.
+    Unknown keys and keys with no alias return themselves. A cycle is a
+    registry bug and raises.
     """
-    spec = PARAMS.get(key)
+    seen: set[str] = set()
+    current = key
+    while True:
+        spec = PARAMS.get(current)
+        if spec is None or spec.alias_of is None:
+            return current
+        if current in seen:  # pragma: no cover - caught by tests
+            raise ValueError(f"alias_of cycle at {current!r}")
+        seen.add(current)
+        current = spec.alias_of
+
+
+def aliases_of(key: str) -> list[str]:
+    """Every registered key whose ``alias_of`` points at ``key``."""
+    root = canonical_key(key)
+    return sorted(k for k, p in PARAMS.items() if p.alias_of == root and k != root)
+
+
+def param_default(key: str, fallback: Any = None) -> Any:
+    """Return the effective default for ``key``.
+
+    Resolves ``alias_of`` chains (D5 iii): an alias's default lives on its
+    canonical key, so this returns the canonical's default. Unknown keys
+    yield ``fallback`` (default ``None``).
+    """
+    spec = PARAMS.get(canonical_key(key))
     return spec.default if spec is not None else fallback
 
 
@@ -281,12 +327,13 @@ def defaults_for_prefix(prefix: str) -> dict[str, Any]:
 
     The suffix is the key with ``prefix`` stripped, so
     ``defaults_for_prefix("llm")`` yields ``{"timeout": 120, ...}`` —
-    the flat shape.
+    the flat shape. Defaults go through :func:`param_default` so aliases
+    inherit their canonical's value (D5 iii).
     """
     if not prefix.endswith("."):
         prefix += "."
     return {
-        k[len(prefix) :]: v.default
+        k[len(prefix) :]: param_default(k)
         for k, v in PARAMS.items()
         if k.startswith(prefix)
     }
@@ -302,7 +349,7 @@ def section_defaults(prefix: str) -> dict[str, Any]:
     if not prefix.endswith("."):
         prefix += "."
     section: dict[str, Any] = {}
-    for key, spec in PARAMS.items():
+    for key in PARAMS:
         if not key.startswith(prefix):
             continue
         parts = key[len(prefix) :].split(".")
@@ -312,7 +359,7 @@ def section_defaults(prefix: str) -> dict[str, Any]:
             if not isinstance(nxt, dict):  # pragma: no cover - malformed key
                 raise ValueError(f"Conflicting parameter key: {key!r}")
             cursor = nxt
-        cursor[parts[-1]] = spec.default
+        cursor[parts[-1]] = param_default(key)
     return section
 
 

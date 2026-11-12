@@ -568,3 +568,91 @@ class TestParamRegistry:
         assert a is b
         other = registry_for(tmp_path / "other")
         assert other is not a
+
+
+# ── alias_of (iii): canonical key + deprecated aliases ────────────
+
+
+class TestAliasOf:
+    """D5 (iii): one concept, one value; aliases resolve at load time."""
+
+    def test_canonical_key_follows_alias_chain(self) -> None:
+        from llmwikify.foundation.params import canonical_key
+
+        assert canonical_key("chat_mutable.max_chat_rounds") == "agent.max_iterations"
+        assert canonical_key("agent.max_iterations") == "agent.max_iterations"
+        assert canonical_key("llm.timeout") == "llm.timeout"  # no alias
+        assert canonical_key("does.not.exist") == "does.not.exist"
+
+    def test_aliases_of_lists_the_family(self) -> None:
+        from llmwikify.foundation.params import aliases_of
+
+        assert aliases_of("agent.max_iterations") == [
+            "chat_mutable.max_chat_rounds"
+        ]
+        assert aliases_of("llm.timeout") == []
+
+    def test_param_default_resolves_through_alias(self) -> None:
+        """An alias's default lives on the canonical (D5 iii)."""
+        assert param_default("chat_mutable.max_chat_rounds") == param_default(
+            "agent.max_iterations"
+        )
+        assert param_default("agent.max_iterations") == 4
+
+    def test_section_defaults_still_yield_alias_value(self) -> None:
+        """config-file shape keeps the alias's effective default (snapshot)."""
+        from llmwikify.foundation.params import section_defaults
+
+        chat = section_defaults("chat_mutable")
+        assert chat["max_chat_rounds"] == 4
+
+    def test_registry_alias_setting_flows_to_canonical(self, tmp_path: Path) -> None:
+        """A deprecated name the user still sets reaches the canonical."""
+        from llmwikify.foundation.config import ParamRegistry
+
+        reg = ParamRegistry(wiki_root=tmp_path)
+        cfg = reg._config
+        reg.resolve()  # establish the snapshot reload() diffs against
+        cfg._cache = {"chat_mutable": {"max_chat_rounds": 10}}
+        assert reg.reload() >= {"agent.max_iterations", "chat_mutable.max_chat_rounds"}
+        assert reg.get("agent.max_iterations") == 10
+        assert reg.get("chat_mutable.max_chat_rounds") == 10
+        assert reg.source("agent.max_iterations") == "global"
+        cfg._cache = None
+
+    def test_canonical_setting_wins_over_alias(self, tmp_path: Path) -> None:
+        """When both are set, the canonical wins — not last-writer-wins."""
+        from llmwikify.foundation.config import ParamRegistry
+
+        reg = ParamRegistry(wiki_root=tmp_path)
+        cfg = reg._config
+        cfg._cache = {
+            "agent": {"max_iterations": 20},
+            "chat_mutable": {"max_chat_rounds": 10},
+        }
+        reg.resolve()
+        assert reg.get("agent.max_iterations") == 20
+        assert reg.get("chat_mutable.max_chat_rounds") == 20
+        cfg._cache = None
+
+    def test_registry_default_when_neither_set(self, tmp_path: Path) -> None:
+        from llmwikify.foundation.config import ParamRegistry
+
+        reg = ParamRegistry(wiki_root=tmp_path)
+        reg.resolve()
+        assert reg.get("agent.max_iterations") == 4
+        assert reg.source("agent.max_iterations") == "registry"
+
+    def test_alias_cycle_is_rejected(self) -> None:
+        from llmwikify.foundation import params as params_mod
+        from llmwikify.foundation.params import Param, canonical_key
+
+        original = dict(params_mod.PARAMS)
+        try:
+            params_mod.PARAMS["a.b"] = Param(1, int, "", "apps", alias_of="c.d")
+            params_mod.PARAMS["c.d"] = Param(2, int, "", "apps", alias_of="a.b")
+            with pytest.raises(ValueError, match="cycle"):
+                canonical_key("a.b")
+        finally:
+            params_mod.PARAMS.clear()
+            params_mod.PARAMS.update(original)
