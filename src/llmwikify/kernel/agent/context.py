@@ -40,11 +40,13 @@ class UnifiedContext:
 
         if isinstance(self.spec, BaseSpec):
             self.messages = list(self.spec.messages)
-        self.start_time = time.monotonic()
+        # perf_counter, not monotonic: monotonic() advances in ~15.6ms
+        # steps on Windows, which quantises every reported elapsed_sec.
+        self.start_time = time.perf_counter()
 
     @property
     def elapsed_sec(self) -> float:
-        return time.monotonic() - self.start_time
+        return time.perf_counter() - self.start_time
 
     @property
     def tools(self) -> list[dict[str, Any]] | None:

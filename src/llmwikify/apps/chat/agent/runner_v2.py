@@ -78,7 +78,10 @@ class _RunContext:
     chars_saved: int = 0
     cancelled: bool = False
     paused: bool = False
-    started_at: float = field(default_factory=time.monotonic)
+    # perf_counter, not monotonic: monotonic() advances in ~15.6ms steps
+    # on Windows, which quantises every reported duration. perf_counter()
+    # is the documented clock for measuring short intervals.
+    started_at: float = field(default_factory=time.perf_counter)
     last_tool_calls: list[dict[str, Any]] = field(default_factory=list)
     last_accumulated: str = ""
     last_thinking: str = ""
@@ -87,7 +90,7 @@ class _RunContext:
     state_trace: list[_StateTraceEntry] = field(default_factory=list)
 
     def elapsed(self) -> float:
-        return time.monotonic() - self.started_at
+        return time.perf_counter() - self.started_at
 
     def hook_ctx(self, iteration: int) -> AgentHookContext:
         return AgentHookContext(
@@ -1057,7 +1060,7 @@ class _StateTrace:
         self.error: str | None = None
 
     def __enter__(self) -> _StateTrace:
-        self._start = time.monotonic()
+        self._start = time.perf_counter()
         return self
 
     def __exit__(
@@ -1066,7 +1069,7 @@ class _StateTrace:
         exc: BaseException | None,
         tb: TracebackType | None,
     ) -> Literal[False]:
-        duration_ms = (time.monotonic() - self._start) * 1000.0
+        duration_ms = (time.perf_counter() - self._start) * 1000.0
         if exc is not None:
             self.event = "error"
             self.error = f"{type(exc).__name__}: {exc}"
