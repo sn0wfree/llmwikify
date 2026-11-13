@@ -36,6 +36,102 @@ class AgentSection:
 
     max_iterations: int
 
+class ChatImmutableSection:
+    """chat_immutable section."""
+
+    clarify_enabled: bool
+    clarify_max_retries: int
+    compaction_enabled: bool
+    compaction_max_tokens: int
+    compaction_min_messages: int
+    compaction_threshold_ratio: float
+    content_truncate_chars: int
+    context_reserve_tokens: int
+    context_store_max_size: int
+    context_store_ttl_seconds: int
+    context_window_override: int
+    db_retry_base_delay: float
+    db_retry_max_retries: int
+    evidence_max_retries: int
+    evidence_scoring_enabled: bool
+    framework_check_enabled: bool
+    gate_max_reasoning_issues: int
+    gate_min_evidence_score: float
+    gate_min_reasoning_score: int
+    gate_min_source_refs: int
+    gate_min_structure_score: int
+    gate_min_traceable_sources: int
+    llm_parse_max_retries: int
+    observation_summary_limit: int
+    reasoning_check_enabled: bool
+    self_loop_budget_ratio: float
+    stage_max_retries: int
+    stage_retry_base_delay: float
+    strict_exit: bool
+    structure_check_enabled: bool
+    summary_truncate_chars: int
+    llm_params: ChatImmutableLlmParamsSection
+
+class ChatImmutableLlmParamsSection:
+    """chat_immutable.llm_params section."""
+
+    research_clarify: ChatImmutableLlmParamsResearchClarifySection
+    research_plan: ChatImmutableLlmParamsResearchPlanSection
+    research_reason: ChatImmutableLlmParamsResearchReasonSection
+    research_replan: ChatImmutableLlmParamsResearchReplanSection
+    research_report: ChatImmutableLlmParamsResearchReportSection
+    research_review: ChatImmutableLlmParamsResearchReviewSection
+    research_revise: ChatImmutableLlmParamsResearchReviseSection
+
+class ChatImmutableLlmParamsResearchClarifySection:
+    """chat_immutable.llm_params.research_clarify section."""
+
+    json_mode: bool
+    max_tokens: int
+    temperature: float
+
+class ChatImmutableLlmParamsResearchPlanSection:
+    """chat_immutable.llm_params.research_plan section."""
+
+    json_mode: bool
+    max_tokens: int
+    temperature: float
+
+class ChatImmutableLlmParamsResearchReasonSection:
+    """chat_immutable.llm_params.research_reason section."""
+
+    json_mode: bool
+    max_tokens: int
+    temperature: float
+
+class ChatImmutableLlmParamsResearchReplanSection:
+    """chat_immutable.llm_params.research_replan section."""
+
+    json_mode: bool
+    max_tokens: int
+    temperature: float
+
+class ChatImmutableLlmParamsResearchReportSection:
+    """chat_immutable.llm_params.research_report section."""
+
+    json_mode: bool
+    max_tokens: int
+    temperature: float
+
+class ChatImmutableLlmParamsResearchReviewSection:
+    """chat_immutable.llm_params.research_review section."""
+
+    json_mode: bool
+    max_tokens: int
+    temperature: float
+
+class ChatImmutableLlmParamsResearchReviseSection:
+    """chat_immutable.llm_params.research_revise section."""
+
+    json_mode: bool
+    max_tokens: int
+    temperature: float
+
 class ChatMutableSection:
     """chat_mutable section."""
 
@@ -115,6 +211,36 @@ class ResearchSection:
     minimax_api_host: str
     minimax_api_key: str
     search_provider: str
+
+class ResearchImmutableSection:
+    """research_immutable section."""
+
+    gate_enabled: bool
+    gate_max_knowledge_gaps: int
+    gate_min_analyzed: int
+    gate_min_avg_credibility: int
+    gate_min_reinforced_claims: int
+    gate_min_sources: int
+    gate_min_type_diversity: int
+    llm_call_timeout_seconds: int
+    max_react_rounds: int
+    max_replan_attempts: int
+    max_source_content_length: int
+    minimax_api_host: str
+    minimax_api_key: str
+    parallel_wiki_search: bool
+    planning_model: str
+    quality_threshold: int
+    report_max_per_source: int
+    report_max_total_content: int
+    report_model: str
+    search_provider: str
+    searxng_url: str
+    similarity_threshold: float
+    source_filter_enabled: bool
+    source_min_content_length: int
+    source_min_quality_score: float
+    tavily_api_key: str
 
 class ResearchMutableSection:
     """research_mutable section."""
@@ -235,9 +361,11 @@ class AppsParams:
     LAYER: ClassVar[str]
 
     agent: AgentSection
+    chat_immutable: ChatImmutableSection
     chat_mutable: ChatMutableSection
     dream: DreamSection
     research: ResearchSection
+    research_immutable: ResearchImmutableSection
     research_mutable: ResearchMutableSection
     subagent: SubagentSection
 

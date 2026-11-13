@@ -37,6 +37,8 @@ COVERAGE_BASELINE = {
     "template_json": 38,
     "research_yaml": 7,
     "six_step_yaml": 9,
+    "research_immutable": 26,
+    "six_step_immutable": 52,
 }
 
 
@@ -185,6 +187,51 @@ def test_registry_matches_six_step_yaml() -> None:
     assert not mismatches, f"registry disagrees with six-step YAML: {mismatches}"
 
 
+def _flatten_immutable(section: Any, prefix: str) -> dict[str, Any]:
+    """Flatten an immutable section to ``{registry_key: value}``."""
+    out: dict[str, Any] = {}
+    if not isinstance(section, dict):
+        return out
+
+    def walk(node: Any, path: str) -> None:
+        if isinstance(node, dict) and node:
+            for k, v in node.items():
+                walk(v, f"{path}.{k}" if path else str(k))
+        else:
+            out[path] = node
+
+    walk(section, prefix)
+    return out
+
+
+def test_registry_matches_research_immutable_yaml() -> None:
+    """research YAML ``immutable`` agrees with ``research_immutable.*``."""
+    data = yaml.safe_load(RESEARCH_YAML.read_text(encoding="utf-8")) or {}
+    expected = _flatten_immutable(data.get("immutable"), "research_immutable")
+    mismatches = [
+        (key, value, param_default(key))
+        for key, value in expected.items()
+        if key in PARAMS and value != param_default(key)
+    ]
+    missing = [key for key in expected if key not in PARAMS]
+    assert not missing, f"research immutable keys missing from registry: {missing}"
+    assert not mismatches, f"registry disagrees with research immutable: {mismatches}"
+
+
+def test_registry_matches_six_step_immutable_yaml() -> None:
+    """six-step YAML ``immutable`` agrees with ``chat_immutable.*``."""
+    data = yaml.safe_load(SIX_STEP_YAML.read_text(encoding="utf-8")) or {}
+    expected = _flatten_immutable(data.get("immutable"), "chat_immutable")
+    mismatches = [
+        (key, value, param_default(key))
+        for key, value in expected.items()
+        if key in PARAMS and value != param_default(key)
+    ]
+    missing = [key for key in expected if key not in PARAMS]
+    assert not missing, f"six-step immutable keys missing from registry: {missing}"
+    assert not mismatches, f"registry disagrees with six-step immutable: {mismatches}"
+
+
 def test_embedded_default_config_unchanged() -> None:
     """DEFAULT_CONFIG is still exactly what it was before the registry.
 
@@ -242,6 +289,31 @@ def test_coverage_does_not_regress() -> None:
     assert len(six_covered) >= COVERAGE_BASELINE["six_step_yaml"], (
         f"six-step YAML coverage dropped: "
         f"{len(six_covered)} < {COVERAGE_BASELINE['six_step_yaml']}"
+    )
+
+    # Immutable sections (flattened nested keys, e.g. llm_params.*)
+    res_imm = _flatten_immutable(
+        (yaml.safe_load(RESEARCH_YAML.read_text(encoding="utf-8")) or {}).get(
+            "immutable"
+        ),
+        "research_immutable",
+    )
+    res_imm_covered = {k for k in res_imm if k in PARAMS}
+    assert len(res_imm_covered) >= COVERAGE_BASELINE["research_immutable"], (
+        f"research immutable coverage dropped: "
+        f"{len(res_imm_covered)} < {COVERAGE_BASELINE['research_immutable']}"
+    )
+
+    six_imm = _flatten_immutable(
+        (yaml.safe_load(SIX_STEP_YAML.read_text(encoding="utf-8")) or {}).get(
+            "immutable"
+        ),
+        "chat_immutable",
+    )
+    six_imm_covered = {k for k in six_imm if k in PARAMS}
+    assert len(six_imm_covered) >= COVERAGE_BASELINE["six_step_immutable"], (
+        f"six-step immutable coverage dropped: "
+        f"{len(six_imm_covered)} < {COVERAGE_BASELINE['six_step_immutable']}"
     )
 
 

@@ -257,6 +257,217 @@ PARAMS.update(
     }
 )
 
+# ─────────────────────────────────────────────────────────────────────
+# Research / chat immutable defaults (L3)
+#
+# Mirrored from apps/research/config_defaults.yaml and
+# six_step_config_defaults.yaml ``immutable:`` sections — code-owned
+# knobs not exposed on the API/UI surface. Prefixes stay separate from
+# ``research.*`` / ``research_mutable.*`` so the documented name clash
+# (global research section vs YAML immutable) does not silently merge
+# two different defaults (see test_known_clash_research_section_defaults).
+# ─────────────────────────────────────────────────────────────────────
+
+PARAMS.update(
+    {
+        # ── research immutable（YAML immutable）────────────────────
+        "research_immutable.max_source_content_length": Param(
+            500000, int, "源内容最大长度", "apps"
+        ),
+        "research_immutable.similarity_threshold": Param(
+            0.92, float, "源相似度阈值", "apps"
+        ),
+        "research_immutable.planning_model": Param(None, str, "planning 模型覆盖", "apps"),
+        "research_immutable.report_model": Param(None, str, "report 模型覆盖", "apps"),
+        "research_immutable.llm_call_timeout_seconds": Param(
+            120, int, "research LLM 调用超时（秒）", "apps"
+        ),
+        "research_immutable.search_provider": Param(
+            "auto", str, "research 搜索 provider（immutable 默认）", "apps"
+        ),
+        "research_immutable.searxng_url": Param(None, str, "SearXNG 端点", "apps"),
+        "research_immutable.minimax_api_key": Param(
+            None, str, "Minimax key（null=回落 llm.api_key）", "apps"
+        ),
+        "research_immutable.minimax_api_host": Param(
+            "https://api.minimaxi.com", str, "Minimax host", "apps"
+        ),
+        "research_immutable.tavily_api_key": Param(None, str, "Tavily key", "apps"),
+        "research_immutable.max_react_rounds": Param(15, int, "ReAct 最大轮数", "apps"),
+        "research_immutable.quality_threshold": Param(7, int, "质量阈值", "apps"),
+        "research_immutable.max_replan_attempts": Param(2, int, "最大重规划次数", "apps"),
+        "research_immutable.parallel_wiki_search": Param(
+            True, bool, "并行 wiki 搜索", "apps"
+        ),
+        "research_immutable.source_filter_enabled": Param(
+            True, bool, "源过滤开关", "apps"
+        ),
+        "research_immutable.source_min_content_length": Param(
+            100, int, "源最小内容长度", "apps"
+        ),
+        "research_immutable.source_min_quality_score": Param(
+            0.3, float, "源最低质量分", "apps"
+        ),
+        "research_immutable.report_max_per_source": Param(
+            4000, int, "单源报告内容上限", "apps"
+        ),
+        "research_immutable.report_max_total_content": Param(
+            60000, int, "报告总内容上限", "apps"
+        ),
+        "research_immutable.gate_enabled": Param(True, bool, "质量门开关", "apps"),
+        "research_immutable.gate_min_sources": Param(3, int, "门：最少源数", "apps"),
+        "research_immutable.gate_min_type_diversity": Param(
+            2, int, "门：最少类型多样性", "apps"
+        ),
+        "research_immutable.gate_min_analyzed": Param(2, int, "门：最少已分析数", "apps"),
+        "research_immutable.gate_min_avg_credibility": Param(
+            5, int, "门：最低平均可信度", "apps"
+        ),
+        "research_immutable.gate_max_knowledge_gaps": Param(
+            3, int, "门：最大知识缺口数", "apps"
+        ),
+        "research_immutable.gate_min_reinforced_claims": Param(
+            2, int, "门：最少强化声明数", "apps"
+        ),
+        # ── chat / six-step immutable（YAML immutable）─────────────
+        "chat_immutable.observation_summary_limit": Param(
+            5, int, "观察摘要条数上限", "apps"
+        ),
+        "chat_immutable.summary_truncate_chars": Param(
+            500, int, "摘要截断字符数", "apps"
+        ),
+        "chat_immutable.content_truncate_chars": Param(
+            10000, int, "内容截断字符数", "apps"
+        ),
+        "chat_immutable.context_store_max_size": Param(
+            200, int, "上下文存储上限", "apps"
+        ),
+        "chat_immutable.context_store_ttl_seconds": Param(
+            1800, int, "上下文存储 TTL（秒）", "apps"
+        ),
+        "chat_immutable.context_reserve_tokens": Param(
+            4096, int, "预留上下文 token", "apps"
+        ),
+        "chat_immutable.context_window_override": Param(
+            0, int, "上下文窗口覆盖（0=自动）", "apps"
+        ),
+        "chat_immutable.compaction_enabled": Param(True, bool, "压缩开关", "apps"),
+        "chat_immutable.compaction_threshold_ratio": Param(
+            0.8, float, "压缩触发比例", "apps"
+        ),
+        "chat_immutable.compaction_min_messages": Param(
+            6, int, "压缩最少消息数", "apps"
+        ),
+        "chat_immutable.compaction_max_tokens": Param(4000, int, "压缩 token 上限", "apps"),
+        "chat_immutable.clarify_max_retries": Param(2, int, "clarify 重试", "apps"),
+        "chat_immutable.evidence_max_retries": Param(2, int, "evidence 重试", "apps"),
+        "chat_immutable.stage_max_retries": Param(2, int, "阶段重试", "apps"),
+        "chat_immutable.stage_retry_base_delay": Param(
+            2.0, float, "阶段重试基础延迟（秒）", "apps"
+        ),
+        "chat_immutable.llm_parse_max_retries": Param(3, int, "LLM 解析重试", "apps"),
+        "chat_immutable.db_retry_base_delay": Param(1.0, float, "DB 重试基础延迟", "apps"),
+        "chat_immutable.db_retry_max_retries": Param(3, int, "DB 最大重试", "apps"),
+        "chat_immutable.self_loop_budget_ratio": Param(
+            0.3, float, "自环预算比例", "apps"
+        ),
+        "chat_immutable.clarify_enabled": Param(True, bool, "6-step clarify 开关", "apps"),
+        "chat_immutable.reasoning_check_enabled": Param(
+            True, bool, "推理检查开关", "apps"
+        ),
+        "chat_immutable.structure_check_enabled": Param(
+            True, bool, "结构检查开关", "apps"
+        ),
+        "chat_immutable.evidence_scoring_enabled": Param(
+            True, bool, "证据打分开关", "apps"
+        ),
+        "chat_immutable.framework_check_enabled": Param(
+            True, bool, "框架检查开关", "apps"
+        ),
+        "chat_immutable.strict_exit": Param(True, bool, "严格退出", "apps"),
+        "chat_immutable.gate_min_evidence_score": Param(
+            0.5, float, "门：最低证据分", "apps"
+        ),
+        "chat_immutable.gate_min_traceable_sources": Param(
+            2, int, "门：最少可溯源源", "apps"
+        ),
+        "chat_immutable.gate_min_reasoning_score": Param(
+            7, int, "门：最低推理分", "apps"
+        ),
+        "chat_immutable.gate_max_reasoning_issues": Param(
+            3, int, "门：最大推理问题数", "apps"
+        ),
+        "chat_immutable.gate_min_structure_score": Param(
+            7, int, "门：最低结构分", "apps"
+        ),
+        "chat_immutable.gate_min_source_refs": Param(3, int, "门：最少源引用", "apps"),
+        # llm_params.<prompt>.{max_tokens,temperature,json_mode}
+        "chat_immutable.llm_params.research_plan.max_tokens": Param(
+            2048, int, "plan max_tokens", "apps"
+        ),
+        "chat_immutable.llm_params.research_plan.temperature": Param(
+            0.3, float, "plan temperature", "apps"
+        ),
+        "chat_immutable.llm_params.research_plan.json_mode": Param(
+            True, bool, "plan json_mode", "apps"
+        ),
+        "chat_immutable.llm_params.research_replan.max_tokens": Param(
+            1024, int, "replan max_tokens", "apps"
+        ),
+        "chat_immutable.llm_params.research_replan.temperature": Param(
+            0.3, float, "replan temperature", "apps"
+        ),
+        "chat_immutable.llm_params.research_replan.json_mode": Param(
+            True, bool, "replan json_mode", "apps"
+        ),
+        "chat_immutable.llm_params.research_clarify.max_tokens": Param(
+            4096, int, "clarify max_tokens", "apps"
+        ),
+        "chat_immutable.llm_params.research_clarify.temperature": Param(
+            0.3, float, "clarify temperature", "apps"
+        ),
+        "chat_immutable.llm_params.research_clarify.json_mode": Param(
+            True, bool, "clarify json_mode", "apps"
+        ),
+        "chat_immutable.llm_params.research_reason.max_tokens": Param(
+            1024, int, "reason max_tokens", "apps"
+        ),
+        "chat_immutable.llm_params.research_reason.temperature": Param(
+            0.1, float, "reason temperature", "apps"
+        ),
+        "chat_immutable.llm_params.research_reason.json_mode": Param(
+            True, bool, "reason json_mode", "apps"
+        ),
+        "chat_immutable.llm_params.research_report.max_tokens": Param(
+            8192, int, "report max_tokens", "apps"
+        ),
+        "chat_immutable.llm_params.research_report.temperature": Param(
+            0.3, float, "report temperature", "apps"
+        ),
+        "chat_immutable.llm_params.research_report.json_mode": Param(
+            False, bool, "report json_mode", "apps"
+        ),
+        "chat_immutable.llm_params.research_review.max_tokens": Param(
+            2048, int, "review max_tokens", "apps"
+        ),
+        "chat_immutable.llm_params.research_review.temperature": Param(
+            0.1, float, "review temperature", "apps"
+        ),
+        "chat_immutable.llm_params.research_review.json_mode": Param(
+            True, bool, "review json_mode", "apps"
+        ),
+        "chat_immutable.llm_params.research_revise.max_tokens": Param(
+            8192, int, "revise max_tokens", "apps"
+        ),
+        "chat_immutable.llm_params.research_revise.temperature": Param(
+            0.3, float, "revise temperature", "apps"
+        ),
+        "chat_immutable.llm_params.research_revise.json_mode": Param(
+            False, bool, "revise json_mode", "apps"
+        ),
+    }
+)
+
 
 # ─────────────────────────────────────────────────────────────────────
 # Helpers

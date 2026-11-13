@@ -126,6 +126,31 @@
 ⚠️ **注意**：上表第三行与 **D2 直接冲突** —— D2 要求「只有上层需要也要下沉 L1」，
 本表第三行写的是「L4，不得下沉」。**此冲突未解决**，是重新评估时的首要待决项。
 
+> #### ✅ Q3 / Q4 拍板（2026-11-13）
+>
+> **Q4 · 多层共用归属 —— 以 D2 为准，修正 D4 第三行**
+>
+> | 维度 | 结论 |
+> |---|---|
+> | **声明存放** | 一律 `foundation/params.py`（D2；纯数据零依赖，不违反 L4→L1） |
+> | **语义归属** | `Param.layer` = 谁**定义/使用**（metadata，不决定文件位置） |
+> | **实现代码** | 留在原层；其它层经 `param_default` / `registry.get` / 分层视图读取 |
+> | **D4 第三行** | **撤回字面义**。其本意是「勿把 L4 **实现**上提到 L1」——与 D2 不冲突，因为 D2 只下沉**声明** |
+> | **同义参数** | 第二行不变：各归各 + `alias_of`（D5 iii） |
+>
+> E5 已写明：「D2 的下沉 L1 指的是**声明收在一处**，不是文件只有一份。」Q4 沿此收口。
+>
+> **Q3 · `user_key` 映射 —— 不建字段**
+>
+> | 原设计用途 | 现状 |
+> |---|---|
+> | 写回时判定「用户可写」 | Q7 已定**不建 `set_param`**；写路径只有 `Config.save()` |
+> | 配置文件键 ≠ 登记表键 | 命名规则已要求**键即配置路径**（`llm.timeout`）；无需映射 |
+> | 改名兼容 | 已由 `alias_of`（D5 iii）覆盖 |
+> | UI 显示名 | YAGNI；将来需要再加 `label` |
+>
+> **结论：不引入 `user_key`。** 若未来恢复程序化写回，再按当时需求评估。
+
 ---
 
 ### D5 · `alias_of` 语义 —— 业界调研后**两项均判反模式，改用第三框架 (iii)**
@@ -377,8 +402,8 @@ PG `category`（逻辑分组）、Spring `groups`（命名空间）、VS Code `s
 |---|---|---|---|---|
 | **Q1** | **`alias_of` 语义** | ~~(i) 纯去重~~ / ~~(ii) 解析穿透~~ / **(iii) 规范键 + 弃用别名，加载时解析** | **(iii)**（见 D5，业界调研后 (i)(ii) 均判反模式） | 登记表字段设计、D5 落地 |
 | **Q2** | **族的划分规则** | ~~待设计~~ | **(iii) 下大幅简化**：无需「读时族 + 优先级」，只需判断「哪些键是规范键的弃用别名」vs「哪些是独立 scope 的键」 | Q1 落地 |
-| **Q3** | **`user_key` 映射规则** | 待设计（父类处理） | — | 写回落点、D2 层归属 |
-| **Q4** | **多层共用参数的归属** | 待设计（须符合 L4→L1） | — | **与 D2 冲突**，见 §2 D4 复核点 |
+| **Q3** | **`user_key` 映射规则** | 建字段 / 不建 | ✅ **已解决**：Q7 不建 `set_param` + 键即配置路径 + `alias_of` 覆盖改名 → **不建 `user_key`**（见 D4 拍板） | — |
+| **Q4** | **多层共用参数的归属** | D2 全下沉 / D4 第三行不下沉 | ✅ **已解决**：**D2 赢**——声明一律 L1，`layer` 标语义归属，实现留原层；D4 第三行撤回字面义（见 D4 拍板） | — |
 | **Q5** | `alias_of` 语义 (i)/(ii) 是否过复杂 | ✅ **已解决** | 调研后改用 (iii)（见 D5） | — |
 | **Q6** | **`layer` 字段是否过度** | 保留 `layer` / 改用 family 分组 / 由 `prefix` 推导 | ✅ **已解决**：用户「S4 需要 layer」→ **保留**；E7 确认业界无此标准，标为 hub-specific | — |
 | **Q7** | **是否建通用 `set_param`** | 建 / 不建 | ✅ **已解决**：E7 业界几乎都**没有**程序化写回（Django 明确禁止）→ **不建**，保留 `Config.save()` | — |
@@ -703,9 +728,12 @@ github.com/ClickHouse/ClickHouse/blob/master/src/Core/Settings.cpp
 | 5 | 迁移消费点，消灭默认值家族漂移 | 中（改行为，需回归） | ✅ `dcdd49d8` |
 | 6 | 最小 diff YAML 编辑（`Config.save` 路径，**不建 `set_param`**） | 中 | ✅ 见 §6.4 |
 
-**当前覆盖率**：登记表 81 条 / ~388 ≈ **21%**。
-已镜像旧默认源：模板 JSON 38 / research YAML 7 / six-step YAML 9 = 54 条。
+**当前覆盖率**：登记表 **162** 条 / ~388 ≈ **42%**（config-file 面已满：模板 JSON 38/38、
+research/chat mutable 7+7+9/9；本批补 research immutable 26 + chat immutable 52）。
+已镜像旧默认源：模板 JSON 38 / research YAML 7+26 / six-step YAML 9+52。
 （覆盖率棘轮测试见 `tests/test_foundation_params.py`）
+剩余大头：CLI flags ~90、dataclass ~90、env ~28、硬编码常量 ~50 —— 多数**不应**进配置登记表
+（运行期旗标 / 非用户旋钮），按 parameter-tiers §8 分批评估。
 
 ---
 
@@ -863,15 +891,37 @@ unsub = reg.on_change(fn)              # 注册监听，返回退订函数
 
 ---
 
+### 6.5 Q3/Q4 拍板 + immutable 扩覆盖（2026-11-13）
+
+**Q3/Q4**：见 §2 D4 拍板批注 —— Q4 以 D2 赢收口；Q3 不建 `user_key`。
+
+**扩覆盖**：`PARAMS` **84 → 162**（+78）：
+
+| 来源 | 新增 | 前缀 |
+|---|---:|---|
+| `config_defaults.yaml` `immutable:` | 26 | `research_immutable.*` |
+| `six_step_config_defaults.yaml` `immutable:`（含 `llm_params.*` 展平） | 52 | `chat_immutable.*` |
+
+前缀与 `research.*` / `research_mutable.*` **刻意分离**，避免与全局 `research` 段同名不同值
+（`test_known_clash_research_section_defaults` 仍 xfail 记录该历史 clash）。
+分层：apps 101 · kernel 47 · foundation 8 · interfaces 6。
+`params.pyi` 已重生成。棘轮基线：`research_immutable=26`、`six_step_immutable=52`。
+
+**刻意不进登记表**（parameter-tiers §3 里约占一半）：CLI flags（运行期旗标）、
+MCP 工具入参、dataclass 构造字段、纯内部 env 开关 —— 无「配置文件默认值」语义，
+进表只会稀释真相源。后续若做 §8 P5（CLI/MCP 收敛）再单独评估。
+
+---
+
 ## 7. 已在仓里的改动（commit `880e6f07`）
 
 | 文件 | 内容 | 行为影响 |
 |---|---|---|
-| `foundation/params.py`（新） | 登记表 `Param` + `PARAMS`（85 条）+ `param_default/param_spec/params_under/section_defaults` | 无 |
+| `foundation/params.py`（新） | 登记表 `Param` + `PARAMS`（首版 85 条，现 **162**）+ helpers | 无 |
 | `foundation/config.py` | `DEFAULT_CONFIG` 改为**从登记表派生**；新增 `Config.get_param(key, wiki_root=None)` | **无**（`DEFAULT_CONFIG` 与 HEAD 版本逐字节相等，有 AST 等价性测试断言） |
-| `tests/test_foundation_params.py`（新） | 11 条：漂移检测 + 覆盖棘轮 + 解析顺序 + 键名合法性 | — |
+| `tests/test_foundation_params.py`（新） | 漂移检测 + 覆盖棘轮 + 解析顺序 + 键名合法性 | — |
 
-**校验**：ruff ✓ · mypy 411 files ✓ · 157 配置相关测试 ✓ · `scripts/check_architecture.py` 0 violation ✓
+**校验**：ruff ✓ · mypy 412 files ✓ · 架构 0 violation ✓ · 全量 5115 passed ✓
 
 ⚠️ **`foundation/params.py` 的 docstring 已注明覆盖率是渐进的**（「Coverage is growing
 incrementally」），避免误导为已全量。
@@ -882,14 +932,15 @@ incrementally」），避免误导为已全量。
 
 重新评估配置中枢方案时，建议按此顺序核对：
 
-1. **先解 Q4**：D2（「只有上层需要也要下沉 L1」）与 D4 初步框架第三行（「L4，不得下沉」）**直接冲突**，必须先定
+1. ~~**先解 Q4**~~ ✅ 已拍板（D2 赢，D4 第三行撤回字面义）
 2. **再定 Q2 族划分规则** —— 它决定 Q1 的 (i)/(ii) 能否成立；划错（如把 `subagent_manager.max_iterations` 拉进主 agent 族）比不做更糟
-3. **再看 Q1 `alias_of` 语义** —— 本轮已判定「过复杂，暂停」
+3. ~~**再看 Q1 `alias_of` 语义**~~ ✅ 已定 D5 (iii)
 4. **核对 S1 子类实现**是否仍按 B + `@dataclass_transform`（有业界依据，但未拍板）
-5. **核对 S2/S3** 写回与通知模型是否仍按建议
+5. **核对 S2/S3** 写回与通知模型是否仍按建议（步 6 已落地 Config.save / save_wiki_config）
 6. **评估复杂度预算** —— 本轮用户反馈「越来越复杂了」，建议为方案设定复杂度上限
    （如「参数总数 388、子类 4 个、新增类 3 个」），超出即裁剪
 7. **复核 D1 单例缓存失效**：`registry_for(wiki_root)` 在 wiki 被删除/移动后如何失效
+8. ~~**Q3 `user_key`**~~ ✅ 已拍板：不建字段
 
 ---
 

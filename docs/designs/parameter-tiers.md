@@ -1,10 +1,12 @@
 # 参数分级与统一登记 — 业界调研 + 本项目盘点
 
 > 日期: 2026-11-11
-> 状态: **调研 + 方案（待评审）**；本文只做梳理与设计，未改代码
+> 状态: **调研 + 方案**；登记表已落地 `foundation/params.py`（config-hub D2）
 > 背景: 任务面板 T134 — 「统一所有参数，对所有参数也分成三级」
 > 关联: `docs/designs/refactor-4layer-architecture.md`（4 层架构）、
-> `docs/diagnostics/platform-free-2026-11.md`（本轮平台无关化改造）
+> `docs/diagnostics/platform-free-2026-11.md`（本轮平台无关化改造）、
+> `docs/designs/config-hub-design-log.md`（D1–D6 决策 + 实现状态）
+> 更新: 2026-11-13 — 登记表 162 条；§9.1「登记表放哪」已由 D2 解决
 
 ---
 
@@ -259,7 +261,10 @@ class ParamSpec:
 
 ## 9. 待决策
 
-1. **登记表放哪**：`kernel/`（L2）会与「L1 参数不可反向依赖」冲突；是放 L1 让 L2 import，还是拆两份？
+1. ~~**登记表放哪**~~ ✅ **已解决（config-hub D2）**：放 `foundation/params.py`（L1）；
+   `layer` 字段标语义归属；纯数据零 import，架构门禁 0 violation
 2. **`.wiki-config.yaml` 是否保留**：它是唯一的「每 wiki」层，与全局 json 职责重叠。
 3. **CLI/MCP 参数是否落配置**：现在多数只运行期生效；若要落，需引入 per-wiki 写入路径。
 4. **`internal` 与 `defaults` 是否要分开**：分开更精确但登记量翻倍。
+5. ~~**Q3 `user_key` / Q4 多层共用**~~ ✅ **已解决**：见 config-hub D4 拍板
+   （不建 `user_key`；声明一律 L1，`layer` 标归属，实现留原层）。
