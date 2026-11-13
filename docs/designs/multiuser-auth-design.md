@@ -1,8 +1,7 @@
 # 多用户与授权模型 — 设计方案（待评审）
 
 > 日期: 2026-11-13
-> 状态：**评审接近完成** —— **D1–D9 全部拍板；Q1/Q2/Q4/Q5/Q6 拍板**；
-> **仅 Q3（`["*"]` 语义）讨论中**，见 §4.3
+> 状态：**设计已收口** —— **D1–D9 全部拍板，Q1–Q6 全部拍板**；可开 P1 实施
 > 依据：`docs/designs/multiuser-auth-research.md`（业界调研，含 PostgreSQL / NIST / Kubernetes / Casbin / GitHub / SQLite / SpiceDB / Envoy 一手取证）
 > 现状基线：`docs/llmwikify-auth-缺陷清单.md`（25 条，P0/P1 全清）
 > 架构约束：`foundation → 仅 foundation`；`apps` 互不依赖；`scripts/check_architecture.py` 门禁 0 violation
@@ -316,7 +315,14 @@ GROUP BY wiki_id
 
 ---
 
-### 4.3 Q3 讨论 → **建议：表允许通配，token 永远具体列表（2026-11-13）**
+### 4.3 Q3 讨论 → **已拍板：表允许通配，token 永远具体列表（2026-11-13）**
+
+> **拍板结论**（用户确认「按建议」）：
+> **Q3-a = (a)** 表里允许 `wiki_id='*'` 通配行；
+> **Q3-b = (b)** claims 快照**签发时求值展开**为具体 wiki 列表；
+> **Q3-c = (i)** `*` **覆盖未来新建**的 wiki（GitHub 语义）。
+>
+> 一句话：**表里允许 `*`（管理便利），token 里永远是具体列表（范围明确）**。
 
 **三个子问题**：
 
@@ -354,8 +360,8 @@ GROUP BY wiki_id
 
 **代价**：新 wiki 对已授权用户「可见」但要重签才可访问 ⇒ 文档写清，并在 `auth whoami` / `auth can-i` 提示「当前 token 未覆盖新 wiki，重签请跑 `auth token`」。
 
-**建议**：**Q3-a = (a) 通配行**；**Q3-b = (b) 快照求值展开**；**Q3-c = (i) `*` 覆盖新建 wiki**。
-一句话：**表里允许 `*`（管理便利），token 里永远是具体列表（范围明确）**。
+**建议**：~~**Q3-a = (a) 通配行**；**Q3-b = (b) 快照求值展开**；**Q3-c = (i) `*` 覆盖新建 wiki**。~~
+**→ 已采纳**（见本节开头拍板结论）。
 
 ---
 
@@ -381,8 +387,9 @@ GROUP BY wiki_id
 | 兼容点 | 说明 |
 |---|---|
 | 老 token（无 `wgrants`） | 裁决时按「`wikis` 全可写」（= 今天的 admin 行为）→ **向后兼容**，不必强制重签 |
-| `wikis` 保留 | 现有 `_check_wikis_claim` / registry / search 三处过滤**不用改** |
+| `wikis` 保留 | 现有 `_check_wikis_claim` / registry / search 三处过滤**不用改**；**但值改为求值展开后的具体列表**（Q3-b），不再出现 `["*"]` |
 | `scope` 保留 | 全局上限，非 admin 仍 read-only（现状） |
+| 新建 wiki | 实时上界含 `*` 时自动纳入；**老 token 需 `auth token` 重签**才可见（Q3-c） |
 
 ### 5.2 裁决：请求 → 决策
 
@@ -540,7 +547,7 @@ auth can-i --user U --wiki W --write  → 只读自检（K8s kubectl auth can-i�
 |---|---|---|---|
 | **Q1** | 授权的**主体**只有 user 吗？要不要支持「组 / 团队」？ | (a) 只 user (b) user + group | ✅ **(b) 支持组** —— 按 K8s `subject.kind` 并入同一张 `wiki_grants`；新增 `groups` / `group_members` |
 | **Q2** | wiki 的「属主」怎么定？创建 wiki 的人自动全权吗？ | (a) 是（PG owner 语义） (b) 否，只由 admin 授权 | ✅ **(b) 只 admin**（Q2 暂定；属主机制留后续升级） |
-| **Q3** | `wikis=["*"]` 语义在授权表落地后怎么表达？ | (a) 通配 (b) 展开 | 🔄 **讨论中**，见 §4.3（建议：表允许通配，快照求值展开） |
+| **Q3** | `wikis=["*"]` 语义在授权表落地后怎么表达？ | (a) 通配 (b) 展开 | ✅ **(a)+(b)+(i)**：表允许 `*` 通配；快照签发时求值展开；`*` 覆盖新建 wiki（§4.3） |
 | **Q4** | 非 admin 拿到授权后，**能不能建用户 / 授权别人**？ | (a) 不能（只有 admin）(b) 能 | ✅ **(a) 不能** —— `grant` 是 admin 专属 |
 | **Q5** | share token（roadmap Phase 3）算不算一种 grant？ | (a) 独立表 `share_tokens` (b) 复用 `wiki_grants` | ✅ **(a) 独立表**（有过期/口令等独立语义） |
 | **Q6** | 本地模式（回环）是否应绕过 grants？ | (a) 绕过（现状） (b) 也走 grants | ✅ **(a) 绕过** —— decision 12「localhost 完全信任」是既有决策 |
@@ -562,7 +569,7 @@ auth can-i --user U --wiki W --write  → 只读自检（K8s kubectl auth can-i�
 | D9 | `public_read` 落点 | ✅ **(b) `public` 主体行**（组支持后更统一） | 用户 | 2026-11-13 |
 | Q1 | 组支持 | ✅ **支持**（`groups` + `group_members`） | 用户 | 2026-11-13 |
 | Q2 | wiki 属主 | ✅ **只 admin**；属主机制留后续升级 | 用户 | 2026-11-13 |
-| Q3 | `["*"]` 语义 | 🔄 **讨论中**（§4.3 建议：表允许通配，快照求值展开） | | |
+| Q3 | `["*"]` 语义 | ✅ **(a) 通配行 + (b) 快照求值展开 + (i) `*` 覆盖新建 wiki** | 用户 | 2026-11-13 |
 | Q4 | 授权权下放 | ✅ **不能** —— `grant` admin 专属 | 用户 | 2026-11-13 |
 | Q5 | share token 归属 | ✅ **(a) 独立表 `share_tokens`** | 用户 | 2026-11-13 |
 | Q6 | 本地模式绕过 | ✅ **(a) 绕过**（decision 12） | 用户 | 2026-11-13 |
