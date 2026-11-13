@@ -1,10 +1,11 @@
 # llmwikify Auth 子系统缺陷清单
 
-> **第十五轮 · auth 缺陷审计**
+> **第十五轮 · auth 缺陷审计** → **2026-11-13 修复收口**
 > 基线 `main @ 3e09b0c3`（2026-11-10，1387 commits）
 > 审计范围：`foundation/auth/`（9 文件）· `interfaces/cli/commands/auth.py` · `interfaces/server/http/auth_routes.py` · `interfaces/server/http/middleware.py` · `interfaces/server/core.py` · `interfaces/cli/commands/serve.py` · `ui/webui/src/{components/auth,stores,types}`
 > 方法：**读代码 + 逐条可复现验证**（不是静态猜测）—— 复现脚本：`tools/exploit_check_wikis_claim.py`、`tools/auth_defect_verify.py`
-> 本轮**未改动仓库任何业务文件**（`git status --porcelain` 为空）
+> **终态**：P0 **5/5** · P1 **7/7** · P2 **10/13** 已修；探针 **4/4 NOT reproduced**
+> 完整会话报告：`docs/summaries/2026-11-13-platform-config-auth-report.md`
 
 > ## 复核批注（2026-11-11，另一会话）
 >
@@ -63,15 +64,17 @@
 
 **审计结果**：共 **25 条缺陷**，其中
 
-| 级别 | 条数 | 性质 |
-|---|---:|---|
-| **P0 安全越权 / 数据丢失** | **5** | 可被实际利用，不是理论风险 |
-| **P1 功能缺陷 / 越界操作** | **7** | 会导致操作对象错、权限模型与文档不符 |
-| **P2 安全姿态 / 可维护性** | **13** | 风险较低或暂不可达，但会持续咬人 |
+| 级别 | 条数 | 性质 | 状态（2026-11-13） |
+|---|---:|---|---|
+| **P0 安全越权 / 数据丢失** | **5** | 可被实际利用，不是理论风险 | ✅ **5/5 已修** |
+| **P1 功能缺陷 / 越界操作** | **7** | 会导致操作对象错、权限模型与文档不符 | ✅ **7/7 已修** |
+| **P2 安全姿态 / 可维护性** | **13** | 风险较低或暂不可达，但会持续咬人 | ✅ **10/13 已修** · 3 挂起（P2-3/9/12） |
 
-**最危险的一条**：`wikis` claim（JWT 里唯一的授权维度）**只覆盖 `/api/wiki/` 一个前缀**。跨 wiki 搜索 `/api/search/cross` 和 wiki 目录 `/api/wikis` 完全在它之外 —— 实测一个**只授权 wiki-a 的 token 能读到 wiki-b 的机密内容**，而 `public_read` 默认 True ⇒ **连 token 都不用带**。
+**最危险的一条（已修）**：`wikis` claim（JWT 里唯一的授权维度）**只覆盖 `/api/wiki/` 一个前缀**。跨 wiki 搜索 `/api/search/cross` 和 wiki 目录 `/api/wikis` 完全在它之外 —— 实测一个**只授权 wiki-a 的 token 能读到 wiki-b 的机密内容**，而 `public_read` 默认 True ⇒ **连 token 都不用带**。→ commit `152a8297`
 
-**最隐蔽的一条**：`_keyring.py` 的 JWT 签名密钥**不 honor `LLMWIKIFY_HOME`** —— auth.db / local_token / pat 都跟着隔离走，**只有密钥留在真实 HOME** ⇒ 隔离被打破。
+**最隐蔽的一条（已修）**：`_keyring.py` 的 JWT 签名密钥**不 honor `LLMWIKIFY_HOME`** —— auth.db / local_token / pat 都跟着隔离走，**只有密钥留在真实 HOME** ⇒ 隔离被打破。→ commit `9f9dd8f1`
+
+**当前验证**：`tools/auth_defect_verify.py` → **4/4 NOT reproduced**；`tools/exploit_check_wikis_claim.py` 授权面 4/4 拦截。详见页首修复批注与 §4。
 
 ---
 
@@ -330,15 +333,17 @@ fetch('/api/auth/me').then((r) => { if (!r.ok) clearToken(); })   // 200 ⇒ 永
 | CLI | 0 | 4 | 1 | 5 |
 | WebUI | 0 | 1 | 1 | 2 |
 
-**建议修序**
+**建议修序（已执行，2026-11-13）**
 
-1. **先修 P0-1 / P0-2 / P0-5**（授权面）—— 三条都在同一处：把 `wikis` 校验从"路径前缀猜"改成"路由显式声明 wiki 维度"，并把 `public_read` 默认改 `False`。
-2. **再修 P0-4**（密钥随 HOME 走）—— 一行改动，但影响所有"隔离"用法。
-3. **P0-3**（迁移清库）—— 需要设计迁移路径，改动最大但不能拖。
-4. **P1-1 / P1-2 / P1-3** 一起改：CLI 加 `--user` 参数、`auto_first_admin` 真的只建一个 admin、`auth init` 不覆盖调用者的 local_token。
-5. **P1-5 / P1-6 / P1-7** 与 P2 中的"文档↔代码漂移"一起清（注释说会做什么但没做的：`with collisions suffixed` / `tempfile+rename` / `?token=` / `/auth/login` / `touch_last_login`）。
+1. ✅ **P0-1 / P0-2 / P0-5**（授权面）—— `wikis` 校验扩路由 + `public_read` 回环语义（`152a8297`）
+2. ✅ **P0-4**（密钥随 HOME 走）—— `9f9dd8f1`
+3. ✅ **P0-3**（迁移清库）—— `02e3f36c`
+4. ✅ **P1-1 / P1-2 / P1-3** CLI 组 —— `52dc305e`
+5. ✅ **P1-4 / P1-5 / P1-6 / P1-7** + P2 十项 + 文档漂移 —— `d21289b1` `a5918fe3`
 
-**验证方式**：P0-1 用 `tools/exploit_check_wikis_claim.py`（阳性：越权 token 能读 → 必须 FAIL；阴性：合法 token 读自己的 wiki → 必须 PASS）；其余用 `tools/auth_defect_verify.py` 的 4 条断言。
+**仍挂起**：P2-3（logout 吊销，需 denylist）、P2-9（有意保留，decision 13）、P2-12（schema 性能）。
+
+**验证方式**：P0-1 用 `tools/exploit_check_wikis_claim.py`（现 4/4 拦截）；其余用 `tools/auth_defect_verify.py`（现 4/4 NOT reproduced）。
 
 ---
 
@@ -350,31 +355,32 @@ fetch('/api/auth/me').then((r) => { if (!r.ok) clearToken(); })   // 200 ⇒ 永
 ```bash
 # P0-1 / P0-2 / P0-5：wikis claim 越权 + 未认证可读 + wiki 目录泄漏
 python tools/exploit_check_wikis_claim.py
-#   VERDICT: 3 of 4 probes reproduced the audit's findings
-#   ① wiki-b 页 + wiki-a token → 403（对照，正确拦截）
-#   ② 跨 wiki 搜索 + wiki-a token → 200 + wiki-b 正文  ★ P0-1
-#   ③ GET /api/wikis → 200 + 服务器绝对路径           ★ P0-5
-#   ④ 跨 wiki 搜索、无 token → 200 + wiki-b 正文        ★ P0-2
+#   修复后：4/4 探针均被拦截（①②③④ 不再复现越权/泄漏/未认证读）
+#   修复前：VERDICT: 3 of 4 probes reproduced（②③④ 曾成立）
 
 # P1-5 / P1-6 / P0-3 / P1-7：四条断言
 python tools/auth_defect_verify.py
-#   VERDICT: ALL CONFIRMED (4/4)
+#   修复后：VERDICT: 4 of 4 probes did NOT reproduce
+#   修复前：VERDICT: ALL CONFIRMED (4/4)
 ```
 
-退出码：`0` = 按预期复现（缺陷成立），`1` = 未复现，`2` = 脚本自身跑不起来。
+退出码：`0` = 按预期复现（缺陷成立）/ 脚本语义见文件头；`1` = 未复现；`2` = 脚本自身跑不起来。
+**修复后跑应看到「NOT reproduced」**（exit 1）——这是预期结果，不是脚本坏了。
 
 > **P1-7 的复现注意**：`/api/auth/me` 分支依赖 `is_local_default(request.url.hostname)`。
 > 用 `fastapi.testclient.TestClient` 时默认 Host 是 `testserver`（非回环）→ 走 401 分支。
 > 脚本用 `TestClient(app, base_url="http://127.0.0.1")` 绕开，等价于真机上 `curl127.0.0.1`。
+> 现探针语义已改为：**无效 Bearer 必须 401**（P1-7 修复后的正确行为）。
 
 ---
 
 ## 6. 边界声明
 
-- 本轮**只读**：仓库业务代码零改动，`git status --porcelain` 为空。
-- **复现脚本已入库** `tools/`（原在仓库外的 `/workspace/.tools/`，不可得）；
-  两个脚本的全部状态建在临时目录，不碰开发者真实 `~/.llmwikify`。
-- 结论基于 `main @ 3e09b0c3`；**2026-11-11 已按当前 `main` 逐条复核**（见页首批注）：
-  24 条仍成立，P0-4 已修，0 条误报。
-- `proxy/v0.41-dev @ 582a7203` 上 auth 部分是否已修**未核**（该分支 54 commit 未合并）。
+- **审计轮（2026-11-10）只读**：当时仓库业务代码零改动；复现脚本后入库 `tools/`。
+- **修复轮（2026-11-11 / 11-13）已改业务代码**，见页首三段修复批注与 §4。
+- 两个脚本的全部状态建在临时目录，不碰开发者真实 `~/.llmwikify`。
+- 结论基于 `main @ 3e09b0c3` 起审；**2026-11-13 按修复后 `main` 复验**：
+  P0 5/5、P1 7/7、P2 10/13 已修，0 误报；探针 4/4 NOT reproduced。
+- `proxy/v0.41-dev @ 582a7203` 上 auth 部分是否已修**未核**（该分支未合并）。
+- 完整会话报告：`docs/summaries/2026-11-13-platform-config-auth-report.md`。
 - 本清单**不含**未做的功能（B8 已实现，见 §0 更正）；这里列的全是**已实现代码里的缺陷**。

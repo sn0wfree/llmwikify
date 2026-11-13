@@ -412,7 +412,7 @@ pip install llmwikify[extractors]  # PDF/Office/media
 
 | Command | Description |
 |---------|-------------|
-| `auth` | Auth bootstrap (init / create-token / list-tokens / revoke / whoami) |
+| `auth` | Auth bootstrap (`init [--email] [--force]` / `create-token [--name] [--user]` / `list-tokens` / `revoke` / `token` / `whoami` / `logout`) |
 
 ### QMD Hybrid Search
 

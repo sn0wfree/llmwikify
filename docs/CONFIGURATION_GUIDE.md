@@ -867,4 +867,58 @@ echo "version: \"0.41\"" >> .wiki-config.yaml
 
 ---
 
-*Last updated: 2026-07-20 | Version: 0.41.0*
+## 🧭 配置中枢（config hub，2026-11）
+
+在 v0.41 三层架构之上，参数**默认值**收敛到单一登记表；配置**文件**仍按作用域分
+（全局 JSON / 每 wiki YAML / env / registry）—— 单一真相源是**声明**，不是文件布局。
+
+### 解析链（高 → 低）
+
+```
+env  >  per-wiki .wiki-config.yaml  >  global ~/.llmwikify/llmwikify.json  >  registry 默认
+```
+
+### API
+
+```python
+from llmwikify.foundation.config import Config, ParamRegistry, registry_for
+from llmwikify.foundation.params import param_default, param_spec, PARAMS
+
+# 单键解析（含 wiki scope）
+Config().get_param("llmwikify.timeout", wiki_root="/path/to/wiki")
+
+# 分层解析 + 热更通知
+reg = registry_for(wiki_root)          # 每 wiki 一个
+reg.get("llm.timeout")                 # 解析后的值
+reg.source("llm.timeout")              # env | wiki | global | registry
+reg.reload()                           # 重解析，返回变更键集合
+unsub = reg.on_change(fn)              # 监听（昂贵对象用）
+
+# 写回（唯一路径；没有通用 set_param）
+Config().save({"provider": "openai"}, section="llm")   # JSON 原子写 + deep_merge
+Config().save_wiki_config(wiki_root, {"llm": {"timeout": 99}})  # YAML 最小 diff，保注释
+```
+
+### 登记表
+
+| 项 | 值 |
+|---|---|
+| 位置 | `foundation/params.py`（L1，纯数据零 import） |
+| 条数 | **162**（apps 101 · kernel 47 · foundation 8 · interfaces 6） |
+| 类型 stub | `params.pyi`（**生成物**，改 `params.py` 后跑 `scripts/gen_params_stub.py`） |
+| 覆盖棘轮 | `tests/test_foundation_params.py` 的 `COVERAGE_BASELINE` 只升不降 |
+
+### YAML 最小 diff 写回
+
+`foundation/yaml_edit.py`：按行定位键，只改目标行/块，其余**逐字节保留**（注释不丢）。
+
+| 限制 | 说明 |
+|---|---|
+| 列表/字典**块内**注释 | 整块替换时会丢 |
+| 锚点 `&` / 别名 `*` / 多文档 `---` | 拒绝（`YamlEditError`） |
+
+设计全文：`docs/designs/config-hub-design-log.md`。
+
+---
+
+*Last updated: 2026-11-13 | Version: 0.41.0 + config hub*

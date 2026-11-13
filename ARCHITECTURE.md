@@ -179,7 +179,7 @@ src/llmwikify/
     │   ├── http/
     │   │   ├── routes.py         # register_routes — composition root
     │   │   ├── middleware.py     # JWT auth + rate limiting
-    │   │   ├── auth_routes.py    # POST /api/auth/login, GET /api/auth/me
+    │   │   ├── auth_routes.py    # /api/auth/{register,verify,tokens,me,logout}
     │   │   ├── maintenance_routes.py
     │   │   ├── _models.py / _handlers.py / _helpers.py
     │   │   ├── wiki/             # wiki / registry / search / log routes
@@ -462,7 +462,7 @@ Business hooks live in `callback/integrations/` — `WikiHook`,
 | `http/wiki/*` | `/api/wiki/*` (single-wiki), `/api/wikis/*` (registry), `/api/search/cross`, `/api/log/error` |
 | `http/agent/*` | `/api/agent/*` — chat (SSE), sessions, dream, ingest log, confirmations, notifications, config, status |
 | `http/maintenance_routes.py` | `/api/maintenance/*` — health history, proposals, manual triggers |
-| `http/auth_routes.py` | `POST /api/auth/login`, `GET /api/auth/me` |
+| `http/auth_routes.py` | `POST /api/auth/{register,verify,tokens}` · `GET /api/auth/{me,tokens}` · `DELETE /api/auth/tokens/{id}` · `POST /api/auth/logout` |
 | `http/middleware.py` | JWT auth (`public_read` + `local_mode`) + rate limiting |
 | `apps/api/openai_server.py` | OpenAI-compatible `/v1/chat/completions` + `/v1/models` + `/v1/health` (registered from `routes.py`) |
 | `utils/webui.py` | React SPA static mount |
