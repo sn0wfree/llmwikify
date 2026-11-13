@@ -161,6 +161,80 @@ class TestAuthInitInteractive:
         repo = UserRepository()
         assert repo.count() == 1
 
+    def test_init_second_email_rejected_p1_1(self):
+        """P1-1: a new email after an admin exists → registration_closed."""
+        import argparse
+
+        rc1 = run_auth_init(
+            wiki=None, config={}, args=argparse.Namespace(email="a@e.com")
+        )
+        assert rc1 == 0
+
+        err = io.StringIO()
+        with patch("sys.stderr", err):
+            rc2 = run_auth_init(
+                wiki=None, config={}, args=argparse.Namespace(email="b@e.com")
+            )
+        assert rc2 == 1
+        assert "admin already exists" in err.getvalue().lower()
+        repo = UserRepository()
+        assert repo.count() == 1
+        assert repo.get_by_email("b@e.com") is None
+
+    def test_init_pat_idempotent_p1_6(self):
+        """P1-6: three same-email inits → exactly one cli-init PAT."""
+        import argparse
+
+        for _ in range(3):
+            rc = run_auth_init(
+                wiki=None, config={}, args=argparse.Namespace(email="p16@e.com")
+            )
+            assert rc == 0
+        ak_repo = ApiKeyRepository()
+        user = UserRepository().get_by_email("p16@e.com")
+        keys = ak_repo.list_by_user(user.id)
+        cli_init = [k for k in keys if k.name == "cli-init"]
+        assert len(cli_init) == 1, f"expected 1 cli-init PAT, got {len(cli_init)}"
+
+    def test_init_keeps_foreign_local_token_p1_3(self):
+        """P1-3: init for another identity must not steal local_token."""
+        import argparse
+
+        rc = run_auth_init(
+            wiki=None, config={}, args=argparse.Namespace(email="me@e.com")
+        )
+        assert rc == 0
+        token_path = Path(os.environ["LLMWIKIFY_HOME"]) / ".llmwikify" / "local_token"
+        mine = token_path.read_text(encoding="utf-8").strip()
+
+        # Create a second user directly (CLI init would refuse — P1-1).
+        other = UserRepository().create(email="colleague@e.com", is_first_admin=False)
+
+        # Mint a PAT for the colleague; local_token must stay ours.
+        out = io.StringIO()
+        with patch("sys.stdout", out):
+            rc = run_auth_create_token(
+                wiki=None,
+                config={},
+                args=argparse.Namespace(
+                    name="for-colleague", user="colleague@e.com"
+                ),
+            )
+        assert rc == 0
+        assert token_path.read_text(encoding="utf-8").strip() == mine
+
+        # PAT was issued to the colleague, not to us.
+        keys = ApiKeyRepository().list_by_user(other.id)
+        assert any(k.name == "for-colleague" for k in keys)
+
+        # --force on init would replace it (same-email path writes ours back).
+        rc = run_auth_init(
+            wiki=None,
+            config={},
+            args=argparse.Namespace(email="me@e.com", force=True),
+        )
+        assert rc == 0
+
 
 # ─── auth create-token ──────────────────────────────────────────
 
@@ -197,6 +271,48 @@ class TestAuthCreateToken:
             )
         assert rc == 1
         assert "No users found" in err.getvalue()
+
+    def test_create_token_explicit_user_p1_2(self):
+        """P1-2: --user selects the PAT owner by email / username / id."""
+        import argparse
+
+        run_auth_init(wiki=None, config={}, args=argparse.Namespace(email="root@e.com"))
+        # Second user via direct create (CLI init refuses — P1-1).
+        other = UserRepository().create(
+            email="bob@example.com", is_first_admin=False, username="bob"
+        )
+
+        out = io.StringIO()
+        with patch("sys.stdout", out):
+            rc = run_auth_create_token(
+                wiki=None,
+                config={},
+                args=argparse.Namespace(name="bob-key", user="bob@example.com"),
+            )
+        assert rc == 0
+        assert "bob@example.com" in out.getvalue()
+        keys = ApiKeyRepository().list_by_user(other.id)
+        assert any(k.name == "bob-key" for k in keys)
+
+        # Username lookup works too.
+        with patch("sys.stdout", io.StringIO()):
+            rc = run_auth_create_token(
+                wiki=None,
+                config={},
+                args=argparse.Namespace(name="bob-by-name", user="bob"),
+            )
+        assert rc == 0
+
+        # Unknown target → exit 1, no PAT minted for anyone else.
+        err = io.StringIO()
+        with patch("sys.stderr", err):
+            rc = run_auth_create_token(
+                wiki=None,
+                config={},
+                args=argparse.Namespace(name="ghost", user="nobody@e.com"),
+            )
+        assert rc == 1
+        assert "No user matching" in err.getvalue()
 
 
 # ─── auth list-tokens ───────────────────────────────────────────

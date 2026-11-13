@@ -69,14 +69,90 @@ def _sign_local_token(user: Any, secret: bytes) -> str:
 # ─── free functions ────────────────────────────────────────────────
 
 
+def _should_write_local_token(user_id: str, *, force: bool = False) -> bool:
+    """P1-3: never steal the caller's login identity.
+
+    Write ``local_token`` only when there is no usable token yet, the
+    existing token already belongs to ``user_id``, or ``--force``.
+    """
+    if force:
+        return True
+    path = _local_token_path()
+    if not path.exists():
+        return True
+    try:
+        existing = path.read_text(encoding="utf-8").strip()
+    except OSError:
+        return True
+    if not existing or existing == "local-mode-no-auth":  # noqa: S105 — sentinel
+        return True
+    try:
+        from llmwikify.foundation.auth import decode, require_secret
+
+        claims = decode(existing, require_secret())
+    except Exception:
+        return True  # unreadable / foreign secret → safe to replace
+    return claims.sub == f"user:{user_id}"
+
+
+def _write_local_token(user_id: str, token: str, *, force: bool = False) -> bool:
+    """Write ``local_token`` for ``user_id`` unless it belongs to someone else.
+
+    Returns True if the file was written, False if kept as-is (P1-3).
+    """
+    if not _should_write_local_token(user_id, force=force):
+        return False
+    token_path = _local_token_path()
+    ensure_dir_700(token_path.parent)
+    token_path.write_text(token + "\n", encoding="utf-8", newline="\n")
+    _chmod_600(token_path)
+    return True
+
+
+def _resolve_user_spec(repo: Any, spec: str) -> Any | None:
+    """P1-2: look up a user by email, then username, then id."""
+    user = repo.get_by_email(spec)
+    if user is None:
+        user = repo.get_by_username(spec)
+    if user is None:
+        user = repo.get_by_id(spec)
+    return user
+
+
+def _ensure_init_pat(user_id: str, *, name: str = "cli-init") -> str | None:
+    """P1-6: create the init PAT only if no active one with this name exists.
+
+    Returns the plaintext PAT when newly minted, or None when reusing.
+    """
+    from llmwikify.foundation.auth import ApiKeyRepository
+
+    ak_repo = ApiKeyRepository()
+    if ak_repo.find_active(user_id, name) is not None:
+        return None
+    pat, pat_hash = generate_pat()
+    ak_repo.create(
+        user_id=user_id,
+        key_prefix=pat[:12],
+        key_hash=pat_hash,
+        name=name,
+        scopes="write",
+    )
+    return pat
+
+
 def run_auth_init(wiki: Any, config: dict, args: Any) -> int:
     """``llmwikify auth init --email <you@example.com>`` (interactive).
 
     Decision 14 + 15: uses prompt_first_admin from foundation.auth.
     Decision 25: PAT-only — no password prompt.
+    P1-1: second email → registration_closed (via auto_first_admin).
+    P1-3: does not overwrite a local_token owned by another user
+          unless ``--force``.
+    P1-6: PAT creation is idempotent (same user + name → reuse).
     """
-    from llmwikify.foundation.auth import prompt_first_admin
+    from llmwikify.foundation.auth import AuthError, prompt_first_admin
 
+    force = bool(getattr(args, "force", False))
     email = getattr(args, "email", None)
     if not email:
         try:
@@ -89,6 +165,8 @@ def run_auth_init(wiki: Any, config: dict, args: Any) -> int:
             return 1
         email = result.user_email
         token = result.token
+        pat = result.pat or None  # "" means an active init PAT was reused (P1-6)
+        user_id = result.user_id
     else:
         # Non-interactive: create user + issue PAT.
         from llmwikify.foundation.auth import (
@@ -100,46 +178,56 @@ def run_auth_init(wiki: Any, config: dict, args: Any) -> int:
         secret = get_secret()
         if not secret:
             secret = set_secret()
-        user = auto_first_admin(email=email)
+        try:
+            user = auto_first_admin(email=email)
+        except AuthError as exc:
+            print(f"[!] {exc.detail}", file=sys.stderr)
+            return 1
+        user_id = user.id
 
-        # Generate PAT + save.
-        pat, pat_hash = generate_pat()
-        ak_repo = ApiKeyRepository()
-        ak_repo.create(
-            user_id=user.id,
-            key_prefix=pat[:12],
-            key_hash=pat_hash,
-            name="cli-init",
-            scopes="write",
-        )
-        from llmwikify.foundation.auth.utils import save_pat
+        # P1-6: reuse an active cli-init PAT instead of stacking copies.
+        pat = _ensure_init_pat(user_id, name="cli-init")
+        if pat is not None:
+            from llmwikify.foundation.auth.utils import save_pat
 
-        save_pat(pat)
+            save_pat(pat)
 
         token = _sign_local_token(user, secret)
 
-    # Write to local_token with chmod 600.
-    token_path = _local_token_path()
-    ensure_dir_700(token_path.parent)
-    token_path.write_text(token + "\n", encoding="utf-8", newline="\n")
-    _chmod_600(token_path)
+    # P1-3: only adopt/replace local_token when it is ours (or --force).
+    wrote = _write_local_token(user_id, token, force=force)
 
     print("✓ JWT secret saved to OS keyring (llmwikify/jwt_secret)")
-    print(f"✓ First admin created: {email}")
-    print(f"✓ local_token saved to {token_path} (chmod 600)")
-    print()
-    print("Your access token (30d, scope=write, wikis=*):")
-    print(f"  {token}")
-    print()
-    print("WebUI: open http://127.0.0.1:8765 and paste your PAT")
-    print('CLI:   export LLMWIKIFY_AUTH_TOKEN="<the-token-above>"')
+    print(f"✓ First admin ready: {email}")
+    token_path = _local_token_path()
+    if wrote:
+        print(f"✓ local_token saved to {token_path} (chmod 600)")
+    else:
+        print(
+            f"✓ local_token left unchanged (owned by another user); "
+            f"use --force to replace {token_path}"
+        )
+    if pat:
+        print()
+        print("Your access token (30d, scope=write, wikis=*):")
+        print(f"  {token}")
+        print()
+        print("WebUI: open http://127.0.0.1:8765 and paste your PAT")
+        print('CLI:   export LLMWIKIFY_AUTH_TOKEN="<the-token-above>"')
+    else:
+        print()
+        print("Existing PAT reused (not re-printed); manage via `auth list-tokens`.")
+        print(f"local_token JWT:\n  {token}")
     return 0
 
 
 def run_auth_create_token(wiki: Any, config: dict, args: Any) -> int:
-    """``llmwikify auth create-token --name <label>``
+    """``llmwikify auth create-token --name <label> [--user <id>]``
 
-    Creates a new PAT, saves to local_token, prints once.
+    Creates a new PAT, optionally for ``--user`` (P1-2: email / username /
+    id; default = current local_token identity, else first user).
+    Writes local_token only when it already belongs to that user or is
+    absent (P1-3 — creating a token for a colleague must not steal yours).
     """
     from llmwikify.foundation.auth import (
         UserRepository,
@@ -147,27 +235,42 @@ def run_auth_create_token(wiki: Any, config: dict, args: Any) -> int:
     )
 
     name = getattr(args, "name", None) or "cli"
+    user_spec = getattr(args, "user", None)
 
-    # Find the first user (or from existing local_token).
     repo = UserRepository()
     user = None
-    try:
-        existing = _local_token_path().read_text(encoding="utf-8").strip()
-        if existing and existing != "local-mode-no-auth":
-            from llmwikify.foundation.auth import decode
 
-            try:
-                claims = decode(existing, require_secret())
-                if claims.sub.startswith("user:"):
-                    user = repo.get_by_id(claims.sub[len("user:") :])
-            except Exception:
-                logger.debug(
-                    "Could not decode existing token for user lookup", exc_info=True
-                )
-    except FileNotFoundError:
-        logger.debug("No existing local_token file found")
+    if user_spec:
+        # P1-2: explicit target wins over local_token / LIMIT 1 fallback.
+        user = _resolve_user_spec(repo, user_spec)
+        if user is None:
+            print(
+                f"[!] No user matching {user_spec!r} "
+                "(tried email, username, id).",
+                file=sys.stderr,
+            )
+            return 1
+    else:
+        # Find the first user (or from existing local_token).
+        try:
+            existing = _local_token_path().read_text(encoding="utf-8").strip()
+            if existing and existing != "local-mode-no-auth":
+                from llmwikify.foundation.auth import decode
+
+                try:
+                    claims = decode(existing, require_secret())
+                    if claims.sub.startswith("user:"):
+                        user = repo.get_by_id(claims.sub[len("user:") :])
+                except Exception:
+                    logger.debug(
+                        "Could not decode existing token for user lookup",
+                        exc_info=True,
+                    )
+        except FileNotFoundError:
+            logger.debug("No existing local_token file found")
 
     if user is None:
+        # Fallback: first row (legacy behaviour when no local_token).
         for row in repo._connect().execute("SELECT * FROM users LIMIT 1"):
             from llmwikify.foundation.auth.db import _row_to_user
 
@@ -189,19 +292,22 @@ def run_auth_create_token(wiki: Any, config: dict, args: Any) -> int:
         scopes="write",
     )
 
-    # Also sign a JWT and save to local_token.
+    # Sign a JWT for this user; P1-3: do not clobber someone else's token.
     token = _sign_local_token(user, require_secret())
-    token_path = _local_token_path()
-    ensure_dir_700(token_path.parent)
-    token_path.write_text(token + "\n", encoding="utf-8", newline="\n")
-    _chmod_600(token_path)
+    wrote = _write_local_token(user.id, token, force=False)
 
-    print(f"✓ PAT created: {ak.key_prefix}... ({name})")
+    print(f"✓ PAT created: {ak.key_prefix}... ({name}) for {user.email}")
     print()
     print("Your PAT (save it — shown once):")
     print(f"  {pat}")
     print()
-    print(f"✓ local_token updated: {token_path}")
+    if wrote:
+        print(f"✓ local_token updated: {_local_token_path()}")
+    else:
+        print(
+            "✓ local_token left unchanged (belongs to another user); "
+            "run `auth token` to switch identity."
+        )
     return 0
 
 
@@ -405,10 +511,19 @@ def setup_auth_parser(subparsers: Any) -> None:
     # init
     p_init = auth_sub.add_parser("init", help="Create the first admin user")
     p_init.add_argument("--email", help="Email (omit for interactive prompt)")
+    p_init.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite local_token even if it belongs to another user",
+    )
 
     # create-token
     p_ct = auth_sub.add_parser("create-token", help="Create a new PAT")
     p_ct.add_argument("--name", help="Label for this token (e.g. 'laptop')")
+    p_ct.add_argument(
+        "--user",
+        help="Target user (email / username / id; default: local_token identity)",
+    )
 
     # list-tokens
     auth_sub.add_parser("list-tokens", help="List all PATs")

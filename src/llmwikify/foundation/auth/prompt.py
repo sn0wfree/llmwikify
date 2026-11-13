@@ -121,26 +121,30 @@ def prompt_first_admin(
     if not secret:
         secret = set_secret()
 
-    # Create the user (idempotent on email).
+    # Create the user (idempotent on email; P1-1 → registration_closed
+    # for a new email once an admin exists — raised to the caller).
     user = auto_first_admin(email=email)
 
-    # Generate a PAT for the user (decision 25).
+    # Generate a PAT for the user (decision 25). P1-6: reuse an active
+    # PAT with the same name instead of stacking a new one each run.
     from ._pat import generate_pat
     from .db import ApiKeyRepository
     from .utils import save_pat
 
-    pat, pat_hash = generate_pat()
     ak_repo = ApiKeyRepository()
-    ak_repo.create(
-        user_id=user.id,
-        key_prefix=pat[:12],
-        key_hash=pat_hash,
-        name="init",
-        scopes="write",
-    )
-
-    # Save PAT to file for later retrieval (cat ~/.llmwikify/pat).
-    save_pat(pat)
+    existing = ak_repo.find_active(user.id, "init")
+    if existing is not None:
+        pat = ""  # reusing — plaintext of the old PAT is not recoverable
+    else:
+        pat, pat_hash = generate_pat()
+        ak_repo.create(
+            user_id=user.id,
+            key_prefix=pat[:12],
+            key_hash=pat_hash,
+            name="init",
+            scopes="write",
+        )
+        save_pat(pat)
 
     claims = TokenClaims.new(
         sub=f"user:{user.id}",

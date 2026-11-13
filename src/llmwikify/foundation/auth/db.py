@@ -264,6 +264,22 @@ class UserRepository:
             ).fetchone()
         return _row_to_user(row) if row else None
 
+    def get_by_username(self, username: str) -> User | None:
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM users WHERE username = ?",
+                (username,),
+            ).fetchone()
+        return _row_to_user(row) if row else None
+
+    def has_admin(self) -> bool:
+        """True iff at least one ``is_first_admin`` row exists (P1-1)."""
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT 1 FROM users WHERE is_first_admin = 1 LIMIT 1"
+            ).fetchone()
+            return row is not None
+
     def create(
         self,
         email: str,
@@ -340,13 +356,25 @@ def auto_first_admin(
       - serve auto-init prompt (decision 14) when --host is non-loopback
         and no admin exists yet.
 
-    Returns the User. Raises AuthError on email collision.
+    P1-1: once any admin exists, a *new* email is rejected with
+    ``registration_closed`` — same policy as HTTP ``POST /api/auth/register``.
+    Re-running with the already-known email stays idempotent.
+
+    Returns the User. Raises AuthError on registration_closed / email collision.
     """
     repo = UserRepository(db_path=db_path)
-    if repo.get_by_email(email) is not None:
-        existing = repo.get_by_email(email)
-        if existing is not None:
-            return existing
+    existing = repo.get_by_email(email)
+    if existing is not None:
+        return existing
+    if repo.has_admin():
+        raise AuthError(
+            code="registration_closed",
+            detail=(
+                "An admin already exists. Use `llmwikify auth create-token "
+                "--user <email>` to issue tokens for other users."
+            ),
+            status_code=403,
+        )
     return repo.create(
         email=email,
         is_first_admin=True,
@@ -489,6 +517,22 @@ class ApiKeyRepository:
                 (user_id,),
             ).fetchall()
         return [_row_to_api_key(r) for r in rows]
+
+    def find_active(self, user_id: str, name: str) -> ApiKey | None:
+        """First active (not revoked, not expired) key for user+name (P1-6)."""
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT * FROM api_keys
+                WHERE user_id = ?
+                  AND name = ?
+                  AND revoked_at IS NULL
+                  AND (expires_at IS NULL OR expires_at > datetime('now'))
+                LIMIT 1
+                """,
+                (user_id, name),
+            ).fetchone()
+        return _row_to_api_key(row) if row else None
 
     def touch_last_used(self, key_id: str) -> None:
         """Update last_used_at to now."""

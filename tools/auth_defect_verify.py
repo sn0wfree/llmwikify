@@ -99,6 +99,11 @@ def probe_p1_6() -> tuple[bool, str]:
         names = [r[0] for r in rows]
         if len(names) >= 3 and len(set(names)) == 1:
             return True, f"{len(names)} PATs, all named {names[0]!r}"
+        if len(names) == 1:
+            return False, (
+                f"NOT reproduced — only {len(names)} PAT named {names[0]!r} "
+                "(P1-6 idempotent)"
+            )
         return False, f"found {len(names)} PATs, names={names}"
     finally:
         shutil.rmtree(home, ignore_errors=True)

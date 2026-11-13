@@ -268,6 +268,21 @@ class TestAutoFirstAdmin:
         u2 = auto_first_admin(email="idemp@example.com", db_path=db)
         assert u1.id == u2.id
 
+    def test_second_email_registration_closed_p1_1(self):
+        """P1-1: new email after an admin exists → AuthError registration_closed."""
+        db = TEST_HOME / "auto3.db"
+        first = auto_first_admin(email="one@example.com", db_path=db)
+        assert first.is_first_admin is True
+
+        with pytest.raises(AuthError) as exc:
+            auto_first_admin(email="two@example.com", db_path=db)
+        assert exc.value.code == "registration_closed"
+        assert exc.value.status_code == 403
+
+        # Still idempotent on the original email.
+        again = auto_first_admin(email="one@example.com", db_path=db)
+        assert again.id == first.id
+
 
 # ─── ApiKeyRepository ────────────────────────────────────────────
 

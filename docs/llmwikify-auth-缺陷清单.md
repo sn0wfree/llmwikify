@@ -24,6 +24,17 @@
 >      `testserver` 不是回环地址，会走 401 分支（脚本已处理）。
 >
 > **复核结论**：24 条仍成立，1 条（P0-4）已修，0 条误报。
+>
+> ## 修复批注（2026-11-13，CLI 组）
+>
+> | 条目 | 状态 | commit 主题 |
+> |---|---|---|
+> | P1-1 | ✅ 已修 | `auto_first_admin` 新邮箱 → `registration_closed` |
+> | P1-2 | ✅ 已修 | `create-token --user`（email/username/id） |
+> | P1-3 | ✅ 已修 | `local_token` 归属保护 + `init --force` |
+> | P1-6 | ✅ 已修 | 同名活跃 PAT 复用，不再堆积 |
+>
+> 仍开放：P1-5（username 撞名）、P1-7（`/api/auth/me` 200）、P2 全部。
 
 ---
 
@@ -163,7 +174,11 @@ _SECRET_FILE = Path("~/.llmwikify/jwt_secret").expanduser()   # ← 模块级常
 
 ## 2. P1 · 功能缺陷 / 越界操作
 
-### P1-1 ★ `auto_first_admin()` 不检查是否已有 admin ⇒ CLI 可造多个管理员
+### P1-1 ★ `auto_first_admin()` 不检查是否已有 admin ⇒ CLI 可造多个管理员 ✅ **已修**
+
+> **2026-11-13 修**：`auto_first_admin` 在已有 admin 时对**新邮箱**抛
+> `AuthError(code="registration_closed")`（对齐 HTTP `/register`）；同邮箱仍幂等。
+> 测试：`test_second_email_registration_closed_p1_1`、`test_init_second_email_rejected_p1_1`。
 
 **位置**：`foundation/auth/db.py:260-282` —— 名字与 docstring 说"first admin"，实现只对**同邮箱**幂等：
 
@@ -179,7 +194,11 @@ def auto_first_admin(email, *, db_path=None) -> User:
 
 **与 HTTP 侧策略不一致**：`auth_routes.py:70-77` 的 `/register` 在有用户后正确返回 403 `registration_closed`。⇒ **CLI 侧是敞开的注册通道，HTTP 侧关着**。
 
-### P1-2 ★ `create-token` 无法指定用户 ⇒ 靠 local_token 隐式决定归属
+### P1-2 ★ `create-token` 无法指定用户 ⇒ 靠 local_token 隐式决定归属 ✅ **已修**
+
+> **2026-11-13 修**：加 `--user`（email → username → id 解析）；未知目标 exit 1。
+> 给他人发 PAT **不覆盖**调用者的 `local_token`（P1-3 同规则）。
+> 测试：`test_create_token_explicit_user_p1_2`。
 
 **位置**：`interfaces/cli/commands/auth.py:136-163`
 
@@ -188,7 +207,10 @@ def auto_first_admin(email, *, db_path=None) -> User:
 ⇒ **没有 `--user` 参数**。给指定用户发 PAT 的唯一办法是**先 `auth init --email <对方>` 把 local_token 切成对方**（这又触发 P1-1 和 P1-3）。
 ⇒ 在**没有 local_token 的新机器**上跑 `create-token`，PAT 会发给**第一个用户**，不是你想给的人。
 
-### P1-3 ★ `auth init` 覆盖 `local_token` ⇒ 把当前身份切走
+### P1-3 ★ `auth init` 覆盖 `local_token` ⇒ 把当前身份切走 ✅ **已修**
+
+> **2026-11-13 修**：`_write_local_token` 仅在「无 token / 同用户 / `--force` / 不可读」时写入。
+> `create-token` 同规则。测试：`test_init_keeps_foreign_local_token_p1_3`。
 
 **实测**：先 `auth init --email you@x`（local_token = you 的 JWT），再 `auth init --email bob@x` ⇒ **local_token 变成 bob 的 JWT**，且输出里仍打印 "First admin created: bob@x"。
 
@@ -217,7 +239,10 @@ return safe[:64] or "user"        # ← 没有任何去重/加后缀
 
 **实测**（`tools/auth_defect_verify.py` ④）：`alice@example.com` → username `alice`；再 `alice@other.com` ⇒ **抛裸 `sqlite3.IntegrityError: UNIQUE constraint failed: users.username`**（不是 `AuthError`，没有友好报错、没有可诊断信息）。
 
-### P1-6 ★ 重复 `auth init` 每次都新增一个同名 PAT
+### P1-6 ★ 重复 `auth init` 每次都新增一个同名 PAT ✅ **已修**
+
+> **2026-11-13 修**：`ApiKeyRepository.find_active(user, name)`；有活跃同名 PAT 则复用。
+> CLI 用 `cli-init`，交互 prompt 用 `init`。复现脚本该探针现报 NOT reproduced。
 
 **实测**（`tools/auth_defect_verify.py` ③）：同邮箱跑 3 次 ⇒ **3 个 PAT，名字全是 `cli-init`**。`auto_first_admin` 对用户幂等，但 PAT 不幂等 ⇒ 反复 init 会堆积无法区分的凭据。
 
