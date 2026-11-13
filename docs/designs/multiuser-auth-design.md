@@ -520,7 +520,7 @@ auth can-i --user U --wiki W --write  → 只读自检（K8s kubectl auth can-i�
 | **P3b** | 组管理 CLI（`auth group create/list/add/remove` + `grant --group`） | 低 | P1 P3 |
 | **P4** | 裁决接入（实时上界 + 快照比对 + disabled 检查 + fail-closed） | **中高**（动中间件） | P3（**D6 已定为 A**） |
 | **P5** | WebUI：授权管理页 + `/me` 返回权限矩阵 | 中 | P3 |
-| **P6** | share token 与 grants 的关系（roadmap Phase 3） | — | 待定（Q5） |
+| **P6** | share token（roadmap Phase 3）—— **独立表 `share_tokens`**（Q5 = a） | 低 | 可延后，与 P1–P5 解耦 |
 
 **建议顺序强调**：P1–P3 是**纯增量**（不动裁决路径），可先落地再评审 P4 的裁决策略。
 
