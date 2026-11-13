@@ -250,17 +250,16 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
     Verifies requests using (in priority order):
       1. httpOnly cookie ``llmwikify_token`` (browser path)
       2. ``Authorization: Bearer <token>`` (CLI/curl)
-      3. ``?token=<X>`` query param (legacy static-key fallback only;
-         JWT-in-query-param is intentionally NOT supported because
-         it leaks via referer logs — see decision 1 + Phase 3 share
-         for proper share-token handling)
+      3. WebSocket handshake may pass ``?token=<api_key>`` (WS-only;
+         HTTP ``_extract_token`` intentionally does NOT read query
+         params — JWT-in-query leaks via referer logs)
 
     Decisions enforced:
       - 1   GET  (read)  + public_read=True  + no token    → 200
                   POST (write) + no token                    → 403
       - 4   scope based on HTTP method (GET=read, others=write)
-      - 6   cookie secure=False (MVP) — TLS termination
-                expected at reverse proxy in production
+      - 6   cookie secure=True on HTTPS, False on plain HTTP
+                (P2-2; TLS termination at reverse proxy in production)
       - 7   wikis claim validated per-request against path
                 /api/wiki/{wiki_id}/...
       - 12  local mode (loopback bind) → middleware is a
@@ -451,7 +450,7 @@ def _deny_no_token(method: str, public_read: bool) -> JSONResponse:
     return _deny(
         403,
         "auth_required",
-        f"{method} requires authentication; POST /auth/login first.",
+        f"{method} requires authentication; POST /auth/verify first.",
     )
 
 

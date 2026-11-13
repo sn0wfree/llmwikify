@@ -156,8 +156,9 @@ class User:
 class UserRepository:
     """Thin SQLite-backed repository for the users table.
 
-    All writes use an atomic tempfile+rename pattern so a Ctrl-C during
-    `auth init` cannot leave a partial auth.db (decision §1.8 risk row).
+    Writes use a single SQLite transaction (rollback journal): a Ctrl-C
+    mid-write rolls back cleanly. No file-level tempfile+rename — that
+    would invalidate WAL mode (decision §1.8 risk row).
     """
 
     def __init__(self, db_path: Path | None = None) -> None:
@@ -185,11 +186,11 @@ class UserRepository:
     def _atomic_write(self) -> Iterator[sqlite3.Connection]:
         """Yields a connection, commits atomically on success.
 
-        We use a single in-memory transaction per write call. SQLite's
-        default journal mode is rollback, so a Ctrl-C mid-write rolls
-        back cleanly. We do NOT use the tempfile+rename trick at the
-        file level here — that would invalidate the WAL mode we're
-        using (decision: keep things simple for a single-table DB).
+        Single in-memory transaction per write call. SQLite default
+        journal mode is rollback, so a Ctrl-C mid-write rolls back
+        cleanly. We do NOT use a file-level tempfile+rename trick —
+        that would invalidate WAL mode (keep it simple for a
+        single-table DB).
         """
         conn = self._connect()
         try:
@@ -280,6 +281,24 @@ class UserRepository:
             ).fetchone()
             return row is not None
 
+    def first_user(self) -> User | None:
+        """Lowest-id user row (CLI fallback when no local_token). P2-13."""
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM users ORDER BY created_at ASC, id ASC LIMIT 1"
+            ).fetchone()
+        return _row_to_user(row) if row else None
+
+    def _unique_username(self, base: str) -> str:
+        """P1-5: append ``_2``, ``_3``… until the username is free."""
+        candidate = base
+        n = 2
+        while self.get_by_username(candidate) is not None:
+            suffix = f"_{n}"
+            candidate = f"{base[: 64 - len(suffix)]}{suffix}"
+            n += 1
+        return candidate
+
     def create(
         self,
         email: str,
@@ -290,6 +309,8 @@ class UserRepository:
         """Create a new user. Raises AuthError if email is taken.
 
         No password — PAT-only auth (decision 25).
+        P1-5: derived/explicit usernames are de-duplicated with a numeric
+        suffix; a concurrent UNIQUE clash is wrapped as AuthError (P2-11).
         """
         if self.get_by_email(email) is not None:
             raise AuthError(
@@ -300,15 +321,30 @@ class UserRepository:
         user_id = uuid.uuid4().hex
         if username is None:
             username = _derive_username(email) if is_first_admin else None
-        with self._atomic_write() as conn:
-            conn.execute(
-                """
-                INSERT INTO users
-                    (id, email, username, is_first_admin)
-                VALUES (?, ?, ?, ?)
-                """,
-                (user_id, email, username, 1 if is_first_admin else 0),
-            )
+        if username is not None:
+            username = self._unique_username(username)
+        try:
+            with self._atomic_write() as conn:
+                conn.execute(
+                    """
+                    INSERT INTO users
+                        (id, email, username, is_first_admin)
+                    VALUES (?, ?, ?, ?)
+                    """,
+                    (user_id, email, username, 1 if is_first_admin else 0),
+                )
+        except sqlite3.IntegrityError as exc:
+            if "username" in str(exc):
+                raise AuthError(
+                    code="username_taken",
+                    detail=f"Username {username!r} already exists.",
+                    status_code=409,
+                ) from exc
+            raise AuthError(
+                code="email_taken",
+                detail=f"User with email {email!r} already exists.",
+                status_code=409,
+            ) from exc
         created = self.get_by_id(user_id)
         if created is None:
             raise AuthError(
@@ -496,14 +532,20 @@ class ApiKeyRepository:
         return _row_to_api_key(row) if row else None
 
     def get_by_hash(self, key_hash: str) -> ApiKey | None:
-        """Look up an active (not revoked, not expired) key by its hash."""
+        """Look up an active (not revoked, not expired) key by its hash.
+
+        P2-5: ``expires_at`` is a unix-epoch integer string (the only
+        format we write); NULL = never expires. Non-numeric legacy
+        values CAST to 0 and count as expired.
+        """
         with self._connect() as conn:
             row = conn.execute(
                 """
                 SELECT * FROM api_keys
                 WHERE key_hash = ?
                   AND revoked_at IS NULL
-                  AND (expires_at IS NULL OR expires_at > datetime('now'))
+                  AND (expires_at IS NULL
+                       OR CAST(expires_at AS INTEGER) > CAST(strftime('%s','now') AS INTEGER))
                 """,
                 (key_hash,),
             ).fetchone()
@@ -519,7 +561,10 @@ class ApiKeyRepository:
         return [_row_to_api_key(r) for r in rows]
 
     def find_active(self, user_id: str, name: str) -> ApiKey | None:
-        """First active (not revoked, not expired) key for user+name (P1-6)."""
+        """First active (not revoked, not expired) key for user+name (P1-6).
+
+        ``expires_at`` is a unix-epoch integer string (P2-5); NULL = never.
+        """
         with self._connect() as conn:
             row = conn.execute(
                 """
@@ -527,7 +572,8 @@ class ApiKeyRepository:
                 WHERE user_id = ?
                   AND name = ?
                   AND revoked_at IS NULL
-                  AND (expires_at IS NULL OR expires_at > datetime('now'))
+                  AND (expires_at IS NULL
+                       OR CAST(expires_at AS INTEGER) > CAST(strftime('%s','now') AS INTEGER))
                 LIMIT 1
                 """,
                 (user_id, name),

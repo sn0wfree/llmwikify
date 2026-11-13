@@ -167,6 +167,17 @@ class TestJWT:
         with pytest.raises(pyjwt.InvalidAudienceError):
             decode(token, secret)
 
+    def test_issuer_enforced(self):
+        """P2-10: decode() must reject a foreign iss claim."""
+        import jwt as pyjwt
+
+        secret = b"x" * 32
+        c = TokenClaims.new(sub="user:abc", scope="read", wikis=["*"], ttl_seconds=60)
+        c.iss = "evil-issuer"
+        token = encode(c, secret)
+        with pytest.raises(pyjwt.InvalidIssuerError):
+            decode(token, secret)
+
     def test_expired(self):
         import jwt as pyjwt
 
@@ -223,6 +234,18 @@ class TestUserRepository:
         with pytest.raises(AuthError) as exc_info:
             repo.create(email="dup@example.com")
         assert exc_info.value.code == "email_taken"
+
+    def test_username_collision_gets_suffix_p1_5(self):
+        """P1-5: same local-part → suffixed username, no bare IntegrityError."""
+        repo = UserRepository(db_path=TEST_HOME / "auth_p15.db")
+        u1 = repo.create(email="alice@example.com", is_first_admin=True)
+        u2 = repo.create(email="alice@other.com", is_first_admin=True)
+        assert u1.username is not None
+        assert u2.username is not None
+        assert u1.username != u2.username
+        assert u2.username.startswith(u1.username)
+        assert repo.get_by_username(u1.username).id == u1.id
+        assert repo.get_by_username(u2.username).id == u2.id
 
     def test_user_has_no_password_hash(self):
         repo = UserRepository(db_path=TEST_HOME / "auth4.db")

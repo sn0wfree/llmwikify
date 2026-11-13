@@ -182,10 +182,10 @@ class WikiServer:
 
             self._agent_service = get_agent_service()
 
-            # Phase 2a: register auth routes (POST /auth/login, GET /auth/me)
-            # Mounted here (not in routes.py) so the WikiRegistry is
-            # already attached to app.state when auth/login runs and
-            # /auth/me can read it for the wikis claim.
+            # Phase 2a: register auth routes (POST /auth/register|verify,
+            # GET /auth/me). Mounted here (not in routes.py) so the
+            # WikiRegistry is already attached to app.state when auth
+            # runs and /auth/me can read it for the wikis claim.
             from llmwikify.interfaces.server.http.auth_routes import (
                 auth_router,
             )
@@ -484,12 +484,17 @@ class WikiServer:
             lifespan=lifespan,
         )
 
-        # CORS support
+        # CORS support.
+        # P2-4: browsers reject Access-Control-Allow-Origin: * together
+        # with credentials, so the pair is never both useful. Cookies
+        # are same-origin (WebUI is served from this process); external
+        # clients use Authorization: Bearer. Therefore allow `*` without
+        # credentials.
         if cors_enabled:
             app.add_middleware(
                 CORSMiddleware,
                 allow_origins=["*"],
-                allow_credentials=True,
+                allow_credentials=False,
                 allow_methods=["*"],
                 allow_headers=["*"],
             )

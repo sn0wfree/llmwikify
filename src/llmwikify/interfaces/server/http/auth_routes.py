@@ -209,7 +209,8 @@ def _build_router() -> APIRouter:
             max_age=COOKIE_MAX_AGE,
             httponly=True,
             samesite="lax",
-            secure=False,
+            # P2-2: mark Secure only on HTTPS so local HTTP keeps working.
+            secure=request.url.scheme == "https",
             path="/",
         )
 
@@ -299,11 +300,22 @@ def _build_router() -> APIRouter:
         request: Request,
         llmwikify_token: str | None = Cookie(default=None),
     ) -> dict[str, Any]:
-        """Return identity of current user (or local-mode marker)."""
+        """Return identity of current user (or local-mode marker).
+
+        Accepts the httpOnly cookie or ``Authorization: Bearer`` (P1-7:
+        WebUI validates the localStorage JWT via Bearer — a bare cookie
+        check never saw it, so stale tokens were never cleared).
+        """
         host = _resolve_effective_host(request)
         local_mode = is_local_default(host)
 
-        if not llmwikify_token:
+        token = llmwikify_token
+        if not token:
+            auth_header = request.headers.get("Authorization", "")
+            if auth_header.lower().startswith("bearer "):
+                token = auth_header[7:].strip() or None
+
+        if not token:
             if local_mode:
                 return {
                     "authenticated": False,
@@ -324,7 +336,7 @@ def _build_router() -> APIRouter:
             )
 
         if (
-            llmwikify_token == "local-mode-no-auth"
+            token == "local-mode-no-auth"
         ):  # noqa: S105 — sentinel, not a password
             return {
                 "authenticated": True,
@@ -338,7 +350,7 @@ def _build_router() -> APIRouter:
             }
 
         try:
-            claims = decode(llmwikify_token, _get_jwt_secret())
+            claims = decode(token, _get_jwt_secret())
         except Exception as exc:
             raise HTTPException(
                 status_code=401,
@@ -367,6 +379,11 @@ def _build_router() -> APIRouter:
                     "detail": "Token refers to a deleted user.",
                 },
             )
+        # P2-7: record last_login on a successful identity check.
+        try:
+            UserRepository().touch_last_login(user.id)
+        except Exception:
+            logger.debug("touch_last_login failed", exc_info=True)
         return {
             "authenticated": True,
             "user": _user_to_dict(user, claims, local_mode=False),

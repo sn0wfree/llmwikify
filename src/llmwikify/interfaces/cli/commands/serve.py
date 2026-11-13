@@ -220,11 +220,7 @@ def run_serve(wiki: Any, config: dict, args: Any) -> int:
         _repo = UserRepository(db_path=auth_db_path())
         _first_user = None
         try:
-            for row in _repo._connect().execute("SELECT * FROM users LIMIT 1"):
-                from llmwikify.foundation.auth.db import _row_to_user
-
-                _first_user = _row_to_user(row)
-                break
+            _first_user = _repo.first_user()
         except Exception:
             logger.debug("Could not query users table for first user lookup")
         if _first_user:

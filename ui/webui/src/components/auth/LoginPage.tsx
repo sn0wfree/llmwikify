@@ -66,12 +66,10 @@ export function LoginPage() {
         return;
       }
       const data = await res.json();
-      // PAT is returned once — store in localStorage for immediate use.
+      // PAT is returned once — shown to the user; do NOT persist it in
+      // localStorage (P2-1). Session JWT lives in the zustand store
+      // (same origin + httponly cookie from /auth/verify).
       login(data.access_token, data.user);
-      // Also store the PAT for future sessions.
-      if (data.pat) {
-        localStorage.setItem('llmwikify_pat', data.pat);
-      }
       navigate('/', { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Network error');

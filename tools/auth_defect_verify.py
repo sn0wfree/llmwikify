@@ -51,20 +51,26 @@ def _fresh_home() -> Path:
 
 
 def probe_p1_5() -> tuple[bool, str]:
-    """Duplicate username → bare IntegrityError instead of AuthError."""
+    """Duplicate username → bare IntegrityError instead of AuthError / suffix."""
     from llmwikify.foundation.auth.db import UserRepository
 
     home = _fresh_home()
     try:
         repo = UserRepository()
-        repo.create("alice@example.com", is_first_admin=True)
+        u1 = repo.create("alice@example.com", is_first_admin=True)
         try:
-            repo.create("alice@other.com", is_first_admin=True)
+            u2 = repo.create("alice@other.com", is_first_admin=True)
         except sqlite3.IntegrityError as exc:  # the defect
             return True, f"bare IntegrityError raised: {exc}"
-        except Exception as exc:  # noqa: BLE001 — anything else means fixed
+        except Exception as exc:  # noqa: BLE001 — AuthError etc. means fixed
             return False, f"raised {type(exc).__name__} (defect not reproduced): {exc}"
-        return False, "second create succeeded — no collision at all"
+        # Fixed path: second create succeeds with a suffixed username.
+        if u2.username and u2.username != u1.username:
+            return False, (
+                f"NOT reproduced — username de-duplicated: "
+                f"{u1.username!r} / {u2.username!r}"
+            )
+        return False, f"second create succeeded with username={u2.username!r}"
     finally:
         shutil.rmtree(home, ignore_errors=True)
 
@@ -184,7 +190,14 @@ def probe_p0_3() -> tuple[bool, str]:
 
 
 def probe_p1_7() -> tuple[bool, str]:
-    """Local mode ``GET /api/auth/me`` → HTTP 200 + authenticated=false."""
+    """Invalid Bearer on ``GET /api/auth/me`` must be 401 (frontend can clear).
+
+    Historical defect: local mode returned 200 + ``authenticated:false``
+    for *any* unauthenticated call, and ``/me`` ignored ``Authorization``,
+    so a stale localStorage JWT was never rejected. Fixed behaviour:
+    a present-but-invalid Bearer → 401; no credentials at all in local
+    mode still returns the local-trust marker (decision 12).
+    """
     from fastapi.testclient import TestClient
 
     from llmwikify.interfaces.server.core import WikiServer
@@ -196,7 +209,6 @@ def probe_p1_7() -> tuple[bool, str]:
     try:
         from llmwikify import Wiki
 
-        # The server requires at least one registered wiki.
         wiki_root = Path(tempfile.mkdtemp(prefix="llmwikify_p17_wiki_"))
         wiki = Wiki(wiki_root)
         wiki.init(agent="generic")
@@ -213,18 +225,22 @@ def probe_p1_7() -> tuple[bool, str]:
             is_default=True,
         )
         server = WikiServer(registry, local_mode=True, public_read=True)
-        # __init__ builds self.app and mounts the auth routes on it;
-        # _build_app() alone would return a bare app without them.
         app = server.app
-        # base_url must be a loopback host: /api/auth/me branches on
-        # is_local_default(host), and TestClient's default Host is
-        # "testserver" which is not loopback.
         client = TestClient(app, base_url="http://127.0.0.1")
         client.__enter__()
-        resp = client.get("/api/auth/me")
-        if resp.status_code == 200 and resp.json().get("authenticated") is False:
-            return True, "HTTP 200, authenticated=false (stale token never cleared)"
-        return False, f"HTTP {resp.status_code}, body={resp.text[:120]!r}"
+
+        # Defect probe: invalid Bearer was previously ignored (cookie-only
+        # /me) → 200 authenticated=false. Fixed → 401.
+        resp = client.get(
+            "/api/auth/me",
+            headers={"Authorization": "Bearer not-a-real-jwt"},
+        )
+        if resp.status_code == 401:
+            return False, "NOT reproduced — invalid Bearer → 401 (P1-7 fixed)"
+        return True, (
+            f"HTTP {resp.status_code} for invalid Bearer "
+            f"(body={resp.text[:80]!r}) — stale token not rejected"
+        )
     except Exception as exc:  # noqa: BLE001
         return False, f"harness error: {type(exc).__name__}: {exc}"
     finally:

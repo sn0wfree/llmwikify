@@ -34,7 +34,26 @@
 > | P1-3 | ✅ 已修 | `local_token` 归属保护 + `init --force` |
 > | P1-6 | ✅ 已修 | 同名活跃 PAT 复用，不再堆积 |
 >
-> 仍开放：P1-5（username 撞名）、P1-7（`/api/auth/me` 200）、P2 全部。
+> ## 修复批注（2026-11-13，P1-5 / P1-7 / P2）
+>
+> | 条目 | 状态 | 说明 |
+> |---|---|---|
+> | P1-5 | ✅ 已修 | `_unique_username` 加 `_2`/`_3` 后缀；并发 UNIQUE → `AuthError` |
+> | P1-7 | ✅ 已修 | `/me` 认 Bearer；无效 token → 401；前端带 Bearer 并在 `authenticated:false` 时 clear |
+> | P2-1 | ✅ 已修 | 不再写 `llmwikify_pat`（JWT 仍在 zustand persist，decision 20） |
+> | P2-2 | ✅ 已修 | cookie `secure = (scheme == https)` |
+> | P2-4 | ✅ 已修 | CORS `allow_credentials=False` + `origins=*`（同源 cookie 不走 CORS） |
+> | P2-5 | ✅ 已修 | `expires_at` 按 unix-epoch 整数比较（NULL=永不过期） |
+> | P2-6 | ✅ 已修 | 类/`_atomic_write` docstring 与实现一致（事务，非 tempfile+rename） |
+> | P2-7 | ✅ 已修 | `/me` 成功时 `touch_last_login` |
+> | P2-8 | ✅ 已修 | 报错改为 `POST /auth/verify first` |
+> | P2-10 | ✅ 已修 | `decode(..., issuer=ISSUER)` |
+> | P2-11 | ✅ 已修 | `create()` 捕获 `IntegrityError` → `AuthError` |
+> | P2-13 | ✅ 已修 | 公开 `UserRepository.first_user()`，CLI/serve 不再调 `_connect` |
+> | 文档漂移 | ✅ 已修 | middleware `?token=` 说明、`core.py` `/auth/login` 注释 |
+> | P2-3 | ⏸ 未修 | logout 吊销需服务端 denylist（JWT 无状态），另开任务 |
+> | P2-9 | ⏸ 有意保留 | `is_local_default(None/"" )==True` 是 decision 13「未指定 bind=本地」；HTTP 路径经 `_resolve_effective_host` 回落 `env_host()`，不会裸传 None |
+> | P2-12 | ⏸ 未修 | 每次实例化跑 `_init_schema`（性能，非安全） |
 
 ---
 
@@ -226,7 +245,10 @@ claims = TokenClaims.new(sub=f"user:{user.id}", scope="write", wikis=["*"])
 
 ⇒ 任何本地用户跑一次 `auth token`，就拿到**全 wiki 写权限**的 owner 级 token（与该用户是不是 admin 无关）。
 
-### P1-5 ★ `_derive_username` 不去重（docstring 说会去重）
+### P1-5 ★ `_derive_username` 不去重（docstring 说会去重） ✅ **已修**
+
+> **2026-11-13 修**：`create()` 经 `_unique_username` 加 `_2`/`_3`…；并发 UNIQUE
+> 包成 `AuthError(username_taken|email_taken)`。测试 `test_username_collision_gets_suffix_p1_5`。
 
 **位置**：`foundation/auth/db.py:56-65`
 
@@ -246,7 +268,11 @@ return safe[:64] or "user"        # ← 没有任何去重/加后缀
 
 **实测**（`tools/auth_defect_verify.py` ③）：同邮箱跑 3 次 ⇒ **3 个 PAT，名字全是 `cli-init`**。`auto_first_admin` 对用户幂等，但 PAT 不幂等 ⇒ 反复 init 会堆积无法区分的凭据。
 
-### P1-7 ★ 本地模式下 `/api/auth/me` 对无效凭据返回 200 ⇒ 前端永远不清登录态
+### P1-7 ★ 本地模式下 `/api/auth/me` 对无效凭据返回 200 ⇒ 前端永远不清登录态 ✅ **已修**
+
+> **2026-11-13 修**：`/me` 同时读 cookie 与 `Authorization: Bearer`；无效 Bearer → 401。
+> `ProtectedRoute` 带 Bearer 校验，`!r.ok` 或 `authenticated===false` 时 `clearToken`。
+> 复现脚本该探针现报 NOT reproduced。
 
 **位置**：`interfaces/server/http/auth_routes.py:297-317` + `ui/webui/src/components/auth/ProtectedRoute.tsx:20-25`
 
@@ -269,6 +295,9 @@ fetch('/api/auth/me').then((r) => { if (!r.ok) clearToken(); })   // 200 ⇒ 永
 ---
 
 ## 3. P2 · 安全姿态 / 可维护性
+
+> **2026-11-13**：P2-1/2/4/5/6/7/8/10/11/13 + 文档漂移已修（见页首修复批注）。
+> 仍开放：P2-3（logout 吊销）、P2-9（有意保留）、P2-12（schema 性能）。
 
 | # | 问题 | 位置 | 说明 |
 |---|---|---|---|

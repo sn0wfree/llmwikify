@@ -16,10 +16,22 @@ export function ProtectedRoute() {
       setChecking(false);
       return;
     }
-    // Validate session with server.
-    fetch('/api/auth/me')
-      .then((r) => {
-        if (!r.ok) clearToken();
+    // Validate the localStorage JWT with the server (P1-7): send it as
+    // Bearer and clear when the server says the session is gone.
+    fetch('/api/auth/me', {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(async (r) => {
+        if (!r.ok) {
+          clearToken();
+          return;
+        }
+        try {
+          const data = await r.json();
+          if (data && data.authenticated === false) clearToken();
+        } catch {
+          clearToken();
+        }
       })
       .catch(() => {})
       .finally(() => setChecking(false));

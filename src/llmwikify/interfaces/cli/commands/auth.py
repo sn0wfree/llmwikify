@@ -269,13 +269,9 @@ def run_auth_create_token(wiki: Any, config: dict, args: Any) -> int:
         except FileNotFoundError:
             logger.debug("No existing local_token file found")
 
-    if user is None:
-        # Fallback: first row (legacy behaviour when no local_token).
-        for row in repo._connect().execute("SELECT * FROM users LIMIT 1"):
-            from llmwikify.foundation.auth.db import _row_to_user
-
-            user = _row_to_user(row)
-            break
+        if user is None:
+            # Fallback: first row (legacy behaviour when no local_token).
+            user = repo.first_user()
 
     if user is None:
         print("[!] No users found. Run `llmwikify auth init` first.", file=sys.stderr)
@@ -423,11 +419,7 @@ def run_auth_token(wiki: Any, config: dict, args: Any) -> int:
         logger.debug("No existing local_token file found")
 
     if user is None:
-        for row in repo._connect().execute("SELECT * FROM users LIMIT 1"):
-            from llmwikify.foundation.auth.db import _row_to_user
-
-            user = _row_to_user(row)
-            break
+        user = repo.first_user()
 
     if user is None:
         print("[!] No users found. Run `llmwikify auth init` first.", file=sys.stderr)

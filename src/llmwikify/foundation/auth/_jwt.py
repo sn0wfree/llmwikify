@@ -126,5 +126,6 @@ def decode(token: str, secret: bytes) -> TokenClaims:
         secret,
         algorithms=[ALGORITHM],
         audience=AUDIENCE,
+        issuer=ISSUER,
     )
     return TokenClaims.from_dict(payload)

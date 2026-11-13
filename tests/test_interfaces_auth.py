@@ -261,6 +261,40 @@ class TestRegisterVerifyFlow:
             assert resp.json()["user"]["local_mode"] is True
             assert resp.json()["user"]["can_edit"] is True
 
+    def test_me_invalid_bearer_returns_401_p1_7(self):
+        """P1-7: a present-but-invalid Bearer must 401 so the SPA can clear."""
+        with patch(
+            "llmwikify.interfaces.server.http.auth_routes.is_local_default",
+            return_value=True,
+        ):
+            client = TestClient(_make_app(local_mode=True, public_read=True))
+            resp = client.get(
+                "/api/auth/me",
+                headers={"Authorization": "Bearer not-a-real-jwt"},
+            )
+            assert resp.status_code == 401
+            assert resp.json()["detail"]["error"] == "invalid_token"
+
+    def test_me_valid_bearer_returns_200(self):
+        """Bearer JWT (no cookie) is accepted on /me."""
+        # Register to create a real user + get identity.
+        client = TestClient(_make_app())
+        reg = client.post("/api/auth/register", json={"email": "bearer@e.com"})
+        assert reg.status_code == 200
+        pat = reg.json()["pat"]
+        ver = client.post("/api/auth/verify", json={"pat": pat})
+        assert ver.status_code == 200
+        access = ver.json()["access_token"]
+        client2 = TestClient(_make_app())
+        resp = client2.get(
+            "/api/auth/me",
+            headers={"Authorization": f"Bearer {access}"},
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["authenticated"] is True
+        assert body["user"]["email"] == "bearer@e.com"
+
 
 # ─── /auth/tokens (PAT management, authenticated) ────────────────
 
