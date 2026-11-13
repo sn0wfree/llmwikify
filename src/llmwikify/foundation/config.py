@@ -40,6 +40,36 @@ def _lookup_path(container: Any, dotted: str) -> Any:
         cursor = cursor[part]
     return cursor
 
+
+def _flatten_dict(
+    data: dict[str, Any], prefix: str = ""
+) -> dict[str, Any]:
+    """Flatten nested dicts to dotted keys (lists/scalars stay leaves)."""
+    out: dict[str, Any] = {}
+    for key, value in data.items():
+        dotted = f"{prefix}.{key}" if prefix else str(key)
+        if isinstance(value, dict) and value:
+            out.update(_flatten_dict(value, dotted))
+        else:
+            out[dotted] = value
+    return out
+
+
+def _write_json_pretty_atomic(path: Path, data: Any) -> None:
+    """Pretty JSON via temp + ``os.replace`` (indent=2, readable config)."""
+    import json
+    import tempfile
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = json.dumps(data, indent=2, ensure_ascii=False)
+    fd, tmp = tempfile.mkstemp(dir=path.parent, suffix=".tmp", prefix=".cfg_")
+    try:
+        with open(fd, "w", encoding="utf-8", newline="\n") as fh:
+            fh.write(payload)
+        Path(tmp).replace(path)
+    finally:
+        Path(tmp).unlink(missing_ok=True)
+
 # Sections exposed by the embedded default config. The *values* come from
 # the parameter registry (foundation/params.py) — they are never written
 # twice. The list only fixes which sections are part of the embedded
@@ -224,23 +254,59 @@ class Config:
         return param_default(key)
 
     def save(self, data: dict[str, Any], section: str | None = None) -> None:
-        """Save config to the global config file.
+        """Save config to the global JSON file (atomic, S3).
 
         Args:
             data: Config data to save.
-            section: If provided, save as {"section": data}. Otherwise save as-is.
+            section: If provided, **deep-merge** into ``{"section": data}``
+                so unknown keys already on disk are preserved (S3). None
+                replaces the whole document.
         """
         self.ensure_dir()
-        from llmwikify.foundation.io import write_json
+        from llmwikify.foundation.utils import deep_merge
 
         if section is not None:
-            # Load existing, merge section, save
             existing = self.get()
-            existing[section] = data
-            write_json(self.path, existing)
+            current = existing.get(section, {})
+            if isinstance(current, dict) and isinstance(data, dict):
+                existing[section] = deep_merge(current, data)
+            else:
+                existing[section] = data
+            _write_json_pretty_atomic(self.path, existing)
         else:
-            write_json(self.path, data)
+            _write_json_pretty_atomic(self.path, data)
         self._cache = None  # Invalidate cache
+
+    def save_wiki_config(
+        self,
+        wiki_root: Path | str,
+        data: dict[str, Any],
+        *,
+        delete_keys: list[str] | None = None,
+    ) -> None:
+        """Minimal-diff edit of ``<wiki_root>/.wiki-config.yaml`` (D3).
+
+        Merges ``data`` (nested dict → dotted keys) and optionally deletes
+        ``delete_keys`` (dotted). Comments and unrelated lines outside the
+        edited keys are preserved byte-for-byte. Atomic via temp+replace.
+
+        Does **not** notify registries — call :meth:`reload` (or
+        ``registry_for(...).reload()``) explicitly after writing.
+        """
+        from llmwikify.foundation.yaml_edit import (
+            delete_in_yaml,
+            set_in_yaml,
+            write_text_atomic,
+        )
+
+        path = Path(wiki_root) / ".wiki-config.yaml"
+        text = path.read_text(encoding="utf-8") if path.exists() else ""
+        for dotted, value in _flatten_dict(data).items():
+            text = set_in_yaml(text, dotted, value)
+        for dotted in delete_keys or ():
+            text = delete_in_yaml(text, dotted)
+        write_text_atomic(path, text)
+        self._wiki_cache.pop(str(Path(wiki_root)), None)
 
     def reload(self) -> None:
         """Clear cache, forcing next get() to re-read from disk."""

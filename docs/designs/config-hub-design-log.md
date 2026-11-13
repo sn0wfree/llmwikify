@@ -701,7 +701,7 @@ github.com/ClickHouse/ClickHouse/blob/master/src/Core/Settings.cpp
 | 3 | **4 个视图 + `nest()` + 生成式 `params.pyi` + 5 条契约测试**（方案 C） | 低 | ✅ `c7189831` |
 | 4 | `ParamRegistry` 父类：解析链 + `reload()` + `on_change()` | 中（动中枢） | ✅ `9c05ab3e` |
 | 5 | 迁移消费点，消灭默认值家族漂移 | 中（改行为，需回归） | ✅ `dcdd49d8` |
-| 6 | 最小 diff YAML 编辑（`Config.save` 路径，**不建 `set_param`**） | 中 | ⬜ 依赖 D3 |
+| 6 | 最小 diff YAML 编辑（`Config.save` 路径，**不建 `set_param`**） | 中 | ✅ 见 §6.4 |
 
 **当前覆盖率**：登记表 81 条 / ~388 ≈ **21%**。
 已镜像旧默认源：模板 JSON 38 / research YAML 7 / six-step YAML 9 = 54 条。
@@ -837,6 +837,29 @@ unsub = reg.on_change(fn)              # 注册监听，返回退订函数
 **行为变更**：`max_iterations` 默认 10 → 4、`DEFAULT_MAX_TOOL_ITERATIONS` 8 → 4
 （与用户可见旋钮 `max_chat_rounds=4` 对齐，消除 10 vs 4 矛盾）。
 全量 **5079 passed / 0 failed / 0 errors**。
+
+### 6.4 步 6：最小 diff YAML 写回（D3 + S3）
+
+**新增** `foundation/yaml_edit.py`（L1，零新依赖；PyYAML 仅用于序列化新值）：
+
+| API | 作用 |
+|---|---|
+| `set_in_yaml(text, dotted_key, value)` | 标量/空容器按行改；非空 dict/list 整块替换；缺失父键自动创建 |
+| `delete_in_yaml(text, dotted_key)` | 删键及其块；缺失键 no-op；父键不自动 prune |
+| `write_text_atomic(path, text)` | 同目录 temp + `os.replace` |
+| `YamlEditError` | anchors / aliases / multi-doc / quoted keys / inline 父值 → 拒绝 |
+
+**`Config` 写路径**（不建 `set_param`，Q7）：
+
+| 方法 | 行为 |
+|---|---|
+| `Config.save(data, section=None)` | 全局 JSON：**原子** pretty 写；`section` 模式 **deep_merge**（未知键保留，S3） |
+| `Config.save_wiki_config(wiki_root, data, delete_keys=None)` | `.wiki-config.yaml` 最小 diff；写后仅失效该 wiki 缓存，**不通知** registry（调用方显式 `reload()`） |
+
+**测试** `tests/test_foundation_yaml_edit.py`（22 条）：注释保留、嵌套改、插入、块替换、
+删除、锚点/多文档拒绝、原子写、`save_wiki_config` 端到端、JSON deep_merge 保未知键。
+
+**已知限制（D3 原文）**：列表/字典**块内**注释会丢；不支持锚点/别名/多文档。
 
 ---
 
