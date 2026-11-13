@@ -1,7 +1,8 @@
 # 多用户与授权模型 — 设计方案（待评审）
 
 > 日期: 2026-11-13
-> 状态：**草案，待评审** —— 文中的 **D1–D9** 是待拍板的决策点，**Q1–Q6** 是需要讨论的问题
+> 状态：**评审中** —— **D1/D2/D5/D7 + Q1（组支持）已拍板**；**D6 讨论中**（§4.1）；
+> D3/D4/D8/D9 与 Q2–Q6 待定
 > 依据：`docs/designs/multiuser-auth-research.md`（业界调研，含 PostgreSQL / NIST / Kubernetes / Casbin / GitHub 一手取证）
 > 现状基线：`docs/llmwikify-auth-缺陷清单.md`（25 条，P0/P1 全清）
 > 架构约束：`foundation → 仅 foundation`；`apps` 互不依赖；`scripts/check_architecture.py` 门禁 0 violation
@@ -101,60 +102,117 @@ api_keys(id, key_prefix, key_hash, user_id, name, scopes, created_at,
 
 ## 3. 目标模型
 
-### 3.1 形状（借 PG 的 `GRANT`，调研 C1/C3/C5）
+### 3.1 形状（借 PG 的 `GRANT`，调研 C1/C3/C5；**含组支持**）
 
-```
+```sql
+-- 主体：user / group / public（public = PG 的 PUBLIC 伪角色 /
+--       K8s 的 system:authenticated 组）
 wiki_grants(
-    user_id   TEXT NOT NULL REFERENCES users(id),
-    wiki_id   TEXT NOT NULL,          -- = namespace / domain
-    can_read  INTEGER NOT NULL DEFAULT 0,
-    can_write INTEGER NOT NULL DEFAULT 0,
-    granted_by TEXT,                  -- 审计（R5）
-    created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    PRIMARY KEY (user_id, wiki_id)
-)
+    principal_type TEXT NOT NULL,      -- 'user' | 'group' | 'public'
+    principal_id   TEXT NOT NULL,      -- user_id | group_id | '*'
+    wiki_id        TEXT NOT NULL,      -- = namespace / domain
+    can_read       INTEGER NOT NULL DEFAULT 0,
+    can_write      INTEGER NOT NULL DEFAULT 0,
+    granted_by     TEXT,               -- 审计（PG R5）
+    created_at     TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (principal_type, principal_id, wiki_id)
+);
+
+-- 组（K8s 式 Group subject）
+groups(id TEXT PRIMARY KEY, name TEXT UNIQUE NOT NULL, created_at TEXT)
+group_members(group_id TEXT NOT NULL REFERENCES groups(id),
+              user_id   TEXT NOT NULL REFERENCES users(id),
+              PRIMARY KEY (group_id, user_id))
 ```
 
-**三条语义规则**（直接来自 PG）：
+**一次性解析用户的主体集合**（纯加法并集，PG R2 / K8s K1）：
+
+```sql
+SELECT wiki_id, MAX(can_read) AS r, MAX(can_write) AS w
+FROM wiki_grants
+WHERE (principal_type = 'user'  AND principal_id = :uid)
+   OR (principal_type = 'group' AND principal_id IN
+       (SELECT group_id FROM group_members WHERE user_id = :uid))
+   OR  principal_type = 'public'
+GROUP BY wiki_id
+```
+
+**四条语义规则**（直接来自 PG）：
 
 | 规则 | 来源 | 我们的落地 |
 |---|---|---|
-| **纯加法**：多行并集，无 deny | PG R2 / K8s K1 | 撤销 = `DELETE` 行 |
-| **owner 隐含全权** | PG R1 | `is_first_admin=1` 的用户**不需要** grant 行；wiki 的属主（创建者）同理 |
-| **PUBLIC 伪角色** | PG R3 | 「所有人默认可读」= 一条 `user_id='*'` 的 grant（等价今天的 `public_read`） |
+| **纯加法**：多行并集，无 deny | PG R2 / K8s K1 | 撤销 = `DELETE` 行（D5） |
+| **owner 隐含全权** | PG R1 | `is_first_admin=1` 的用户**不需要** grant 行 |
+| **PUBLIC 伪角色** | PG R3 | `principal_type='public'` 行 = 未认证可读 |
+| **授权可传递** | PG R4 | **不做**（N3） |
 
 ### 3.2 身份与权限的分离
 
 | 层 | 存什么 | 变不变 |
 |---|---|---|
-| **身份**（who） | `users` | 很少变 |
+| **身份**（who） | `users` + `groups` / `group_members` | 很少变 |
 | **能力**（what can do） | `wiki_grants` | 经常变 |
 | **凭证**（how prove） | `api_keys` / JWT | 每 token 一份 |
-| **快照**（token 上的副本） | `claims.wikis` | 签发时冻结 |
+| **快照**（token 上的副本） | `claims.wgrants` | 签发时冻结 |
 
-### 3.3 token 与授权的关系（GitHub 铁律 C4）
+### 3.3 token 与授权的关系（GitHub 铁律 C4 + **D7**）
 
 ```
-最终权限 = token 上签的 grants  ∩  用户当前 grants
+最终权限 = token 快照（claims.wgrants）  ∩  用户实时上界（wiki_grants 查询）
 ```
 
-> **上限实时查，快照只是缓存** —— 这正是 GitHub「失去 repo 访问权 ⇒ token 立即失效」的做法（S5）。
+> **快照管上限，实时管当下** ——
+> 「加权限」不追溯到已发 token（快照不动）；
+> 「撤权限 / 禁用户」立即生效（实时收紧）。
 
 ---
 
-## 4. 决策点（待拍板）
+## 4. 决策点
 
-| # | 决策 | 选项 | 建议 | 理由 |
+| # | 决策 | 选项 | 状态 | 理由 |
 |---|---|---|---|---|
-| **D1** | 授权表形状 | (a) 扁平 `user×wiki×r/w` (b) 角色表 + grant (c) 通用引擎 | **(a)** | 调研 C6；规模 <50 人；少 2 张表 |
-| **D2** | 授权存哪 | (a) `auth.db` (b) wiki 自己的 DB | **(a)** | 授权是**全局**事实；与 wiki 生命周期解耦；`auth.db` 已是权限事实源 |
-| **D3** | 授权粒度 | (a) 只到 wiki (b) 到 page | **(a)** | page 级授权 = 每次读页都查表；N7 已排除 |
-| **D4** | 动作集合 | (a) read/write (b) read/write/admin | **(a)** | admin 是**身份**不是**动作**；`is_first_admin` 已表达 |
-| **D5** | deny 规则 | (a) 无 (b) 有 | **(a)** | PG/K8s 均无；撤销=删行，语义无歧义 |
-| **D6** | 撤销后已发 token | (a) 立即失效 (b) 需重签 | **(a)** | GitHub 铁律 C4；否则撤权形同虚设 |
-| **D7** | token 载荷 | (a) grants 快照进 JWT (b) 每请求查表 (c) 两者都做 | **(a) + (b) 兜底校验** | 中间件零 IO；但 D6 要立即失效 ⇒ 需要 (b) 查一次上界 |
-| **D8** | 非 admin 的默认 | (a) 默认无授权 (b) 默认全 wiki 只读 | **(a)** | 最小权限（K8s 警告）；今天默认 `["*"]` 正是反例 |
-| **D9** | `public_read` 落点 | (a) 保留为全局开关 (b) 变成 PUBLIC grant 行 | **先 (a)，预留 (b)** | (b) 更统一但改动面大；PUBLIC 行需特殊主体语义 |
+| **D1** | 授权表形状 | (a) 扁平 `principal×wiki×r/w` (b) 角色表 + grant (c) 通用引擎 | ✅ **(a)**，**含组支持** | 调研 C6；规模 <50 人；少 2 张角色表；组按 K8s 的 `subject.kind` 并入同一表 |
+| **D2** | 授权存哪 | (a) `auth.db` (b) wiki 自己的 DB | ✅ **(a)** | 授权是**全局**事实；与 wiki 生命周期解耦 |
+| **D3** | 授权粒度 | (a) 只到 wiki (b) 到 page | ⬜ 待定 | page 级授权 = 每次读页都查表；N7 已排除 → 倾向 (a) |
+| **D4** | 动作集合 | (a) read/write (b) read/write/admin | ⬜ 待定 | admin 是**身份**不是**动作** → 倾向 (a) |
+| **D5** | deny 规则 | (a) 无 (b) 有 | ✅ **(a) 删行即撤销** | PG/K8s 均无；撤销=删行，语义无歧义 |
+| **D6** | 撤销后已发 token | (a) 每请求查表（实时） (b) 纯快照 (c) 短 TTL + refresh | 🔄 **讨论中**（见 §4.1） | — |
+| **D7** | token 载荷 | (a) 快照 (b) 每请求查表 (c) 两者都做 | ✅ **(c) 快照 + 实时上界校验** | 快照=token 上限，实时=撤权/禁用户立即生效 |
+| **D8** | 非 admin 的默认 | (a) 默认无授权 (b) 默认全 wiki 只读 | ⬜ 待定 | 最小权限（K8s 警告）→ 倾向 (a) |
+| **D9** | `public_read` 落点 | (a) 保留全局开关 (b) `public` 主体行 | ⬜ 待定 | 组支持后 (b) 更统一 → 倾向 (b) |
+
+### 4.1 D6 讨论（2026-11-13）
+
+**语义先定死**（D7 = c 的直接推论）：
+
+| 组成 | 作用 | 是否需查库 |
+|---|---|---|
+| **快照** `claims.wgrants` | **token 的上限** —— 签发时该 token 允许哪些 wiki/动作 | 否（claims 自带） |
+| **实时上界** `wiki_grants` 查询 | **用户当前的上限** —— 撤权 / 禁用户立刻生效 | **是**（每次请求 1 次） |
+
+最终权限 = **交集**。
+⇒「加权限」不追溯已发 token；「撤权限 / 禁用户」立即生效。
+
+**三种实现**：
+
+| | **A. 每请求查表** | **B. 纯快照** | **C. 短 TTL + refresh** |
+|---|---|---|---|
+| 撤权生效 | **立即** | token 过期（30d）❌ | ≤ TTL |
+| 请求路径 IO | 1 次主键点查 | 0 | 0 |
+| 实现量 | 小（1 条 SELECT） | 最小 | 大（+refresh 表/端点/cookie） |
+| 跨进程可见 | ✅ DB 共享 | — | — |
+| 主要风险 | 依赖 auth.db 可读 | **撤销形同虚设** | 交互复杂，本地工具过重 |
+
+**建议 A**，理由：
+
+1. **性能不是瓶颈**：grants 是主键点查（warm 约 20–100µs）；一次 wiki 页读是「文件 + SQLite + 图分析」毫秒级 ⇒ 开销 **<1%**。若后续压测需要，可用 `auth.db` mtime 作缓存版本号（撤权即写 DB ⇒ mtime 变 ⇒ 跨进程也自然失效）。
+2. **B 在产品上是错的**：最需要撤权的两个场景（误授权、凭据泄露）恰恰是 B 最无能为力的时候。
+3. **CLI 与 server 常是不同进程**：B/C 都要求「改授权 ⇒ 重签 token」，但 `auth revoke` 在 CLI 进程、用户不会想到去服务端重签。
+
+**A 的代价（如实记录）**：每次请求依赖 `auth.db` 可读 ⇒ **查表失败必须 fail-closed**（保守拒绝），不得放行。
+
+**A 的附带收益**：落地后 `users.disabled_at` 可支撑「禁用用户 ⇒ 其所有 token 立即失效」。
+⚠️ 但**单 token 级吊销**（JWT logout）仍需 denylist —— 那是 P2-3，独立议题，本次不做。
 
 ---
 
@@ -196,17 +254,21 @@ GET  /api/search/cross         → 列 claims.wikis ∩ 可读集合
 
 ```
 1. local_mode（回环）→ 全放行                 ← 决策 12，保留
-2. 无 token → public_read ? GET 放行 : 401/403
+2. 无 token → public 主体行 ? GET 放行 : 401/403
 3. 验签（JWT / PAT）失败 → 401
 4. 全局 scope 检查（非 GET 需 write）→ 403
 5. 取 wiki_id（路径 / registry / search 三类路由）
-6. 查 wiki_grants（实时，上界）→ 无行 → 403
-7. 快照比对（claims.wgrants）：快照没有该 wiki → 403（D6：撤权立即生效）
+6. 查 wiki_grants（实时上界，含 user + group + public 三路并集）
+   → 无行 → 403；查表失败 → fail-closed 403
+7. 快照比对（claims.wgrants）：快照没有该 wiki → 403
 8. 放行
 ```
 
-> **第 6 步是「实时上界」，第 7 步是「快照」** —— 两者取交集即 D6 语义。
-> 第 6 步的查询**必须带索引**（`(user_id, wiki_id)` 主键已够）。
+> **第 6 步是「实时上界」，第 7 步是「快照」** —— 两者取交集即 D7 语义。
+> 第 6 步一次查询覆盖 user / group / public 三路（§3.1 的 SQL），
+> 主键 `(principal_type, principal_id, wiki_id)` 索引够用；
+> `group_members(user_id)` 需索引。
+> ⚠️ **查表失败必须 fail-closed**（保守拒绝），不得放行。
 
 ### 5.3 用户生命周期
 
@@ -218,6 +280,18 @@ GET  /api/search/cross         → 列 claims.wikis ∩ 可读集合
 | `auth grant --user U --wiki W [--read/--write]` | 加授权 | 幂等（upsert） |
 | `auth revoke --user U --wiki W` | 撤授权 | 删行；对应 token 立即失效 |
 | `auth can-i --user U --wiki W --write` | 自检（K8s K5） | 只读，返回 yes/no |
+
+**组相关命令**（Q1 = b 后新增）：
+
+| 命令 | 语义 | 约束 |
+|---|---|---|
+| `auth group create <name>` | 建组 | 只有 admin |
+| `auth group list` | 列组 + 成员 | 只读 |
+| `auth group add <group> --user U` | 加成员 | 幂等 |
+| `auth group remove <group> --user U` | 移成员 | |
+| `auth grant --group G --wiki W [--read/--write]` | 给**组**授权 | 幂等 upsert；与 `--user` 互斥 |
+
+> **组授权的撤销影响面更大**：撤一个组授权 ⇒ 组内所有成员立即失权（D6 语义在组场景下更重要）。
 
 ### 5.4 用户禁用如何让 token 失效
 
@@ -256,12 +330,13 @@ ALTER TABLE users ADD COLUMN disabled_at TEXT;   -- NULL = 有效
 
 | 期 | 内容 | 风险 | 依赖 |
 |---|---|---|---|
-| **P1** | `wiki_grants` 表 + `GrantRepository`（建表/读写/查）+ 迁移探测 | **低**（纯新增） | — |
+| **P1** | `wiki_grants` + `groups` + `group_members` 表 + `GrantRepository`（建表/读写/查）+ 迁移探测 | **低**（纯新增） | — |
 | **P2** | `users.disabled_at` + `auth create-user/list-users/disable-user` | 低 | — |
 | **P3** | 签发装 `wgrants`（claims）+ `auth grant/revoke/can-i` CLI | 中（改签发） | P1 P2 |
-| **P4** | 裁决接入（实时上界 + 快照比对 + disabled 检查） | **中高**（动中间件） | P3 |
+| **P3b** | 组管理 CLI（`auth group create/list/add/remove` + `grant --group`） | 低 | P1 P3 |
+| **P4** | 裁决接入（实时上界 + 快照比对 + disabled 检查 + fail-closed） | **中高**（动中间件） | P3（**D6 定为 A 时**） |
 | **P5** | WebUI：授权管理页 + `/me` 返回权限矩阵 | 中 | P3 |
-| **P6** | share token 与 grants 的关系（roadmap Phase 3） | — | 待定 |
+| **P6** | share token 与 grants 的关系（roadmap Phase 3） | — | 待定（Q5） |
 
 **建议顺序强调**：P1–P3 是**纯增量**（不动裁决路径），可先落地再评审 P4 的裁决策略。
 
@@ -272,11 +347,12 @@ ALTER TABLE users ADD COLUMN disabled_at TEXT;   -- NULL = 有效
 | # | 风险 | 缓解 |
 |---|---|---|
 | R1 | 裁决路径改动引入回归（P0-1/P0-2 刚修好） | P4 单独评审；保留 `wikis` 旧路径做双跑对比；`tools/exploit_check_wikis_claim.py` 作回归门禁 |
-| R2 | 每次请求多一次 SQLite 查询 | 主键索引；可加进程内 LRU 缓存（失效靠 `auth grant` 时清） |
-| R3 | D6「立即失效」与 JWT 无状态冲突 | 已在 5.2 定义为「快照 ∩ 实时上界」；文档明说 |
+| R2 | 每次请求多一次 SQLite 查询 | 主键索引；如需缓存用 `auth.db` mtime 作版本号（撤权即写 DB ⇒ 跨进程也失效） |
+| R3 | D6「立即失效」与 JWT 无状态冲突 | 已定义为「快照 ∩ 实时上界」；**查表失败 fail-closed** |
 | R4 | 忘记「admin 隐含全权」⇒ admin 把自己锁在外面 | 裁决第 6 步：`is_first_admin` 短路；`auth can-i` 自检；提供 `--force` 救援 |
-| R5 | 授权与 `public_read` 语义重叠导致困惑 | D9 先保留开关；文档明确「未认证 GET」vs「用户可读」是两层 |
+| R5 | 授权与 `public_read` 语义重叠导致困惑 | D9 落定后统一为「public 主体行」；文档明确「未认证 GET」vs「用户可读」是两层 |
 | R6 | 复杂度膨胀（用户已就 config hub 反馈过） | N1–N7 明确排除；角色层延后；每期独立可验收 |
+| R7 | **组授权撤销影响面放大**（组内全员立即失权） | 文档明示；`auth group list` 显示成员数；撤销前提示 |
 
 ---
 
@@ -284,7 +360,7 @@ ALTER TABLE users ADD COLUMN disabled_at TEXT;   -- NULL = 有效
 
 | # | 问题 | 选项 | 我的倾向 |
 |---|---|---|---|
-| **Q1** | 授权的**主体**只有 user 吗？要不要支持「组 / 团队」？ | (a) 只 user (b) user + group（多一张表 + 解析链） | **(a)** 先；组的需求等真有人提 |
+| **Q1** | 授权的**主体**只有 user 吗？要不要支持「组 / 团队」？ | (a) 只 user (b) user + group | ✅ **(b) 支持组** —— 按 K8s `subject.kind` 并入同一张 `wiki_grants`；新增 `groups` / `group_members` |
 | **Q2** | wiki 的「属主」怎么定？创建 wiki 的人自动全权吗？ | (a) 是（PG owner 语义） (b) 否，只由 admin 授权 | **(a)**，但当前无 wiki 属主记录 ⇒ 退化为「只有 admin 隐含全权」 |
 | **Q3** | `wikis=["*"]` 语义在授权表落地后怎么表达？ | (a) 保留为「通配」 (b) 展开成 N 行 | **(a)** 保留通配；展开会让 wiki 增删时授权行失配 |
 | **Q4** | 非 admin 拿到授权后，**能不能建用户 / 授权别人**？ | (a) 不能（只有 admin）(b) 能 | **(a)**；`grant` 是 admin 专属 |
@@ -293,25 +369,25 @@ ALTER TABLE users ADD COLUMN disabled_at TEXT;   -- NULL = 有效
 
 ---
 
-## 10. 决策日志（评审时逐条填）
+## 10. 决策日志
 
 | # | 决策 | 结论 | 拍板人 | 日期 |
 |---|---|---|---|---|
-| D1 | 授权表形状 | | | |
-| D2 | 授权存储位置 | | | |
-| D3 | 授权粒度 | | | |
-| D4 | 动作集合 | | | |
-| D5 | deny 规则 | | | |
-| D6 | 撤销后 token | | | |
-| D7 | token 载荷 | | | |
-| D8 | 非 admin 默认 | | | |
-| D9 | `public_read` 落点 | | | |
-| Q1 | 组支持 | | | |
-| Q2 | wiki 属主 | | | |
-| Q3 | `["*"]` 语义 | | | |
-| Q4 | 授权权下放 | | | |
-| Q5 | share token 归属 | | | |
-| Q6 | 本地模式绕过 | | | |
+| D1 | 授权表形状 | ✅ 扁平 `principal×wiki×r/w`，**含组支持**（K8s subject.kind） | 用户 | 2026-11-13 |
+| D2 | 授权存哪 | ✅ `auth.db` | 用户 | 2026-11-13 |
+| D3 | 授权粒度 | ⬜ 待定（倾向 wiki 级） | | |
+| D4 | 动作集合 | ⬜ 待定（倾向 read/write） | | |
+| D5 | deny 规则 | ✅ 无 deny，**删行即撤销** | 用户 | 2026-11-13 |
+| D6 | 撤销后 token | 🔄 **讨论中**（A/B/C 三案见 §4.1，建议 A） | | |
+| D7 | token 载荷 | ✅ **快照 + 实时上界校验**（交集） | 用户 | 2026-11-13 |
+| D8 | 非 admin 默认 | ⬜ 待定（倾向默认无授权） | | |
+| D9 | `public_read` 落点 | ⬜ 待定（组支持后倾向 `public` 主体行） | | |
+| Q1 | 组支持 | ✅ **支持**（`groups` + `group_members`） | 用户 | 2026-11-13 |
+| Q2 | wiki 属主 | ⬜ 待讨论 | | |
+| Q3 | `["*"]` 语义 | ⬜ 待讨论（倾向保留通配） | | |
+| Q4 | 授权权下放 | ⬜ 待讨论（倾向 admin 专属） | | |
+| Q5 | share token 归属 | ⬜ 待讨论 | | |
+| Q6 | 本地模式绕过 | ⬜ 待讨论（倾向绕过） | | |
 
 ---
 
