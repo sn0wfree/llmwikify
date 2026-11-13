@@ -391,3 +391,39 @@ class TestAuthLogout:
 
         rc = run_auth_logout(wiki=None, config={}, args=argparse.Namespace())
         assert rc == 0
+
+
+class TestSignLocalTokenGrant:
+    """P1-4: a non-admin must not receive an owner-level (write) token."""
+
+    def _claims(self, is_first_admin: bool):
+        from types import SimpleNamespace
+
+        from llmwikify.foundation.auth import decode, set_secret
+        from llmwikify.interfaces.cli.commands.auth import _sign_local_token
+
+        user = SimpleNamespace(id="u-test", is_first_admin=is_first_admin)
+        secret = set_secret()  # creates one on a fresh test home
+        return decode(_sign_local_token(user, secret), secret)
+
+    def test_admin_keeps_write_scope(self):
+        claims = self._claims(is_first_admin=True)
+        assert claims.scope == "write"
+        assert claims.wikis == ["*"]
+
+    def test_non_admin_is_read_only(self):
+        claims = self._claims(is_first_admin=False)
+        assert claims.scope == "read"
+        assert claims.wikis == ["*"]
+
+    def test_missing_flag_defaults_to_read(self):
+        """A user record without the flag must not silently become admin."""
+        from types import SimpleNamespace
+
+        from llmwikify.foundation.auth import decode, set_secret
+        from llmwikify.interfaces.cli.commands.auth import _sign_local_token
+
+        user = SimpleNamespace(id="u-x")  # no is_first_admin attribute
+        secret = set_secret()
+        claims = decode(_sign_local_token(user, secret), secret)
+        assert claims.scope == "read"

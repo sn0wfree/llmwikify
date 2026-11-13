@@ -41,6 +41,31 @@ _local_token_path = local_token_path
 _chmod_600 = chmod_600
 
 
+def _sign_local_token(user: Any, secret: bytes) -> str:
+    """Sign a local JWT whose grant matches ``user``'s role.
+
+    P1-4: every token-issuance site used to hardcode
+    ``scope="write", wikis=["*"]``, so any local user who ran
+    ``auth token`` walked away with owner-level write access to every
+    wiki regardless of whether they were an admin. Admins keep the full
+    grant; everyone else gets a **read-only** token.
+
+    Read scope still covers every wiki: decision 1 makes reads open, and
+    there is no per-user wiki-grant table to narrow it by. Closing that
+    gap needs a grant model, not a token flag (see
+    docs/llmwikify-auth-缺陷清单.md P1-4).
+    """
+    from llmwikify.foundation.auth import TokenClaims, encode
+
+    is_admin = bool(getattr(user, "is_first_admin", False))
+    claims = TokenClaims.new(
+        sub=f"user:{user.id}",
+        scope="write" if is_admin else "read",
+        wikis=["*"],
+    )
+    return encode(claims, secret)
+
+
 # ─── free functions ────────────────────────────────────────────────
 
 
@@ -67,9 +92,7 @@ def run_auth_init(wiki: Any, config: dict, args: Any) -> int:
     else:
         # Non-interactive: create user + issue PAT.
         from llmwikify.foundation.auth import (
-            TokenClaims,
             auto_first_admin,
-            encode,
             get_secret,
             set_secret,
         )
@@ -93,12 +116,7 @@ def run_auth_init(wiki: Any, config: dict, args: Any) -> int:
 
         save_pat(pat)
 
-        claims = TokenClaims.new(
-            sub=f"user:{user.id}",
-            scope="write",
-            wikis=["*"],
-        )
-        token = encode(claims, secret)
+        token = _sign_local_token(user, secret)
 
     # Write to local_token with chmod 600.
     token_path = _local_token_path()
@@ -124,9 +142,7 @@ def run_auth_create_token(wiki: Any, config: dict, args: Any) -> int:
     Creates a new PAT, saves to local_token, prints once.
     """
     from llmwikify.foundation.auth import (
-        TokenClaims,
         UserRepository,
-        encode,
         require_secret,
     )
 
@@ -174,12 +190,7 @@ def run_auth_create_token(wiki: Any, config: dict, args: Any) -> int:
     )
 
     # Also sign a JWT and save to local_token.
-    claims = TokenClaims.new(
-        sub=f"user:{user.id}",
-        scope="write",
-        wikis=["*"],
-    )
-    token = encode(claims, require_secret())
+    token = _sign_local_token(user, require_secret())
     token_path = _local_token_path()
     ensure_dir_700(token_path.parent)
     token_path.write_text(token + "\n", encoding="utf-8", newline="\n")
@@ -283,9 +294,7 @@ def run_auth_revoke_token(wiki: Any, config: dict, args: Any) -> int:
 def run_auth_token(wiki: Any, config: dict, args: Any) -> int:
     """``llmwikify auth token`` — re-sign a fresh JWT, write to local_token."""
     from llmwikify.foundation.auth import (
-        TokenClaims,
         UserRepository,
-        encode,
         require_secret,
     )
 
@@ -318,12 +327,7 @@ def run_auth_token(wiki: Any, config: dict, args: Any) -> int:
         print("[!] No users found. Run `llmwikify auth init` first.", file=sys.stderr)
         return 1
 
-    claims = TokenClaims.new(
-        sub=f"user:{user.id}",
-        scope="write",
-        wikis=["*"],
-    )
-    token = encode(claims, require_secret())
+    token = _sign_local_token(user, require_secret())
     token_path = _local_token_path()
     ensure_dir_700(token_path.parent)
     token_path.write_text(token + "\n", encoding="utf-8", newline="\n")
