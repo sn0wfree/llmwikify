@@ -256,6 +256,61 @@ GROUP BY wiki_id
 **A 的附带收益**：落地后 `users.disabled_at` 可支撑「禁用用户 ⇒ 其所有 token 立即失效」。
 ⚠️ 但**单 token 级吊销**（JWT logout）仍需 denylist —— 那是 P2-3，独立议题，本次不做。
 
+### 4.2 D6 的性能与并发（2026-11-13 补，实测 + 业界）
+
+**问题**：每次请求查表，会不会锁死 `auth.db`？
+
+**实测**（5000 行，主键点查）：
+
+| 姿势 | 单次耗时 | 说明 |
+|---|---:|---|
+| 复用连接点查 | **25–28 µs** | 1000 次 = 25 ms |
+| **每次开新连接** | **208 µs** | ≈ **8 倍** —— 连接建立是大头 |
+| `journal_mode` 默认 | **`delete`（回滚日志）** | ⚠️ **现在就是这样**（`foundation/db.py::connect(wal=False)`） |
+
+**SQLite 并发语义**（一手源：sqlite.org/wal.html）：
+
+| 模式 | 语义 | 疯狂鉴权时 |
+|---|---|---|
+| **rollback journal（现状）** | **读阻塞写、写阻塞读** | 一次 `auth grant`（写）挡住后面的鉴权读 ⇒ **会排队** |
+| **WAL** | "readers do not block writers and a writer does not block readers" | 读写并发；**只允许 1 个写者**（auth 写很少） |
+| WAL 的坑 | 持续读 + 长事务 ⇒ checkpoint 无法完成 ⇒ WAL 无限增长 ⇒ 读变慢 | 不锁死，但要留「reader gaps」 |
+| WAL 仍会 BUSY | exclusive locking / 崩溃恢复 / 最后连接清理 三个窄窗口 | 已有 `busy_timeout=5s` 兜底 |
+
+⇒ **「锁死」的风险来自 journal mode + 每次开新连接，不是「查表」本身。**
+
+**业界做法**（一手源）：
+
+| 系统 | 做法 | 证据 |
+|---|---|---|
+| **SpiceDB / Zanzibar** | **多层缓存权限判定**，用一致性等级换延迟 | "implements a number of levels of caching, to ensure that repeated permissions checks do not need to be recomputed over and over again"；`fully_consistent` "explicitly bypasses caching, dramatically impacting latency" |
+| **Envoy ext_authz** | 外部授权服务 + **超时 + fail-closed** | `timeout: 200ms`（默认）；`failure_mode_allow: false`；`ok/denied/error/failure_mode_allowed` 统计 |
+| **SQLite WAL** | 读写并发 + checkpoint | 见上表 |
+
+**规模差异**：SpiceDB 缓存是为「每秒百万次检查」；llmwikify 是 **<50 人本地工具**，
+一次 wiki 页读是毫秒级（文件 + SQLite + 图分析）⇒ 25µs 鉴权查表 **占比 <1%**。
+
+**D6 语义不变，实现加两层**：
+
+```
+1. local_mode / is_first_admin / 无 token + public_read → 短路，根本不查表
+   （热路径大多数请求在这里就结束）
+2. 查 wiki_grants：WAL + 复用连接 + 主键点查 ≈ 25µs
+3. （可选）内存缓存 + epoch 失效 —— 只有压测证明需要才加
+```
+
+**五条硬措施**：
+
+| # | 措施 | 为什么 | 归属 |
+|---|---|---|---|
+| **M1** | `auth.db` **开 WAL**（`connect(wal=True)`） | 消除读写互锁 | P1 必做 |
+| **M2** | **复用连接**（进程内 1 个/线程） | 8 倍性能差；现在 `_connect()` 每次新建 | P1 必做 |
+| **M3** | **`_init_schema` 不每次跑**（P2-12 同根） | 每实例化 PRAGMA + executescript 是纯开销 | P1 必做 |
+| **M4** | **fail-closed + 超时** | 查表失败/超时 → 403，不放行、不悬挂 | P4 必做 |
+| **M5** | **IP 级 rate limit** | 「疯狂鉴权」的闸门（middleware 已有） | 已有，需覆盖鉴权路径 |
+
+> **Windows 额外注意**：锁语义更紧、杀软会短暂持锁 —— M1/M2 尤其重要。
+
 ---
 
 ## 5. 关键机制设计
@@ -406,7 +461,7 @@ auth can-i --user U --wiki W --write  → 只读自检（K8s kubectl auth can-i�
 
 | 期 | 内容 | 风险 | 依赖 |
 |---|---|---|---|
-| **P1** | `wiki_grants` + `groups` + `group_members` 表 + `GrantRepository`（建表/读写/查）+ 迁移探测 | **低**（纯新增） | — |
+| **P1** | `wiki_grants` + `groups` + `group_members` 表 + `GrantRepository`（建表/读写/查）+ 迁移探测 + **M1 WAL / M2 连接复用 / M3 schema 一次** | **低**（纯新增） | — |
 | **P2** | `users.disabled_at` + `auth create-user/list-users/disable-user` | 低 | — |
 | **P3** | 签发装 `wgrants`（claims）+ `auth grant/revoke/can-i` CLI | 中（改签发） | P1 P2 |
 | **P3b** | 组管理 CLI（`auth group create/list/add/remove` + `grant --group`） | 低 | P1 P3 |
@@ -423,12 +478,13 @@ auth can-i --user U --wiki W --write  → 只读自检（K8s kubectl auth can-i�
 | # | 风险 | 缓解 |
 |---|---|---|
 | R1 | 裁决路径改动引入回归（P0-1/P0-2 刚修好） | P4 单独评审；保留 `wikis` 旧路径做双跑对比；`tools/exploit_check_wikis_claim.py` 作回归门禁 |
-| R2 | 每次请求多一次 SQLite 查询 | 主键索引；如需缓存用 `auth.db` mtime 作版本号（撤权即写 DB ⇒ 跨进程也失效） |
-| R3 | D6「立即失效」与 JWT 无状态冲突 | 已定义为「快照 ∩ 实时上界」；**查表失败 fail-closed** |
+| R2 | 每次请求多一次 SQLite 查询 | M1 WAL + M2 连接复用（实测 25µs vs 208µs）+ M3 schema 一次；如需缓存用 `auth.db` mtime 作版本号（撤权即写 DB ⇒ 跨进程也失效） |
+| R3 | D6「立即失效」与 JWT 无状态冲突 | 已定义为「快照 ∩ 实时上界」；**查表失败 fail-closed**（M4） |
 | R4 | 忘记「admin 隐含全权」⇒ admin 把自己锁在外面 | 裁决第 6 步：`is_first_admin` 短路；`auth can-i` 自检；提供 `--force` 救援 |
 | R5 | 授权与 `public_read` 语义重叠导致困惑 | D9 落定后统一为「public 主体行」；文档明确「未认证 GET」vs「用户可读」是两层 |
 | R6 | 复杂度膨胀（用户已就 config hub 反馈过） | N1–N7 明确排除；角色层延后；每期独立可验收 |
 | R7 | **组授权撤销影响面放大**（组内全员立即失权） | 文档明示；`auth group list` 显示成员数；撤销前提示 |
+| R8 | **疯狂鉴权锁死 auth.db**（Windows 锁更紧 + 杀软持锁） | M1 WAL（读写不互锁）+ M2 连接复用 + M5 限流；详见 §4.2 |
 
 ---
 

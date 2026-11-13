@@ -38,6 +38,9 @@
 | S4 | Apache Casbin — RBAC with Domains | casbin.org/docs/rbac-with-domains | ✅ 全文 |
 | S5 | GitHub Docs — Managing personal access tokens | docs.github.com/…/managing-your-personal-access-tokens | ✅ 全文 |
 | S6 | MySQL `GRANT` 文档 | dev.mysql.com/doc/refman/8.4/en/privileges.html | ❌ 404（未取证，下文按标准模型描述并标注） |
+| S7 | SQLite — Write-Ahead Logging | sqlite.org/wal.html | ✅ 全文 |
+| S8 | SpiceDB — Consistency（鉴权缓存 + 一致性等级） | authzed.com/docs/spicedb/concepts/consistency | ✅ 全文 |
+| S9 | Envoy — External Authorization（ext_authz） | envoyproxy.io/docs/envoy/latest/configuration/http/http_filters/ext_authz_filter | ✅ 全文 |
 
 ---
 
@@ -308,7 +311,41 @@ g, alice, user,  tenant2
 
 ---
 
-## 10. 未取证 / 存疑项
+## 10. 性能与并发（2026-11-13 补：每请求查表是否锁死 DB）
+
+**实测**（本机 5000 行，主键点查）：
+
+| 姿势 | 单次 | 说明 |
+|---|---:|---|
+| 复用连接点查 | 25–28 µs | 1000 次 = 25 ms |
+| 每次开新连接 | **208 µs** | ≈ 8 倍（连接建立是大头） |
+| `journal_mode` 默认 | `delete`（回滚日志） | 我们现状（`connect(wal=False)`） |
+
+**SQLite WAL 并发语义**（S7）：
+
+> "WAL provides more concurrency as readers do not block writers and a writer does not block readers."
+
+| 模式 | 语义 |
+|---|---|
+| rollback journal | **读阻塞写、写阻塞读** —— 会排队 |
+| WAL | 读写并发；**只允许 1 个写者**；仍可能 `SQLITE_BUSY`（三个窄窗口） |
+| WAL 坑 | 持续读 + 长事务 ⇒ checkpoint 无法完成 ⇒ WAL 无限增长（"the WAL file will grow without bound"） |
+
+**业界的鉴权缓存**：
+
+| 系统 | 做法 | 证据 |
+|---|---|---|
+| **SpiceDB / Zanzibar** | 多层缓存权限判定，一致性等级换延迟 | S8："implements a number of levels of caching, to ensure that repeated permissions checks do not need to be recomputed over and over again"；`fully_consistent` "explicitly bypasses caching, dramatically impacting latency" |
+| **Envoy ext_authz** | 外部授权服务 + 超时 + fail-closed | S9：`timeout: 200ms`（默认）；`failure_mode_allow: false` |
+| **NIST / PG / K8s** | 无通用缓存层（DB 自己的页缓存） | — |
+
+**对 llmwikify 的结论**：<50 人本地工具，一次 wiki 页读是毫秒级 ⇒ 25µs 鉴权查表占比 **<1%**。
+**不需要**上 SpiceDB 式缓存；但必须 **WAL + 连接复用**，否则在 Windows 上「锁死」是真风险。
+详见 `multiuser-auth-design.md` §4.2 的五条硬措施（M1–M5）。
+
+---
+
+## 11. 未取证 / 存疑项
 
 | 项 | 状态 |
 |---|---|
@@ -316,14 +353,18 @@ g, alice, user,  tenant2
 | OPA / Cedar 的具体模型 | 本轮未取证；**结论上**归入「通用策略引擎 = YAGNI」，若评审要求再补 |
 | Zanzibar / ReBAC | 本轮未取证；与本题规模不匹配，暂不展开 |
 | 各家「授权变更立即生效」的**实现细节** | S5 只给了行为承诺（失权即 token 失效），未给实现机制 |
+| Zanzibar 热点缓存实现 | S8 有导读（authzed.com/blog/hotspot-caching…）未逐字取证；缓存 + 一致性等级的结论已足够 |
 
 ---
 
-## 11. 参考
+## 12. 参考
 
 - S1 https://www.postgresql.org/docs/current/sql-grant.html
 - S2 https://csrc.nist.gov/projects/role-based-access-control
 - S3 https://kubernetes.io/docs/reference/access-authn-authz/rbac/
 - S4 https://casbin.org/docs/rbac-with-domains
 - S5 https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens
+- S7 https://www.sqlite.org/wal.html （WAL 并发语义，一手）
+- S8 https://authzed.com/docs/spicedb/concepts/consistency （鉴权缓存 + 一致性等级）
+- S9 https://www.envoyproxy.io/docs/envoy/latest/configuration/http/http_filters/ext_authz_filter （外部授权 + 超时 + fail-closed）
 - 内部：`docs/designs/auth-and-sharing-roadmap.md`（Phase 3 share token / Phase 4 hub 的既有规划）
