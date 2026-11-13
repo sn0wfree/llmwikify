@@ -1,9 +1,9 @@
 # 多用户与授权模型 — 设计方案（待评审）
 
 > 日期: 2026-11-13
-> 状态：**评审中** —— **D1 / D2 / D5 / D6 / D7 + Q1（组支持）已拍板**；
-> D3 / D4 / D8 / D9 与 Q2–Q6 待定
-> 依据：`docs/designs/multiuser-auth-research.md`（业界调研，含 PostgreSQL / NIST / Kubernetes / Casbin / GitHub 一手取证）
+> 状态：**评审接近完成** —— **D1–D9 全部拍板；Q1/Q2/Q4/Q5/Q6 拍板**；
+> **仅 Q3（`["*"]` 语义）讨论中**，见 §4.3
+> 依据：`docs/designs/multiuser-auth-research.md`（业界调研，含 PostgreSQL / NIST / Kubernetes / Casbin / GitHub / SQLite / SpiceDB / Envoy 一手取证）
 > 现状基线：`docs/llmwikify-auth-缺陷清单.md`（25 条，P0/P1 全清）
 > 架构约束：`foundation → 仅 foundation`；`apps` 互不依赖；`scripts/check_architecture.py` 门禁 0 violation
 
@@ -108,7 +108,7 @@ api_keys(id, key_prefix, key_hash, user_id, name, scopes, created_at,
 | wiki 维度 | 全开（`["*"]`） | `principal×wiki×r/w`，非 admin 默认无 |
 | 读写粒度 | **全局** `scope` | **per-wiki** `can_read / can_write` |
 | 撤销 | 无（logout 不吊销） | 删行即生效；禁用即失效（D6 = A） |
-| public_read | 全局开关 | `principal_type='public'` 行（D9 待定） |
+| public_read | 全局开关 | `principal_type='public'` 行（D9 已定） |
 | 自检 | 无 | `auth can-i` |
 | 裁决 | 只查 claims | claims **∩** grants 表；失败 fail-closed |
 
@@ -124,13 +124,16 @@ api_keys(id, key_prefix, key_hash, user_id, name, scopes, created_at,
 wiki_grants(
     principal_type TEXT NOT NULL,      -- 'user' | 'group' | 'public'
     principal_id   TEXT NOT NULL,      -- user_id | group_id | '*'
-    wiki_id        TEXT NOT NULL,      -- = namespace / domain
-    can_read       INTEGER NOT NULL DEFAULT 0,
+    wiki_id        TEXT NOT NULL,      -- 具体 wiki_id，或 '*' 通配（Q3-a）
+    can_read       INTEGER NOT NULL DEFAULT 0,   -- D4：只有 read / write
     can_write      INTEGER NOT NULL DEFAULT 0,
     granted_by     TEXT,               -- 审计（PG R5）
     created_at     TEXT NOT NULL DEFAULT (datetime('now')),
     PRIMARY KEY (principal_type, principal_id, wiki_id)
 );
+-- D3 = wiki 级：无 page_id（N7 排除）
+-- D8 = 非 admin 默认无授权：不写任何默认行
+-- D9 = 未认证可读 = principal_type='public' 行（不是全局开关）
 
 -- 组（K8s 式 Group subject）
 groups(id TEXT PRIMARY KEY, name TEXT UNIQUE NOT NULL, created_at TEXT)
@@ -187,13 +190,13 @@ GROUP BY wiki_id
 |---|---|---|---|---|
 | **D1** | 授权表形状 | (a) 扁平 `principal×wiki×r/w` (b) 角色表 + grant (c) 通用引擎 | ✅ **(a)**，**含组支持** | 调研 C6；规模 <50 人；少 2 张角色表；组按 K8s 的 `subject.kind` 并入同一表 |
 | **D2** | 授权存哪 | (a) `auth.db` (b) wiki 自己的 DB | ✅ **(a)** | 授权是**全局**事实；与 wiki 生命周期解耦 |
-| **D3** | 授权粒度 | (a) 只到 wiki (b) 到 page | ⬜ 待定 | page 级授权 = 每次读页都查表；N7 已排除 → 倾向 (a) |
-| **D4** | 动作集合 | (a) read/write (b) read/write/admin | ⬜ 待定 | admin 是**身份**不是**动作** → 倾向 (a) |
+| **D3** | 授权粒度 | (a) 只到 wiki (b) 到 page | ✅ **(a) wiki 级** | page 级 = 每次读页都查表；N7 已排除 |
+| **D4** | 动作集合 | (a) read/write (b) read/write/admin | ✅ **(a) read/write** | admin 是**身份**不是**动作** |
 | **D5** | deny 规则 | (a) 无 (b) 有 | ✅ **(a) 删行即撤销** | PG/K8s 均无；撤销=删行，语义无歧义 |
 | **D6** | 撤销后已发 token | (a) 每请求查表（实时） (b) 纯快照 (c) 短 TTL + refresh | ✅ **(a) 每请求查表，已发 token 立即失效** | 见 §4.1 |
 | **D7** | token 载荷 | (a) 快照 (b) 每请求查表 (c) 两者都做 | ✅ **(c) 快照 + 实时上界校验** | 快照=token 上限，实时=撤权/禁用户立即生效 |
-| **D8** | 非 admin 的默认 | (a) 默认无授权 (b) 默认全 wiki 只读 | ⬜ 待定 | 最小权限（K8s 警告）→ 倾向 (a) |
-| **D9** | `public_read` 落点 | (a) 保留全局开关 (b) `public` 主体行 | ⬜ 待定 | 组支持后 (b) 更统一 → 倾向 (b) |
+| **D8** | 非 admin 的默认 | (a) 默认无授权 (b) 默认全 wiki 只读 | ✅ **(a) 默认无授权**（最小权限） | K8s 警告：通配易过度授权 |
+| **D9** | `public_read` 落点 | (a) 保留全局开关 (b) `public` 主体行 | ✅ **(b) `public` 主体行** | 组支持后更统一（PG PUBLIC 伪角色） |
 
 ### 4.1 D6 讨论 → **已拍板：A（2026-11-13）**
 
@@ -310,6 +313,49 @@ GROUP BY wiki_id
 | **M5** | **IP 级 rate limit** | 「疯狂鉴权」的闸门（middleware 已有） | 已有，需覆盖鉴权路径 |
 
 > **Windows 额外注意**：锁语义更紧、杀软会短暂持锁 —— M1/M2 尤其重要。
+
+---
+
+### 4.3 Q3 讨论 → **建议：表允许通配，token 永远具体列表（2026-11-13）**
+
+**三个子问题**：
+
+| 子问题 | 选项 | 业界对照 |
+|---|---|---|
+| **Q3-a** 表里能否写 `wiki_id='*'` | (a) 能，通配行 (b) 不能，只能具体 id | GitHub「All repositories」= 通配；PG `ALL TABLES IN SCHEMA` = 展开 |
+| **Q3-b** claims 快照存什么 | (a) 存 `*` (b) **签发时求值展开**为具体列表 | GitHub token 签发时明确「All / Only select」 |
+| **Q3-c** `*` 覆盖**未来新建**的 wiki 吗 | (i) 覆盖（GitHub 语义） (ii) 不覆盖（PG 语义） | 两家相反 |
+
+**业界两种做法**（一手源）：
+
+| 系统 | 做法 | 原文要点 |
+|---|---|---|
+| **GitHub FG-PAT** | **通配**：「All repositories」= 新仓库**自动纳入** | "Repository access: All repositories / Only select repositories" |
+| **PostgreSQL** | **展开**：`GRANT … ON ALL TABLES IN SCHEMA` 只对**当时的**表；新表不自动 | "This functionality is currently supported only for tables…"；另有 `ALTER DEFAULT PRIVILEGES` 专治「新对象默认授权」 |
+| **Kubernetes** | `resources: ["*"]` 是**类型**通配；**namespace 必须显式**（Role 绑定到 ns） | "Caution: Using wildcards … could result in overly permissive access" |
+
+**关键洞察：两层可以不一致**（D7 已定「最终权限 = 快照 ∩ 实时上界」）：
+
+| 层 | `*` 的含义 | 新 wiki 时 |
+|---|---|---|
+| **grants 表（实时上界）** | 一行表示「该主体对全部 wiki 的授权」 | **自动纳入上限**（Q3-c = i） |
+| **claims 快照（token 上限）** | **不存在** —— 签发时求值展开为 `["wiki-a","wiki-b"]` | **老 token 拿不到** |
+| **裁决** | 实时：`*` 命中该 wiki；快照：精确列表比对 | 交集 |
+
+**收益**：
+
+| 收益 | 说明 |
+|---|---|
+| 管理方便 | `auth grant --user u --wiki '*'` 一行搞定；wiki 增删不失配 |
+| token 范围**明确** | 快照是具体列表，`auth whoami` 直接可见；审计无歧义 |
+| 新 wiki **不静默扩大 token 权限** | 老 token 要访问新 wiki 得 `auth token` 重签 —— 权限增长经过一道显式动作 |
+| 撤权立即生效 | `auth revoke --user u --wiki '*'` 删一行 ⇒ 实时收紧（D6） |
+| 与 D8 一致 | 非 admin 默认无授权；`*` 是**显式**给的全集，不是默认 |
+
+**代价**：新 wiki 对已授权用户「可见」但要重签才可访问 ⇒ 文档写清，并在 `auth whoami` / `auth can-i` 提示「当前 token 未覆盖新 wiki，重签请跑 `auth token`」。
+
+**建议**：**Q3-a = (a) 通配行**；**Q3-b = (b) 快照求值展开**；**Q3-c = (i) `*` 覆盖新建 wiki**。
+一句话：**表里允许 `*`（管理便利），token 里永远是具体列表（范围明确）**。
 
 ---
 
@@ -453,7 +499,7 @@ auth can-i --user U --wiki W --write  → 只读自检（K8s kubectl auth can-i�
 | **升级后现有非 admin** | 今天不存在（建不了第二个用户）⇒ 无需迁移 |
 | **老 JWT（无 `wgrants`）** | 裁决时按老语义（`wikis` 全可写）；`auth token` 重签后按新语义 |
 | **单用户场景** | 行为**完全不变**（admin 隐含全权）⇒ G5 零破坏 |
-| **`public_read`** | 保持全局开关（D9-a）；非 admin 默认无授权（D8），与 public_read 叠加后：未认证 GET 仍公开 |
+| **`public_read`** | **D9 = (b) 落成 `principal_type='public'` 行**；升级时把现有 `public_read=True` 行为迁移为一条 `public` 的 read grant（见 P1 迁移） |
 
 ---
 
@@ -461,7 +507,7 @@ auth can-i --user U --wiki W --write  → 只读自检（K8s kubectl auth can-i�
 
 | 期 | 内容 | 风险 | 依赖 |
 |---|---|---|---|
-| **P1** | `wiki_grants` + `groups` + `group_members` 表 + `GrantRepository`（建表/读写/查）+ 迁移探测 + **M1 WAL / M2 连接复用 / M3 schema 一次** | **低**（纯新增） | — |
+| **P1** | `wiki_grants` + `groups` + `group_members` 表 + `GrantRepository`（建表/读写/查）+ 迁移探测（含 `public_read` → `public` 行）+ **M1 WAL / M2 连接复用 / M3 schema 一次** | **低**（纯新增） | **D3 D4 已定**，可开工 |
 | **P2** | `users.disabled_at` + `auth create-user/list-users/disable-user` | 低 | — |
 | **P3** | 签发装 `wgrants`（claims）+ `auth grant/revoke/can-i` CLI | 中（改签发） | P1 P2 |
 | **P3b** | 组管理 CLI（`auth group create/list/add/remove` + `grant --group`） | 低 | P1 P3 |
@@ -493,11 +539,11 @@ auth can-i --user U --wiki W --write  → 只读自检（K8s kubectl auth can-i�
 | # | 问题 | 选项 | 我的倾向 |
 |---|---|---|---|
 | **Q1** | 授权的**主体**只有 user 吗？要不要支持「组 / 团队」？ | (a) 只 user (b) user + group | ✅ **(b) 支持组** —— 按 K8s `subject.kind` 并入同一张 `wiki_grants`；新增 `groups` / `group_members` |
-| **Q2** | wiki 的「属主」怎么定？创建 wiki 的人自动全权吗？ | (a) 是（PG owner 语义） (b) 否，只由 admin 授权 | **(a)**，但当前无 wiki 属主记录 ⇒ 退化为「只有 admin 隐含全权」 |
-| **Q3** | `wikis=["*"]` 语义在授权表落地后怎么表达？ | (a) 保留为「通配」 (b) 展开成 N 行 | **(a)** 保留通配；展开会让 wiki 增删时授权行失配 |
-| **Q4** | 非 admin 拿到授权后，**能不能建用户 / 授权别人**？ | (a) 不能（只有 admin）(b) 能 | **(a)**；`grant` 是 admin 专属 |
-| **Q5** | share token（roadmap Phase 3）算不算一种 grant？ | (a) 独立表 `share_tokens` (b) 复用 `wiki_grants` | **(b) 倾向**：share = 「对某 wiki 的 read grant + 匿名主体」；但 share 有过期/口令等独立语义 ⇒ **(a) 更干净** |
-| **Q6** | 本地模式（回环）是否应绕过 grants？ | (a) 绕过（现状） (b) 也走 grants | **(a)** 保留 —— decision 12「localhost 完全信任」是既有决策；改动会破坏本地开发体验 |
+| **Q2** | wiki 的「属主」怎么定？创建 wiki 的人自动全权吗？ | (a) 是（PG owner 语义） (b) 否，只由 admin 授权 | ✅ **(b) 只 admin**（Q2 暂定；属主机制留后续升级） |
+| **Q3** | `wikis=["*"]` 语义在授权表落地后怎么表达？ | (a) 通配 (b) 展开 | 🔄 **讨论中**，见 §4.3（建议：表允许通配，快照求值展开） |
+| **Q4** | 非 admin 拿到授权后，**能不能建用户 / 授权别人**？ | (a) 不能（只有 admin）(b) 能 | ✅ **(a) 不能** —— `grant` 是 admin 专属 |
+| **Q5** | share token（roadmap Phase 3）算不算一种 grant？ | (a) 独立表 `share_tokens` (b) 复用 `wiki_grants` | ✅ **(a) 独立表**（有过期/口令等独立语义） |
+| **Q6** | 本地模式（回环）是否应绕过 grants？ | (a) 绕过（现状） (b) 也走 grants | ✅ **(a) 绕过** —— decision 12「localhost 完全信任」是既有决策 |
 
 ---
 
@@ -507,19 +553,19 @@ auth can-i --user U --wiki W --write  → 只读自检（K8s kubectl auth can-i�
 |---|---|---|---|---|
 | D1 | 授权表形状 | ✅ 扁平 `principal×wiki×r/w`，**含组支持**（K8s subject.kind） | 用户 | 2026-11-13 |
 | D2 | 授权存哪 | ✅ `auth.db` | 用户 | 2026-11-13 |
-| D3 | 授权粒度 | ⬜ 待定（倾向 wiki 级） | | |
-| D4 | 动作集合 | ⬜ 待定（倾向 read/write） | | |
+| D3 | 授权粒度 | ✅ **(a) wiki 级**（无 page_id） | 用户 | 2026-11-13 |
+| D4 | 动作集合 | ✅ **(a) read/write** | 用户 | 2026-11-13 |
 | D5 | deny 规则 | ✅ 无 deny，**删行即撤销** | 用户 | 2026-11-13 |
 | D6 | 撤销后 token | ✅ **(a) 每请求查表，已发 token 立即失效**（下一个请求即 403） | 用户 | 2026-11-13 |
 | D7 | token 载荷 | ✅ **快照 + 实时上界校验**（交集） | 用户 | 2026-11-13 |
-| D8 | 非 admin 默认 | ⬜ 待定（倾向默认无授权） | | |
-| D9 | `public_read` 落点 | ⬜ 待定（组支持后倾向 `public` 主体行） | | |
+| D8 | 非 admin 默认 | ✅ **(a) 默认无授权**（最小权限） | 用户 | 2026-11-13 |
+| D9 | `public_read` 落点 | ✅ **(b) `public` 主体行**（组支持后更统一） | 用户 | 2026-11-13 |
 | Q1 | 组支持 | ✅ **支持**（`groups` + `group_members`） | 用户 | 2026-11-13 |
-| Q2 | wiki 属主 | ⬜ 待讨论 | | |
-| Q3 | `["*"]` 语义 | ⬜ 待讨论（倾向保留通配） | | |
-| Q4 | 授权权下放 | ⬜ 待讨论（倾向 admin 专属） | | |
-| Q5 | share token 归属 | ⬜ 待讨论 | | |
-| Q6 | 本地模式绕过 | ⬜ 待讨论（倾向绕过） | | |
+| Q2 | wiki 属主 | ✅ **只 admin**；属主机制留后续升级 | 用户 | 2026-11-13 |
+| Q3 | `["*"]` 语义 | 🔄 **讨论中**（§4.3 建议：表允许通配，快照求值展开） | | |
+| Q4 | 授权权下放 | ✅ **不能** —— `grant` admin 专属 | 用户 | 2026-11-13 |
+| Q5 | share token 归属 | ✅ **(a) 独立表 `share_tokens`** | 用户 | 2026-11-13 |
+| Q6 | 本地模式绕过 | ✅ **(a) 绕过**（decision 12） | 用户 | 2026-11-13 |
 
 ---
 
