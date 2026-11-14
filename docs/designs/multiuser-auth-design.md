@@ -784,3 +784,58 @@ create-user / list-users / disable-user / enable-user
 | 测试 | `TestGroupCLIP3b`（5 条）：建组/幂等加成员/组授权→成员 can-i/互斥校验/admin 专属 |
 
 **验证**：全量 **5167 passed** · mypy 413 files 0 · 架构 0 violation · ruff 干净。
+
+### 12.5 P4a · 裁决接入（2026-11-13，doc-first）
+
+**规格定稿**（评审中拍板，覆盖 §5.2 原文）：
+
+| 步 | 条件 | 结果 | 归属 |
+|---|---|---|---|
+| ① | `local_mode`（回环） | pass | 不变 |
+| ② | **无 token** | **401（一律）**；`public_read` 废弃 | **P4b**（本期不动，见下） |
+| ③ | 验签失败 | 401 | 不变 |
+| ④ | `disabled_at` 非空 | 401 | **P4a** |
+| ⑤ | `is_first_admin` | pass（PG owner） | **P4a** |
+| ⑥' | **旧 token** | 跳过 ⑥⑦，`wikis`+`scope` 原样放行 | **P4a** |
+| ⑥ | 查 `wiki_grants` 实时上界 | 无行→403；失败→**fail-closed 403** | **P4a** |
+| ⑦ | 快照 ∩ 实时 | 无→403 | **P4a** |
+| 列表路由 | snapshot ∩ live | — | **P4b** |
+
+**旧 token 判定**（无 `legacy` 字段，纯值规则）：
+
+| 解码后 | 判定 | 行为 |
+|---|---|---|
+| `wgrants` 非空 | 新 token（P3+） | ⑥⑦ 精确裁决 |
+| `wgrants` 空 **且** `wikis` 非空 | **旧 token**（P3 前恒 `wikis=["*"]`） | 跳过 ⑥⑦；`wikis` 含该 wiki 或 `*` → 放行；`scope` 照旧 |
+| `wgrants` 空 **且** `wikis == []` | 新 token 零授权（D8） | 走 ⑥，无行 → 403 |
+
+> 「全部权限」= **wiki 维度全开**；`scope` 不提权（旧非 admin 仍 read-only）。
+> 该规则同时兼容既有测试里的 `TokenClaims.new(wikis=[...])` 造的 fake token（`wgrants={}`）。
+
+**实现要点**：
+
+| 项 | 内容 |
+|---|---|
+| **纯函数** | 新增 `foundation/auth/authorize.py`：`authorize_request(claims, *, wiki_id, need_write, db_path)` → `AuthzDecision(allowed, status, code, detail)`；**可单测穷举** |
+| **middleware** | `dispatch` 用 `authorize_request` 替换「scope 检查 + `_check_wikis_claim`」；抽出 `_wiki_id_from_path`；**② 无 token 分支本期保持不动**（P4b 改） |
+| **PAT 路径修补** | `_verify_token` 的 PAT 分支现签 `wikis=["*"], wgrants={}` ⇒ 会被误判为旧 token → **非 admin PAT 拿到全 wiki**。改为经 `snapshot_for_user` 装快照（需把 `known_wikis` 传入） |
+| **user 缺失** | P4a **不**新增「用户不存在 → 401」（避免破坏 `user:fake` 既有测试；`disabled` 只在用户存在时生效）。删除用户后旧 token 仍可能用 —— 记为已知缺口，P4b 或后续处理 |
+| **fail-closed** | grants 查询异常 → 403 `authz_unavailable`，不放行（M4） |
+| **门禁** | `tools/exploit_check_wikis_claim.py` + `tools/auth_defect_verify.py` 必须保持「已修」状态 |
+
+**P4a 刻意不做**（→ P4b）：
+
+| 不做 | 归属 |
+|---|---|
+| ② 无 token → 401（`public_read` 废弃） | P4b |
+| 列表路由 snapshot ∩ live | P4b |
+| 用户不存在 → 401 | P4b（与 fake-token 测试改造一起） |
+| D9 `public` 行 | 已定不做 |
+
+**验收**：
+
+- `authorize_request` 单测覆盖：disabled / scope / admin / legacy 三分支 / live / snapshot / fail-closed
+- 既有 middleware 测试（`user:fake` + `wikis=[...]`）**全部保持通过**（走 legacy 分支）
+- 新增：真实 user + grant → 放行；revoke → 下一请求 403；disabled → 401；非 admin PAT 不再全 wiki
+- `public_read` 相关测试**不动**（P4b 才改）
+- 全量测试 + mypy + 架构门禁 0 + exploit 脚本门禁
