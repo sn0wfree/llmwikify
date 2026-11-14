@@ -151,6 +151,7 @@ class User:
     is_first_admin: bool
     created_at: str
     last_login_at: str | None
+    disabled_at: str | None = None  # P2: NULL = active; set = disabled
 
 
 class UserRepository:
@@ -201,14 +202,14 @@ class UserRepository:
 
     @staticmethod
     def _schema_current(conn: sqlite3.Connection) -> bool:
-        """M3 fast path: tables exist and the pre-PAT migration is done."""
+        """M3 fast path: tables exist, pre-PAT migration done, P2 column present."""
         row = conn.execute(
             "SELECT name FROM sqlite_master WHERE type='table' AND name='users'"
         ).fetchone()
         if row is None:
             return False
         cols = {r[1] for r in conn.execute("PRAGMA table_info(users)").fetchall()}
-        return "password_hash" not in cols
+        return "password_hash" not in cols and "disabled_at" in cols
 
     def _init_schema(self) -> None:
         conn = self._connect()
@@ -224,7 +225,8 @@ class UserRepository:
                     username TEXT UNIQUE,
                     is_first_admin INTEGER NOT NULL DEFAULT 0,
                     created_at TEXT NOT NULL DEFAULT (datetime('now')),
-                    last_login_at TEXT
+                    last_login_at TEXT,
+                    disabled_at TEXT
                 );
                 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
                 CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
@@ -244,6 +246,7 @@ class UserRepository:
                 CREATE INDEX IF NOT EXISTS idx_api_keys_hash ON api_keys(key_hash);
                 CREATE INDEX IF NOT EXISTS idx_api_keys_user ON api_keys(user_id);
                 """)
+        _ensure_users_columns(conn)  # P2: pre-P2 DBs lack disabled_at
         conn.commit()
 
     # ─── Public API ─────────────────────────────────────────────────
@@ -330,9 +333,10 @@ class UserRepository:
             )
         user_id = uuid.uuid4().hex
         if username is None:
-            username = _derive_username(email) if is_first_admin else None
-        if username is not None:
-            username = self._unique_username(username)
+            # P2: derive a username for every user (admin and non-admin);
+            # P1-5 de-duplicates with a numeric suffix.
+            username = _derive_username(email)
+        username = self._unique_username(username)
         try:
             with self._atomic_write() as conn:
                 conn.execute(
@@ -372,11 +376,63 @@ class UserRepository:
                 (user_id,),
             )
 
+    # ── P2: user lifecycle ──────────────────────────────────────
+
+    def list_users(self) -> list[User]:
+        """All users, insertion order (P2 `auth list-users`)."""
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT * FROM users ORDER BY rowid"
+            ).fetchall()
+        return [_row_to_user(r) for r in rows]
+
+    def disable(self, user_id: str) -> bool:
+        """Soft-disable a user (P2). Returns True if a row changed.
+
+        The row is kept for audit trail; a disabled user's tokens stop
+        working on the next request (D6-A, wired in P4).
+        """
+        with self._atomic_write() as conn:
+            cursor = conn.execute(
+                "UPDATE users SET disabled_at = datetime('now') "
+                "WHERE id = ? AND disabled_at IS NULL",
+                (user_id,),
+            )
+            return cursor.rowcount > 0
+
+    def enable(self, user_id: str) -> bool:
+        """Re-enable a disabled user (P2). Returns True if a row changed."""
+        with self._atomic_write() as conn:
+            cursor = conn.execute(
+                "UPDATE users SET disabled_at = NULL "
+                "WHERE id = ? AND disabled_at IS NOT NULL",
+                (user_id,),
+            )
+            return cursor.rowcount > 0
+
+    def is_disabled(self, user_id: str) -> bool:
+        """True iff the user exists and is soft-disabled (P2)."""
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT disabled_at FROM users WHERE id = ?",
+                (user_id,),
+            ).fetchone()
+        return row is not None and row["disabled_at"] is not None
+
 
 # ─── Helpers ──────────────────────────────────────────────────────
 
 
+def _ensure_users_columns(conn: sqlite3.Connection) -> None:
+    """P2: ensure ``users.disabled_at`` exists (idempotent ALTER)."""
+    try:
+        conn.execute("ALTER TABLE users ADD COLUMN disabled_at TEXT")
+    except sqlite3.OperationalError:
+        pass  # column already exists
+
+
 def _row_to_user(row: sqlite3.Row) -> User:
+    keys = row.keys()
     return User(
         id=row["id"],
         email=row["email"],
@@ -384,6 +440,7 @@ def _row_to_user(row: sqlite3.Row) -> User:
         is_first_admin=bool(row["is_first_admin"]),
         created_at=row["created_at"],
         last_login_at=row["last_login_at"],
+        disabled_at=row["disabled_at"] if "disabled_at" in keys else None,
     )
 
 
@@ -477,7 +534,7 @@ class ApiKeyRepository:
 
     @staticmethod
     def _schema_current(conn: sqlite3.Connection) -> bool:
-        """M3 fast path: both tables exist and pre-PAT migration is done."""
+        """M3 fast path: both tables exist, pre-PAT + P2 migrations done."""
         for table in ("users", "api_keys"):
             row = conn.execute(
                 "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
@@ -486,7 +543,7 @@ class ApiKeyRepository:
             if row is None:
                 return False
         cols = {r[1] for r in conn.execute("PRAGMA table_info(users)").fetchall()}
-        return "password_hash" not in cols
+        return "password_hash" not in cols and "disabled_at" in cols
 
     def _init_schema(self) -> None:
         conn = self._connect()
@@ -502,7 +559,8 @@ class ApiKeyRepository:
                     username TEXT UNIQUE,
                     is_first_admin INTEGER NOT NULL DEFAULT 0,
                     created_at TEXT NOT NULL DEFAULT (datetime('now')),
-                    last_login_at TEXT
+                    last_login_at TEXT,
+                    disabled_at TEXT
                 );
                 CREATE TABLE IF NOT EXISTS api_keys (
                     id TEXT PRIMARY KEY,
@@ -519,6 +577,7 @@ class ApiKeyRepository:
                 CREATE INDEX IF NOT EXISTS idx_api_keys_hash ON api_keys(key_hash);
                 CREATE INDEX IF NOT EXISTS idx_api_keys_user ON api_keys(user_id);
                 """)
+        _ensure_users_columns(conn)  # P2: pre-P2 DBs lack disabled_at
         conn.commit()
 
     def create(

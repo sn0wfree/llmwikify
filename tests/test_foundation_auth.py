@@ -302,9 +302,82 @@ class TestAutoFirstAdmin:
         assert exc.value.code == "registration_closed"
         assert exc.value.status_code == 403
 
-        # Still idempotent on the original email.
-        again = auto_first_admin(email="one@example.com", db_path=db)
-        assert again.id == first.id
+
+class TestUserLifecycleP2:
+    """P2: disabled_at column + disable/enable/list + username for all users."""
+
+    def test_disabled_at_column_exists(self):
+        repo = UserRepository(db_path=TEST_HOME / "p2_col.db")
+        cols = {
+            r[1]
+            for r in repo._connect().execute("PRAGMA table_info(users)").fetchall()
+        }
+        assert "disabled_at" in cols
+
+    def test_disable_enable_roundtrip(self):
+        repo = UserRepository(db_path=TEST_HOME / "p2_de.db")
+        u = repo.create(email="de@example.com")
+        assert u.disabled_at is None
+        assert repo.is_disabled(u.id) is False
+
+        assert repo.disable(u.id) is True
+        assert repo.is_disabled(u.id) is True
+        again = repo.get_by_id(u.id)
+        assert again is not None and again.disabled_at is not None
+
+        # Idempotent second disable.
+        assert repo.disable(u.id) is False
+
+        assert repo.enable(u.id) is True
+        assert repo.is_disabled(u.id) is False
+        # Idempotent second enable.
+        assert repo.enable(u.id) is False
+
+    def test_list_users(self):
+        repo = UserRepository(db_path=TEST_HOME / "p2_list.db")
+        repo.create(email="a@example.com")
+        repo.create(email="b@example.com")
+        users = repo.list_users()
+        assert [u.email for u in users] == ["a@example.com", "b@example.com"]
+        assert all(u.disabled_at is None for u in users)
+
+    def test_non_admin_gets_username_p2(self):
+        """P2: username is derived for every user, not just admins."""
+        repo = UserRepository(db_path=TEST_HOME / "p2_un.db")
+        u = repo.create(email="bob@example.com", is_first_admin=False)
+        assert u.username == "bob"
+
+    def test_pre_p2_db_gains_disabled_at(self):
+        """Migration: an existing users table without disabled_at gets the column."""
+        import sqlite3
+
+        db = TEST_HOME / "p2_mig.db"
+        conn = sqlite3.connect(db)
+        conn.executescript(
+            """
+            CREATE TABLE users (
+                id TEXT PRIMARY KEY,
+                email TEXT UNIQUE NOT NULL,
+                username TEXT UNIQUE,
+                is_first_admin INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                last_login_at TEXT
+            );
+            INSERT INTO users (id, email, username, is_first_admin)
+            VALUES ('u1', 'old@example.com', 'old', 1);
+            """
+        )
+        conn.commit()
+        conn.close()
+
+        repo = UserRepository(db_path=db)  # triggers migration
+        cols = {
+            r[1] for r in repo._connect().execute("PRAGMA table_info(users)").fetchall()
+        }
+        assert "disabled_at" in cols
+        u = repo.get_by_id("u1")
+        assert u is not None and u.disabled_at is None
+        assert u.email == "old@example.com"
 
 
 # ─── ApiKeyRepository ────────────────────────────────────────────

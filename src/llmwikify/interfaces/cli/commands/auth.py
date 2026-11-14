@@ -488,6 +488,165 @@ def run_auth_logout(wiki: Any, config: dict, args: Any) -> int:
     return 0
 
 
+# ─── P2: user lifecycle helpers ────────────────────────────────
+
+
+def _resolve_local_user() -> Any | None:
+    """Resolve the identity behind ``local_token`` (or None)."""
+    from llmwikify.foundation.auth import UserRepository, decode, require_secret
+
+    try:
+        existing = _local_token_path().read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+    if not existing or existing == "local-mode-no-auth":  # noqa: S105 — sentinel
+        return None
+    try:
+        claims = decode(existing, require_secret())
+    except Exception:
+        logger.debug("local_token decode failed", exc_info=True)
+        return None
+    if not claims.sub.startswith("user:"):
+        return None
+    return UserRepository().get_by_id(claims.sub[len("user:") :])
+
+
+def _require_admin() -> Any | None:
+    """Return the current admin user, or print an error and return None.
+
+    Q4: create-user / list-users / disable-user / enable-user are admin-only.
+    Fail-closed: no token, unresolvable identity, or non-admin → refuse.
+    """
+    user = _resolve_local_user()
+    if user is None:
+        print(
+            "[!] Cannot resolve identity from local_token. "
+            "Run `llmwikify auth token` first.",
+            file=sys.stderr,
+        )
+        return None
+    if not user.is_first_admin:
+        print(
+            "[!] Admin privileges required for this command (Q4).",
+            file=sys.stderr,
+        )
+        return None
+    return user
+
+
+def run_auth_create_user(wiki: Any, config: dict, args: Any) -> int:
+    """``llmwikify auth create-user --email <you@example.com>`` (P2).
+
+    Creates a **non-admin** user. Admins are locked to the first account
+    (P1-1 ``registration_closed``; Q2 defers owner semantics).
+    """
+    from llmwikify.foundation.auth import AuthError, UserRepository
+
+    if _require_admin() is None:
+        return 1
+
+    email = (getattr(args, "email", "") or "").strip()
+    if not email or "@" not in email:
+        print("[!] --email is required (a valid address).", file=sys.stderr)
+        return 1
+
+    repo = UserRepository()
+    try:
+        user = repo.create(email=email, is_first_admin=False)
+    except AuthError as exc:
+        print(f"[!] {exc.detail}", file=sys.stderr)
+        return 1
+
+    print(f"✓ Created user: {user.email} (username={user.username}, non-admin)")
+    print("  Next: `llmwikify auth grant --user "
+          f"{user.email} --wiki <wiki-id> --read` to grant access.")
+    return 0
+
+
+def run_auth_list_users(wiki: Any, config: dict, args: Any) -> int:
+    """``llmwikify auth list-users`` — table of users + status (P2)."""
+    from llmwikify.foundation.auth import UserRepository
+
+    if _require_admin() is None:
+        return 1
+
+    users = UserRepository().list_users()
+    if not users:
+        print("No users found.")
+        return 0
+
+    print(f"{'ID':<12} {'Email':<28} {'Username':<20} {'Role':<8} {'Status':<10}")
+    print("-" * 80)
+    for u in users:
+        role = "admin" if u.is_first_admin else "user"
+        status = "disabled" if u.disabled_at else "active"
+        print(f"{u.id[:12]:<12} {u.email:<28} {(u.username or '-'):<20} "
+              f"{role:<8} {status:<10}")
+    print()
+    print(f"Total: {len(users)} user(s)")
+    return 0
+
+
+def run_auth_disable_user(wiki: Any, config: dict, args: Any) -> int:
+    """``llmwikify auth disable-user <email|username|id>`` (P2).
+
+    Soft-disable: sets ``disabled_at``; the row is kept for audit.
+    The user's tokens stop working on the next request (D6-A, wired in P4).
+    """
+    from llmwikify.foundation.auth import UserRepository
+
+    if _require_admin() is None:
+        return 1
+
+    spec = (getattr(args, "user", "") or "").strip()
+    if not spec:
+        print("[!] Usage: llmwikify auth disable-user <email|username|id>",
+              file=sys.stderr)
+        return 1
+
+    repo = UserRepository()
+    target = _resolve_user_spec(repo, spec)
+    if target is None:
+        print(f"[!] No user matching {spec!r}.", file=sys.stderr)
+        return 1
+    if target.is_first_admin:
+        print("[!] Refusing to disable the admin (would lock you out).",
+              file=sys.stderr)
+        return 1
+
+    if repo.disable(target.id):
+        print(f"✓ Disabled {target.email}")
+    else:
+        print(f"· {target.email} was already disabled.")
+    return 0
+
+
+def run_auth_enable_user(wiki: Any, config: dict, args: Any) -> int:
+    """``llmwikify auth enable-user <email|username|id>`` (P2, inverse)."""
+    from llmwikify.foundation.auth import UserRepository
+
+    if _require_admin() is None:
+        return 1
+
+    spec = (getattr(args, "user", "") or "").strip()
+    if not spec:
+        print("[!] Usage: llmwikify auth enable-user <email|username|id>",
+              file=sys.stderr)
+        return 1
+
+    repo = UserRepository()
+    target = _resolve_user_spec(repo, spec)
+    if target is None:
+        print(f"[!] No user matching {spec!r}.", file=sys.stderr)
+        return 1
+
+    if repo.enable(target.id):
+        print(f"✓ Enabled {target.email}")
+    else:
+        print(f"· {target.email} was already active.")
+    return 0
+
+
 # ─── argparse subparser ────────────────────────────────────────────
 
 
@@ -533,6 +692,21 @@ def setup_auth_parser(subparsers: Any) -> None:
     # logout
     auth_sub.add_parser("logout", help="Remove local_token")
 
+    # P2: user lifecycle (admin-only)
+    p_cu = auth_sub.add_parser(
+        "create-user", help="Create a non-admin user (admin only)"
+    )
+    p_cu.add_argument("--email", required=True, help="Email of the new user")
+    auth_sub.add_parser("list-users", help="List users (admin only)")
+    p_du = auth_sub.add_parser(
+        "disable-user", help="Soft-disable a user (admin only)"
+    )
+    p_du.add_argument("user", help="Email / username / id to disable")
+    p_eu = auth_sub.add_parser(
+        "enable-user", help="Re-enable a disabled user (admin only)"
+    )
+    p_eu.add_argument("user", help="Email / username / id to enable")
+
 
 # ─── Command class ──────────────────────────────────────────────
 
@@ -550,7 +724,9 @@ class AuthCommand(Command):
         sub = getattr(args, "auth_command", None)
         if sub is None:
             print(
-                "Usage: llmwikify auth {init,create-token,list-tokens,revoke-token,token,whoami,logout}",
+                "Usage: llmwikify auth {init,create-token,list-tokens,"
+                "revoke-token,token,whoami,logout,"
+                "create-user,list-users,disable-user,enable-user}",
                 file=sys.stderr,
             )
             return 1
@@ -568,5 +744,13 @@ class AuthCommand(Command):
             return run_auth_whoami(wiki, config, args)
         if sub == "logout":
             return run_auth_logout(wiki, config, args)
+        if sub == "create-user":
+            return run_auth_create_user(wiki, config, args)
+        if sub == "list-users":
+            return run_auth_list_users(wiki, config, args)
+        if sub == "disable-user":
+            return run_auth_disable_user(wiki, config, args)
+        if sub == "enable-user":
+            return run_auth_enable_user(wiki, config, args)
         print(f"Unknown auth subcommand: {sub}", file=sys.stderr)
         return 1

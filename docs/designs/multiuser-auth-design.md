@@ -515,7 +515,7 @@ auth can-i --user U --wiki W --write  → 只读自检（K8s kubectl auth can-i�
 | 期 | 内容 | 风险 | 依赖 | 状态 |
 |---|---|---|---|---|
 | **P1** | `wiki_grants` + `groups` + `group_members` 表 + `GrantRepository`（建表/读写/查 + `*` 通配求值）+ **M1 WAL / M2 连接复用 / M3 schema 一次** | **低**（纯新增） | ✅ | ✅ **已完成**（§12.1） |
-| **P2** | `users.disabled_at` + `auth create-user/list-users/disable-user` | 低 | — | 待开工 |
+| **P2** | `users.disabled_at` + `auth create-user/list-users/disable-user/enable-user` | 低 | — | ✅ **已完成**（§12.2） |
 | **P3** | 签发装 `wgrants`（claims）+ `auth grant/revoke/can-i` CLI | 中（改签发） | P1 P2 | 待开工 |
 | **P3b** | 组管理 CLI（`auth group create/list/add/remove` + `grant --group`） | 低 | P1 P3 | 待开工 |
 | **P4** | 裁决接入（实时上界 + 快照比对 + disabled 检查 + fail-closed） | **中高**（动中间件） | P3（**D6 已定为 A**） | 待开工 |
@@ -660,10 +660,20 @@ create-user / list-users / disable-user / enable-user
 
 **验收**：
 
-- `auth create-user --email a@x` → 建非 admin，username 自动派生
-- 重复 email → `email_taken`
-- 非 admin 跑 `create-user` → 拒绝
-- `auth disable-user a@x` → `disabled_at` 非空；再次禁用幂等
-- `auth enable-user a@x` → `disabled_at` 归 NULL
-- `auth list-users` → 表格含 disabled 标记
-- 全量测试 + mypy + 架构门禁 0
+- ✅ `auth create-user --email a@x` → 建非 admin，username 自动派生
+- ✅ 重复 email → `email_taken`
+- ✅ 非 admin 跑 `create-user` → 拒绝
+- ✅ `auth disable-user a@x` → `disabled_at` 非空；再次禁用幂等
+- ✅ `auth enable-user a@x` → `disabled_at` 归 NULL
+- ✅ `auth list-users` → 表格含 disabled 标记
+- ✅ 全量测试 + mypy + 架构门禁 0
+
+**实现记录（2026-11-13）**：
+
+| 文件 | 改动 |
+|---|---|
+| `foundation/auth/db.py` | `users` 增 `disabled_at` 列（CREATE + 幂等 ALTER `_ensure_users_columns`）；`User.disabled_at`；`list_users` / `disable` / `enable` / `is_disabled`；`create()` 为**所有**用户派生 username |
+| `interfaces/cli/commands/auth.py` | `create-user` / `list-users` / `disable-user` / `enable-user`；`_require_admin()` fail-closed 校验（Q4）；disable admin 拒绝（防锁死） |
+| 测试 | `TestUserLifecycleP2`（5 条，含 pre-P2 迁移）+ `TestUserLifecycleCLIP2`（8 条） |
+
+**验证**：全量 **5151 passed** · mypy 413 files 0 · 架构 0 violation · ruff 干净。

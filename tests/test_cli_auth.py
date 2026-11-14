@@ -9,6 +9,7 @@ Decisions exercised:
 
 from __future__ import annotations
 
+import argparse
 import io
 import json
 import os
@@ -39,8 +40,12 @@ from llmwikify.foundation.auth import (  # noqa: E402
 )
 from llmwikify.interfaces.cli.commands.auth import (  # noqa: E402
     run_auth_create_token,
+    run_auth_create_user,
+    run_auth_disable_user,
+    run_auth_enable_user,
     run_auth_init,
     run_auth_list_tokens,
+    run_auth_list_users,
     run_auth_logout,
     run_auth_revoke_token,
     run_auth_token,
@@ -543,3 +548,154 @@ class TestSignLocalTokenGrant:
         secret = set_secret()
         claims = decode(_sign_local_token(user, secret), secret)
         assert claims.scope == "read"
+
+
+class TestUserLifecycleCLIP2:
+    """P2: create-user / list-users / disable-user / enable-user (admin-only)."""
+
+    @staticmethod
+    def _init_admin(email: str = "root@e.com") -> None:
+        run_auth_init(wiki=None, config={}, args=argparse.Namespace(email=email))
+
+    @staticmethod
+    def _become(user) -> None:
+        """Rewrite local_token to the given user's JWT (test helper)."""
+        from llmwikify.foundation.auth import get_secret, require_secret
+        from llmwikify.interfaces.cli.commands.auth import (
+            _chmod_600,
+            _local_token_path,
+            _sign_local_token,
+            ensure_dir_700,
+        )
+
+        secret = get_secret() or require_secret()
+        token = _sign_local_token(user, secret)
+        path = _local_token_path()
+        ensure_dir_700(path.parent)
+        path.write_text(token + "\n", encoding="utf-8", newline="\n")
+        _chmod_600(path)
+
+    def test_create_user_requires_admin(self):
+        """Non-admin local_token → refuse (Q4)."""
+        self._init_admin()
+        # Create a non-admin and switch identity to them.
+        from llmwikify.foundation.auth import UserRepository
+
+        other = UserRepository().create(
+            email="bob@e.com", is_first_admin=False
+        )
+        self._become(other)
+
+        err = io.StringIO()
+        with patch("sys.stderr", err):
+            rc = run_auth_create_user(
+                None, {}, argparse.Namespace(email="x@e.com")
+            )
+        assert rc == 1
+        assert "Admin privileges required" in err.getvalue()
+        assert UserRepository().get_by_email("x@e.com") is None
+
+    def test_create_user_without_token_refuses(self):
+        """No local_token → refuse (fail-closed)."""
+        self._init_admin()
+        path = Path(os.environ["LLMWIKIFY_HOME"]) / ".llmwikify" / "local_token"
+        path.unlink(missing_ok=True)
+        err = io.StringIO()
+        with patch("sys.stderr", err):
+            rc = run_auth_create_user(
+                None, {}, argparse.Namespace(email="x@e.com")
+            )
+        assert rc == 1
+        assert "local_token" in err.getvalue()
+
+    def test_create_user(self):
+        self._init_admin()
+        out = io.StringIO()
+        with patch("sys.stdout", out):
+            rc = run_auth_create_user(
+                None, {}, argparse.Namespace(email="carol@e.com")
+            )
+        assert rc == 0
+        assert "Created user" in out.getvalue()
+        from llmwikify.foundation.auth import UserRepository
+
+        u = UserRepository().get_by_email("carol@e.com")
+        assert u is not None
+        assert u.is_first_admin is False
+        assert u.username == "carol"
+
+    def test_create_user_duplicate_email(self):
+        self._init_admin()
+        err = io.StringIO()
+        with patch("sys.stderr", err):
+            rc = run_auth_create_user(
+                None, {}, argparse.Namespace(email="root@e.com")
+            )
+        assert rc == 1
+        assert "already exists" in err.getvalue()
+
+    def test_list_users(self):
+        self._init_admin()
+        from llmwikify.foundation.auth import UserRepository
+
+        UserRepository().create(email="dave@e.com", is_first_admin=False)
+        out = io.StringIO()
+        with patch("sys.stdout", out):
+            rc = run_auth_list_users(None, {}, argparse.Namespace())
+        assert rc == 0
+        text = out.getvalue()
+        assert "root@e.com" in text
+        assert "dave@e.com" in text
+        assert "admin" in text
+        assert "active" in text
+
+    def test_disable_and_enable_user(self):
+        self._init_admin()
+        from llmwikify.foundation.auth import UserRepository
+
+        UserRepository().create(email="eve@e.com", is_first_admin=False)
+
+        out = io.StringIO()
+        with patch("sys.stdout", out):
+            rc = run_auth_disable_user(
+                None, {}, argparse.Namespace(user="eve@e.com")
+            )
+        assert rc == 0
+        assert "Disabled" in out.getvalue()
+        u = UserRepository().get_by_email("eve@e.com")
+        assert u is not None and u.disabled_at is not None
+
+        out2 = io.StringIO()
+        with patch("sys.stdout", out2):
+            rc2 = run_auth_enable_user(
+                None, {}, argparse.Namespace(user="eve@e.com")
+            )
+        assert rc2 == 0
+        assert "Enabled" in out2.getvalue()
+        u2 = UserRepository().get_by_email("eve@e.com")
+        assert u2 is not None and u2.disabled_at is None
+
+    def test_disable_admin_refused(self):
+        """Never allow disabling the admin (would lock the operator out)."""
+        self._init_admin()
+        err = io.StringIO()
+        with patch("sys.stderr", err):
+            rc = run_auth_disable_user(
+                None, {}, argparse.Namespace(user="root@e.com")
+            )
+        assert rc == 1
+        assert "admin" in err.getvalue().lower()
+        from llmwikify.foundation.auth import UserRepository
+
+        u = UserRepository().get_by_email("root@e.com")
+        assert u is not None and u.disabled_at is None
+
+    def test_disable_unknown_user(self):
+        self._init_admin()
+        err = io.StringIO()
+        with patch("sys.stderr", err):
+            rc = run_auth_disable_user(
+                None, {}, argparse.Namespace(user="nobody@e.com")
+            )
+        assert rc == 1
+        assert "No user matching" in err.getvalue()
