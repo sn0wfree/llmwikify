@@ -677,3 +677,47 @@ create-user / list-users / disable-user / enable-user
 | 测试 | `TestUserLifecycleP2`（5 条，含 pre-P2 迁移）+ `TestUserLifecycleCLIP2`（8 条） |
 
 **验证**：全量 **5151 passed** · mypy 413 files 0 · 架构 0 violation · ruff 干净。
+
+### 12.3 P3 · 签发装 grants + 授权 CLI（2026-11-13，doc-first）
+
+**范围**（对应 §5.1 签发 + §5.6 管理面）：
+
+| 项 | 内容 |
+|---|---|
+| **`TokenClaims.wgrants`** | 新增 `dict[str, str]`（`wiki_id → "r" \| "rw"`），默认 `{}`；`from_dict` 对旧 token 容错 |
+| **admin 签发** | `wikis=["*"]`、`wgrants={}`、`scope=write` —— **行为不变**（G5；裁决第 5 步短路，registry/search 过滤用 `*` 才能看见未来 wiki） |
+| **非 admin 签发** | `GrantRepository.expand(user_id, known_wikis)` 求值展开（Q3-b）：`wikis=[具体列表]`、`wgrants={wiki:"r"\|"rw"}` |
+| **`scope` 规则澄清** | **scope = 快照里是否含任一 `rw`**（有则 `write`，否则 `read`）。旧「非 admin 恒 read-only」是 D8（无授权）下的**现状**，不是规则；D4 允许 per-wiki write 后，有写授权的非 admin 必须拿到 `scope=write`，否则中间件第 4 步会误杀 |
+| **`known_wikis` 来源** | CLI → `WikiRegistry(config).list_wikis()`；HTTP `/verify` → `request.app.state.wiki_registry` |
+| **`auth grant`** | `--user U --wiki W [--write]`（缺省 read；write蕴含 read）；admin 专属（Q4）；`wiki_id` 可为 `'*'`（Q3-a） |
+| **`auth revoke`** | `--user U --wiki W`；删行即撤（D5/D6） |
+| **`auth can-i`** | `--user U --wiki W [--write]` → `yes`/`no`（K8s `kubectl auth can-i`） |
+
+**刻意不做**（本期）：
+
+| 不做 | 归属 |
+|---|---|
+| 中间件按 `wgrants` 做 per-wiki 读写裁决 | **P4** |
+| `auth group …` 与 `grant --group` | **P3b** |
+| 改 `_check_wikis_claim` / registry / search 过滤逻辑 | **P4**（P3 只改 claims 内容，现有过滤自动受益） |
+
+**P3 单独上线时的裁决效果**（诚实记录）：
+
+| 场景 | P3 后 | P4 补齐 |
+|---|---|---|
+| 非 admin 读 wiki-a | ✅ `wikis=["wiki-a"]` 放行 | — |
+| 非 admin 访问 wiki-b（未授权） | ✅ `wikis` 不含 → 403 | — |
+| 非 admin 在 wiki-a 可写、wiki-b 只读 | ⚠️ `scope=write` + `wikis` 含两者 ⇒ **POST wiki-b 仍会过**（旧全局 scope 检查） | P4 按 `wgrants[wiki-b]="r"` 拒 |
+| admin | ✅ 完全不变 | — |
+
+⇒ **P3 是增量改善**（wiki 维度收窄已生效）；**per-wiki 读写精确裁决在 P4**。
+
+**验收**：
+
+- admin 签出的 token 与 P3 前**逐字节同形**（`wikis=["*"]`、无 `wgrants` 或空）
+- 非 admin 有 read 授权 → token `wikis` 含该 wiki、`wgrants[wiki]="r"`、`scope=read`
+- 非 admin 有 write 授权 → `scope=write`、`wgrants[wiki]="rw"`
+- 非 admin 零授权 → `wikis=[]`
+- `auth grant/revoke/can-i` 可用；非 admin 跑 → 拒绝
+- `auth grant --wiki '*'` 写入通配行；`can-i` 对新 wiki 返回 yes（Q3-c）
+- 全量测试 + mypy + 架构门禁 0
