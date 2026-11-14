@@ -734,3 +734,44 @@ create-user / list-users / disable-user / enable-user
 | 测试 | `TestSnapshotForUserP3`（4 条）+ `TestGrantCLIP3`（6 条）+ 更新 `TestSignLocalTokenGrant` |
 
 **验证**：全量 **5162 passed** · mypy 413 files 0 · 架构 0 violation · ruff 干净。
+
+### 12.4 P3b · 组管理 CLI（2026-11-13，doc-first）
+
+**范围**（对应 §5.6 + Q1 组支持 + Q4 admin 专属）：
+
+| 命令 | 语义 |
+|---|---|
+| `auth group create <name>` | 建组；重名 → `group_exists` |
+| `auth group list` | 列组：id / name / 成员数 |
+| `auth group add <group> --user U` | 加成员（幂等）；`<group>` 按 name 或 id 解析 |
+| `auth group remove <group> --user U` | 移成员 |
+| `auth grant --group G --wiki W [--write]` | 给**组**授权；**与 `--user` 互斥**（一条 grant 只授一个主体） |
+| `auth revoke --group G --wiki W` | 撤组授权 |
+| `auth can-i --user U …` | 已有；组授权经 `group_members` 自动生效（P1 的 `effective()` 已支持） |
+
+**约束**：
+
+| 规则 | 说明 |
+|---|---|
+| **admin 专属** | 全部命令（Q4）；沿用 `_require_admin()` |
+| **`--user` 与 `--user`/`--group` 互斥** | `grant`/`revoke` 必须二选一，都给或都不给 → 报错 |
+| **组解析** | `<group>` 接受 group name 或 group id |
+| **撤销影响面** | 撤组授权 ⇒ 组内全员立即失权（R7）；输出提示成员数 |
+
+**刻意不做**（本期）：
+
+| 不做 | 归属 |
+|---|---|
+| `auth group rename` / `delete` | 未在设计清单；需要时再加 |
+| WebUI 组管理页 | P5 |
+| 按组签发 claims 的特殊逻辑 | **无需** —— `snapshot_for_user` → `expand()` 已走 `group_members` 三路并集（P1） |
+
+**验收**：
+
+- `auth group create team` → 成功；重复 → `group_exists`
+- `auth group add team --user bob@e` → 幂等；`group list` 成员数 1
+- `auth grant --group team --wiki wiki-a --write` → 组内成员 `can-i --write` = yes
+- `auth revoke --group team --wiki wiki-a` → 成员立即 no
+- `grant --user X --group G` 同时给 → 报错
+- 非 admin → 拒绝
+- 全量测试 + mypy + 架构门禁 0
