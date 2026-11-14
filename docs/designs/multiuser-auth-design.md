@@ -512,15 +512,15 @@ auth can-i --user U --wiki W --write  → 只读自检（K8s kubectl auth can-i�
 
 ## 7. 分期实施（每期独立可验收）
 
-| 期 | 内容 | 风险 | 依赖 |
-|---|---|---|---|
-| **P1** | `wiki_grants` + `groups` + `group_members` 表 + `GrantRepository`（建表/读写/查）+ 迁移探测（含 `public_read` → `public` 行）+ **M1 WAL / M2 连接复用 / M3 schema 一次** | **低**（纯新增） | **D3 D4 已定**，可开工 |
-| **P2** | `users.disabled_at` + `auth create-user/list-users/disable-user` | 低 | — |
-| **P3** | 签发装 `wgrants`（claims）+ `auth grant/revoke/can-i` CLI | 中（改签发） | P1 P2 |
-| **P3b** | 组管理 CLI（`auth group create/list/add/remove` + `grant --group`） | 低 | P1 P3 |
-| **P4** | 裁决接入（实时上界 + 快照比对 + disabled 检查 + fail-closed） | **中高**（动中间件） | P3（**D6 已定为 A**） |
-| **P5** | WebUI：授权管理页 + `/me` 返回权限矩阵 | 中 | P3 |
-| **P6** | share token（roadmap Phase 3）—— **独立表 `share_tokens`**（Q5 = a） | 低 | 可延后，与 P1–P5 解耦 |
+| 期 | 内容 | 风险 | 依赖 | 状态 |
+|---|---|---|---|---|
+| **P1** | `wiki_grants` + `groups` + `group_members` 表 + `GrantRepository`（建表/读写/查 + `*` 通配求值）+ **M1 WAL / M2 连接复用 / M3 schema 一次** | **低**（纯新增） | ✅ | ✅ **已完成**（§12.1） |
+| **P2** | `users.disabled_at` + `auth create-user/list-users/disable-user` | 低 | — | 待开工 |
+| **P3** | 签发装 `wgrants`（claims）+ `auth grant/revoke/can-i` CLI | 中（改签发） | P1 P2 | 待开工 |
+| **P3b** | 组管理 CLI（`auth group create/list/add/remove` + `grant --group`） | 低 | P1 P3 | 待开工 |
+| **P4** | 裁决接入（实时上界 + 快照比对 + disabled 检查 + fail-closed） | **中高**（动中间件） | P3（**D6 已定为 A**） | 待开工 |
+| **P5** | WebUI：授权管理页 + `/me` 返回权限矩阵 | 中 | P3 | 待开工 |
+| **P6** | share token（roadmap Phase 3）—— **独立表 `share_tokens`**（Q5 = a） | 低 | 可延后，与 P1–P5 解耦 | 待开工 |
 
 **建议顺序强调**：P1–P3 是**纯增量**（不动裁决路径），可先落地再评审 P4 的裁决策略。
 
@@ -578,7 +578,53 @@ auth can-i --user U --wiki W --write  → 只读自检（K8s kubectl auth can-i�
 
 ## 11. 关联文档
 
-- `docs/designs/multiuser-auth-research.md` — 业界调研（PostgreSQL / NIST / K8s / Casbin / GitHub 一手取证）
+- `docs/designs/multiuser-auth-research.md` — 业界调研（PostgreSQL / NIST / K8s / Casbin / GitHub / SQLite / SpiceDB / Envoy 一手取证）
+- `docs/summaries/2026-11-13-multiuser-auth-design-record.md` — 讨论与规划完整记录
 - `docs/llmwikify-auth-缺陷清单.md` — 现状缺陷与修复批注（P0/P1 已清）
 - `docs/designs/auth-and-sharing-roadmap.md` — 既有 Phase 3/4 规划（share token / hub）
 - `docs/designs/refactor-4layer-architecture.md` — 4 层依赖规则（`foundation` 不得依赖 `apps`）
+
+---
+
+## 12. 实现记录
+
+### 12.1 P1 · 授权表 + 仓库（2026-11-13 完成）
+
+**新增** `src/llmwikify/foundation/auth/grants.py`：
+
+| API | 作用 |
+|---|---|
+| `GrantRepository(db_path=None)` | 建表 + CRUD；WAL + 线程本地连接 |
+| `grant(type, id, wiki_id, *, read, write, granted_by)` | upsert 一行（加法，无 deny） |
+| `revoke(type, id, wiki_id)` | 删行（D5 / D6-a：下个请求即生效） |
+| `effective(user_id, wiki_id) -> (r, w)` | 单 wiki 实时上界，求值 `*`（Q3-a/c） |
+| `expand(user_id, wiki_ids) -> {wiki: (r,w)}` | 签发用：**快照永不含 `*`**（Q3-b） |
+| `create_group / list_groups / add_member / remove_member / list_members / groups_of` | 组管理（Q1） |
+| `list_grants(...)` | 审计查询 |
+| `PRINCIPAL_TYPES` / `WILDCARD` | `{'user','group','public'}` / `'*'` |
+
+**表结构**（与 §3.1 一致，含 CHECK 约束）：
+
+```sql
+wiki_grants(principal_type CHECK IN ('user','group','public'),
+            principal_id, wiki_id, can_read, can_write, granted_by, created_at,
+            PRIMARY KEY(principal_type, principal_id, wiki_id))
+groups(id, name, created_at)
+group_members(group_id, user_id, PRIMARY KEY(group_id, user_id))
+```
+
+**性能三措施落地**（§4.2）：
+
+| # | 措施 | 实现 |
+|---|---|---|
+| **M1** | WAL | `foundation.db.get_connection()` 默认 `wal=True` |
+| **M2** | 连接复用 | 三仓库共用**同一** thread-local `ManagedConnection`（测试断言 `u._connect() is a._connect() is g._connect()`） |
+| **M3** | schema 一次 | `_schema_ready()` / `_schema_current()` 快路径，跳过 `executescript` |
+
+**改动** `foundation/auth/db.py`：`UserRepository` / `ApiKeyRepository` 的 `_connect()` 改为返回
+线程本地持久连接；`_atomic_write()` 委托 `ManagedConnection.transaction()`（不再每写新建+关闭连接）。
+
+**测试** `tests/test_foundation_auth_grants.py`（23 条）：schema / WAL / 连接复用 / grant-revoke /
+通配求值与展开 / 组成员与即时撤权 / public 主体 / 参数校验。
+
+**验证**：全量 **5138 passed** · mypy 413 files 0 · 架构 0 violation · ruff 干净。

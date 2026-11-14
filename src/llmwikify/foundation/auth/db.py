@@ -159,11 +159,19 @@ class UserRepository:
     Writes use a single SQLite transaction (rollback journal): a Ctrl-C
     mid-write rolls back cleanly. No file-level tempfile+rename — that
     would invalidate WAL mode (decision §1.8 risk row).
+
+    Connections are **thread-local and persistent** (M1 WAL + M2 reuse):
+    ``foundation.db.get_connection`` hands back one connection per thread
+    instead of opening a new one per call (which measured ~8× slower).
     """
 
     def __init__(self, db_path: Path | None = None) -> None:
         self.db_path = db_path or auth_db_path()
         self._ensure_dir()
+        # M1 + M2: WAL journal + thread-local persistent connection.
+        from llmwikify.foundation.db import get_connection
+
+        self._mgr = get_connection(self.db_path)
         self._init_schema()
 
     def _ensure_dir(self) -> None:
@@ -177,37 +185,39 @@ class UserRepository:
             pass
 
     def _connect(self) -> sqlite3.Connection:
-        """Open a connection with row_factory + foreign_keys."""
-        from llmwikify.foundation.db import connect as _db_connect
-
-        return _db_connect(self.db_path)
+        """Thread-local persistent connection (M2)."""
+        return self._mgr.conn
 
     @contextmanager
     def _atomic_write(self) -> Iterator[sqlite3.Connection]:
         """Yields a connection, commits atomically on success.
 
-        Single in-memory transaction per write call. SQLite default
-        journal mode is rollback, so a Ctrl-C mid-write rolls back
-        cleanly. We do NOT use a file-level tempfile+rename trick —
-        that would invalidate WAL mode (keep it simple for a
-        single-table DB).
+        Delegates to the shared thread-local connection's transaction
+        context manager (auto-commit / rollback). The connection is NOT
+        closed here — it is reused for the next call (M2).
         """
-        conn = self._connect()
-        try:
+        with self._mgr.transaction() as conn:
             yield conn
-            conn.commit()
-        except Exception:
-            conn.rollback()
-            raise
-        finally:
-            conn.close()
+
+    @staticmethod
+    def _schema_current(conn: sqlite3.Connection) -> bool:
+        """M3 fast path: tables exist and the pre-PAT migration is done."""
+        row = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='users'"
+        ).fetchone()
+        if row is None:
+            return False
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(users)").fetchall()}
+        return "password_hash" not in cols
 
     def _init_schema(self) -> None:
-        with self._connect() as conn:
-            # P0-3: migrate a pre-PAT schema in place (drop only the
-            # obsolete password_hash column, back up first, keep rows).
-            _migrate_pre_pat_schema(conn, self.db_path)
-            conn.executescript("""
+        conn = self._connect()
+        if self._schema_current(conn):
+            return  # M3: schema already current — skip executescript
+        # P0-3: migrate a pre-PAT schema in place (drop only the
+        # obsolete password_hash column, back up first, keep rows).
+        _migrate_pre_pat_schema(conn, self.db_path)
+        conn.executescript("""
                 CREATE TABLE IF NOT EXISTS users (
                     id TEXT PRIMARY KEY,
                     email TEXT UNIQUE NOT NULL,
@@ -234,7 +244,7 @@ class UserRepository:
                 CREATE INDEX IF NOT EXISTS idx_api_keys_hash ON api_keys(key_hash);
                 CREATE INDEX IF NOT EXISTS idx_api_keys_user ON api_keys(user_id);
                 """)
-            conn.commit()
+        conn.commit()
 
     # ─── Public API ─────────────────────────────────────────────────
 
@@ -442,6 +452,10 @@ class ApiKeyRepository:
     def __init__(self, db_path: Path | None = None) -> None:
         self.db_path = db_path or auth_db_path()
         self._ensure_dir()
+        # M1 + M2: WAL journal + thread-local persistent connection.
+        from llmwikify.foundation.db import get_connection
+
+        self._mgr = get_connection(self.db_path)
         self._init_schema()
 
     def _ensure_dir(self) -> None:
@@ -452,17 +466,36 @@ class ApiKeyRepository:
             pass
 
     def _connect(self) -> sqlite3.Connection:
-        """Open a connection with row_factory + foreign_keys."""
-        from llmwikify.foundation.db import connect as _db_connect
+        """Thread-local persistent connection (M2)."""
+        return self._mgr.conn
 
-        return _db_connect(self.db_path)
+    @contextmanager
+    def _atomic_write(self) -> Iterator[sqlite3.Connection]:
+        """Yields a connection, commits atomically on success (M2)."""
+        with self._mgr.transaction() as conn:
+            yield conn
+
+    @staticmethod
+    def _schema_current(conn: sqlite3.Connection) -> bool:
+        """M3 fast path: both tables exist and pre-PAT migration is done."""
+        for table in ("users", "api_keys"):
+            row = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+                (table,),
+            ).fetchone()
+            if row is None:
+                return False
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(users)").fetchall()}
+        return "password_hash" not in cols
 
     def _init_schema(self) -> None:
-        with self._connect() as conn:
-            # P0-3: migrate a pre-PAT schema in place (drop only the
-            # obsolete password_hash column, back up first, keep rows).
-            _migrate_pre_pat_schema(conn, self.db_path)
-            conn.executescript("""
+        conn = self._connect()
+        if self._schema_current(conn):
+            return  # M3: schema already current — skip executescript
+        # P0-3: migrate a pre-PAT schema in place (drop only the
+        # obsolete password_hash column, back up first, keep rows).
+        _migrate_pre_pat_schema(conn, self.db_path)
+        conn.executescript("""
                 CREATE TABLE IF NOT EXISTS users (
                     id TEXT PRIMARY KEY,
                     email TEXT UNIQUE NOT NULL,
@@ -486,19 +519,7 @@ class ApiKeyRepository:
                 CREATE INDEX IF NOT EXISTS idx_api_keys_hash ON api_keys(key_hash);
                 CREATE INDEX IF NOT EXISTS idx_api_keys_user ON api_keys(user_id);
                 """)
-            conn.commit()
-
-    @contextmanager
-    def _atomic_write(self) -> Iterator[sqlite3.Connection]:
-        conn = self._connect()
-        try:
-            yield conn
-            conn.commit()
-        except Exception:
-            conn.rollback()
-            raise
-        finally:
-            conn.close()
+        conn.commit()
 
     def create(
         self,
