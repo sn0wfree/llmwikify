@@ -33,7 +33,12 @@ from ._jwt import TokenClaims, decode, encode
 from ._keyring import get_secret, require_secret, set_secret
 from ._pat import generate_pat, hash_pat, verify_pat
 from .db import ApiKeyRepository, UserRepository, auth_db_path, auto_first_admin
-from .grants import PRINCIPAL_TYPES, WILDCARD, GrantRepository
+from .grants import (
+    PRINCIPAL_TYPES,
+    WILDCARD,
+    GrantRepository,
+    snapshot_for_user,
+)
 from .prompt import FirstAdminPromptResult, prompt_first_admin
 from .utils import (
     chmod_600,
@@ -62,6 +67,7 @@ __all__ = [
     "GrantRepository",
     "PRINCIPAL_TYPES",
     "WILDCARD",
+    "snapshot_for_user",
     "auth_db_path",
     "auto_first_admin",
     "prompt_first_admin",

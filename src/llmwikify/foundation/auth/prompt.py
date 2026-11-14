@@ -146,10 +146,18 @@ def prompt_first_admin(
         )
         save_pat(pat)
 
+    # P3: admin keeps ["*"] / {} / write (G5 — unchanged); snapshot_for_user
+    # short-circuits on is_admin so known_wikis is irrelevant here.
+    from .grants import snapshot_for_user
+
+    wikis, wgrants, scope = snapshot_for_user(
+        user.id, [], is_admin=bool(user.is_first_admin)
+    )
     claims = TokenClaims.new(
         sub=f"user:{user.id}",
-        scope="write",
-        wikis=["*"],
+        scope=scope,
+        wikis=wikis,
+        wgrants=wgrants,
     )
     token = encode(claims, secret)
 

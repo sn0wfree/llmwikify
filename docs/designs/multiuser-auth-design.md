@@ -516,7 +516,7 @@ auth can-i --user U --wiki W --write  → 只读自检（K8s kubectl auth can-i�
 |---|---|---|---|---|
 | **P1** | `wiki_grants` + `groups` + `group_members` 表 + `GrantRepository`（建表/读写/查 + `*` 通配求值）+ **M1 WAL / M2 连接复用 / M3 schema 一次** | **低**（纯新增） | ✅ | ✅ **已完成**（§12.1） |
 | **P2** | `users.disabled_at` + `auth create-user/list-users/disable-user/enable-user` | 低 | — | ✅ **已完成**（§12.2） |
-| **P3** | 签发装 `wgrants`（claims）+ `auth grant/revoke/can-i` CLI | 中（改签发） | P1 P2 | 待开工 |
+| **P3** | 签发装 `wgrants`（claims）+ `auth grant/revoke/can-i` CLI | 中（改签发） | P1 P2 | ✅ **已完成**（§12.3） |
 | **P3b** | 组管理 CLI（`auth group create/list/add/remove` + `grant --group`） | 低 | P1 P3 | 待开工 |
 | **P4** | 裁决接入（实时上界 + 快照比对 + disabled 检查 + fail-closed） | **中高**（动中间件） | P3（**D6 已定为 A**） | 待开工 |
 | **P5** | WebUI：授权管理页 + `/me` 返回权限矩阵 | 中 | P3 | 待开工 |
@@ -714,10 +714,23 @@ create-user / list-users / disable-user / enable-user
 
 **验收**：
 
-- admin 签出的 token 与 P3 前**逐字节同形**（`wikis=["*"]`、无 `wgrants` 或空）
-- 非 admin 有 read 授权 → token `wikis` 含该 wiki、`wgrants[wiki]="r"`、`scope=read`
-- 非 admin 有 write 授权 → `scope=write`、`wgrants[wiki]="rw"`
-- 非 admin 零授权 → `wikis=[]`
-- `auth grant/revoke/can-i` 可用；非 admin 跑 → 拒绝
-- `auth grant --wiki '*'` 写入通配行；`can-i` 对新 wiki 返回 yes（Q3-c）
-- 全量测试 + mypy + 架构门禁 0
+- ✅ admin 签出的 token 与 P3 前**同形**（`wikis=["*"]`、`wgrants={}`、`scope=write`）
+- ✅ 非 admin 有 read 授权 → token `wikis` 含该 wiki、`wgrants[wiki]="r"`、`scope=read`
+- ✅ 非 admin 有 write 授权 → `scope=write`、`wgrants[wiki]="rw"`
+- ✅ 非 admin 零授权 → `wikis=[]`
+- ✅ `auth grant/revoke/can-i` 可用；非 admin 跑 → 拒绝
+- ✅ `auth grant --wiki '*'` 写入通配行；`can-i` 对新 wiki 返回 yes（Q3-c）
+- ✅ 全量测试 + mypy + 架构门禁 0
+
+**实现记录（2026-11-13）**：
+
+| 文件 | 改动 |
+|---|---|
+| `foundation/auth/_jwt.py` | `TokenClaims.wgrants: dict[str,str]`（`field(default_factory=dict)`）；`new(..., wgrants=)`；`from_dict` 对旧 token 容错 |
+| `foundation/auth/grants.py` | 新增 `snapshot_for_user(user_id, known_wikis, *, is_admin)` → `(wikis, wgrants, scope)` |
+| `foundation/auth/prompt.py` | 签发改走 `snapshot_for_user`（admin → `["*"]` 不变） |
+| `interfaces/cli/commands/auth.py` | `_sign_local_token(..., known_wikis)`；`_known_wiki_ids()`；`grant` / `revoke` / `can-i`（admin 专属） |
+| `interfaces/server/http/auth_routes.py` | `_build_user_claims()` + `_known_wiki_ids()`；`/register`、`/verify` 走快照；PAT scopes 作**上限**（与计算值取更紧者） |
+| 测试 | `TestSnapshotForUserP3`（4 条）+ `TestGrantCLIP3`（6 条）+ 更新 `TestSignLocalTokenGrant` |
+
+**验证**：全量 **5162 passed** · mypy 413 files 0 · 架构 0 violation · ruff 干净。

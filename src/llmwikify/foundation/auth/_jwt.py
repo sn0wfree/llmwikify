@@ -20,7 +20,7 @@ where the secret comes from (keyring or `--auth-token` override).
 from __future__ import annotations
 
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from typing import Any, cast
 
 import jwt
@@ -45,10 +45,15 @@ class TokenClaims:
 
     Fields:
         sub:    "user:<uuid>" | "share:<uuid>" — who/what issued this.
-        scope:  "read" | "write" — capability level.
-        wikis:  explicit whitelist of wiki_ids the token can act on.
-                Use ["*"] for owner bootstrap only; middleware always
-                checks per-request (decision 7).
+        scope:  "read" | "write" — global ceiling (P3: write iff the
+                snapshot contains at least one per-wiki "rw").
+        wikis:  whitelist of wiki_ids the token can act on.
+                Admin tokens keep ["*"] (owner bootstrap; the middleware
+                short-circuits on is_first_admin). Non-admin tokens are
+                expanded to a **concrete list** at signing time (Q3-b) —
+                a wiki created after signing is NOT silently added.
+        wgrants: per-wiki capability snapshot, ``{wiki_id: "r"|"rw"}``
+                (P3). Empty for admin tokens. Old tokens omit it → {}.
         exp:    unix timestamp (PyJWT requires int).
         iat:    unix timestamp.
         aud:    always "llmwikify".
@@ -62,6 +67,7 @@ class TokenClaims:
     iat: int
     aud: str = AUDIENCE
     iss: str = ISSUER
+    wgrants: dict[str, str] = field(default_factory=dict)
 
     @classmethod
     def new(
@@ -70,6 +76,7 @@ class TokenClaims:
         scope: str,
         wikis: list[str],
         ttl_seconds: int = DEFAULT_TTL_SECONDS,
+        wgrants: dict[str, str] | None = None,
     ) -> TokenClaims:
         """Construct a fresh claim with iat=now, exp=now+ttl."""
         now = int(time.time())
@@ -79,6 +86,7 @@ class TokenClaims:
             wikis=list(wikis),
             iat=now,
             exp=now + ttl_seconds,
+            wgrants=dict(wgrants or {}),
         )
 
     def to_dict(self) -> dict[str, object]:
@@ -91,6 +99,11 @@ class TokenClaims:
         # forward-compat with tokens that omit it.
         wikis_raw = data.get("wikis", [])
         wikis = list(wikis_raw) if isinstance(wikis_raw, list) else []
+        # P3: per-wiki capability snapshot; old tokens omit it → {}.
+        wgrants_raw = data.get("wgrants", {})
+        wgrants: dict[str, str] = {}
+        if isinstance(wgrants_raw, dict):
+            wgrants = {str(k): str(v) for k, v in wgrants_raw.items()}
         # PyJWT 值为 object；cast 无运行时开销，int() 语义不变。
         exp = int(cast(Any, data["exp"]))
         return cls(
@@ -101,6 +114,7 @@ class TokenClaims:
             iat=int(cast(Any, data.get("iat", exp - DEFAULT_TTL_SECONDS))),
             aud=str(data.get("aud", AUDIENCE)),
             iss=str(data.get("iss", ISSUER)),
+            wgrants=wgrants,
         )
 
 

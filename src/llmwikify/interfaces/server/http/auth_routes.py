@@ -53,6 +53,43 @@ def _get_jwt_secret() -> bytes:
     return require_secret()
 
 
+def _known_wiki_ids(request: Request) -> list[str]:
+    """Enumerate registered wiki ids for token snapshots (P3)."""
+    registry = getattr(request.app.state, "wiki_registry", None)
+    if registry is None:
+        return []
+    try:
+        return [w.wiki_id for w in registry.list_wikis()]
+    except Exception:
+        logger.debug("wiki enumeration failed", exc_info=True)
+        return []
+
+
+def _build_user_claims(user: Any, request: Request, *, scope: str | None = None) -> Any:
+    """Build a user JWT from live grants (P3 / Q3-b).
+
+    admin → ["*"] / {} / write (G5); non-admin → expanded concrete snapshot.
+    ``scope`` (when given, e.g. PAT ``scopes``) acts as a **ceiling**: the
+    tighter of ``scope`` and the computed scope wins — a PAT can never
+    widen what the user's grants allow.
+    """
+    from llmwikify.foundation.auth import snapshot_for_user
+
+    is_admin = bool(getattr(user, "is_first_admin", False))
+    wikis, wgrants, computed = snapshot_for_user(
+        user.id, _known_wiki_ids(request), is_admin=is_admin
+    )
+    final_scope = computed
+    if scope is not None:
+        final_scope = "read" if (scope == "read" or computed == "read") else "write"
+    return TokenClaims.new(
+        sub=f"user:{user.id}",
+        scope=final_scope,
+        wikis=wikis,
+        wgrants=wgrants,
+    )
+
+
 def _build_router() -> APIRouter:
     router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -123,12 +160,8 @@ def _build_router() -> APIRouter:
             scopes="write",
         )
 
-        # Build JWT for immediate use.
-        claims = TokenClaims.new(
-            sub=f"user:{user.id}",
-            scope="write",
-            wikis=["*"],
-        )
+        # Build JWT for immediate use (P3: snapshot from live grants).
+        claims = _build_user_claims(user, request)
         token = encode(claims, _get_jwt_secret())
 
         return {
@@ -195,12 +228,9 @@ def _build_router() -> APIRouter:
                 },
             )
 
-        # Issue JWT — PAT owner is admin, always gets all-wikis access.
-        claims = TokenClaims.new(
-            sub=f"user:{user.id}",
-            scope=api_key.scopes,
-            wikis=["*"],
-        )
+        # Issue JWT from live grants (P3). PAT scopes remain the ceiling
+        # when tighter than the computed one.
+        claims = _build_user_claims(user, request, scope=api_key.scopes)
         token = encode(claims, _get_jwt_secret())
 
         response.set_cookie(

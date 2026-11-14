@@ -39,14 +39,17 @@ from llmwikify.foundation.auth import (  # noqa: E402
     UserRepository,
 )
 from llmwikify.interfaces.cli.commands.auth import (  # noqa: E402
+    run_auth_can_i,
     run_auth_create_token,
     run_auth_create_user,
     run_auth_disable_user,
     run_auth_enable_user,
+    run_auth_grant,
     run_auth_init,
     run_auth_list_tokens,
     run_auth_list_users,
     run_auth_logout,
+    run_auth_revoke_grant,
     run_auth_revoke_token,
     run_auth_token,
     run_auth_whoami,
@@ -515,9 +518,9 @@ class TestAuthLogout:
 
 
 class TestSignLocalTokenGrant:
-    """P1-4: a non-admin must not receive an owner-level (write) token."""
+    """P1-4 + P3: grant-shaped tokens (admin keeps *, non-admin expands)."""
 
-    def _claims(self, is_first_admin: bool):
+    def _claims(self, is_first_admin: bool, known_wikis: list[str] | None = None):
         from types import SimpleNamespace
 
         from llmwikify.foundation.auth import decode, set_secret
@@ -525,17 +528,23 @@ class TestSignLocalTokenGrant:
 
         user = SimpleNamespace(id="u-test", is_first_admin=is_first_admin)
         secret = set_secret()  # creates one on a fresh test home
-        return decode(_sign_local_token(user, secret), secret)
+        return decode(
+            _sign_local_token(user, secret, known_wikis=known_wikis or []),
+            secret,
+        )
 
     def test_admin_keeps_write_scope(self):
-        claims = self._claims(is_first_admin=True)
+        claims = self._claims(is_first_admin=True, known_wikis=["a", "b"])
         assert claims.scope == "write"
         assert claims.wikis == ["*"]
+        assert claims.wgrants == {}
 
-    def test_non_admin_is_read_only(self):
-        claims = self._claims(is_first_admin=False)
+    def test_non_admin_no_grants_is_empty(self):
+        """P3 + D8: zero grants → empty snapshot, read ceiling."""
+        claims = self._claims(is_first_admin=False, known_wikis=["a", "b"])
         assert claims.scope == "read"
-        assert claims.wikis == ["*"]
+        assert claims.wikis == []
+        assert claims.wgrants == {}
 
     def test_missing_flag_defaults_to_read(self):
         """A user record without the flag must not silently become admin."""
@@ -546,8 +555,236 @@ class TestSignLocalTokenGrant:
 
         user = SimpleNamespace(id="u-x")  # no is_first_admin attribute
         secret = set_secret()
-        claims = decode(_sign_local_token(user, secret), secret)
+        claims = decode(_sign_local_token(user, secret, known_wikis=[]), secret)
         assert claims.scope == "read"
+        assert claims.wikis == []
+
+
+class TestSnapshotForUserP3:
+    """P3: snapshot_for_user — admin unchanged, non-admin expands grants."""
+
+    @staticmethod
+    def _snap(is_admin: bool, known: list[str], *, uid: str = "u-snap"):
+        from llmwikify.foundation.auth import snapshot_for_user
+
+        return snapshot_for_user(uid, known, is_admin=is_admin)
+
+    def test_admin_unchanged(self):
+        wikis, wgrants, scope = self._snap(True, ["a", "b", "c"])
+        assert wikis == ["*"]
+        assert wgrants == {}
+        assert scope == "write"
+
+    def test_non_admin_no_grants(self):
+        wikis, wgrants, scope = self._snap(False, ["a", "b"])
+        assert wikis == []
+        assert wgrants == {}
+        assert scope == "read"
+
+    def test_non_admin_with_grants(self, monkeypatch, tmp_path):
+        from llmwikify.foundation.auth import GrantRepository, snapshot_for_user
+
+        monkeypatch.setenv("LLMWIKIFY_HOME", str(tmp_path))
+        repo = GrantRepository(db_path=tmp_path / "snap.db")
+        repo.grant("user", "u-snap", "wiki-a", write=True)
+        repo.grant("user", "u-snap", "wiki-b", read=True)
+
+        wikis, wgrants, scope = snapshot_for_user(
+            "u-snap", ["wiki-a", "wiki-b", "wiki-c"], is_admin=False,
+            db_path=tmp_path / "snap.db",
+        )
+        assert set(wikis) == {"wiki-a", "wiki-b"}
+        assert wgrants == {"wiki-a": "rw", "wiki-b": "r"}
+        assert scope == "write"  # has at least one rw
+
+    def test_non_admin_read_only_scope(self, monkeypatch, tmp_path):
+        from llmwikify.foundation.auth import GrantRepository, snapshot_for_user
+
+        monkeypatch.setenv("LLMWIKIFY_HOME", str(tmp_path))
+        repo = GrantRepository(db_path=tmp_path / "snap2.db")
+        repo.grant("user", "u-snap", "wiki-a", read=True)
+
+        wikis, wgrants, scope = snapshot_for_user(
+            "u-snap", ["wiki-a"], is_admin=False, db_path=tmp_path / "snap2.db"
+        )
+        assert wikis == ["wiki-a"]
+        assert wgrants == {"wiki-a": "r"}
+        assert scope == "read"
+
+    def test_wildcard_expands_in_snapshot(self, monkeypatch, tmp_path):
+        from llmwikify.foundation.auth import (
+            GrantRepository,
+            snapshot_for_user,
+        )
+
+        monkeypatch.setenv("LLMWIKIFY_HOME", str(tmp_path))
+        repo = GrantRepository(db_path=tmp_path / "snap3.db")
+        repo.grant("user", "u-snap", "*", read=True)
+
+        wikis, wgrants, scope = snapshot_for_user(
+            "u-snap", ["x", "y"], is_admin=False, db_path=tmp_path / "snap3.db"
+        )
+        assert set(wikis) == {"x", "y"}
+        assert "*" not in wikis  # Q3-b: snapshot never contains the literal
+        assert all(v == "r" for v in wgrants.values())
+        assert scope == "read"
+
+
+class TestGrantCLIP3:
+    """P3: auth grant / revoke / can-i (admin-only)."""
+
+    @staticmethod
+    def _init_admin(email: str = "root@e.com") -> None:
+        run_auth_init(wiki=None, config={}, args=argparse.Namespace(email=email))
+
+    def test_grant_then_can_i(self):
+        self._init_admin()
+        from llmwikify.foundation.auth import UserRepository
+
+        UserRepository().create(email="carol@e.com", is_first_admin=False)
+
+        out = io.StringIO()
+        with patch("sys.stdout", out):
+            rc = run_auth_grant(
+                None,
+                {},
+                argparse.Namespace(user="carol@e.com", wiki="wiki-a", write=False),
+            )
+        assert rc == 0
+        assert "Granted" in out.getvalue()
+
+        out2 = io.StringIO()
+        with patch("sys.stdout", out2):
+            rc2 = run_auth_can_i(
+                None,
+                {},
+                argparse.Namespace(user="carol@e.com", wiki="wiki-a", write=False),
+            )
+        assert rc2 == 0
+        assert out2.getvalue().strip() == "yes"
+
+        # Not granted elsewhere.
+        out3 = io.StringIO()
+        with patch("sys.stdout", out3):
+            rc3 = run_auth_can_i(
+                None,
+                {},
+                argparse.Namespace(user="carol@e.com", wiki="wiki-b", write=False),
+            )
+        assert rc3 == 1
+        assert out3.getvalue().strip() == "no"
+
+    def test_grant_write_then_can_i_write(self):
+        self._init_admin()
+        from llmwikify.foundation.auth import UserRepository
+
+        UserRepository().create(email="dave@e.com", is_first_admin=False)
+        with patch("sys.stdout", io.StringIO()):
+            run_auth_grant(
+                None,
+                {},
+                argparse.Namespace(user="dave@e.com", wiki="wiki-a", write=True),
+            )
+        out = io.StringIO()
+        with patch("sys.stdout", out):
+            rc = run_auth_can_i(
+                None,
+                {},
+                argparse.Namespace(user="dave@e.com", wiki="wiki-a", write=True),
+            )
+        assert rc == 0
+        assert out.getvalue().strip() == "yes"
+
+    def test_revoke_takes_effect(self):
+        self._init_admin()
+        from llmwikify.foundation.auth import UserRepository
+
+        UserRepository().create(email="eve@e.com", is_first_admin=False)
+        with patch("sys.stdout", io.StringIO()):
+            run_auth_grant(
+                None,
+                {},
+                argparse.Namespace(user="eve@e.com", wiki="wiki-a", write=True),
+            )
+        with patch("sys.stdout", io.StringIO()):
+            rc = run_auth_revoke_grant(
+                None, {}, argparse.Namespace(user="eve@e.com", wiki="wiki-a")
+            )
+        assert rc == 0
+        out = io.StringIO()
+        with patch("sys.stdout", out):
+            rc2 = run_auth_can_i(
+                None,
+                {},
+                argparse.Namespace(user="eve@e.com", wiki="wiki-a", write=False),
+            )
+        assert rc2 == 1
+        assert out.getvalue().strip() == "no"
+
+    def test_wildcard_grant_covers_new_wiki(self):
+        """Q3-c: a '*' grant covers a wiki created after the grant."""
+        self._init_admin()
+        from llmwikify.foundation.auth import UserRepository
+
+        UserRepository().create(email="fred@e.com", is_first_admin=False)
+        with patch("sys.stdout", io.StringIO()):
+            run_auth_grant(
+                None,
+                {},
+                argparse.Namespace(user="fred@e.com", wiki="*", write=False),
+            )
+        out = io.StringIO()
+        with patch("sys.stdout", out):
+            rc = run_auth_can_i(
+                None,
+                {},
+                argparse.Namespace(user="fred@e.com", wiki="brand-new", write=False),
+            )
+        assert rc == 0
+        assert out.getvalue().strip() == "yes"
+
+    def test_grant_requires_admin(self):
+        self._init_admin()
+        from llmwikify.foundation.auth import UserRepository
+
+        other = UserRepository().create(email="bob@e.com", is_first_admin=False)
+        # Switch identity to the non-admin.
+        from llmwikify.foundation.auth import get_secret, require_secret
+        from llmwikify.interfaces.cli.commands.auth import (
+            _chmod_600,
+            _local_token_path,
+            _sign_local_token,
+            ensure_dir_700,
+        )
+
+        secret = get_secret() or require_secret()
+        token = _sign_local_token(other, secret, known_wikis=[])
+        path = _local_token_path()
+        ensure_dir_700(path.parent)
+        path.write_text(token + "\n", encoding="utf-8", newline="\n")
+        _chmod_600(path)
+
+        err = io.StringIO()
+        with patch("sys.stderr", err):
+            rc = run_auth_grant(
+                None,
+                {},
+                argparse.Namespace(user="bob@e.com", wiki="wiki-a", write=False),
+            )
+        assert rc == 1
+        assert "Admin privileges required" in err.getvalue()
+
+    def test_can_i_admin_always_yes(self):
+        self._init_admin()
+        out = io.StringIO()
+        with patch("sys.stdout", out):
+            rc = run_auth_can_i(
+                None,
+                {},
+                argparse.Namespace(user="root@e.com", wiki="anything", write=True),
+            )
+        assert rc == 0
+        assert "yes" in out.getvalue()
 
 
 class TestUserLifecycleCLIP2:

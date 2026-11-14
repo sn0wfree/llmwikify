@@ -406,8 +406,44 @@ class GrantRepository:
         return out
 
 
+def snapshot_for_user(
+    user_id: str,
+    known_wikis: Iterable[str],
+    *,
+    is_admin: bool,
+    db_path: Path | str | None = None,
+) -> tuple[list[str], dict[str, str], str]:
+    """Build a token snapshot from the live grants (P3 / Q3-b).
+
+    Returns ``(wikis, wgrants, scope)``:
+
+    * **admin** → ``(["*"], {}, "write")`` — unchanged from pre-P3
+      behaviour (G5). The middleware short-circuits on ``is_first_admin``
+      (PG owner, design §5.2 step 5), and the ``*`` keeps registry/search
+      filters able to see wikis created after signing.
+    * **non-admin** → concrete expanded lists; ``scope`` is the global
+      ceiling = ``"write"`` iff any per-wiki grant is ``"rw"`` (P3
+      clarification: the old "non-admin is always read-only" was the D8
+      no-grant *status quo*, not a rule — D4 allows per-wiki write).
+    """
+    if is_admin:
+        return [WILDCARD], {}, "write"
+    repo = GrantRepository(db_path=db_path)
+    expanded = repo.expand(user_id, known_wikis)
+    wikis: list[str] = []
+    wgrants: dict[str, str] = {}
+    for wid, (r, w) in expanded.items():
+        if not r:
+            continue
+        wikis.append(wid)
+        wgrants[wid] = "rw" if w else "r"
+    scope = "write" if any(v == "rw" for v in wgrants.values()) else "read"
+    return wikis, wgrants, scope
+
+
 __all__ = [
     "GrantRepository",
     "PRINCIPAL_TYPES",
     "WILDCARD",
+    "snapshot_for_user",
 ]

@@ -41,27 +41,54 @@ _local_token_path = local_token_path
 _chmod_600 = chmod_600
 
 
-def _sign_local_token(user: Any, secret: bytes) -> str:
+def _known_wiki_ids(config: dict | None = None) -> list[str]:
+    """Enumerate registered wiki ids for token snapshots (P3).
+
+    Interfaces may import kernel. Falls back to ``[]`` on any failure —
+    an empty snapshot is safe (deny-by-default for non-admins).
+    """
+    try:
+        from llmwikify.kernel.multi_wiki.registry import WikiRegistry
+
+        registry = WikiRegistry(config or {})
+        registry.initialize()
+        try:
+            return [w.wiki_id for w in registry.list_wikis()]
+        finally:
+            registry.close()
+    except Exception:
+        logger.debug("wiki enumeration failed", exc_info=True)
+        return []
+
+
+def _sign_local_token(
+    user: Any, secret: bytes, known_wikis: list[str] | None = None
+) -> str:
     """Sign a local JWT whose grant matches ``user``'s role.
 
-    P1-4: every token-issuance site used to hardcode
-    ``scope="write", wikis=["*"]``, so any local user who ran
-    ``auth token`` walked away with owner-level write access to every
-    wiki regardless of whether they were an admin. Admins keep the full
-    grant; everyone else gets a **read-only** token.
+    P1-4: non-admins never get owner-level write by default.
+    P3: the snapshot comes from ``snapshot_for_user`` —
+      * admin  → ``wikis=["*"]``, ``wgrants={}``, ``scope=write`` (G5, unchanged)
+      * non-admin → concrete expanded lists from ``wiki_grants`` (Q3-b);
+        ``scope=write`` iff any per-wiki grant is ``rw`` (D4).
 
-    Read scope still covers every wiki: decision 1 makes reads open, and
-    there is no per-user wiki-grant table to narrow it by. Closing that
-    gap needs a grant model, not a token flag (see
-    docs/llmwikify-auth-缺陷清单.md P1-4).
+    ``known_wikis`` defaults to enumerating the registry; pass ``[]``
+    only in tests that deliberately want an empty snapshot.
     """
-    from llmwikify.foundation.auth import TokenClaims, encode
+    from llmwikify.foundation.auth import TokenClaims, encode, snapshot_for_user
 
-    is_admin = bool(getattr(user, "is_first_admin", False))
+    if known_wikis is None:
+        known_wikis = _known_wiki_ids()
+    wikis, wgrants, scope = snapshot_for_user(
+        user.id,
+        known_wikis,
+        is_admin=bool(getattr(user, "is_first_admin", False)),
+    )
     claims = TokenClaims.new(
         sub=f"user:{user.id}",
-        scope="write" if is_admin else "read",
-        wikis=["*"],
+        scope=scope,
+        wikis=wikis,
+        wgrants=wgrants,
     )
     return encode(claims, secret)
 
@@ -647,6 +674,124 @@ def run_auth_enable_user(wiki: Any, config: dict, args: Any) -> int:
     return 0
 
 
+# ─── P3: grant / revoke / can-i (admin-only, Q4) ──────────────
+
+
+def run_auth_grant(wiki: Any, config: dict, args: Any) -> int:
+    """``llmwikify auth grant --user U --wiki W [--write]`` (P3).
+
+    Upserts one grant row.缺省 ``read``；``--write`` 蕴含 read.
+    ``--wiki '*'`` grants every wiki, including future ones (Q3-a / Q3-c).
+    """
+    from llmwikify.foundation.auth import AuthError, GrantRepository, UserRepository
+
+    if _require_admin() is None:
+        return 1
+
+    user_spec = (getattr(args, "user", "") or "").strip()
+    wiki_id = (getattr(args, "wiki", "") or "").strip()
+    if not user_spec or not wiki_id:
+        print(
+            "[!] Usage: llmwikify auth grant --user <email|id> --wiki <id|*> "
+            "[--write]",
+            file=sys.stderr,
+        )
+        return 1
+
+    target = _resolve_user_spec(UserRepository(), user_spec)
+    if target is None:
+        print(f"[!] No user matching {user_spec!r}.", file=sys.stderr)
+        return 1
+
+    want_write = bool(getattr(args, "write", False))
+    try:
+        GrantRepository().grant(
+            "user",
+            target.id,
+            wiki_id,
+            read=True,
+            write=want_write,
+            granted_by=_admin_id(),
+        )
+    except AuthError as exc:
+        print(f"[!] {exc.detail}", file=sys.stderr)
+        return 1
+
+    mode = "read+write" if want_write else "read"
+    print(f"✓ Granted {target.email} → {wiki_id} ({mode})")
+    print("  Note: existing tokens keep their snapshot; run "
+          "`llmwikify auth token` as that user to refresh.")
+    return 0
+
+
+def run_auth_revoke_grant(wiki: Any, config: dict, args: Any) -> int:
+    """``llmwikify auth revoke --user U --wiki W`` (P3). D5/D6: delete row."""
+    from llmwikify.foundation.auth import GrantRepository, UserRepository
+
+    if _require_admin() is None:
+        return 1
+
+    user_spec = (getattr(args, "user", "") or "").strip()
+    wiki_id = (getattr(args, "wiki", "") or "").strip()
+    if not user_spec or not wiki_id:
+        print(
+            "[!] Usage: llmwikify auth revoke --user <email|id> --wiki <id|*>",
+            file=sys.stderr,
+        )
+        return 1
+
+    target = _resolve_user_spec(UserRepository(), user_spec)
+    if target is None:
+        print(f"[!] No user matching {user_spec!r}.", file=sys.stderr)
+        return 1
+
+    if GrantRepository().revoke("user", target.id, wiki_id):
+        print(f"✓ Revoked {target.email} → {wiki_id} "
+              "(takes effect on the next request)")
+    else:
+        print(f"· No grant for {target.email} → {wiki_id}.")
+    return 0
+
+
+def run_auth_can_i(wiki: Any, config: dict, args: Any) -> int:
+    """``llmwikify auth can-i --user U --wiki W [--write]`` → yes/no (K8s)."""
+    from llmwikify.foundation.auth import GrantRepository, UserRepository
+
+    if _require_admin() is None:
+        return 1
+
+    user_spec = (getattr(args, "user", "") or "").strip()
+    wiki_id = (getattr(args, "wiki", "") or "").strip()
+    if not user_spec or not wiki_id:
+        print(
+            "[!] Usage: llmwikify auth can-i --user <email|id> --wiki <id|*> "
+            "[--write]",
+            file=sys.stderr,
+        )
+        return 1
+
+    target = _resolve_user_spec(UserRepository(), user_spec)
+    if target is None:
+        print(f"[!] No user matching {user_spec!r}.", file=sys.stderr)
+        return 1
+
+    if target.is_first_admin:
+        print("yes  (admin, implicit full access)")
+        return 0
+
+    can_read, can_write = GrantRepository().effective(target.id, wiki_id)
+    need_write = bool(getattr(args, "write", False))
+    ok = can_write if need_write else can_read
+    print("yes" if ok else "no")
+    return 0 if ok else 1
+
+
+def _admin_id() -> str | None:
+    """id of the current admin (for ``granted_by`` audit), or None."""
+    user = _resolve_local_user()
+    return user.id if user is not None else None
+
+
 # ─── argparse subparser ────────────────────────────────────────────
 
 
@@ -707,6 +852,33 @@ def setup_auth_parser(subparsers: Any) -> None:
     )
     p_eu.add_argument("user", help="Email / username / id to enable")
 
+    # P3: grant / revoke / can-i (admin only)
+    p_gr = auth_sub.add_parser(
+        "grant", help="Grant wiki access to a user (admin only)"
+    )
+    p_gr.add_argument("--user", required=True, help="Email / username / id")
+    p_gr.add_argument(
+        "--wiki", required=True, help="Wiki id, or '*' for all wikis"
+    )
+    p_gr.add_argument(
+        "--write", action="store_true", help="Grant write (implies read)"
+    )
+    p_rv = auth_sub.add_parser(
+        "revoke", help="Revoke a user's wiki grant (admin only)"
+    )
+    p_rv.add_argument("--user", required=True, help="Email / username / id")
+    p_rv.add_argument(
+        "--wiki", required=True, help="Wiki id, or '*' to drop the wildcard"
+    )
+    p_ci = auth_sub.add_parser(
+        "can-i", help="Check whether a user can access a wiki (admin only)"
+    )
+    p_ci.add_argument("--user", required=True, help="Email / username / id")
+    p_ci.add_argument("--wiki", required=True, help="Wiki id")
+    p_ci.add_argument(
+        "--write", action="store_true", help="Check write instead of read"
+    )
+
 
 # ─── Command class ──────────────────────────────────────────────
 
@@ -726,7 +898,8 @@ class AuthCommand(Command):
             print(
                 "Usage: llmwikify auth {init,create-token,list-tokens,"
                 "revoke-token,token,whoami,logout,"
-                "create-user,list-users,disable-user,enable-user}",
+                "create-user,list-users,disable-user,enable-user,"
+                "grant,revoke,can-i}",
                 file=sys.stderr,
             )
             return 1
@@ -752,5 +925,11 @@ class AuthCommand(Command):
             return run_auth_disable_user(wiki, config, args)
         if sub == "enable-user":
             return run_auth_enable_user(wiki, config, args)
+        if sub == "grant":
+            return run_auth_grant(wiki, config, args)
+        if sub == "revoke":
+            return run_auth_revoke_grant(wiki, config, args)
+        if sub == "can-i":
+            return run_auth_can_i(wiki, config, args)
         print(f"Unknown auth subcommand: {sub}", file=sys.stderr)
         return 1
