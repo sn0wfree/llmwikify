@@ -628,3 +628,42 @@ group_members(group_id, user_id, PRIMARY KEY(group_id, user_id))
 通配求值与展开 / 组成员与即时撤权 / public 主体 / 参数校验。
 
 **验证**：全量 **5138 passed** · mypy 413 files 0 · 架构 0 violation · ruff 干净。
+
+### 12.2 P2 · 用户生命周期（2026-11-13，doc-first）
+
+**范围**（对应 §5.3 与 D8 / Q2 / Q4）：
+
+| 项 | 内容 |
+|---|---|
+| **schema** | `users` 增列 `disabled_at TEXT`（NULL=有效；非 NULL=禁用）；已有库走幂等 `ALTER TABLE ADD COLUMN` |
+| **`User` dataclass** | 增 `disabled_at` 字段 |
+| **`create-user`** | 建**非 admin** 用户（admin 已由 `registration_closed` 锁定，Q2：属主机制后续升级）；`username` 自动派生去重（P1-5 同规则）；**admin 专属**（Q4） |
+| **`list-users`** | 列 id / email / username / is_first_admin / disabled_at / 授权摘要；**admin 专属** |
+| **`disable-user`** | 置 `disabled_at=now()`（软删，**不删行**，审计留痕）；**admin 专属**（Q4） |
+| **`enable-user`** | 置 `disabled_at=NULL` —— **P2 附带**（超出原设计清单，为避免单向门） |
+
+**身份校验（Q4 = admin 专属）**：
+
+```
+create-user / list-users / disable-user / enable-user
+  → 从 local_token 解出当前用户
+  → 不是 admin / 解不出 / 无 token → 拒绝（fail-closed）
+```
+
+**刻意不做**（本期）：
+
+| 不做 | 归属 |
+|---|---|
+| 裁决时查 `disabled_at`（让已发 token 立即失效） | **P4**（D6-a 的第 4 步） |
+| 删除用户（硬删） | 非目标；软删即可 |
+| 授权摘要的完整矩阵展示 | P5 WebUI |
+
+**验收**：
+
+- `auth create-user --email a@x` → 建非 admin，username 自动派生
+- 重复 email → `email_taken`
+- 非 admin 跑 `create-user` → 拒绝
+- `auth disable-user a@x` → `disabled_at` 非空；再次禁用幂等
+- `auth enable-user a@x` → `disabled_at` 归 NULL
+- `auth list-users` → 表格含 disabled 标记
+- 全量测试 + mypy + 架构门禁 0
