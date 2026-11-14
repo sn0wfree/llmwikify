@@ -45,6 +45,10 @@ from llmwikify.interfaces.cli.commands.auth import (  # noqa: E402
     run_auth_disable_user,
     run_auth_enable_user,
     run_auth_grant,
+    run_auth_group_add,
+    run_auth_group_create,
+    run_auth_group_list,
+    run_auth_group_remove,
     run_auth_init,
     run_auth_list_tokens,
     run_auth_list_users,
@@ -785,6 +789,139 @@ class TestGrantCLIP3:
             )
         assert rc == 0
         assert "yes" in out.getvalue()
+
+
+class TestGroupCLIP3b:
+    """P3b: auth group create/list/add/remove + grant --group."""
+
+    @staticmethod
+    def _init_admin(email: str = "root@e.com") -> None:
+        run_auth_init(wiki=None, config={}, args=argparse.Namespace(email=email))
+
+    @staticmethod
+    def _run(fn, **kw):
+        out, err = io.StringIO(), io.StringIO()
+        with patch("sys.stdout", out), patch("sys.stderr", err):
+            rc = fn(None, {}, argparse.Namespace(**kw))
+        return rc, out.getvalue(), err.getvalue()
+
+    def test_group_create_and_list(self):
+        self._init_admin()
+        rc, out, _ = self._run(run_auth_group_create, name="team")
+        assert rc == 0
+        assert "Created group: team" in out
+
+        # Duplicate name.
+        rc2, _, err2 = self._run(run_auth_group_create, name="team")
+        assert rc2 == 1
+        assert "already exists" in err2
+
+        rc3, out3, _ = self._run(run_auth_group_list)
+        assert rc3 == 0
+        assert "team" in out3
+        assert "0" in out3  # member count
+
+    def test_group_add_remove_member(self):
+        self._init_admin()
+        from llmwikify.foundation.auth import UserRepository
+
+        UserRepository().create(email="bob@e.com", is_first_admin=False)
+        self._run(run_auth_group_create, name="g1")
+
+        rc, out, _ = self._run(run_auth_group_add, group="g1", user="bob@e.com")
+        assert rc == 0
+        assert "Added" in out
+
+        # Idempotent.
+        rc2, out2, _ = self._run(run_auth_group_add, group="g1", user="bob@e.com")
+        assert rc2 == 0
+        assert "already in" in out2
+
+        rc3, out3, _ = self._run(run_auth_group_list)
+        assert "1" in out3.split("team")[-1] or "g1" in out3
+
+        rc4, out4, _ = self._run(run_auth_group_remove, group="g1", user="bob@e.com")
+        assert rc4 == 0
+        assert "Removed" in out4
+
+    def test_group_grant_applies_to_member(self):
+        """Group grant → member can-i yes; revoke → no (immediate)."""
+        self._init_admin()
+        from llmwikify.foundation.auth import UserRepository
+
+        UserRepository().create(email="carol@e.com", is_first_admin=False)
+        self._run(run_auth_group_create, name="team")
+        self._run(run_auth_group_add, group="team", user="carol@e.com")
+
+        rc, out, _ = self._run(
+            run_auth_grant, group="team", wiki="wiki-a", write=True
+        )
+        assert rc == 0
+        assert "Granted" in out
+        assert "1 member" in out
+
+        rc2, out2, _ = self._run(
+            run_auth_can_i, user="carol@e.com", wiki="wiki-a", write=True
+        )
+        assert rc2 == 0
+        assert out2.strip() == "yes"
+
+        rc3, out3, _ = self._run(run_auth_revoke_grant, group="team", wiki="wiki-a")
+        assert rc3 == 0
+        assert "Revoked" in out3
+
+        rc4, out4, _ = self._run(
+            run_auth_can_i, user="carol@e.com", wiki="wiki-a", write=False
+        )
+        assert rc4 == 1
+        assert out4.strip() == "no"
+
+    def test_user_and_group_mutually_exclusive(self):
+        self._init_admin()
+        from llmwikify.foundation.auth import UserRepository
+
+        UserRepository().create(email="dave@e.com", is_first_admin=False)
+        self._run(run_auth_group_create, name="tg")
+
+        # Both given → error.
+        rc, _, err = self._run(
+            run_auth_grant,
+            user="dave@e.com",
+            group="tg",
+            wiki="wiki-a",
+            write=False,
+        )
+        assert rc == 1
+        assert "exactly one" in err
+
+        # Neither given → error.
+        rc2, _, err2 = self._run(run_auth_grant, wiki="wiki-a", write=False)
+        assert rc2 == 1
+        assert "exactly one" in err2
+
+    def test_group_commands_require_admin(self):
+        self._init_admin()
+        from llmwikify.foundation.auth import UserRepository
+
+        other = UserRepository().create(email="eve@e.com", is_first_admin=False)
+        from llmwikify.foundation.auth import get_secret, require_secret
+        from llmwikify.interfaces.cli.commands.auth import (
+            _chmod_600,
+            _local_token_path,
+            _sign_local_token,
+            ensure_dir_700,
+        )
+
+        secret = get_secret() or require_secret()
+        token = _sign_local_token(other, secret, known_wikis=[])
+        path = _local_token_path()
+        ensure_dir_700(path.parent)
+        path.write_text(token + "\n", encoding="utf-8", newline="\n")
+        _chmod_600(path)
+
+        rc, _, err = self._run(run_auth_group_create, name="x")
+        assert rc == 1
+        assert "Admin privileges required" in err
 
 
 class TestUserLifecycleCLIP2:

@@ -678,36 +678,36 @@ def run_auth_enable_user(wiki: Any, config: dict, args: Any) -> int:
 
 
 def run_auth_grant(wiki: Any, config: dict, args: Any) -> int:
-    """``llmwikify auth grant --user U --wiki W [--write]`` (P3).
+    """``llmwikify auth grant (--user U | --group G) --wiki W [--write]`` (P3).
 
-    Upserts one grant row.缺省 ``read``；``--write`` 蕴含 read.
+    Upserts one grant row. 缺省 ``read``；``--write`` 蕴含 read.
     ``--wiki '*'`` grants every wiki, including future ones (Q3-a / Q3-c).
+    Exactly one of --user / --group (P3b).
     """
-    from llmwikify.foundation.auth import AuthError, GrantRepository, UserRepository
+    from llmwikify.foundation.auth import AuthError, GrantRepository
 
     if _require_admin() is None:
         return 1
 
-    user_spec = (getattr(args, "user", "") or "").strip()
+    subject = _grant_target(args)
+    if subject is None:
+        return 1
+    kind, principal_id = subject
+
     wiki_id = (getattr(args, "wiki", "") or "").strip()
-    if not user_spec or not wiki_id:
+    if not wiki_id:
         print(
-            "[!] Usage: llmwikify auth grant --user <email|id> --wiki <id|*> "
-            "[--write]",
+            "[!] Usage: llmwikify auth grant (--user <id> | --group <name>) "
+            "--wiki <id|*> [--write]",
             file=sys.stderr,
         )
-        return 1
-
-    target = _resolve_user_spec(UserRepository(), user_spec)
-    if target is None:
-        print(f"[!] No user matching {user_spec!r}.", file=sys.stderr)
         return 1
 
     want_write = bool(getattr(args, "write", False))
     try:
         GrantRepository().grant(
-            "user",
-            target.id,
+            kind,
+            principal_id,
             wiki_id,
             read=True,
             write=want_write,
@@ -718,39 +718,59 @@ def run_auth_grant(wiki: Any, config: dict, args: Any) -> int:
         return 1
 
     mode = "read+write" if want_write else "read"
-    print(f"✓ Granted {target.email} → {wiki_id} ({mode})")
-    print("  Note: existing tokens keep their snapshot; run "
-          "`llmwikify auth token` as that user to refresh.")
+    label = _subject_label(kind, principal_id)
+    print(f"✓ Granted {label} → {wiki_id} ({mode})")
+    if kind == "group":
+        n = len(GrantRepository().list_members(principal_id))
+        print(f"  Affects {n} member(s); revoke takes effect next request.")
+    else:
+        print("  Note: existing tokens keep their snapshot; run "
+              "`llmwikify auth token` as that user to refresh.")
     return 0
 
 
 def run_auth_revoke_grant(wiki: Any, config: dict, args: Any) -> int:
-    """``llmwikify auth revoke --user U --wiki W`` (P3). D5/D6: delete row."""
-    from llmwikify.foundation.auth import GrantRepository, UserRepository
+    """``llmwikify auth revoke (--user U | --group G) --wiki W`` (P3/P3b)."""
+    from llmwikify.foundation.auth import GrantRepository
 
     if _require_admin() is None:
         return 1
 
-    user_spec = (getattr(args, "user", "") or "").strip()
+    subject = _grant_target(args)
+    if subject is None:
+        return 1
+    kind, principal_id = subject
+
     wiki_id = (getattr(args, "wiki", "") or "").strip()
-    if not user_spec or not wiki_id:
+    if not wiki_id:
         print(
-            "[!] Usage: llmwikify auth revoke --user <email|id> --wiki <id|*>",
+            "[!] Usage: llmwikify auth revoke (--user <id> | --group <name>) "
+            "--wiki <id|*>",
             file=sys.stderr,
         )
         return 1
 
-    target = _resolve_user_spec(UserRepository(), user_spec)
-    if target is None:
-        print(f"[!] No user matching {user_spec!r}.", file=sys.stderr)
-        return 1
-
-    if GrantRepository().revoke("user", target.id, wiki_id):
-        print(f"✓ Revoked {target.email} → {wiki_id} "
+    label = _subject_label(kind, principal_id)
+    if GrantRepository().revoke(kind, principal_id, wiki_id):
+        print(f"✓ Revoked {label} → {wiki_id} "
               "(takes effect on the next request)")
+        if kind == "group":
+            n = len(GrantRepository().list_members(principal_id))
+            print(f"  Affects {n} member(s).")
     else:
-        print(f"· No grant for {target.email} → {wiki_id}.")
+        print(f"· No grant for {label} → {wiki_id}.")
     return 0
+
+
+def _subject_label(kind: str, principal_id: str) -> str:
+    """Human label for a grant subject (email / username / group name)."""
+    if kind == "user":
+        from llmwikify.foundation.auth import UserRepository
+
+        u = UserRepository().get_by_id(principal_id)
+        return u.email if u is not None else principal_id
+    grp = _resolve_group(principal_id)
+    return grp["name"] if grp is not None else principal_id
 
 
 def run_auth_can_i(wiki: Any, config: dict, args: Any) -> int:
@@ -790,6 +810,163 @@ def _admin_id() -> str | None:
     """id of the current admin (for ``granted_by`` audit), or None."""
     user = _resolve_local_user()
     return user.id if user is not None else None
+
+
+# ─── P3b: group management + --group grants (admin-only) ──────
+
+
+def _resolve_group(spec: str) -> Any | None:
+    """Look up a group by id, then by name."""
+    from llmwikify.foundation.auth import GrantRepository
+
+    repo = GrantRepository()
+    # id?
+    for g in repo.list_groups():
+        if g["id"] == spec:
+            return g
+    # name?
+    for g in repo.list_groups():
+        if g["name"] == spec:
+            return g
+    return None
+
+
+def run_auth_group_create(wiki: Any, config: dict, args: Any) -> int:
+    """``llmwikify auth group create <name>`` (P3b)."""
+    from llmwikify.foundation.auth import AuthError, GrantRepository
+
+    if _require_admin() is None:
+        return 1
+
+    name = (getattr(args, "name", "") or "").strip()
+    if not name:
+        print("[!] Usage: llmwikify auth group create <name>", file=sys.stderr)
+        return 1
+
+    try:
+        gid = GrantRepository().create_group(name)
+    except AuthError as exc:
+        print(f"[!] {exc.detail}", file=sys.stderr)
+        return 1
+    print(f"✓ Created group: {name} (id={gid})")
+    return 0
+
+
+def run_auth_group_list(wiki: Any, config: dict, args: Any) -> int:
+    """``llmwikify auth group list`` — groups + member counts (P3b)."""
+    from llmwikify.foundation.auth import GrantRepository
+
+    if _require_admin() is None:
+        return 1
+
+    groups = GrantRepository().list_groups()
+    if not groups:
+        print("No groups found.")
+        return 0
+
+    print(f"{'ID':<14} {'Name':<24} {'Members':<8}")
+    print("-" * 48)
+    for g in groups:
+        print(f"{g['id'][:12]:<14} {g['name']:<24} {g['member_count']:<8}")
+    print()
+    print(f"Total: {len(groups)} group(s)")
+    return 0
+
+
+def run_auth_group_add(wiki: Any, config: dict, args: Any) -> int:
+    """``llmwikify auth group add <group> --user U`` (P3b, idempotent)."""
+    from llmwikify.foundation.auth import GrantRepository, UserRepository
+
+    if _require_admin() is None:
+        return 1
+
+    group_spec = (getattr(args, "group", "") or "").strip()
+    user_spec = (getattr(args, "user", "") or "").strip()
+    if not group_spec or not user_spec:
+        print(
+            "[!] Usage: llmwikify auth group add <group> --user <email|id>",
+            file=sys.stderr,
+        )
+        return 1
+
+    grp = _resolve_group(group_spec)
+    if grp is None:
+        print(f"[!] No group matching {group_spec!r}.", file=sys.stderr)
+        return 1
+    target = _resolve_user_spec(UserRepository(), user_spec)
+    if target is None:
+        print(f"[!] No user matching {user_spec!r}.", file=sys.stderr)
+        return 1
+
+    if GrantRepository().add_member(grp["id"], target.id):
+        print(f"✓ Added {target.email} → {grp['name']}")
+    else:
+        print(f"· {target.email} is already in {grp['name']}.")
+    return 0
+
+
+def run_auth_group_remove(wiki: Any, config: dict, args: Any) -> int:
+    """``llmwikify auth group remove <group> --user U`` (P3b)."""
+    from llmwikify.foundation.auth import GrantRepository, UserRepository
+
+    if _require_admin() is None:
+        return 1
+
+    group_spec = (getattr(args, "group", "") or "").strip()
+    user_spec = (getattr(args, "user", "") or "").strip()
+    if not group_spec or not user_spec:
+        print(
+            "[!] Usage: llmwikify auth group remove <group> --user <email|id>",
+            file=sys.stderr,
+        )
+        return 1
+
+    grp = _resolve_group(group_spec)
+    if grp is None:
+        print(f"[!] No group matching {group_spec!r}.", file=sys.stderr)
+        return 1
+    target = _resolve_user_spec(UserRepository(), user_spec)
+    if target is None:
+        print(f"[!] No user matching {user_spec!r}.", file=sys.stderr)
+        return 1
+
+    if GrantRepository().remove_member(grp["id"], target.id):
+        print(f"✓ Removed {target.email} from {grp['name']}")
+        print("  Group grants no longer apply to this user (next request).")
+    else:
+        print(f"· {target.email} was not in {grp['name']}.")
+    return 0
+
+
+def _grant_target(args: Any) -> tuple[str, str] | None:
+    """Resolve grant/revoke subject → ``(kind, principal_id)`` or None.
+
+    kind is ``"user"`` or ``"group"``. Prints the error itself on failure.
+    Exactly one of --user / --group must be given (P3b).
+    """
+    from llmwikify.foundation.auth import GrantRepository, UserRepository
+
+    user_spec = (getattr(args, "user", "") or "").strip()
+    group_spec = (getattr(args, "group", "") or "").strip()
+    if bool(user_spec) == bool(group_spec):
+        print(
+            "[!] Provide exactly one of --user or --group.",
+            file=sys.stderr,
+        )
+        return None
+    if user_spec:
+        target = _resolve_user_spec(UserRepository(), user_spec)
+        if target is None:
+            print(f"[!] No user matching {user_spec!r}.", file=sys.stderr)
+            return None
+        return "user", target.id
+    grp = _resolve_group(group_spec)
+    if grp is None:
+        print(f"[!] No group matching {group_spec!r}.", file=sys.stderr)
+        return None
+    # Touch the repo so a valid-but-empty group still resolves cleanly.
+    GrantRepository().list_members(grp["id"])
+    return "group", grp["id"]
 
 
 # ─── argparse subparser ────────────────────────────────────────────
@@ -854,9 +1031,10 @@ def setup_auth_parser(subparsers: Any) -> None:
 
     # P3: grant / revoke / can-i (admin only)
     p_gr = auth_sub.add_parser(
-        "grant", help="Grant wiki access to a user (admin only)"
+        "grant", help="Grant wiki access to a user or group (admin only)"
     )
-    p_gr.add_argument("--user", required=True, help="Email / username / id")
+    p_gr.add_argument("--user", help="Email / username / id (mutually exclusive with --group)")
+    p_gr.add_argument("--group", help="Group name or id (mutually exclusive with --user)")
     p_gr.add_argument(
         "--wiki", required=True, help="Wiki id, or '*' for all wikis"
     )
@@ -864,9 +1042,10 @@ def setup_auth_parser(subparsers: Any) -> None:
         "--write", action="store_true", help="Grant write (implies read)"
     )
     p_rv = auth_sub.add_parser(
-        "revoke", help="Revoke a user's wiki grant (admin only)"
+        "revoke", help="Revoke a user's/group's wiki grant (admin only)"
     )
-    p_rv.add_argument("--user", required=True, help="Email / username / id")
+    p_rv.add_argument("--user", help="Email / username / id (mutually exclusive with --group)")
+    p_rv.add_argument("--group", help="Group name or id (mutually exclusive with --user)")
     p_rv.add_argument(
         "--wiki", required=True, help="Wiki id, or '*' to drop the wildcard"
     )
@@ -878,6 +1057,19 @@ def setup_auth_parser(subparsers: Any) -> None:
     p_ci.add_argument(
         "--write", action="store_true", help="Check write instead of read"
     )
+
+    # P3b: group management (admin only)
+    p_gc = auth_sub.add_parser("group", help="Group management (admin only)")
+    group_sub = p_gc.add_subparsers(dest="group_command", help="Group subcommand")
+    p_gcreate = group_sub.add_parser("create", help="Create a group")
+    p_gcreate.add_argument("name", help="Group name")
+    group_sub.add_parser("list", help="List groups with member counts")
+    p_gadd = group_sub.add_parser("add", help="Add a user to a group")
+    p_gadd.add_argument("group", help="Group name or id")
+    p_gadd.add_argument("--user", required=True, help="Email / username / id")
+    p_grm = group_sub.add_parser("remove", help="Remove a user from a group")
+    p_grm.add_argument("group", help="Group name or id")
+    p_grm.add_argument("--user", required=True, help="Email / username / id")
 
 
 # ─── Command class ──────────────────────────────────────────────
@@ -899,7 +1091,7 @@ class AuthCommand(Command):
                 "Usage: llmwikify auth {init,create-token,list-tokens,"
                 "revoke-token,token,whoami,logout,"
                 "create-user,list-users,disable-user,enable-user,"
-                "grant,revoke,can-i}",
+                "grant,revoke,can-i,group}",
                 file=sys.stderr,
             )
             return 1
@@ -931,5 +1123,25 @@ class AuthCommand(Command):
             return run_auth_revoke_grant(wiki, config, args)
         if sub == "can-i":
             return run_auth_can_i(wiki, config, args)
+        if sub == "group":
+            return _dispatch_group(wiki, config, args)
         print(f"Unknown auth subcommand: {sub}", file=sys.stderr)
         return 1
+
+
+def _dispatch_group(wiki: Any, config: dict, args: Any) -> int:
+    """Dispatch ``auth group <create|list|add|remove>`` (P3b)."""
+    sub = getattr(args, "group_command", None)
+    if sub == "create":
+        return run_auth_group_create(wiki, config, args)
+    if sub == "list":
+        return run_auth_group_list(wiki, config, args)
+    if sub == "add":
+        return run_auth_group_add(wiki, config, args)
+    if sub == "remove":
+        return run_auth_group_remove(wiki, config, args)
+    print(
+        "Usage: llmwikify auth group {create,list,add,remove}",
+        file=sys.stderr,
+    )
+    return 1

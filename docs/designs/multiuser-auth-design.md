@@ -517,7 +517,7 @@ auth can-i --user U --wiki W --write  → 只读自检（K8s kubectl auth can-i�
 | **P1** | `wiki_grants` + `groups` + `group_members` 表 + `GrantRepository`（建表/读写/查 + `*` 通配求值）+ **M1 WAL / M2 连接复用 / M3 schema 一次** | **低**（纯新增） | ✅ | ✅ **已完成**（§12.1） |
 | **P2** | `users.disabled_at` + `auth create-user/list-users/disable-user/enable-user` | 低 | — | ✅ **已完成**（§12.2） |
 | **P3** | 签发装 `wgrants`（claims）+ `auth grant/revoke/can-i` CLI | 中（改签发） | P1 P2 | ✅ **已完成**（§12.3） |
-| **P3b** | 组管理 CLI（`auth group create/list/add/remove` + `grant --group`） | 低 | P1 P3 | 待开工 |
+| **P3b** | 组管理 CLI（`auth group create/list/add/remove` + `grant --group`） | 低 | P1 P3 | ✅ **已完成**（§12.4） |
 | **P4** | 裁决接入（实时上界 + 快照比对 + disabled 检查 + fail-closed） | **中高**（动中间件） | P3（**D6 已定为 A**） | 待开工 |
 | **P5** | WebUI：授权管理页 + `/me` 返回权限矩阵 | 中 | P3 | 待开工 |
 | **P6** | share token（roadmap Phase 3）—— **独立表 `share_tokens`**（Q5 = a） | 低 | 可延后，与 P1–P5 解耦 | 待开工 |
@@ -769,9 +769,18 @@ create-user / list-users / disable-user / enable-user
 **验收**：
 
 - `auth group create team` → 成功；重复 → `group_exists`
-- `auth group add team --user bob@e` → 幂等；`group list` 成员数 1
-- `auth grant --group team --wiki wiki-a --write` → 组内成员 `can-i --write` = yes
-- `auth revoke --group team --wiki wiki-a` → 成员立即 no
-- `grant --user X --group G` 同时给 → 报错
-- 非 admin → 拒绝
-- 全量测试 + mypy + 架构门禁 0
+- ✅ `auth group add team --user bob@e` → 幂等；`group list` 成员数 1
+- ✅ `auth grant --group team --wiki wiki-a --write` → 组内成员 `can-i --write` = yes
+- ✅ `auth revoke --group team --wiki wiki-a` → 成员立即 no
+- ✅ `grant --user X --group G` 同时给 → 报错
+- ✅ 非 admin → 拒绝
+- ✅ 全量测试 + mypy + 架构门禁 0
+
+**实现记录（2026-11-13）**：
+
+| 文件 | 改动 |
+|---|---|
+| `interfaces/cli/commands/auth.py` | `group create/list/add/remove`（`_dispatch_group`）；`_resolve_group`（name 或 id）；`grant`/`revoke` 支持 `--group`，与 `--user` **互斥**；`_subject_label` 输出 email/组名；组授权撤销提示影响成员数（R7） |
+| 测试 | `TestGroupCLIP3b`（5 条）：建组/幂等加成员/组授权→成员 can-i/互斥校验/admin 专属 |
+
+**验证**：全量 **5167 passed** · mypy 413 files 0 · 架构 0 violation · ruff 干净。
