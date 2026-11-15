@@ -854,3 +854,42 @@ create-user / list-users / disable-user / enable-user
 | `tests/test_interfaces_auth.py` | share-token 测试接受中间件层 `invalid_subject`（路由层 `share_token_not_here` 保留为纵深） |
 
 **已知缺口（→ P4b）**：用户被删除后其旧 token 仍可能通过（P4a 不查 user 存在性，避免破坏 `user:fake` 测试）。
+
+### 12.6 P4b · 裁决收尾（2026-11-14，doc-first）
+
+**范围**（P4 的「刻意不做」项 + 规格里已拍板的 ②/列表路由）：
+
+| 项 | 内容 |
+|---|---|
+| **② 无 token → 401** | `dispatch` 删掉 `public_read` 放行分支；无 token **一律 401**（回环 ① 仍最先短路）。`public_read` 参数**保留但忽略**（构造兼容；`serve.py` 的 `LLMWIKIFY_PUBLIC_READ` 仍在传，行为上已无效） |
+| **用户存在检查** | `authorize_request`：`user is None` → **401 `user_not_found`**（补 P4a 缺口）；置于 **scope 之后**（scope 是纯检查，先跑可保留 `forbidden_scope` 语义） |
+| **列表路由 snapshot ∩ live** | 新增 `accessible_wikis(claims, known_wikis, db_path)` → 可读 wiki 集合；`registry_routes` / `search_routes` 改用它，替代裸 `claims.wikis` 过滤 |
+| **`accessible_wikis` 规则** | 与 `authorize_request` 对齐：admin → 全部 known；legacy → `wikis`（`*`=known）；新 token → `wgrants` 可读键 ∩ live `expand()` |
+| **exploit 终验** | 两个脚本保持「已修」状态 |
+
+**`accessible_wikis` 语义**（列表可见 = 能读）：
+
+| token 类型 | 结果 |
+|---|---|
+| admin | `set(known_wikis)` |
+| legacy（`wgrants` 空 + `wikis` 非空） | `wikis`（`*` → known）∩ known |
+| 新 token | `{w ∈ wgrants 可读} ∩ known` ∩ live `expand()` |
+| 用户缺失 / share | `set()` |
+
+**测试改造**：
+
+| 测试 | 改法 |
+|---|---|
+| `TestMiddlewareScope._make_token` | `user:fake` → **真实 user**（`_ensure_user()`）；token 仍走 legacy 分支（`wikis` 非空 + `wgrants={}`），断言不变 |
+| `test_public_read_allows_get_without_token` | 期望改为 **401** |
+| `test_api_routes.py` / `test_wiki_server.py` 中依赖 `public_read` 匿名 GET 的用例 | 改期望 401，或改用 local_mode / 带 token |
+
+**验收**：
+
+- 无 token（非回环）→ **一律 401**（GET/POST/列表均是）
+- 回环 `local_mode` → 仍全放行
+- 真实 user + legacy token → 行为与 P4a 一致
+- 用户被删 → 其 token → 401 `user_not_found`
+- `/api/wikis`、`/api/search/cross` 可见集 = snapshot ∩ live（revoke 后列表立即收窄）
+- 门禁两脚本保持「已修」
+- 全量测试 + mypy + 架构门禁 0
