@@ -20,9 +20,9 @@ Legacy rule (P4a, value-based — no schema change):
     ``wgrants`` empty **and** ``wikis == []``      →  new zero-grant
     token (D8) — falls through to the live check, which denies.
 
-User-missing is **not** an error here (P4a): ``disabled`` only applies
-when the row exists. Deleting a user does not invalidate an old token
-until P4b — recorded as a known gap in the design doc.
+User-missing is a **401** (P4b): a token for a deleted account dies with
+the account. The check runs after the pure scope ceiling so a
+read-only token on a missing user still reports ``forbidden_scope``.
 """
 
 from __future__ import annotations
@@ -99,11 +99,9 @@ def authorize_request(
 
     user = UserRepository(db_path=db_path).get_by_id(user_id)
 
-    # ④ disabled (D6: takes effect on the very next request)
-    if user is not None and user.disabled_at is not None:
-        return _deny(401, "user_disabled", "User account is disabled.")
-
     # Global scope ceiling (decision 4): non-GET requires write.
+    # Checked before the user-exists probe so a read-only token on a
+    # missing user still reports forbidden_scope (cheaper, more precise).
     if need_write and claims.scope != "write":
         return _deny(
             403,
@@ -111,9 +109,21 @@ def authorize_request(
             f"scope=write required; got {claims.scope!r}",
         )
 
+    # P4b: the user must still exist (deleted account → token dies too).
+    if user is None:
+        return _deny(
+            401,
+            "user_not_found",
+            "Token refers to a deleted user.",
+        )
+
+    # ④ disabled (D6: takes effect on the very next request)
+    if user.disabled_at is not None:
+        return _deny(401, "user_disabled", "User account is disabled.")
+
     # ⑤ admin → implicit full access (PG owner). Checked before the
     # wiki dimension so admins see wikis created after signing.
-    if user is not None and user.is_first_admin:
+    if user.is_first_admin:
         return _allow()
 
     # Non-wiki route: only scope (and disabled) apply.
@@ -168,4 +178,62 @@ def authorize_request(
     return _allow()
 
 
-__all__ = ["AuthzDecision", "authorize_request"]
+def accessible_wikis(
+    claims: TokenClaims,
+    known_wikis: list[str],
+    db_path: Path | None = None,
+) -> set[str]:
+    """Wikis this token can READ — snapshot ∩ live (P4b, list routes).
+
+    ``/api/wikis`` and ``/api/search/cross`` return *lists*; they must
+    show exactly the wikis a point-read would be allowed on, otherwise
+    the UI lists a wiki that 403s on open.
+
+    Rules mirror :func:`authorize_request`:
+
+    * admin → every known wiki
+    * legacy token (``wgrants`` empty + ``wikis`` non-empty) → the
+      ``wikis`` list (``*`` = all known) — no live check, same as the
+      point-read path
+    * new token → readable keys of ``wgrants`` ∩ known ∩ live ``expand()``
+    * missing user / non-user subject → empty set
+    """
+    known = set(known_wikis)
+    if not claims.sub.startswith("user:"):
+        return set()
+    user_id = claims.sub[len("user:") :]
+
+    from .db import UserRepository
+
+    user = UserRepository(db_path=db_path).get_by_id(user_id)
+    if user is None:
+        return set()
+    if user.is_first_admin:
+        return known
+
+    # Legacy token: the wikis list is the whole story.
+    if not claims.wgrants and claims.wikis:
+        if "*" in claims.wikis:
+            return known
+        return set(claims.wikis) & known
+
+    # New token: snapshot readable keys, then confirm against live grants.
+    readable_snap = {
+        w for w, v in claims.wgrants.items() if v in ("r", "rw")
+    }
+    candidates = readable_snap & known
+    if not candidates:
+        return set()
+    from .grants import GrantRepository
+
+    try:
+        live = GrantRepository(db_path=db_path).expand(user_id, candidates)
+    except Exception:  # noqa: BLE001 — fail-closed
+        logger.warning(
+            "accessible_wikis expand failed for user=%s", user_id, exc_info=True
+        )
+        return set()
+    return {w for w in candidates if live.get(w, (False, False))[0]}
+
+
+__all__ = ["AuthzDecision", "authorize_request", "accessible_wikis"]

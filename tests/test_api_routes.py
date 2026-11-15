@@ -214,9 +214,12 @@ class TestWikiServerConfiguration:
 
     def test_server_with_agent(self, wiki_instance):
         """Test server exposes agent routes returning idle state."""
-        # public_read=True: decision 1 (read-open) for loopback. Since
-        # P0-2 the constructor default is False, so it must be explicit.
-        server = WikiServer(wiki_instance, enable_webui=False, public_read=True)
+        # P4b: no token → 401 on non-loopback; use local_mode so the
+        # route itself is reachable (the point of this test is that the
+        # route is registered and answers, not that it is public).
+        server = WikiServer(
+            wiki_instance, enable_webui=False, public_read=True, local_mode=True
+        )
         client = TestClient(server.app)
 
         # Agent routes are registered and return gracefully
@@ -235,10 +238,9 @@ class TestWikiServerConfiguration:
         by ``_register_websocket_routes`` (``api_key or ""``); the
         HTTP layer no longer reads it.
 
-        This test verifies the new contract: GET requests pass
-        through with ``public_read=True`` (decision 1), while a
-        POST to a write endpoint requires a JWT. The static
-        ``api_key`` parameter has no effect on the HTTP layer.
+        P4b: ``public_read`` no longer opens anonymous reads — a GET
+        without a token is 401. ``/api/health`` stays open (excluded
+        from auth). The static ``api_key`` has no effect on HTTP.
         """
         server = WikiServer(
             wiki_instance,
@@ -252,10 +254,9 @@ class TestWikiServerConfiguration:
         response = client.get("/api/health")
         assert response.status_code == 200
 
-        # GET /api/wiki/status passes through because
-        # public_read=True (decision 1: GETs are world-readable).
+        # P4b: GET without token → 401 (public_read is ignored).
         response = client.get("/api/wiki/status")
-        assert response.status_code == 200
+        assert response.status_code == 401
 
         # POST to a write endpoint requires a JWT — the static
         # api_key is no longer recognized by the middleware.
@@ -263,8 +264,6 @@ class TestWikiServerConfiguration:
             "/api/wiki/page",
             json={"page_name": "NewPage", "content": "# New"},
         )
-        # 401 (no token, public_read irrelevant for writes) or
-        # 403 (auth required for this scope). Either is correct.
         assert response.status_code in (401, 403)
 
     def test_server_with_cors_disabled(self, wiki_instance):

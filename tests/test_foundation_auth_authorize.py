@@ -73,13 +73,13 @@ class TestDisabled:
         assert d.status == 401
         assert d.code == "user_disabled"
 
-    def test_missing_user_is_not_disabled_p4a(self, db: Path):
-        """P4a: a token for a deleted/unknown user is not auto-denied
-        (documented gap; user-exists check lands in P4b)."""
+    def test_missing_user_is_401_p4b(self, db: Path):
+        """P4b: a token for a deleted/unknown user → 401 user_not_found."""
         c = _claims("no-such-user", scope="write", wikis=["*"])
         d = authorize_request(c, wiki_id="wiki-a", need_write=True, db_path=db)
-        # Not disabled, not admin, legacy (wikis non-empty) → allow.
-        assert d.allowed is True
+        assert d.allowed is False
+        assert d.status == 401
+        assert d.code == "user_not_found"
 
 
 class TestScope:
@@ -144,13 +144,20 @@ class TestNonWikiRoute:
 class TestLegacyToken:
     """wgrants empty + wikis non-empty → pre-P3 token; wikis govern."""
 
+    @staticmethod
+    def _uid(db: Path) -> str:
+        u = UserRepository(db_path=db).get_by_email("user@e.com")
+        assert u is not None
+        return u.id
+
     def test_legacy_wildcard_allows_any(self, db: Path):
-        c = _claims("anyone", scope="write", wikis=["*"])
+        c = _claims(self._uid(db), scope="write", wikis=["*"])
         d = authorize_request(c, wiki_id="whatever", need_write=True, db_path=db)
         assert d.allowed is True
 
     def test_legacy_list_respected(self, db: Path):
-        c = _claims("anyone", scope="write", wikis=["main"])
+        uid = self._uid(db)
+        c = _claims(uid, scope="write", wikis=["main"])
         assert authorize_request(
             c, wiki_id="main", need_write=True, db_path=db
         ).allowed is True
@@ -160,7 +167,7 @@ class TestLegacyToken:
 
     def test_legacy_still_bound_by_scope(self, db: Path):
         """Old non-admin tokens keep scope=read — no privilege escalation."""
-        c = _claims("anyone", scope="read", wikis=["*"])
+        c = _claims(self._uid(db), scope="read", wikis=["*"])
         d = authorize_request(c, wiki_id="main", need_write=True, db_path=db)
         assert d.allowed is False
         assert d.code == "forbidden_scope"
@@ -258,7 +265,10 @@ class TestFailClosed:
 
 class TestDecisionShape:
     def test_allow_is_200(self, db: Path):
-        c = _claims("x", scope="write", wikis=["*"])
+        users = UserRepository(db_path=db)
+        u = users.get_by_email("user@e.com")
+        assert u is not None
+        c = _claims(u.id, scope="write", wikis=["*"])
         d = authorize_request(c, wiki_id=None, need_write=True, db_path=db)
         assert isinstance(d, AuthzDecision)
         assert d.allowed is True

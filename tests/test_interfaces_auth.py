@@ -377,15 +377,31 @@ class TestTokenManagement:
 
 
 class TestMiddlewareScope:
+    @staticmethod
+    def _ensure_user(email: str = "mw@e.com"):
+        """Real user row — P4b rejects tokens for missing users (401)."""
+        from llmwikify.foundation.auth import UserRepository
+
+        repo = UserRepository()
+        u = repo.get_by_email(email)
+        if u is None:
+            u = repo.create(email=email, is_first_admin=False)
+        return u
+
     def _make_token(self, scope: str, wikis: list[str]) -> str:
         secret = require_secret()
-        c = TokenClaims.new(sub="user:fake", scope=scope, wikis=wikis, ttl_seconds=60)
+        user = self._ensure_user()
+        c = TokenClaims.new(
+            sub=f"user:{user.id}", scope=scope, wikis=wikis, ttl_seconds=60
+        )
         return encode(c, secret)
 
-    def test_public_read_allows_get_without_token(self):
+    def test_no_token_returns_401_p4b(self):
+        """P4b: 无 token 不允许看 — public_read no longer opens GETs."""
         client = TestClient(_make_app(public_read=True, local_mode=False))
         resp = client.get("/api/wiki/main/info")
-        assert resp.status_code == 200
+        assert resp.status_code == 401
+        assert resp.json()["error"] == "auth_required"
 
     def test_no_public_read_requires_token(self):
         client = TestClient(_make_app(public_read=False, local_mode=False))

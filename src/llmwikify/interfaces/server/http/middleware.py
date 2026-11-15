@@ -255,16 +255,17 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
          params — JWT-in-query leaks via referer logs)
 
     Decisions enforced:
-      - 1   GET  (read)  + public_read=True  + no token    → 200
-                  POST (write) + no token                    → 403
-      - 4   scope based on HTTP method (GET=read, others=write)
-      - 6   cookie secure=True on HTTPS, False on plain HTTP
-                (P2-2; TLS termination at reverse proxy in production)
-      - 7   wikis claim validated per-request against path
-                /api/wiki/{wiki_id}/...
       - 12  local mode (loopback bind) → middleware is a
                 pass-through: anyone on localhost is fully trusted,
                 including POST/PUT/DELETE
+      - P4b no token (non-loopback) → 401, always; ``public_read``
+                no longer opens anonymous reads (decision「无 token 不允许看」)
+      - 4   scope based on HTTP method (GET=read, others=write)
+      - P4a authorization (disabled / scope / admin / legacy /
+                live wiki_grants / snapshot) via
+                ``foundation.auth.authorize_request``
+      - 6   cookie secure=True on HTTPS, False on plain HTTP
+                (P2-2; TLS termination at reverse proxy in production)
     """
 
     def __init__(
@@ -280,6 +281,9 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
         # that never need to verify a token (pure local-mode, no cookie)
         # don't crash at boot if the keyring isn't ready yet.
         self._explicit_secret = secret
+        # public_read is retained for constructor compatibility but is
+        # IGNORED since P4b: no token → 401 regardless (决策「无 token
+        # 不允许看」). local_mode is the only anonymous-bypass.
         self.public_read = public_read
         self.local_mode = local_mode
 
@@ -313,19 +317,11 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
         # Try to extract token from cookie or Authorization header.
         token = self._extract_token(request)
         if not token:
-            # No token at all. Allow GETs if public_read, else 401/403.
-            if request.method == "GET" and self.public_read:
-                logger.debug(
-                    "MW: %s %s → no token, GET+public_read → pass", request.method, path
-                )
-                return await call_next(request)
-            logger.warning(
-                "MW: %s %s → no token → deny (%s)",
-                request.method,
-                path,
-                "401" if not self.public_read else "403",
-            )
-            return _deny_no_token(request.method, self.public_read)
+            # P4b (决策「无 token 不允许看」): no token → 401, always.
+            # public_read no longer opens anonymous reads; local_mode
+            # already returned above for loopback.
+            logger.warning("MW: %s %s → no token → 401", request.method, path)
+            return _deny(401, "auth_required", "Authentication required.")
 
         # Token present — verify (JWT first, then PAT fallback).
         # known_wikis feeds the PAT snapshot (P4a: PAT must not fall
@@ -466,28 +462,6 @@ def _deny(status_code: int, code: str, detail: str) -> JSONResponse:
     return JSONResponse(
         {"error": code, "status_code": status_code, "detail": detail},
         status_code=status_code,
-    )
-
-
-def _deny_no_token(method: str, public_read: bool) -> JSONResponse:
-    """Special-case 401 vs 403 for unauthenticated requests.
-
-    401 Unauthorized: no token AND public_read=False (always require
-                      auth, even for reads).
-    403 Forbidden:   no token AND public_read=True  (GET would have
-                      been allowed, but the caller is doing a non-GET
-                      so we forbid).
-    """
-    if not public_read:
-        return _deny(401, "auth_required", "Authentication required.")
-    if method == "GET":
-        # Should not reach here in normal flow (GET bypassed above),
-        # but be defensive.
-        return _deny(401, "auth_required", "Authentication required.")
-    return _deny(
-        403,
-        "auth_required",
-        f"{method} requires authentication; POST /auth/verify first.",
     )
 
 

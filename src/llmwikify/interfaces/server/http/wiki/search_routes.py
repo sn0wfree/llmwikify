@@ -7,22 +7,28 @@ from fastapi import APIRouter, HTTPException, Request
 from llmwikify.kernel.multi_wiki.registry import WikiRegistry
 
 
-def _filter_by_claim(request: Request, requested: list[str] | None) -> list[str] | None:
-    """Restrict a wiki-id list to the caller's ``wikis`` claim.
+def _filter_by_claim(
+    request: Request, requested: list[str] | None, known_wikis: list[str]
+) -> list[str] | None:
+    """Restrict a wiki-id list to what the caller can actually read.
 
-    P0-1: ``GET /api/search/cross`` and friends used to accept an
-    arbitrary ``wikis`` filter (or none = search everything), so a token
-    scoped to one wiki could read another. The claim is now enforced
-    here instead of only by URL prefix in the middleware.
+    P0-1: ``GET /api/search/cross`` used to accept an arbitrary
+    ``wikis`` filter (or none = search everything), so a token scoped
+    to one wiki could read another.
 
-    Returns ``None`` when the caller may see everything (no claims, or
-    ``wikis=["*"]``), otherwise the intersected list — possibly empty,
-    in which case the route must 403 rather than silently return nothing.
+    P4b: visibility = snapshot ∩ live (``accessible_wikis``) — the same
+    set a point-read would be allowed on, so the list never includes a
+    wiki that would 403 on open.
+
+    Returns ``None`` when the caller may see everything (local_mode —
+    no claims attached), otherwise the intersected list.
     """
     claims = getattr(request.state, "auth_claims", None)
-    if claims is None or "*" in claims.wikis:
-        return requested
-    allowed = set(claims.wikis)
+    if claims is None:
+        return requested  # local_mode: middleware bypassed, trust
+    from llmwikify.foundation.auth import accessible_wikis
+
+    allowed = accessible_wikis(claims, known_wikis)
     if requested is None:
         return sorted(allowed)
     return [w for w in requested if w in allowed]
@@ -51,7 +57,8 @@ def register_search_routes(app, registry: WikiRegistry) -> None:
             backend: Search backend
         """
         requested = wikis.split(",") if wikis else None
-        wiki_ids = _filter_by_claim(request, requested)
+        known = [w.wiki_id for w in registry.list_wikis()]
+        wiki_ids = _filter_by_claim(request, requested, known)
         if wiki_ids is not None and not wiki_ids:
             claims = getattr(request.state, "auth_claims", None)
             raise HTTPException(

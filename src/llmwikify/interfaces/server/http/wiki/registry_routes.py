@@ -36,11 +36,19 @@ def register_registry_routes(app, registry: WikiRegistry) -> None:
         The list is now filtered by the claim, and ``root`` is omitted —
         it is a server filesystem path and has no business in an API
         response (the caller already knows the wiki_id).
+
+        P4b: visibility = snapshot ∩ live (``accessible_wikis``), so a
+        revoked grant narrows the list on the next request — the list
+        never shows a wiki that a point-read would 403.
         """
+        from llmwikify.foundation.auth import accessible_wikis
+
         claims = getattr(request.state, "auth_claims", None)
         wikis = registry.list_wikis()
-        if claims is not None and "*" not in claims.wikis:
-            allowed = set(claims.wikis)
+        known = [w.wiki_id for w in wikis]
+        if claims is not None:
+            # local_mode leaves claims unset → show everything (trust).
+            allowed = accessible_wikis(claims, known)
             wikis = [w for w in wikis if w.wiki_id in allowed]
         return {
             "wikis": [

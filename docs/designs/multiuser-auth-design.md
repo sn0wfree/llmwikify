@@ -519,7 +519,7 @@ auth can-i --user U --wiki W --write  → 只读自检（K8s kubectl auth can-i�
 | **P3** | 签发装 `wgrants`（claims）+ `auth grant/revoke/can-i` CLI | 中（改签发） | P1 P2 | ✅ **已完成**（§12.3） |
 | **P3b** | 组管理 CLI（`auth group create/list/add/remove` + `grant --group`） | 低 | P1 P3 | ✅ **已完成**（§12.4） |
 | **P4a** | 纯函数 `authorize()` + ④⑤⑥'⑥⑦ + 旧 token 兼容 + fail-closed + PAT 快照修补 | 中（动中间件） | P3 | ✅ **已完成**（§12.5） |
-| **P4b** | 列表路由 snapshot ∩ live + ② 无 token → 401（`public_read` 废弃）+ 用户存在检查 + exploit 终验 | 中低 | P4a | 待开工 |
+| **P4b** | 列表路由 snapshot ∩ live + ② 无 token → 401（`public_read` 废弃）+ 用户存在检查 + exploit 终验 | 中低 | P4a | ✅ **已完成**（§12.6） |
 | **P5** | WebUI：授权管理页 + `/me` 返回权限矩阵 | 中 | P3 | 待开工 |
 | **P6** | share token（roadmap Phase 3）—— **独立表 `share_tokens`**（Q5 = a） | 低 | 可延后，与 P1–P5 解耦 | 待开工 |
 
@@ -886,10 +886,22 @@ create-user / list-users / disable-user / enable-user
 
 **验收**：
 
-- 无 token（非回环）→ **一律 401**（GET/POST/列表均是）
-- 回环 `local_mode` → 仍全放行
-- 真实 user + legacy token → 行为与 P4a 一致
-- 用户被删 → 其 token → 401 `user_not_found`
-- `/api/wikis`、`/api/search/cross` 可见集 = snapshot ∩ live（revoke 后列表立即收窄）
-- 门禁两脚本保持「已修」
-- 全量测试 + mypy + 架构门禁 0
+- ✅ 无 token（非回环）→ **一律 401**（GET/POST/列表均是）
+- ✅ 回环 `local_mode` → 仍全放行
+- ✅ 真实 user + legacy token → 行为与 P4a 一致
+- ✅ 用户被删 → 其 token → 401 `user_not_found`
+- ✅ `/api/wikis`、`/api/search/cross` 可见集 = snapshot ∩ live
+- ✅ 门禁两脚本保持「已修」（exploit 4/4 blocked；defect 4/4 NOT reproduced）
+- ✅ 全量 **5187 passed** · mypy 414 files 0 · 架构 0 violation · ruff 干净
+
+**实现记录（2026-11-14）**：
+
+| 文件 | 改动 |
+|---|---|
+| `foundation/auth/authorize.py` | 用户缺失 → 401 `user_not_found`（scope 之后）；新增 `accessible_wikis(claims, known_wikis)` |
+| `interfaces/server/http/middleware.py` | 无 token → 401 一律；`public_read` 保留但**忽略**；删 `_deny_no_token` |
+| `wiki/registry_routes.py` | `/api/wikis` 可见集改 `accessible_wikis` |
+| `wiki/search_routes.py` | `_filter_by_claim` 改 `accessible_wikis`（传入 known_wikis） |
+| 测试 | `TestMiddlewareScope._make_token` → 真实 user；`test_no_token_returns_401_p4b`；`test_api_routes`/`test_wiki_server` 依赖匿名 GET 的用例改 401 或 local_mode；authorize 测试改用真实 user |
+
+**P4 至此收口**（P4a + P4b）：per-wiki 读写精确裁决 + 无 token 拒绝 + 列表一致 + 用户生命周期联动。
