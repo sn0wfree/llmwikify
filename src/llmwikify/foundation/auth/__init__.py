@@ -32,6 +32,7 @@ from ._errors import AuthError
 from ._jwt import TokenClaims, decode, encode
 from ._keyring import get_secret, require_secret, set_secret
 from ._pat import generate_pat, hash_pat, verify_pat
+from .authorize import AuthzDecision, authorize_request
 from .db import ApiKeyRepository, UserRepository, auth_db_path, auto_first_admin
 from .grants import (
     PRINCIPAL_TYPES,
@@ -68,6 +69,8 @@ __all__ = [
     "PRINCIPAL_TYPES",
     "WILDCARD",
     "snapshot_for_user",
+    "AuthzDecision",
+    "authorize_request",
     "auth_db_path",
     "auto_first_admin",
     "prompt_first_admin",

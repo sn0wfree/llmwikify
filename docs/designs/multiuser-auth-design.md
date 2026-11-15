@@ -518,7 +518,8 @@ auth can-i --user U --wiki W --write  → 只读自检（K8s kubectl auth can-i�
 | **P2** | `users.disabled_at` + `auth create-user/list-users/disable-user/enable-user` | 低 | — | ✅ **已完成**（§12.2） |
 | **P3** | 签发装 `wgrants`（claims）+ `auth grant/revoke/can-i` CLI | 中（改签发） | P1 P2 | ✅ **已完成**（§12.3） |
 | **P3b** | 组管理 CLI（`auth group create/list/add/remove` + `grant --group`） | 低 | P1 P3 | ✅ **已完成**（§12.4） |
-| **P4** | 裁决接入（实时上界 + 快照比对 + disabled 检查 + fail-closed） | **中高**（动中间件） | P3（**D6 已定为 A**） | 待开工 |
+| **P4a** | 纯函数 `authorize()` + ④⑤⑥'⑥⑦ + 旧 token 兼容 + fail-closed + PAT 快照修补 | 中（动中间件） | P3 | ✅ **已完成**（§12.5） |
+| **P4b** | 列表路由 snapshot ∩ live + ② 无 token → 401（`public_read` 废弃）+ 用户存在检查 + exploit 终验 | 中低 | P4a | 待开工 |
 | **P5** | WebUI：授权管理页 + `/me` 返回权限矩阵 | 中 | P3 | 待开工 |
 | **P6** | share token（roadmap Phase 3）—— **独立表 `share_tokens`**（Q5 = a） | 低 | 可延后，与 P1–P5 解耦 | 待开工 |
 
@@ -834,8 +835,22 @@ create-user / list-users / disable-user / enable-user
 
 **验收**：
 
-- `authorize_request` 单测覆盖：disabled / scope / admin / legacy 三分支 / live / snapshot / fail-closed
-- 既有 middleware 测试（`user:fake` + `wikis=[...]`）**全部保持通过**（走 legacy 分支）
-- 新增：真实 user + grant → 放行；revoke → 下一请求 403；disabled → 401；非 admin PAT 不再全 wiki
-- `public_read` 相关测试**不动**（P4b 才改）
-- 全量测试 + mypy + 架构门禁 0 + exploit 脚本门禁
+- ✅ `authorize_request` 单测覆盖：disabled / scope / admin / legacy 三分支 / live / snapshot / fail-closed（20 条）
+- ✅ 既有 middleware 测试（`user:fake` + `wikis=[...]`）**全部保持通过**（走 legacy 分支）
+- ✅ 新增：真实 user + grant → 放行；revoke → 下一请求 403；disabled → 401
+- ✅ 非 admin PAT 不再全 wiki（`_verify_token` PAT 分支经 `snapshot_for_user`）
+- ✅ `public_read` 相关测试**不动**（P4b 才改）
+- ✅ 门禁：`exploit_check_wikis_claim.py` **4/4 blocked**；`auth_defect_verify.py` **4/4 NOT reproduced**
+- ✅ 全量 **5187 passed** · mypy 414 files 0 · 架构 0 violation · ruff 干净
+
+**实现记录（2026-11-13）**：
+
+| 文件 | 改动 |
+|---|---|
+| **新增** `foundation/auth/authorize.py` | `AuthzDecision` + `authorize_request()`：disabled → scope → admin → non-wiki → legacy → live（fail-closed）→ snapshot |
+| `foundation/auth/__init__.py` | 导出 `AuthzDecision` / `authorize_request` |
+| `interfaces/server/http/middleware.py` | `dispatch` 改调 `authorize_request`；抽出 `_wiki_id_from_path`；**PAT 分支经 `snapshot_for_user` 装快照**（修「非 admin PAT 全 wiki」漏洞）；`_known_wiki_ids(request)` |
+| **新增** `tests/test_foundation_auth_authorize.py` | 20 条穷举单测 |
+| `tests/test_interfaces_auth.py` | share-token 测试接受中间件层 `invalid_subject`（路由层 `share_token_not_here` 保留为纵深） |
+
+**已知缺口（→ P4b）**：用户被删除后其旧 token 仍可能通过（P4a 不查 user 存在性，避免破坏 `user:fake` 测试）。

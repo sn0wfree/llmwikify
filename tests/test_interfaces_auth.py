@@ -516,4 +516,9 @@ class TestShareTokenRejection:
         client.cookies["llmwikify_token"] = token
         resp = client.get("/api/auth/me")
         assert resp.status_code == 401
-        assert resp.json()["detail"]["error"] == "share_token_not_here"
+        # P4a: the middleware now rejects non-user subjects first
+        # (invalid_subject); the route-level share_token_not_here remains
+        # as defense-in-depth if the request ever bypasses middleware.
+        body = resp.json()
+        err = body.get("detail", body).get("error") if isinstance(body.get("detail", body), dict) else body.get("error")
+        assert err in ("invalid_subject", "share_token_not_here")

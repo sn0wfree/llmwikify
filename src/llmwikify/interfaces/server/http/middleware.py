@@ -328,44 +328,58 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
             return _deny_no_token(request.method, self.public_read)
 
         # Token present — verify (JWT first, then PAT fallback).
-        claims = self._verify_token(token)
+        # known_wikis feeds the PAT snapshot (P4a: PAT must not fall
+        # into the legacy branch and grant non-admins full wiki access).
+        claims = self._verify_token(token, self._known_wiki_ids(request))
         if claims is None:
             logger.warning(
                 "MW: %s %s → token verify failed → 401", request.method, path
             )
             return _deny(401, "invalid_token", "Token is invalid or expired.")
 
-        # Scope enforcement (decision 4): non-GET requires scope=write.
-        if request.method != "GET" and claims.scope != "write":
+        # P4a: one decision point — disabled / scope / admin / legacy /
+        # live grants / snapshot (design §12.5). The no-token branch
+        # above is unchanged this phase (public_read cleanup is P4b).
+        from llmwikify.foundation.auth import authorize_request
+
+        decision = authorize_request(
+            claims,
+            wiki_id=_wiki_id_from_path(path),
+            need_write=request.method != "GET",
+        )
+        if not decision.allowed:
             logger.warning(
-                "MW: %s %s → scope=%s, need write → 403",
+                "MW: %s %s → deny (%s): %s",
                 request.method,
                 path,
-                claims.scope,
+                decision.code,
+                decision.detail,
             )
-            return _deny(
-                403, "forbidden_scope", f"scope=write required; got {claims.scope!r}"
-            )
-
-        # Wikis claim enforcement (decision 7): for /api/wiki/{wiki_id}/...
-        # paths, check that the token covers this wiki.
-        wiki_violation = _check_wikis_claim(path, claims)
-        if wiki_violation is not None:
-            logger.warning(
-                "MW: %s %s → wikis violation: %s", request.method, path, wiki_violation
-            )
-            return _deny(403, "forbidden_wiki", wiki_violation)
+            return _deny(decision.status, decision.code, decision.detail)
 
         # Attach claims to request.state so downstream handlers can read.
         request.state.auth_claims = claims
         logger.debug(
-            "MW: %s %s → pass (scope=%s, wikis=%s)",
+            "MW: %s %s → pass (scope=%s, wikis=%s, wgrants=%s)",
             request.method,
             path,
             claims.scope,
             claims.wikis,
+            claims.wgrants,
         )
         return await call_next(request)
+
+    @staticmethod
+    def _known_wiki_ids(request: Request) -> list[str]:
+        """Registered wiki ids for PAT snapshot building (P4a)."""
+        registry = getattr(request.app.state, "wiki_registry", None)
+        if registry is None:
+            return []
+        try:
+            return [w.wiki_id for w in registry.list_wikis()]
+        except Exception:
+            logger.debug("wiki enumeration failed", exc_info=True)
+            return []
 
     def _extract_token(self, request: Request) -> str:
         """Read token from cookie (preferred) or Authorization header."""
@@ -377,8 +391,16 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
             return auth_header[7:].strip()
         return ""
 
-    def _verify_token(self, token: str) -> TokenClaims | None:
-        """Try JWT decode first, then PAT lookup. Returns claims or None."""
+    def _verify_token(
+        self, token: str, known_wikis: list[str] | None = None
+    ) -> TokenClaims | None:
+        """Try JWT decode first, then PAT lookup. Returns claims or None.
+
+        P4a: the PAT branch builds a real snapshot via
+        ``snapshot_for_user`` — signing ``wikis=["*"]`` with an empty
+        ``wgrants`` would be misread as a legacy token and hand
+        non-admins full wiki access.
+        """
         # 1. Try JWT.
         try:
             return decode(token, self._get_secret())
@@ -412,10 +434,25 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
             if user is None:
                 return None
 
+            from llmwikify.foundation.auth import snapshot_for_user
+
+            wikis, wgrants, computed = snapshot_for_user(
+                user.id,
+                known_wikis or [],
+                is_admin=bool(user.is_first_admin),
+            )
+            # PAT scopes act as a ceiling: the tighter of the PAT scope
+            # and the computed scope wins (a PAT cannot widen grants).
+            scope = (
+                "read"
+                if (api_key.scopes == "read" or computed == "read")
+                else "write"
+            )
             return TokenClaims.new(
                 sub=f"user:{user.id}",
-                scope=api_key.scopes,
-                wikis=["*"],
+                scope=scope,
+                wikis=wikis,
+                wgrants=wgrants,
             )
         except Exception:
             logger.debug("PAT lookup failed", exc_info=True)
@@ -454,25 +491,28 @@ def _deny_no_token(method: str, public_read: bool) -> JSONResponse:
     )
 
 
-def _check_wikis_claim(path: str, claims: TokenClaims) -> str | None:
-    """Enforce wikis claim for wiki-specific routes.
+def _wiki_id_from_path(path: str) -> str | None:
+    """Extract the wiki_id from ``/api/wiki/{wiki_id}/...`` paths.
 
-    Fixed routes like /api/wiki/status have fewer path segments and
-    are automatically skipped. Only routes matching /api/wiki/{wiki_id}/...
-    (5+ segments) are checked.
+    Fixed routes like ``/api/wiki/status`` (4 segments) and
+    ``/api/wiki/sink/...`` (non-wiki prefix) return ``None`` — they are
+    not wiki-scoped, so only the global scope check applies.
     """
     if not path.startswith("/api/wiki/"):
         return None
     parts = path.split("/")
-    # /api/wiki/status → 4 segments (skip)
-    # /api/wiki/sink/status → 5 segments (sink is a fixed prefix, not a wiki_id)
-    # /api/wiki/strategy/page/xxx → 5+ segments (check)
     if len(parts) < 5:
         return None
     wiki_id = parts[3]
-    # Skip known non-wiki prefixes (fixed routes under /api/wiki/).
-    _NON_WIKI_PREFIXES = frozenset({"sink"})
-    if wiki_id in _NON_WIKI_PREFIXES:
+    if wiki_id in frozenset({"sink"}):
+        return None
+    return wiki_id
+
+
+def _check_wikis_claim(path: str, claims: TokenClaims) -> str | None:
+    """Legacy wikis-claim check (kept for reference; P4a uses authorize)."""
+    wiki_id = _wiki_id_from_path(path)
+    if wiki_id is None:
         return None
     if "*" in claims.wikis:
         return None
