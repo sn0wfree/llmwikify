@@ -41,6 +41,7 @@ from .grants import (
     snapshot_for_user,
 )
 from .prompt import FirstAdminPromptResult, prompt_first_admin
+from .share import ShareToken, ShareTokenRepository
 from .utils import (
     chmod_600,
     ensure_dir_700,
@@ -72,6 +73,8 @@ __all__ = [
     "AuthzDecision",
     "authorize_request",
     "accessible_wikis",
+    "ShareToken",
+    "ShareTokenRepository",
     "auth_db_path",
     "auto_first_admin",
     "prompt_first_admin",

@@ -521,7 +521,7 @@ auth can-i --user U --wiki W --write  → 只读自检（K8s kubectl auth can-i�
 | **P4a** | 纯函数 `authorize()` + ④⑤⑥'⑥⑦ + 旧 token 兼容 + fail-closed + PAT 快照修补 | 中（动中间件） | P3 | ✅ **已完成**（§12.5） |
 | **P4b** | 列表路由 snapshot ∩ live + ② 无 token → 401（`public_read` 废弃）+ 用户存在检查 + exploit 终验 | 中低 | P4a | ✅ **已完成**（§12.6） |
 | **P5** | WebUI：授权管理页 + `/me` 返回权限矩阵 | 中 | P3 | ✅ **已完成**（§12.7） |
-| **P6** | share token（roadmap Phase 3）—— **独立表 `share_tokens`**（Q5 = a） | 低 | 可延后，与 P1–P5 解耦 | 待开工 |
+| **P6** | share token（roadmap Phase 3）—— **独立表 `share_tokens`**（Q5 = a） | 低 | 可延后，与 P1–P5 解耦 | ✅ **已完成**（§12.8） |
 
 **建议顺序强调**：P1–P3 是**纯增量**（不动裁决路径），可先落地再评审 P4 的裁决策略。
 
@@ -979,6 +979,17 @@ create-user / list-users / disable-user / enable-user
 
 **验收**：
 
-- 建表 + `ShareTokenRepository` CRUD 全绿；`get_by_hash` 只返回活跃（未吊销、未过期）
-- `revoke` 幂等；`touch_view` 递增 `view_count`
-- 全量测试 + mypy + 架构门禁 0
+- ✅ 建表 + `ShareTokenRepository` CRUD 全绿；`get_by_hash` 只返回活跃（未吊销、未过期）
+- ✅ `revoke` 幂等；`touch_view` 递增 `view_count`
+- ✅ 重复 `token_hash` → `share_exists`；缺参 → `invalid_share`
+- ✅ 全量 **5201 passed** · mypy 415 files 0 · 架构 0 violation · ruff 干净
+
+**实现记录（2026-11-14）**：
+
+| 文件 | 改动 |
+|---|---|
+| **新增** `foundation/auth/share.py` | `ShareToken` + `ShareTokenRepository`（create/get_by_id/get_by_hash/list/revoke/touch_view）；M1 WAL + M2 连接 + M3 schema 快路径 |
+| `foundation/auth/__init__.py` | 导出 `ShareToken` / `ShareTokenRepository` |
+| **新增** `tests/test_foundation_auth_share.py` | 9 条：schema / CRUD / 过期 / 吊销 / 浏览计数 / 过滤 |
+
+**P1–P6 全部完成。** 多用户授权主链路 + share 数据层已落地；完整 share 功能（JWT/路由/CLI/远端只读/WebUI）属 roadmap Phase 3，另开。
