@@ -1,7 +1,7 @@
 # llmwikify Architecture
 
 > Technical architecture for developers.
-> **Version:** 0.40.3 | **Last updated:** 2026-10-22 | **Tests:** 4940 Python collected
+> **Version:** 0.40.6 | **Last updated:** 2026-11-16 | **Tests:** 5201 Python collected
 >
 > Diagrams & flow charts live in [docs/architecture/overview.md](docs/architecture/overview.md).
 
@@ -13,8 +13,8 @@
 
 | Layer | Responsibility |
 |-------|----------------|
-| **`kernel/`** | Core engines — wiki domain model, multi-wiki, search, knowledge graph, storage |
-| **`foundation/`** | LLM client, prompt registry, extractors, configuration, IO |
+| **`kernel/`** | Core engines — wiki domain model, multi-wiki, search, knowledge graph, storage, generic agent framework |
+| **`foundation/`** | LLM client, prompt registry, extractors, configuration, parameter registry, IO, **auth & authorization** |
 | **`apps/`** | Application services — wiki, chat (ChatRunner + Skills), research, agent runtime + self-maintenance |
 | **`interfaces/`** | CLI, MCP, FastAPI server (REST + MCP + Web UI), Web bundle |
 
@@ -74,13 +74,24 @@ src/llmwikify/
 │   ├── agent/                    # Generic agent framework (UnifiedAgentLoop /
 │   │                             # StepHandler / UnifiedHook / spec /
 │   │                             # execution_context / steps/ / codegen_pipeline)
+│   ├── skills/                   # Skill framework types (SkillResult / SkillContext /
+│   │                             # ConfirmationManager)
 │   ├── codegen/                  # LLM code generation (extract/validate/execute)
 │   └── principle_checker.py      # Prompt principle compliance
 │
 ├── foundation/                   # Cross-cutting primitives
 │   ├── config.py / db.py / io.py / logging.py / migration.py
+│   ├── params.py (+ .pyi)        # Parameter registry — 162 entries, single source
+│   │                             # of truth for DEFAULT_CONFIG (generated stub)
+│   ├── yaml_edit.py              # Minimal-diff YAML write-back (config hub)
 │   ├── llm_client.py             # OpenAI-compatible client + retry/backoff
-│   ├── auth/                     # JWT secret (OS keyring) + verification
+│   ├── auth/                     # JWT + PAT + authorization (see below)
+│   │   ├── _jwt.py               # TokenClaims (scope / wikis / wgrants)
+│   │   ├── db.py                 # auth.db — users / api_keys / disabled_at
+│   │   ├── grants.py             # wiki_grants + groups + group_members
+│   │   ├── authorize.py          # authorize_request() / accessible_wikis()
+│   │   ├── share.py              # share_tokens (P6 data layer)
+│   │   └── _keyring.py / _pat.py / utils.py / prompt.py
 │   ├── callback/                 # AgentHook (13 hook points) + CompositeHook
 │   │   └── integrations/         # WikiHook / WikiDreamSyncHook / RawFileScanHook
 │   ├── llm/
@@ -102,9 +113,13 @@ src/llmwikify/
 ```
 ├── apps/                         # Application services
 │   ├── db.py / db_base.py        # AppDatabase (shared agent DB)
+│   ├── wiki_db.py / chat_db/     # Shared DB infra: wiki_db facade + chat repos
+│   │                             # (session / message / tool_call / permission /
+│   │                             #  admin_stats / research+wiki delegates)
 │   ├── wiki/
 │   │   ├── service.py            # Wiki application service (multi-wiki facade)
-│   │   └── db.py
+│   │   ├── tool_registry.py      # WikiToolRegistry
+│   │   └── db.py / dream_editor.py
 │   │
 │   ├── chat/                     # Chat agent + Skills
 │   │   ├── base.py / session.py / state.py / command_router.py
@@ -168,7 +183,7 @@ src/llmwikify/
 └── interfaces/
     ├── cli/
     │   ├── _app.py / _base.py / _config.py / _output.py
-    │   └── commands/             # 33 command modules (34 subcommands)
+    │   └── commands/             # 35 command modules (34 subcommands)
     ├── mcp/
     │   ├── adapter.py            # MCPAdapter (FastMCP wrapper)
     │   ├── server.py             # Legacy entry (deprecated)
@@ -178,8 +193,9 @@ src/llmwikify/
     │   ├── constants.py
     │   ├── http/
     │   │   ├── routes.py         # register_routes — composition root
-    │   │   ├── middleware.py     # JWT auth + rate limiting
-    │   │   ├── auth_routes.py    # /api/auth/{register,verify,tokens,me,logout}
+    │   │   ├── middleware.py     # JWT auth + authorization decision + rate limiting
+    │   │   ├── auth_routes.py    # /api/auth/{register,verify,tokens,me,grants,
+    │   │   │                     # users,groups,logout}
     │   │   ├── maintenance_routes.py
     │   │   ├── _models.py / _handlers.py / _helpers.py
     │   │   ├── wiki/             # wiki / registry / search / log routes
@@ -230,7 +246,8 @@ flowchart TB
         FP["prompts"]
         FE["extractors"]
         FC["callback<br/>AgentHook · CompositeHook"]
-        FX["config · io · utils · auth · logging"]
+        FA["auth<br/>JWT · PAT · grants · authorize"]
+        FX["config · params · io · utils · logging"]
     end
 
     CLI --> AC & AW & AR
@@ -437,6 +454,87 @@ Business hooks live in `callback/integrations/` — `WikiHook`,
 
 ---
 
+## Multi-user Authorization (`foundation/auth/`)
+
+Authorization data lives in `~/.llmwikify/auth.db` (override via
+`LLMWIKIFY_HOME`), fully separate from wiki storage. The decision logic is
+one pure function — `foundation/auth/authorize.py::authorize_request()` —
+so the middleware only does *get token → verify → ask*.
+
+### Decision order (short-circuiting)
+
+```
+local_mode (loopback bind)          → allow
+no token                            → 401 auth_required
+signature invalid / expired         → 401 invalid_token
+subject is not `user:`              → 401 invalid_subject
+write needed but scope != write     → 403 forbidden_scope
+user row missing                    → 401 user_not_found
+user.disabled_at set                → 401 user_disabled
+is_first_admin                      → allow
+wiki_id is None (non-wiki route)    → allow
+legacy token (wgrants empty + wikis non-empty) → governed by `wikis`
+live `wiki_grants` lookup           → 403 forbidden_wiki / 403 authz_unavailable
+snapshot ∩ live                     → 403 forbidden_wiki (re-sign required)
+```
+
+| Decision | Semantics |
+|----------|-----------|
+| D6=A | Every request queries the live grants table — a revoke takes effect on the **next** request; a grant is **not** retroactive (re-sign via `llmwikify auth token`) |
+| Legacy detection | A **value rule**, not a schema field: `wgrants` empty **and** `wikis` non-empty → pre-P3 token (skips the grants check) |
+| Scope ceiling | Checked before the user-exists probe, so a read-only token on a deleted account reports `forbidden_scope` |
+| Fail-closed | A grants-query error denies with `authz_unavailable` — never allows |
+| List routes | `/api/wikis` and `/api/search/cross` return `accessible_wikis()` = snapshot ∩ live, so a listed wiki is openable |
+
+### Data model
+
+`wiki_grants` carries three principal kinds (K8s `subject.kind` pattern):
+
+| `principal_type` | Meaning | Expansion |
+|------------------|---------|-----------|
+| `user` | one user → one wiki | direct match |
+| `group` | one group → one wiki | via `group_members` |
+| `public` | PG `PUBLIC` pseudo-role | every authenticated user |
+
+```sql
+CREATE TABLE wiki_grants (
+    principal_type TEXT NOT NULL CHECK (principal_type IN ('user','group','public')),
+    principal_id   TEXT NOT NULL,
+    wiki_id        TEXT NOT NULL,   -- '*' = includes wikis created later
+    can_read       INTEGER NOT NULL DEFAULT 0,
+    can_write      INTEGER NOT NULL DEFAULT 0,
+    granted_by     TEXT,
+    created_at     TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (principal_type, principal_id, wiki_id)
+);
+CREATE TABLE groups (id TEXT PRIMARY KEY, name TEXT UNIQUE NOT NULL, created_at TEXT);
+CREATE TABLE group_members (group_id TEXT REFERENCES groups(id), user_id TEXT NOT NULL);
+```
+
+- No deny rows — revoke = delete the row.
+- `wiki_id = '*'` only widens the **live** bound; **token snapshots never
+  contain `'*'`** (expanded to concrete ids at signing) → a newly created
+  wiki requires a re-signed token.
+- `users.disabled_at` soft-deletes a user; `share_tokens` is a separate
+  table (P6 data layer — the full share feature is roadmap Phase 3).
+- Performance: WAL + thread-local reused connection → ~25–28 µs warm point
+  query (a fresh `sqlite3.connect()` per call costs 208 µs).
+
+### Management surface
+
+| Surface | Entry |
+|---------|-------|
+| CLI (admin only) | `llmwikify auth {create-user,list-users,disable-user,enable-user,grant,revoke,can-i,group create\|list\|add\|remove}` |
+| HTTP · self | `GET /api/auth/me` — read/write permission matrix per wiki |
+| HTTP · admin | `GET/POST/DELETE /api/auth/grants` · `GET /api/auth/users` · `GET /api/auth/groups` |
+| WebUI | `/agent/access` — AccessControl page (admin) |
+
+`grant` / `revoke` treat `--user` and `--group` as mutually exclusive.
+Design: [docs/designs/multiuser-auth-design.md](docs/designs/multiuser-auth-design.md)
+· Implementation record: [docs/summaries/2026-11-14-multiuser-auth-implementation-record.md](docs/summaries/2026-11-14-multiuser-auth-implementation-record.md).
+
+---
+
 ## Interfaces (`interfaces/`)
 
 ### CLI (`interfaces/cli/`)
@@ -462,8 +560,8 @@ Business hooks live in `callback/integrations/` — `WikiHook`,
 | `http/wiki/*` | `/api/wiki/*` (single-wiki), `/api/wikis/*` (registry), `/api/search/cross`, `/api/log/error` |
 | `http/agent/*` | `/api/agent/*` — chat (SSE), sessions, dream, ingest log, confirmations, notifications, config, status |
 | `http/maintenance_routes.py` | `/api/maintenance/*` — health history, proposals, manual triggers |
-| `http/auth_routes.py` | `POST /api/auth/{register,verify,tokens}` · `GET /api/auth/{me,tokens}` · `DELETE /api/auth/tokens/{id}` · `POST /api/auth/logout` |
-| `http/middleware.py` | JWT auth (`public_read` + `local_mode`) + rate limiting |
+| `http/auth_routes.py` | `POST /api/auth/{register,verify,tokens}` · `GET /api/auth/{me,tokens,grants,users,groups}` · `POST/DELETE /api/auth/grants` · `DELETE /api/auth/tokens/{id}` · `POST /api/auth/logout` |
+| `http/middleware.py` | JWT auth (`local_mode` bypass) → `authorize_request()` decision → rate limiting |
 | `apps/api/openai_server.py` | OpenAI-compatible `/v1/chat/completions` + `/v1/models` + `/v1/health` (registered from `routes.py`) |
 | `utils/webui.py` | React SPA static mount |
 
@@ -562,7 +660,7 @@ applies to the initial connection only.
 
 ## Testing
 
-- **4940 Python tests** collected (`pytest --collect-only -q`, `tests/ab_testing` excluded)
+- **5201 Python tests** collected (`pytest --collect-only -q`, `tests/ab_testing` excluded)
 - Frontend: Vitest + React Testing Library (`ui/webui`)
 - pytest with coverage target ≥ 85%
 - Test isolation via temp directories
@@ -572,6 +670,7 @@ applies to the initial connection only.
 pytest                                           # all tests
 pytest tests/test_apps_chat_agent_runner_v2.py    # ChatRunnerV2
 pytest tests/test_v022_relations.py              # graph relations
+pytest tests/test_foundation_auth_authorize.py   # authorization decision
 ```
 
 ---
@@ -599,6 +698,7 @@ pytest tests/test_v022_relations.py              # graph relations
 | v0.38 | Nanobot v0.2.1 borrowings — `MessageBus` in-process pub/sub; `WebSocketManager` + `/api/ws/agent`; `AgentRunner[SpecT, ResultT]` ABC; `LLMProvider` ABC + `ProviderConfig` + `RetryMode` + `ThinkingStyle`. Additive — no breaking changes. |
 | v0.40 | **Quant separation** — `reproduction/` module migrated to [quantnodes](https://github.com/sn0wfree/quantnodes); `quant/` data moved to `QuantNodes/old_quant/`; project refocused on **Knowledge + Chat + Research Assistant**. Breaking: `/api/paper/*`, `/api/factor/*`, `/api/strategy/*`, `/api/reproduction/*` removed. |
 | v0.41 (in dev) | **Self-maintenance** — `apps/agent/maintenance/` (auto-ingest / gap filler / lint / DB loops, all rate-limited); **OpenAI-compatible `/v1` endpoints** (`apps/api/openai_server.py`); **Jina Reader** search integration; config defaults moved to YAML (`config_defaults.yaml`). |
+| v0.40.4–v0.40.6 | **Config hub** — `foundation/params.py` parameter registry (162 entries, `DEFAULT_CONFIG` derived from it) + `foundation/yaml_edit.py` minimal-diff write-back; **platform hardening** — single `global_config_home` resolver, POSIX-normalised logical paths; **multi-user authorization** — `wiki_grants` / groups, per-request authorization decision, admin management CLI + HTTP + WebUI `/agent/access`. Auth behaviour change: `public_read` anonymous reads are gone — non-loopback requests need a token. |
 
 See [docs/MIGRATION_v0.36.md](docs/MIGRATION_v0.36.md),
 [docs/MIGRATION_v0.38.md](docs/MIGRATION_v0.38.md),
@@ -607,4 +707,4 @@ See [docs/MIGRATION_v0.36.md](docs/MIGRATION_v0.36.md),
 
 ---
 
-*Last updated: 2026-10-13 · Version: 0.40.2*
+*Last updated: 2026-11-16 · Version: 0.40.6*

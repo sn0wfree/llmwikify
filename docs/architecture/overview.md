@@ -1,7 +1,7 @@
 # llmwikify 架构与流程总览（图解版）
 
 > 面向开发者的图示文档。文字版见 [ARCHITECTURE.md](../../ARCHITECTURE.md)。
-> **版本:** 0.40.3 · **更新:** 2026-10-22 · **测试:** 4940 collected
+> **版本:** 0.40.6 · **更新:** 2026-11-16 · **测试:** 5201 collected
 > **验证:** `python scripts/check_architecture.py` → 0 violations
 
 ## 目录
@@ -13,8 +13,9 @@
 - [5. 知识入库与查询复利](#5-知识入库与查询复利)
 - [6. 自维护子系统（v0.41）](#6-自维护子系统v041)
 - [7. `/study` 深度研究](#7-study-深度研究)
-- [8. 入口层与运行时开关](#8-入口层与运行时开关)
-- [9. 验证与维护](#9-验证与维护)
+- [8. 多用户与授权模型](#8-多用户与授权模型)
+- [9. 入口层与运行时开关](#9-入口层与运行时开关)
+- [10. 验证与维护](#10-验证与维护)
 
 ---
 
@@ -36,7 +37,8 @@ backward-compat shim（保留旧导入路径，指向新家）：
 | `apps/chat/agent/unified/` | `kernel/agent/`（通用 agent 框架） |
 | `apps/chat/agent/execution_context.py` | `kernel/agent/execution_context.py` |
 | `apps/chat/engine.py`、`apps/chat/research_engine/` | `apps/research/`（研究引擎） |
-| `kernel/quant/llm_client.py` | `foundation/llm/client.py` |
+| `apps/chat/db.py` | `apps/chat_db/`（ChatDatabase） |
+| `apps/agent/tools/__init__.py` | `apps/wiki/tool_registry.py` + `apps/chat/skills/` |
 
 ---
 
@@ -76,7 +78,8 @@ flowchart TB
         FP["prompts"]
         FE["extractors"]
         FC["callback<br/>AgentHook · CompositeHook"]
-        FX["config · io · utils · auth · logging"]
+        FA["auth<br/>JWT · PAT · grants · authorize"]
+        FX["config · params · io · utils · logging"]
     end
 
     CLI --> AC & AW & AR
@@ -88,7 +91,7 @@ flowchart TB
     L2 --> L1
 ```
 
-规模：`src/llmwikify/` 约 400 个 py 文件 / 7.5 万行；`tests/` 约 236 个测试文件。
+规模：`src/llmwikify/` 415 个 py 文件 / 8.5 万行；`tests/` 244 个测试文件。
 
 ---
 
@@ -266,7 +269,101 @@ sequenceDiagram
 
 ---
 
-## 8. 入口层与运行时开关
+## 8. 多用户与授权模型
+
+授权数据在 `~/.llmwikify/auth.db`（`LLMWIKIFY_HOME` 可隔离测试库），与 wiki 存储完全分离。
+裁决集中在 `foundation/auth/authorize.py` 的纯函数 `authorize_request()`，中间件只做「取 token → 验签 → 调裁决」。
+
+### 8.1 裁决顺序（短路求值）
+
+```mermaid
+flowchart TB
+    S["请求进入"] --> LM{"local_mode?<br/>回环绑定"}
+    LM -->|是| PASS["放行"]
+    LM -->|否| T{"带 token?"}
+    T -->|否| D401["401 auth_required"]
+    T -->|是| V{"验签通过?"}
+    V -->|否| D401b["401 invalid_token"]
+    V -->|是| SUB{"subject=user:?"}
+    SUB -->|否| D401c["401 invalid_subject"]
+    SUB -->|是| SC{"需写?<br/>scope==write"}
+    SC -->|否| D403["403 forbidden_scope"]
+    SC -->|是| U{"用户存在?"}
+    U -->|否| D401d["401 user_not_found"]
+    U -->|是| DI{"已禁用?"}
+    DI -->|是| D401e["401 user_disabled"]
+    DI -->|否| AD{"admin?"}
+    AD -->|是| PASS
+    AD -->|否| W{"wiki_id?"}
+    W -->|无| PASS
+    W -->|有| LG{"旧 token?<br/>wgrants空 且 wikis非空"}
+    LG -->|是| LGW["wikis 列表管辖"]
+    LGW -->|不覆盖| D403b["403 forbidden_wiki"]
+    LGW -->|覆盖| PASS
+    LG -->|否| LIVE["实时 grants 查表<br/>fail-closed"]
+    LIVE -->|无授权| D403c["403 forbidden_wiki"]
+    LIVE -->|查询异常| D403d["403 authz_unavailable"]
+    LIVE -->|有授权| SN{"快照 ∩ 实时"}
+    SN -->|不在快照| D403e["403 forbidden_wiki<br/>需重签"]
+    SN -->|通过| PASS
+```
+
+| 决策 | 语义 |
+|------|------|
+| **D6=A** | 每请求查实时 grants 表 —— 撤权**下一请求即 403**；加权限**不追溯**老 token（需 `llmwikify auth token` 重签） |
+| **旧 token 判定** | **值规则，非 schema 字段**：`wgrants` 空 **且** `wikis` 非空 → 旧 token（跳过 grants 检查）；`wgrants` 空 **且** `wikis == []` → 新签发的零授权 token（走实时检查，被拒） |
+| **scope 上限先于用户存在性** | 只读 token 打在已删账号上，报 `forbidden_scope`（更精确）；scope = 快照含任一 `rw` ? `write` : `read` |
+| **fail-closed** | 查表异常一律 403 `authz_unavailable`，不放行 |
+| **只有 admin 隐含全权**（Q2） | 不做 wiki 属主概念；admin 早于 wiki 维度检查 → 能看到签发后新建的 wiki |
+| **列表路由同源** | `/api/wikis`、`/api/search/cross` 返回 `accessible_wikis()` = 快照 ∩ 实时，避免「列得出但打开 403」 |
+
+### 8.2 授权数据模型
+
+`wiki_grants` 单表承载三种主体（K8s `subject.kind` 模式，D1/Q1）：
+
+| principal_type | 语义 | 展开方式 |
+|---|---|---|
+| `user` | 单个用户对某 wiki 的权限 | 直接匹配 |
+| `group` | 组对某 wiki 的权限 | 经 `group_members` 展开到成员 |
+| `public` | PG `PUBLIC` 伪角色 | 所有登录用户 |
+
+```sql
+CREATE TABLE wiki_grants (
+    principal_type TEXT NOT NULL CHECK (principal_type IN ('user','group','public')),
+    principal_id   TEXT NOT NULL,
+    wiki_id        TEXT NOT NULL,       -- '*' = 含未来新建 wiki（仅实时上界）
+    can_read       INTEGER NOT NULL DEFAULT 0,
+    can_write      INTEGER NOT NULL DEFAULT 0,
+    granted_by     TEXT,
+    created_at     TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (principal_type, principal_id, wiki_id)
+);
+CREATE TABLE groups (id TEXT PRIMARY KEY, name TEXT UNIQUE NOT NULL, created_at TEXT);
+CREATE TABLE group_members (group_id TEXT REFERENCES groups(id), user_id TEXT NOT NULL);
+```
+
+- **无 deny 行**：撤销 = 删行（D5）。
+- **`wiki_id = '*'`** 只在实时上界里表示「含未来 wiki」；**token 快照永不存 `*`**，签发时展开为具体列表（Q3）→ 新建 wiki 需重签。
+- `users.disabled_at` 软删用户；`share_tokens` 独立表（P6 数据层就绪，完整 share 功能归 roadmap Phase 3）。
+- 性能：WAL + 线程本地复用连接，实测点查 **25–28 µs**（每次新开 `sqlite3.connect` 是 208 µs，8× 差距）。
+
+### 8.3 管理面
+
+| 面 | 入口 |
+|---|---|
+| CLI（admin 专属） | `llmwikify auth {create-user,list-users,disable-user,enable-user,grant,revoke,can-i,group create\|list\|add\|remove}` |
+| HTTP · 自述 | `GET /api/auth/me` —— 当前用户对每个 wiki 的读/写权限矩阵 |
+| HTTP · 管理（admin） | `GET/POST/DELETE /api/auth/grants` · `GET /api/auth/users` · `GET /api/auth/groups` |
+| WebUI | `/agent/access` —— AccessControl 页（admin） |
+
+`grant` / `revoke` 的 `--user` 与 `--group` **互斥**。设计与决策记录见
+[docs/designs/multiuser-auth-design.md](../designs/multiuser-auth-design.md)，
+实施记录见
+[docs/summaries/2026-11-14-multiuser-auth-implementation-record.md](../summaries/2026-11-14-multiuser-auth-implementation-record.md)。
+
+---
+
+## 9. 入口层与运行时开关
 
 ### WebUI 路由（`ui/webui/src/App.tsx`）
 
@@ -282,6 +379,7 @@ sequenceDiagram
 /agent/confirmations      确认中心
 /agent/tasks              任务监控
 /agent/settings           LLM 设置
+/agent/access             访问控制（admin 授权管理）
 /login                    JWT 认证
 ```
 
@@ -298,13 +396,16 @@ sequenceDiagram
 
 ---
 
-## 9. 验证与维护
+## 10. 验证与维护
 
 ```bash
 python scripts/check_architecture.py     # 分层依赖 + 导入解析：0 violation / 0 broken import
-pytest --collect-only -q                 # 测试收集（4940，排除 tests/ab_testing）
+pytest --collect-only -q                 # 测试收集（5201，排除 tests/ab_testing）
 pytest -m e2e                            # 端到端（需要真实服务）
 curl http://localhost:8765/api/health    # 运行时健康检查
+
+python tools/exploit_check_wikis_claim.py   # 授权绕过探针：4/4 blocked
+python tools/auth_defect_verify.py          # 已知 auth 缺陷复现脚本：4/4 NOT reproduced
 ```
 
 代码图谱（graphify）：
@@ -315,3 +416,5 @@ graphify update .    # 刷新 graphify-out/（无 API 成本）
 
 > 维护约定：本文件是`ARCHITECTURE.md` 的图解伴生文档。
 > 架构改动（新增/删除层内模块、改变主链路）时同步更新两处。
+>
+> 最近更新：2026-11-16 —— 补入多用户授权模型（§8）、修正 shim 表、刷新规模与测试数字。

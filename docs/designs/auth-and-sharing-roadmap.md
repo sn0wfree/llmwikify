@@ -1,7 +1,7 @@
 # llmwikify Auth & Sharing Roadmap
 
 > **方案锁定时间**: 2026-07-02
-> **当前 phase**: Phase 2 (auth foundation)
+> **当前 phase**: Phase 2 / 2.5 已落地 · Phase 3 数据层已就绪(功能待做) · Phase 4 未启动
 > **预估完成**: 2026-07-31 (4 周内全部 4 phase 落地)
 > **跟 AGENTS.md 的关系**: 8 原则受 Karpathy 启发。本文把"先沟通、再实施"原则用到极致,所有改动前先用本文对齐。
 >
@@ -13,6 +13,27 @@
 > foundation  →  (self only)
 > (reproduction 独立 sibling, 通过 interfaces/ 暴露)
 > ```
+
+## 0.0 状态快照(2026-11-16)
+
+| Phase | 状态 | 落地物 |
+|---|---|---|
+| Phase 2 基础鉴权 | ✅ 已落地 | `foundation/auth/`(JWT + keyring + `auth.db`)、`auth_routes.py`、`middleware.py`、CLI `auth init/token/whoami/logout` |
+| Phase 2.5 无密码 PAT | ✅ 已落地 | `api_keys` 表 + `_pat.py`、`POST /api/auth/{register,verify}`、CLI `create-token/list-tokens/revoke-token`、WebUI PAT→JWT 换发 |
+| **多用户授权(本 roadmap 之外)** | ✅ 已落地 P1–P6 | `wiki_grants` / `groups` / `group_members`、每请求授权裁决、管理 CLI + HTTP + WebUI `/agent/access` |
+| Phase 3 Share + Remote Wiki | 🟡 数据层就绪 | `share_tokens` 独立表 + `ShareTokenRepository`(P6);**share JWT / `GET /share/{slug}` / share CLI / RemoteWiki 只读 / WebUI ShareView 未做** |
+| Phase 4 Central Hub | ⬜ 未启动 | — |
+
+> **注意 §0 两处已被后续决策覆盖**:
+> - `public_read=True`(匿名可读)**已废弃** —— P4b 起非回环请求**无 token 一律 401**,唯一匿名旁路是 `local_mode`(回环绑定)。
+> - "鉴权层级 = 多用户 + PAT" 的**多用户部分**已由
+>   [multiuser-auth-design.md](multiuser-auth-design.md) 定义并实现(用户 / 组 / public 三类主体,
+>   read / write 二值权限,撤权下一请求即生效)。
+>
+> 决策与实施记录:
+> [docs/designs/multiuser-auth-design.md](multiuser-auth-design.md) ·
+> [docs/summaries/2026-11-14-multiuser-auth-implementation-record.md](../summaries/2026-11-14-multiuser-auth-implementation-record.md) ·
+> [docs/llmwikify-auth-缺陷清单.md](../llmwikify-auth-缺陷清单.md)
 
 ## 0. 目标(从用户问答锁定)
 
@@ -376,6 +397,12 @@ commit 5: tests + design doc 更新
 
 ## 2. Phase 3 — Share + Remote Wiki(~915 行, 4 commits, 8 天)
 
+> **状态(2026-11-16)**: 🟡 **数据层已就绪** —— `share_tokens` 独立表 + `ShareTokenRepository`
+> 已按 Q5=a 落地(`foundation/auth/share.py`)。以下清单中的 share JWT、`GET /share/{slug}`、
+> share CLI、RemoteWiki 只读约束、WebUI ShareView **尚未实施**。
+> 设计取舍(为什么是独立表而非复用 `api_keys`)见
+> [multiuser-auth-design.md](multiuser-auth-design.md) Q5。
+
 ### 2.1 文件清单
 
 **新增 (3 文件)**:
@@ -570,12 +597,12 @@ commit 11: docs(hub): 中央知识库分享设计
 
 ## 4. 三 Phase 总览
 
-| Phase | 提交数 | 客户端 LoC | 独立仓 | 时间 |
-|---|---|---|---|---|
-| Phase 2 (now) | 3 | ~895 | — | 2 天 |
-| Phase 3 | 4 | ~915 | — | 8 天 |
-| Phase 4 | 4 | ~600 | llmwikify-hub (~3000+ LoC) | 1.5 周 |
-| **总计** | **11 client commits** | **~2410 客户端** | **hub 服务端** | **~4 周** |
+| Phase | 状态 | 提交数 | 客户端 LoC | 独立仓 | 时间 |
+|---|---|---|---|---|---|
+| Phase 2 | ✅ 已落地 | 3 | ~895 | — | 2 天 |
+| Phase 3 | 🟡 数据层就绪 | 4 | ~915 | — | 8 天 |
+| Phase 4 | ⬜ 未启动 | 4 | ~600 | llmwikify-hub (~3000+ LoC) | 1.5 周 |
+| **总计** | | **11 client commits** | **~2410 客户端** | **hub 服务端** | **~4 周** |
 
 ---
 

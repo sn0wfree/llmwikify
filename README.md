@@ -37,7 +37,7 @@ LLM-maintained knowledge bases** with **chat** and **general research assistant*
 | | |
 |---|---|
 | 📚 **Knowledge Base** | LLM-maintained wiki with auto-linting, multi-wiki registry, section anchors |
-| 💬 **Chat Agent** | Streaming chat with tool calling, 50+ skills, subagents, memory |
+| 💬 **Chat Agent** | Streaming chat with tool calling, 38 skills, subagents, memory |
 | 🔬 **Research Assistant** | Adaptive ReAct loop, multi-source synthesis, quality gates |
 | 🔍 **Smart Search** | SQLite FTS5 + optional QMD hybrid (BM25 + vector + LLM reranking) |
 | 🔗 **Bidirectional Links** | Automatic `[[wikilink]]` detection with section-level granularity |
@@ -49,7 +49,7 @@ LLM-maintained knowledge bases** with **chat** and **general research assistant*
 ## Features
 
 ### 💬 Chat + Skills Agent
-Streaming chat with tool calling, confirmations, and 50+ built-in skills (CRUD,
+Streaming chat with tool calling, confirmations, and 38 built-in skills (CRUD,
 research, subagent, scheduler). The agent can search your wiki, manage pages,
 and orchestrate multi-step research — all with human-in-the-loop confirmations.
 
@@ -62,7 +62,7 @@ Configuration-driven via `~/.llmwikify/llmwikify.json`.
 
 ### 📚 Knowledge Base (Wiki)
 LLM-maintained wiki with bidirectional wikilinks, multi-wiki registry,
-section-level anchors, YAML frontmatter + DuckDB storage, FTS5 full-text search.
+section-level anchors, YAML frontmatter + SQLite storage, FTS5 full-text search.
 
 ### Markdown Editor
 Split-pane live markdown editor with page tree, front-matter panel, and wikilink autocomplete. Edit, preview, and manage your wiki pages in one view.
@@ -253,7 +253,7 @@ New to llmwikify? Start with our **5 end-to-end scenarios**:
 | **Research Assistant** | Adaptive ReAct loop, multi-source synthesis, quality gates (general purpose) |
 | **Web UI** | React SPA: editor, graph, dashboard, chat pages |
 | **Extraction** | PDF, Word, Excel, PowerPoint, images, audio, web, YouTube |
-| **MCP Server** | 28 tools over stdio + HTTP, multi-wiki support |
+| **MCP Server** | 26 tools over stdio + HTTP, multi-wiki support |
 
 ---
 
@@ -413,6 +413,14 @@ pip install llmwikify[extractors]  # PDF/Office/media
 | Command | Description |
 |---------|-------------|
 | `auth` | Auth bootstrap (`init [--email] [--force]` / `create-token [--name] [--user]` / `list-tokens` / `revoke` / `token` / `whoami` / `logout`) |
+| `auth` (admin) | User lifecycle (`create-user` / `list-users` / `disable-user` / `enable-user`) |
+| `auth` (admin) | Wiki authorization (`grant [--user U \| --group G] --wiki W [--write]` / `revoke` / `can-i`) |
+| `auth` (admin) | Groups (`group create` / `group list` / `group add` / `group remove`) |
+
+> Authorization model: a flat `user | group | public × wiki × read|write` grant
+> table in `~/.llmwikify/auth.db`. Every request re-checks the live table —
+> a revoke takes effect on the next request. See
+> [`docs/designs/multiuser-auth-design.md`](docs/designs/multiuser-auth-design.md).
 
 ### QMD Hybrid Search
 
@@ -507,6 +515,7 @@ Multi-wiki management:
 - [`docs/ONBOARDING.md`](docs/ONBOARDING.md) — New-user guide + onboarding improvements (v0.38+)
 - [`examples/`](examples/README.md) — 8 runnable playbooks
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) — Layered architecture, modules, data flow
+- [`docs/designs/multiuser-auth-design.md`](docs/designs/multiuser-auth-design.md) — Multi-user & wiki authorization model
 - [`docs/CONFIGURATION_GUIDE.md`](docs/CONFIGURATION_GUIDE.md) — All config options + Doctor
 - [`docs/DOCTOR.md`](docs/DOCTOR.md) — `llmwikify doctor` reference: 9 checks, fix dicts, CI integration (v0.40+)
 - [`CONTRIBUTING.md`](CONTRIBUTING.md) — Development setup and workflow

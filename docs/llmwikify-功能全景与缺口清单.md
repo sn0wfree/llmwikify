@@ -4,13 +4,15 @@
 > 基线 `main` @ `3e09b0c3`（2026-11-10）· 1387 commits
 > 对照 `feat/auto-doc-ingest` @ `a0b0f019` · `v0.41-dev` @ `582a7203`
 > 核对基准：仓库自带的 `docs/diagnostics/feature-completeness-2026-11.md`（2026-11-06）——**已过期 5 天，逐条重核**
+>
+> ⚠ **Auth 相关条目已于 2026-11-16 复核并就地更新**（标注「11-16 复核」）；其余条目仍以 11-10 基线为准。
 
 ---
 
 ## 0. 三句话结论
 
 1. **功能面很大但不算薄**：4 个入口面（CLI 34 / MCP 28 / HTTP 87 路由 / WebUI 14 页）+ 8 个核心能力域，**没有一个入口面是空壳**。
-2. **缺口集中在两处**：① **research 的 skill 路径三个占位**（A1 查询分解 / A2 多源综合 / A3 打分）—— README 承诺的"分解问题 → 多源综合 → 打分"在 skill 路径上是假的；② **Auth 的 Phase 2.5 后 4 个 commit + Phase 3/4** 全部未动。
+2. **缺口集中在两处**：① **research 的 skill 路径三个占位**（A1 查询分解 / A2 多源综合 / A3 打分）—— README 承诺的"分解问题 → 多源综合 → 打分"在 skill 路径上是假的；② **Auth 的 Share（Phase 3）与 Hub（Phase 4）全部未动**（11-16 复核：PAT 链路与多用户授权已闭环，只剩 share / hub）。
 3. **README 有 5 处数字/描述与实现不符**（"50+ skills" 实际 39、**DuckDB storage 根本没用于存储**、MCP 工具数自相矛盾）。低垂果实，改 README 5 分钟。
 
 ---
@@ -63,7 +65,7 @@ synthesize       watch         wikis          write_page
 | 4 | **Chat + Skills Agent** | 完整 | ReAct 流式、工具调用、人工确认、39 个 Skill 子类 |
 | 5 | **Research** | **⚠ 双路径，部分占位** | engine 路径完整；**skill 路径的 plan/score/summarize 是占位** |
 | 6 | **自维护（AutoResearch / Wiki Dream / Maintenance）** | 较新，持续建设 | 提案闭环已打通（跨实例可见 + 可审批） |
-| 7 | **Auth & 多 wiki** | **⚠ 只做了一半** | JWT + 部分 PAT；Share / Hub 未做 |
+| 7 | **Auth & 多 wiki** | **✅ 鉴权已闭环**<br>11-16 复核 | JWT + PAT + **每请求授权裁决**（用户 / 组 / public 三类主体，读写二值）；管理面：CLI + `/api/auth/{me,grants,users,groups}` + WebUI `/agent/access`。**Share / Hub 未做** |
 | 8 | **提取器** | 完整（7 个覆盖 8 类格式） | PDF / Office / 图片 / 音频 / Web / YouTube（markitdown 兜底） |
 
 ### 1.3 内部规模
@@ -82,18 +84,22 @@ synthesize       watch         wikis          write_page
 
 ## 2. README 声明 vs 实际实现（5 处不符）
 
+> **11-16 复核：第 1/2/3 条已在 README 就地修正**（数字改为实测值，矛盾表述已消解）。
+> 第 4/5 条（research skill 路径占位）属代码问题，未动。
+
 | README 声明 | 实测 | 判定 |
 |---|---|---|
-| "50+ built-in skills" | Skill 子类 **39**，注册进 registry **21** 处 | **夸大**（两处都不够 50） |
-| "**26** MCP tools" 与 "**28** tools over stdio + HTTP" | **28** | README **自相矛盾** |
-| "YAML frontmatter + **DuckDB storage**" | DuckDB 全仓仅出现在 `doctor_cmd.py:164` 的依赖检查里，**从未用于存储** | **不实**（实际是 SQLite + FTS5） |
-| "breaks down questions into **sub-queries**" | engine 路径真实；**skill 路径 A1 是占位**，不调 LLM | **部分不实** |
-| "synthesizes **structured reports**" | engine 路径真实；**skill 路径 A2 claims 是固定模板** | **部分不实** |
+| "50+ built-in skills" | 运行时注册 **38** 个（Skill 子类 41） | **已修** → README 改为 "38 built-in skills" |
+| "**26** MCP tools" 与 "**28** tools over stdio + HTTP" | `@mcp.tool` 装饰器 **28** 处，但 `wiki_status` / `wiki_search` 各定义两次，FastMCP 按名去重 → **对外实际 26** | **已修** → 统一写 26（"28"那处删掉） |
+| "YAML frontmatter + **DuckDB storage**" | DuckDB 全仓仅出现在 `doctor_cmd.py:178` 的依赖检查里，**从未用于存储** | **已修** → 改为 "SQLite storage" |
+| "breaks down questions into **sub-queries**" | engine 路径真实；**skill 路径 A1 是占位**，不调 LLM | **部分不实**（代码问题，未动） |
+| "synthesizes **structured reports**" | engine 路径真实；**skill 路径 A2 claims 是固定模板** | **部分不实**（代码问题，未动） |
 | "8 relation types" | 8 ✓ | 实 |
 | "Smart Lint: 5 类" | 8 个规则 | 保守说法，不算错 |
 
-★ **DuckDB 那条值得单独说**：一个"已经不在依赖里的东西"出现在 README 的功能描述里，
-会让人以为有列式分析能力。实际存储是 SQLite + FTS5，**DuckDB 只是 doctor 会检查它装没装**。
+★ **DuckDB 那条值得单独说**：一个"实际未被使用的东西"出现在 README 的功能描述里，
+会让人以为有列式分析能力。实际存储是 SQLite + FTS5，**DuckDB 只是 doctor 会检查它装没装**
+（它仍在 `pyproject.toml` 的 dependencies 里，但全仓无读写调用）。
 
 ---
 
@@ -118,9 +124,9 @@ synthesize       watch         wikis          write_page
 
 ### 3.2 B 类 · 计划有、代码无
 
-| # | 功能 | 出处 | 状态（11-11 重核） |
+| # | 功能 | 出处 | 状态（11-16 复核） |
 |---|---|---|---|
-| **B1** | Auth Share 链接 | `auth-and-sharing-roadmap.md` Phase 3 | **仍未开始**。`auth_routes.py:355` 仍显式拒 share token |
+| **B1** | Auth Share 链接 | `auth-and-sharing-roadmap.md` Phase 3 | **数据层就绪，功能未做**。`share_tokens` 独立表 + `ShareTokenRepository` 已落地（P6，Q5=a）；share JWT / `GET /share/{slug}` / share CLI / RemoteWiki 只读 / WebUI ShareView 均未实现 |
 | **B2** | Central Hub Publish | 同上 Phase 4 | **仍未开始**。无 `foundation/hub/`、无 `publish.py` |
 | **B3** | Skill Action 分组（read/write/analyze… 7 类） | `chat-architecture-2026-06.md` | **仍未开始**。`skills/actions/` 仍扁平 20 文件（仅 `detect/` 有子目录） |
 | **B4** | Memory 双系统合并 | 同上 | **仍未开始**。`MemoryManager` 与 `context_entries` 表并存（后者仍有 6 处引用），"谁主谁辅"未决 |
@@ -132,9 +138,9 @@ synthesize       watch         wikis          write_page
 
 | # | 功能 | 出处 | 未完成项 |
 |---|---|---|---|
-| **B8** | **Auth PAT 完整链路** | `auth-and-sharing-roadmap.md:638-641` | Phase 2.5 commit 7（schema+utils+删 argon2）/ commit 8（PAT 路由+middleware）/ commit 9（CLI create-token/list/revoke）/ commit 10（**WebUI 无密码登录**） |
-| **B9** | Auth Phase 3 — share + remote wiki | 同上 `:643` | commits 12-15 |
-| **B10** | Auth Phase 4 — 中央 hub publish + **独立仓立项** | 同上 `:644-645` | commits 16-19 + 立项 |
+| **B8** | **Auth PAT 完整链路** | `auth-and-sharing-roadmap.md:638-641` | ✅ **已完成（11-16 复核）** —— schema + utils + 删 argon2、PAT 路由 + middleware、CLI `create-token/list-tokens/revoke-token`、WebUI 无密码登录（PAT→JWT 换发）全部落地 |
+| **B9** | Auth Phase 3 — share + remote wiki | 同上 `:643` | 🟡 commits 12-15 中的 **数据层已做**（`share_tokens` 独立表）；share JWT / 路由 / CLI / RemoteWiki 只读未做 |
+| **B10** | Auth Phase 4 — 中央 hub publish + **独立仓立项** | 同上 `:644-645` | ⬜ 未开始（跨仓立项） |
 
 > ★ **B8 是被埋得最深、性价比最高的一项**：Phase 2 已经做完，剩下的是**纯增量**（4 个 commit），
 > 而且它带出 **WebUI 无密码登录** —— 这是目前"个人自建 wiki"最大的体验缺口。
@@ -157,7 +163,7 @@ synthesize       watch         wikis          write_page
 - **graph 孤儿节点 620 个** —— 绝大多数是假阳性（FastAPI 路由装饰器 / CLI 注册 / Protocol 方法 / hook 多态调用在图里天然无入边）。抽查 `cross_wiki_search` / `build_minimal` / `research_reviewer` **全部实际可达**。
 - **`research_timeout` / `--self-create` / WebSocket push** —— **均已实现**，勿再当欠账。
 - **`hook_adapter.py` 的 3 处 `pass`** —— 设计如此（AgentHook 13 点里没有对应点）。
-- **`GET /api/skills` 无 `Depends(auth)`** —— 中间件 `public_read=True` 覆盖 GET，非漏洞；是否该私有是**产品决策**。
+- **`GET /api/skills` 无 `Depends(auth)`** —— ⚠ **11-16 复核：`public_read` 已废弃**，非回环请求无 token 一律 401（中间件层拦截），该豁免不再是理由。
 
 ---
 
@@ -190,18 +196,18 @@ synthesize       watch         wikis          write_page
 |---|---|---|---|---|
 | **1** | **对齐 README 数字** | 5 分钟 | 中 | 5 处不符，其中 DuckDB 那条会误导人以为有列式分析能力 |
 | **2** | **合并 `v0.41-dev`** | 中（54 commit） | **高** | 已写完的存储端口化 / 状态外置 / 统一运行时 / **覆盖率门禁 76**；不合并则 C6 永远收敛不了 |
-| **3** | **B8 Auth PAT 链路** | 4 个 commit | **高** | Phase 2 已完成，是纯增量；带出 WebUI 无密码登录 —— 当前最大体验缺口 |
+| **3** | ~~**B8 Auth PAT 链路**~~ | — | — | ✅ **已完成（11-16 复核）** |
 | **4** | **A1+A2+A3 research 三个占位** | 中 | **高** | README 头牌能力，skill 路径上目前是假的；且 `v0.41-dev` 正在统一 Agent 运行时，**做完再接收益更高** |
 | **5** | A4+A5+A6（通知/scheduler/worktree） | 中 | 中 | 三个都是 CRUD/工作流的基础设施，做完才谈得上"自动化" |
 | **6** | B3 Skill 分组 + B4 Memory 合并 | 中 | 中 | 结构性债，不影响用户可见功能 |
-| **7** | B1/B2/B9/B10（Share + Hub） | **大** | 中高 | Phase 3/4 + 独立仓立项，**是产品决策不是技术决策**，要先拍板再动手 |
+| **7** | B1/B2/B9/B10（Share + Hub） | **大** | 中高 | Phase 3/4 + 独立仓立项，**是产品决策不是技术决策**，要先拍板再动手（share 数据层已就绪） |
 | **8** | B6 ATF | 大 | 中 | 12 个开放问题未决，先要设计收敛 |
 | — | B5 SkillsLoader hot-reload | 小 | 小 | 加个 reload 路径即可，可搭车做 |
 
 ### 需要你拍板的三件事
 
 1. **Skill 数量口径**：README 说 50+，实际 39 个子类 / 21 处注册。是**补到 50**，还是**把 README 改成真实数字**？
-2. **Auth 走多远**：只做 B8（PAT + 无密码登录，本仓可闭环），还是连 B9/B10（Share + Hub，含独立仓立项）？
+2. **Auth 走多远**：B8（PAT + 无密码登录）已完成并加上多用户授权（P1–P6）。剩下的是 **B9 share**（本仓可闭环，数据层已就绪）与 **B10 Hub**（含跨仓独立仓立项）—— 要做哪个？
 3. **`v0.41-dev` 什么时候合**：它是 54 个 commit 的大重构，合并前需要一次完整的回归验证窗口 —— 现在就合，还是等某个版本窗口？
 
 ---
