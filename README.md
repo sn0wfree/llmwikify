@@ -249,11 +249,11 @@ New to llmwikify? Start with our **5 end-to-end scenarios**:
 | **Wiki Core** | FTS5 search, bidirectional references, query compounding, multi-wiki registry |
 | **Smart Lint** | Broken links, orphans, contradictions, outdated pages, knowledge gaps |
 | **Knowledge Graph** | 8 relation types, PageRank, community detection, HTML/SVG/GraphML export |
-| **Chat + Agent** | ReAct streaming, 26 MCP tools, skills system, research engine |
+| **Chat + Agent** | ReAct streaming, MCP tools, skills system, research engine |
 | **Research Assistant** | Adaptive ReAct loop, multi-source synthesis, quality gates (general purpose) |
 | **Web UI** | React SPA: editor, graph, dashboard, chat pages |
 | **Extraction** | PDF, Word, Excel, PowerPoint, images, audio, web, YouTube |
-| **MCP Server** | 26 tools over stdio + HTTP, multi-wiki support |
+| **MCP Server** | 20 tools (single wiki) / 8 tools (multi-wiki registry), over stdio + HTTP |
 
 ---
 
@@ -428,7 +428,9 @@ pip install llmwikify[extractors]  # PDF/Office/media
 |---------|-------------|
 | `qmd` | QMD search engine (status / search / install / embed / mcp) |
 
-> **MCP tools**: 26 `wiki_*` tools available when server runs with `--transport stdio` or HTTP. See [docs/MCP_SETUP.md](docs/MCP_SETUP.md).
+> **MCP tools**: 单 wiki 模式 **20** 个 / 多 wiki 注册表模式 **8** 个（两模式工具名并集 26 个，
+> 但**没有任何一个服务器同时暴露 26 个**）。See [docs/MCP_SETUP.md](docs/MCP_SETUP.md) ·
+> [工具面核实](docs/diagnostics/mcp-tool-surface-2026-11.md).
 
 ---
 
@@ -479,7 +481,12 @@ server.run(host="0.0.0.0", port=8765)
 
 ---
 
-## MCP Server (26 Tools)
+## MCP Server (26 Tools — single-wiki 20 / multi-wiki 8)
+
+> The table below lists **all 26 unique tool names** across both registration
+> paths. A running server exposes **one** of them: **20** in single-wiki mode,
+> **8** in multi-wiki registry mode (the two paths are mutually exclusive).
+> See [docs/diagnostics/mcp-tool-surface-2026-11.md](docs/diagnostics/mcp-tool-surface-2026-11.md).
 
 Wiki maintenance and query:
 
@@ -489,13 +496,22 @@ Wiki maintenance and query:
 | `wiki_ingest` | Ingest a source file |
 | `wiki_write_page` | Write/update a wiki page |
 | `wiki_read_page` | Read a wiki page |
-| `wiki_search` | Full-text search (FTS5) |
+| `wiki_search` | Full-text search (FTS5; single-wiki mode also accepts `backend=qmd`) |
 | `wiki_lint` | Health check |
 | `wiki_status` | Status overview |
+| `wiki_log` | Append an entry to the wiki log |
 | `wiki_references` | Page references |
 | `wiki_synthesize` | Save query answer as wiki page |
 | `wiki_graph` | Graph query / modify |
 | `wiki_graph_analyze` | Graph export / detect / report |
+| `wiki_recommend` | Recommendations (missing pages, orphan pages, …) |
+| `wiki_analyze_source` | Analyze a source file, cache structured extraction |
+| `wiki_suggest_synthesis` | Cross-source synthesis suggestions |
+| `wiki_knowledge_gaps` | Knowledge gaps / outdated / redundant pages |
+| `wiki_build_index` | Build or rebuild the reference index |
+| `wiki_read_schema` | Read the `wiki.md` schema file |
+| `wiki_update_schema` | Update the `wiki.md` schema file |
+| `wiki_sink_status` | Query sink buffer status |
 
 Multi-wiki management:
 
@@ -504,6 +520,7 @@ Multi-wiki management:
 | `wiki_list` | List all registered wikis |
 | `wiki_switch` | Switch to a different wiki |
 | `wiki_register` | Register a new wiki |
+| `wiki_unregister` | Unregister a wiki |
 | `wiki_search_cross` | Search across multiple wikis |
 | `wiki_scan` | Scan directories for wikis |
 

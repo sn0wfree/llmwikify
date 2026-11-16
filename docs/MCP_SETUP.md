@@ -1,9 +1,15 @@
 # MCP Server Setup Guide
 
-**llmwikify** 通过统一的 `llmwikify serve` CLI 暴露 **26 个 wiki 工具**
+**llmwikify** 通过统一的 `llmwikify serve` CLI 暴露 wiki 工具
 （MCP stdio / HTTP / SSE 三种 transport），同时承载 REST API 和 Web UI。
 
-**Current**: 26 tools (v0.38.0)
+**Current**: 单 wiki 模式 **20** 个工具 / 多 wiki 注册表模式 **8** 个；
+两模式的工具名并集 **26** 个（**没有任何一个服务器同时暴露 26 个**）。
+
+> ⚠️ 两种模式**互斥注册**（`MCPAdapter` 按入参二选一）：
+> 单 wiki 模式注册 `register_wiki_tools`（20 个，含 `wiki_status` / `wiki_search` 的单 wiki 版）；
+> 多 wiki 模式注册 `register_multi_wiki_tools`（8 个，含同名工具的多 wiki 版 + 6 个多 wiki 专属）。
+> 详见 [docs/diagnostics/mcp-tool-surface-2026-11.md](./diagnostics/mcp-tool-surface-2026-11.md)。
 
 > **v0.30+ 破坏性变更**：旧 `MCPServer(wiki).serve()` Python API 已废弃。
 > 统一由 `llmwikify.interfaces.server.WikiServer` 替代，由 `llmwikify serve`
@@ -171,10 +177,19 @@ curl -H "Authorization: Bearer <your-token>" http://server:8765/api/wiki/status
 
 ---
 
-## 📋 Available Tools (26 Total)
+## 📋 Available Tools（两模式并集 26 个唯一名字）
 
-> 数字 = 实际注册到 FastMCP 的工具数（v0.38.0）。每个工具的"Added"列表示
-> 引入版本。
+> 下列 26 个是**两条注册路径的工具名并集**（20 核心 + 6 多 wiki 专属），
+> **不是任何一个运行中服务器的工具数**：
+>
+> | 模式 | 注册函数 | 工具数 |
+> |---|---|---|
+> | 单 wiki | `register_wiki_tools` | **20** |
+> | 多 wiki 注册表 | `register_multi_wiki_tools` | **8** |
+>
+> ⚠️ 多 wiki 模式下，`wiki_init` / `wiki_ingest` / `wiki_write_page` / `wiki_read_page` /
+> `wiki_lint` 等 18 个核心工具**不注册** —— 只能通过 REST API 或切换到单 wiki 使用。
+> 每个工具的"Added"列表示引入版本。
 
 ### Wiki 核心（20）
 
@@ -201,7 +216,11 @@ curl -H "Authorization: Bearer <your-token>" http://server:8765/api/wiki/status
 | `wiki_suggest_synthesis` | 跨源综合建议 | v0.28.0 |
 | `wiki_knowledge_gaps` | 知识缺口 / 过时 / 冗余 | v0.28.0 |
 
-### Multi-Wiki（6，v0.31+）
+### Multi-Wiki 专属（6，v0.31+）
+
+> 仅在**多 wiki 注册表模式**下注册。另有两个工具在两种模式下同名但语义不同：
+> `wiki_status`（单 wiki 版 `wiki.status()` / 多 wiki 版走注册表）与
+> `wiki_search`（单 wiki 版支持 `backend=fts5|qmd` / 多 wiki 版支持 `wiki_id`）。
 
 | Tool | Description |
 |------|-------------|
@@ -361,8 +380,9 @@ MCP 服务（含 llmwikify）聚合到一个 stdio 端点。
 - [Configuration Guide](./CONFIGURATION_GUIDE.md) — `server.*` / `mcp.*` / `wikis.*` 全配置项
 - [MCPorter Deployment](./MCPORTER_DEPLOYMENT.md) — 多 MCP 聚合
 - [TUTORIAL.md](./TUTORIAL.md) — 5 个端到端场景（含 Chat SSE）
+- [MCP 工具面核实](./diagnostics/mcp-tool-surface-2026-11.md) — 20 / 8 / 26 三个数字的来源与复核证据
 - [MCP 协议](https://modelcontextprotocol.io/)
 
 ---
 
-*Last updated: 2026-06-30 | Version: 0.38.0 | 26 tools*
+*Last updated: 2026-11-16 | Version: 0.38.0 | 工具并集 26（单 wiki 20 / 多 wiki 8）*

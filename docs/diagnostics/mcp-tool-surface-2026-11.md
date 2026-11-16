@@ -95,21 +95,26 @@ register_multi_wiki_tools: defines=8  decorated=8
 |---|---|---|
 | `README.md` | "26 `wiki_*` tools available when server runs with `--transport stdio` or HTTP" | 暗示单个服务器暴露 26 个；实际是 20 或 8 |
 | `README.md` | `## MCP Server (26 Tools)` | 同上（该表本身按"维护与查询 / 多 wiki 管理"分组，实际已隐含两种模式） |
-| `docs/MCP_SETUP.md` | "暴露 **26 个 wiki 工具**" / "Current: 26 tools (v0.38.0)" / "📋 Available Tools (26 Total)" | 同上 |
+| `README.md` | MCP 工具表 | **只列了 16 个工具**，标题却写 26 —— 漏 10 个：`wiki_log` `wiki_recommend` `wiki_analyze_source` `wiki_suggest_synthesis` `wiki_knowledge_gaps` `wiki_build_index` `wiki_read_schema` `wiki_update_schema` `wiki_sink_status` `wiki_unregister` |
+| `docs/MCP_SETUP.md` | "暴露 **26 个 wiki 工具**" / "Current: 26 tools (v0.38.0)" / "📋 Available Tools (26 Total)" | 同上；且"数字 = 实际注册到 FastMCP 的工具数"这句**本身就是错的** |
+| `docs/llmwikify-功能全景与缺口清单.md` | §2 README 对照表 | 我在 commit `17456c94` 里写进了**错误解释**（"FastMCP 按名去重 → 对外实际 26"） |
 
 ### 3.2 修正口径
 
 统一表述为：
 
 > 单 wiki 模式 **20** 个工具；多 wiki 模式 **8** 个；两模式名字并集 **26** 个。
+> **没有任何一个运行中的服务器暴露 26 个。**
 
-README 的工具表**保留 26 行**（它按用途分组，两模式的工具都在里面），
-只在标题与说明行标明"单 wiki 模式 20 / 多 wiki 模式 8"。
+具体改动：
 
-### 3.3 不改的地方
+| 文件 | 改动 |
+|---|---|
+| `README.md` | 标题与说明行标注 20/8；工具表**补齐到 26 行**（逐条对齐 `tools.py` 的 docstring） |
+| `docs/MCP_SETUP.md` | 头部加模式表；`Available Tools` 章节说明改为"并集 26"；多 wiki 章节标注 6 个专属 + 2 个同名不同语义 |
+| `docs/llmwikify-功能全景与缺口清单.md` | §2 换成正确解释（20 + 8 − 2 同名 = 26 并集，if/else 互斥） |
 
-- 工具**名单**不变、工具**数量**不变（26 并集口径保留）—— 改的只是"available when server runs"的措辞。
-- `docs/MCP_SETUP.md` 的版本戳 `v0.38.0` 不动（那是该文档自身的版本，不是工具数版本）。
+工具**名单**与**数量**（26 并集口径）不变 —— 改的只是"available when server runs"的措辞。
 
 ---
 
