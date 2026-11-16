@@ -328,10 +328,14 @@ async def _wiki_switch(args: dict, ctx: SkillContext) -> SkillResult:
         return SkillResult.fail("wiki_id is required")
     try:
         instance = registry.get_wiki_instance(wiki_id)
+        # Actually switch: core tools re-resolve the default wiki on
+        # every call, so this must take effect (multi-wiki-mcp-reconnect).
+        registry.set_default_wiki(wiki_id)
         return SkillResult.ok(
             {
                 "message": f"Switched to wiki: {instance.name}",
                 "wiki": instance.to_dict(),
+                "default_wiki_id": registry.get_default_wiki_id(),
             }
         )
     except KeyError:

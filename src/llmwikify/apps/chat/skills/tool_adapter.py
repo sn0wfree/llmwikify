@@ -165,6 +165,25 @@ class SkillToolAdapter:
             ],
         }
 
+    def _skill_config(self) -> dict[str, Any]:
+        """Build ``SkillContext.config`` for both execution paths.
+
+        Exposes the multi-wiki ``WikiRegistry`` so the 8 multi-wiki
+        ``wiki_query`` actions (wiki_list / wiki_switch / …) can resolve
+        it — they were failing with "wiki_registry not configured"
+        because no writer existed. See
+        docs/designs/multi-wiki-mcp-reconnect.md §3.5.
+        """
+        config: dict[str, Any] = {"wiki_id": self.wiki_id} if self.wiki_id else {}
+        if self.subagent_manager is not None:
+            config["subagent_manager"] = self.subagent_manager
+        if self.child_tool_registry is not None:
+            config["child_tool_registry"] = self.child_tool_registry
+        registry = getattr(self.wiki_service, "wiki_registry", None)
+        if registry is not None:
+            config["wiki_registry"] = registry
+        return config
+
     async def _execute_direct(self, name: str, arguments: dict[str, Any]) -> Any:
         skill_name, action_name = self._name_map[name]
         # Resolve llm_spec from wiki_service
@@ -176,13 +195,7 @@ class SkillToolAdapter:
                 logger.debug(
                     "Failed to resolve llm_spec from wiki_service", exc_info=True
                 )
-        config: dict[str, Any] = {"wiki_id": self.wiki_id} if self.wiki_id else {}
-        # Phase 10-E (2026-06-20): expose SubagentManager + safe child
-        # tool registry to subagent_skill via SkillContext.config.
-        if self.subagent_manager is not None:
-            config["subagent_manager"] = self.subagent_manager
-        if self.child_tool_registry is not None:
-            config["child_tool_registry"] = self.child_tool_registry
+        config = self._skill_config()
         ctx = SkillContext(
             wiki=self.wiki,
             db=self.db,
@@ -237,11 +250,7 @@ class SkillToolAdapter:
                 logger.debug(
                     "Failed to resolve llm_spec from wiki_service", exc_info=True
                 )
-        config: dict[str, Any] = {"wiki_id": self.wiki_id} if self.wiki_id else {}
-        if self.subagent_manager is not None:
-            config["subagent_manager"] = self.subagent_manager
-        if self.child_tool_registry is not None:
-            config["child_tool_registry"] = self.child_tool_registry
+        config = self._skill_config()
         ctx = SkillContext(
             wiki=self.wiki,
             db=self.db,

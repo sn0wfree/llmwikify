@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import Any, cast
 
 from fastmcp import FastMCP
 
@@ -11,18 +11,53 @@ from llmwikify.kernel import Wiki
 from llmwikify.kernel.graph.visualizer import build_visualization_data
 
 
-def register_wiki_tools(mcp: FastMCP, wiki: Wiki) -> None:
-    """Register all wiki tools on the MCP server."""
+def register_wiki_tools(
+    mcp: FastMCP,
+    wiki: Wiki | None = None,
+    *,
+    registry: Any | None = None,
+) -> None:
+    """Register the 20 core wiki tools on the MCP server.
+
+    Args:
+        mcp: FastMCP server instance.
+        wiki: Fixed wiki object for single-wiki mode. Unused when
+            ``registry`` is given (kept for the ``registry is None``
+            fast path, which must stay byte-identical to the old
+            behaviour).
+        registry: Optional ``WikiRegistry``. When given, every tool
+            re-resolves the registry's **current default wiki** on each
+            call, so a later ``wiki_switch`` takes effect without a
+            restart. See ``docs/designs/multi-wiki-mcp-reconnect.md``.
+
+    Raises:
+        RuntimeError: In registry mode when no default wiki is set, or
+            when the default resolves to a remote wiki (FastMCP turns
+            this into a structured tool error).
+    """
+
+    def _target() -> Wiki:
+        """Resolve the wiki to act on (dynamic in registry mode)."""
+        if registry is None:
+            if wiki is None:
+                raise RuntimeError("No wiki configured")
+            return wiki
+        default_id = registry.get_default_wiki_id()
+        if not default_id:
+            raise RuntimeError("No default wiki configured")
+        # KeyError (unknown id) / ValueError (remote wiki has no local
+        # object) both surface as tool errors via FastMCP.
+        return cast("Wiki", registry.get_wiki(default_id))
 
     @mcp.tool
     def wiki_init(overwrite: bool = False) -> str:
         """Initialize a wiki."""
-        return json.dumps(wiki.init(overwrite=overwrite))
+        return json.dumps(_target().init(overwrite=overwrite))
 
     @mcp.tool
     def wiki_ingest(source: str) -> str:
         """Ingest a source file, extract content."""
-        result = wiki.ingest_source(source)
+        result = _target().ingest_source(source)
         if isinstance(result, str):
             return result
         return json.dumps(result, ensure_ascii=False, indent=2)
@@ -30,7 +65,7 @@ def register_wiki_tools(mcp: FastMCP, wiki: Wiki) -> None:
     @mcp.tool
     def wiki_write_page(page_name: str, content: str) -> str:
         """Write a wiki page."""
-        result = wiki.write_page(page_name, content)
+        result = _target().write_page(page_name, content)
         if isinstance(result, str):
             return result
         return json.dumps(result, ensure_ascii=False, indent=2)
@@ -38,7 +73,7 @@ def register_wiki_tools(mcp: FastMCP, wiki: Wiki) -> None:
     @mcp.tool
     def wiki_read_page(page_name: str) -> str:
         """Read a wiki page (supports wiki/.sink/ files)."""
-        result = wiki.read_page(page_name)
+        result = _target().read_page(page_name)
         if isinstance(result, str):
             return result
         return json.dumps(result, ensure_ascii=False, indent=2)
@@ -53,7 +88,7 @@ def register_wiki_tools(mcp: FastMCP, wiki: Wiki) -> None:
             backend: Search backend - "fts5" (fast, default) or "qmd" (semantic)
         """
         return json.dumps(
-            wiki.search(query, limit, backend=backend), ensure_ascii=False, indent=2
+            _target().search(query, limit, backend=backend), ensure_ascii=False, indent=2
         )
 
     @mcp.tool
@@ -73,7 +108,7 @@ def register_wiki_tools(mcp: FastMCP, wiki: Wiki) -> None:
             limit: Max LLM-detected issues to return (default: 10).
             force: Force re-detection (ignore cache).
         """
-        result = wiki.lint(
+        result = _target().lint(
             mode=mode,
             limit=limit,
             force=force,
@@ -116,7 +151,7 @@ def register_wiki_tools(mcp: FastMCP, wiki: Wiki) -> None:
         Returns:
             JSON with analysis results: topics, entities, relations, suggested_pages, etc.
         """
-        result = wiki.analyze_source(source_path, force=force)
+        result = _target().analyze_source(source_path, force=force)
         return json.dumps(result, ensure_ascii=False, indent=2)
 
     @mcp.tool
@@ -129,11 +164,11 @@ def register_wiki_tools(mcp: FastMCP, wiki: Wiki) -> None:
         """Show page references (inbound and outbound wikilinks)."""
         result = {"page": page_name, "inbound": [], "outbound": []}
         if not outbound:
-            result["inbound"] = wiki.get_inbound_links(
+            result["inbound"] = _target().get_inbound_links(
                 page_name, include_context=detail
             )
         if not inbound:
-            result["outbound"] = wiki.get_outbound_links(
+            result["outbound"] = _target().get_outbound_links(
                 page_name, include_context=detail
             )
         return json.dumps(result, ensure_ascii=False, indent=2)
@@ -141,7 +176,7 @@ def register_wiki_tools(mcp: FastMCP, wiki: Wiki) -> None:
     @mcp.tool
     def wiki_status() -> str:
         """Get wiki status summary."""
-        return json.dumps(wiki.status(), ensure_ascii=False, indent=2)
+        return json.dumps(_target().status(), ensure_ascii=False, indent=2)
 
     @mcp.tool
     def wiki_log(operation: str, details: str) -> str:
@@ -151,22 +186,22 @@ def register_wiki_tools(mcp: FastMCP, wiki: Wiki) -> None:
             operation: Operation name (e.g., 'ingest', 'edit', 'lint')
             details: Human-readable description of what happened
         """
-        return wiki.append_log(operation, details)
+        return _target().append_log(operation, details)
 
     @mcp.tool
     def wiki_recommend() -> str:
         """Get wiki recommendations (missing pages, orphan pages, etc.)."""
-        return json.dumps(wiki.recommend(), ensure_ascii=False, indent=2)
+        return json.dumps(_target().recommend(), ensure_ascii=False, indent=2)
 
     @mcp.tool
     def wiki_build_index() -> str:
         """Build or rebuild the reference index."""
-        return json.dumps(wiki.build_index(), ensure_ascii=False, indent=2)
+        return json.dumps(_target().build_index(), ensure_ascii=False, indent=2)
 
     @mcp.tool
     def wiki_read_schema() -> str:
         """Read the wiki.md schema file."""
-        return json.dumps(wiki.read_schema(), ensure_ascii=False, indent=2)
+        return json.dumps(_target().read_schema(), ensure_ascii=False, indent=2)
 
     @mcp.tool
     def wiki_update_schema(content: str) -> str:
@@ -175,7 +210,7 @@ def register_wiki_tools(mcp: FastMCP, wiki: Wiki) -> None:
         Args:
             content: Full markdown content for wiki.md
         """
-        return json.dumps(wiki.update_schema(content), ensure_ascii=False, indent=2)
+        return json.dumps(_target().update_schema(content), ensure_ascii=False, indent=2)
 
     @mcp.tool
     def wiki_synthesize(
@@ -200,7 +235,7 @@ def register_wiki_tools(mcp: FastMCP, wiki: Wiki) -> None:
             auto_log: Log this operation to wiki log (default: True)
             merge_or_replace: Strategy - "sink", "merge", or "replace" (default: "sink")
         """
-        result = wiki.synthesize_query(
+        result = _target().synthesize_query(
             query=query,
             answer=answer,
             source_pages=source_pages,
@@ -215,7 +250,7 @@ def register_wiki_tools(mcp: FastMCP, wiki: Wiki) -> None:
     @mcp.tool
     def wiki_sink_status() -> str:
         """Query the sink buffer status."""
-        return json.dumps(wiki.sink_status(), ensure_ascii=False, indent=2)
+        return json.dumps(_target().sink_status(), ensure_ascii=False, indent=2)
 
     @mcp.tool
     def wiki_suggest_synthesis(source_name: str | None = None) -> str:
@@ -224,7 +259,7 @@ def register_wiki_tools(mcp: FastMCP, wiki: Wiki) -> None:
         Args:
             source_name: Optional specific source to analyze (default: all unanalyzed)
         """
-        result = wiki.suggest_synthesis(source_name=source_name)
+        result = _target().suggest_synthesis(source_name=source_name)
         return json.dumps(result, ensure_ascii=False, indent=2)
 
     @mcp.tool
@@ -238,7 +273,7 @@ def register_wiki_tools(mcp: FastMCP, wiki: Wiki) -> None:
             JSON with knowledge gap analysis results including:
             outdated_pages, knowledge_gaps, redundant_pages, contradictions, data_gaps.
         """
-        result = wiki.lint(
+        result = _target().lint(
             generate_investigations=True,
             limit=limit,
         )
@@ -247,7 +282,7 @@ def register_wiki_tools(mcp: FastMCP, wiki: Wiki) -> None:
     @mcp.tool
     def wiki_graph_analyze() -> str:
         """Analyze knowledge graph structure (PageRank, communities, suggestions)."""
-        return json.dumps(wiki.graph_analyze(), ensure_ascii=False, indent=2)
+        return json.dumps(_target().graph_analyze(), ensure_ascii=False, indent=2)
 
     @mcp.tool
     def wiki_graph(
@@ -260,7 +295,8 @@ def register_wiki_tools(mcp: FastMCP, wiki: Wiki) -> None:
             current_page: Optional page name to center around
             mode: Display mode: 'auto', 'full', 'focused', or 'minimal'
         """
-        result = build_visualization_data(wiki.index, wiki, current_page, mode)
+        target = _target()
+        result = build_visualization_data(target.index, target, current_page, mode)
         return json.dumps(result, ensure_ascii=False, indent=2)
 
 
@@ -289,15 +325,20 @@ def register_multi_wiki_tools(mcp: FastMCP, registry: Any) -> None:
     def wiki_switch(wiki_id: str) -> str:
         """Switch to a different wiki.
 
+        Sets it as the registry default, so core tools (read/write/…)
+        act on it from the next call onward.
+
         Args:
             wiki_id: ID of the wiki to switch to
         """
         try:
             instance = registry.get_wiki_instance(wiki_id)
+            registry.set_default_wiki(wiki_id)
             return json.dumps(
                 {
                     "message": f"Switched to wiki: {instance.name}",
                     "wiki": instance.to_dict(),
+                    "default_wiki_id": registry.get_default_wiki_id(),
                 },
                 ensure_ascii=False,
                 indent=2,
@@ -388,13 +429,21 @@ def register_multi_wiki_tools(mcp: FastMCP, registry: Any) -> None:
             return json.dumps(status, ensure_ascii=False, indent=2)
 
     @mcp.tool
-    def wiki_search(query: str, limit: int = 10, wiki_id: str | None = None) -> str:
+    def wiki_search(
+        query: str,
+        limit: int = 10,
+        wiki_id: str | None = None,
+        backend: str = "fts5",
+    ) -> str:
         """Search wiki pages.
 
         Args:
             query: Search query string
             limit: Maximum number of results (default: 10)
             wiki_id: Optional wiki ID (uses default if not specified)
+            backend: Search backend - "fts5" (fast, default) or "qmd"
+                (semantic). Only applies to the single-``wiki_id`` branch;
+                the cross-wiki fallback always uses FTS5.
         """
         if wiki_id:
             try:
@@ -409,7 +458,7 @@ def register_multi_wiki_tools(mcp: FastMCP, registry: Any) -> None:
                     return json.dumps({"error": "Remote wiki client not available"})
                 else:
                     wiki = registry.get_wiki(wiki_id)
-                    results = wiki.search(query, limit)
+                    results = wiki.search(query, limit, backend=backend)
                     return json.dumps(results, ensure_ascii=False, indent=2)
             except KeyError:
                 return json.dumps({"error": f"Wiki not found: {wiki_id}"})

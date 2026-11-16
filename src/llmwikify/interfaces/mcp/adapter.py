@@ -50,11 +50,33 @@ class MCPAdapter:
 
         self._mcp = FastMCP(self.name)
 
-        # Register tools based on mode
+        # Register tools based on mode. In registry mode the 20 core
+        # tools are registered first with dynamic default-wiki
+        # resolution, then the two same-named multi-wiki variants
+        # (wiki_status / wiki_search, which take wiki_id) replace them —
+        # giving the 26 unique names the v0.31 design specifies, without
+        # FastMCP's "Component already exists" warning.
+        # See docs/designs/multi-wiki-mcp-reconnect.md.
         if self.registry:
+            register_wiki_tools(self._mcp, self.wiki, registry=self.registry)
+            for _name in ("wiki_status", "wiki_search"):
+                self._remove_tool(_name)
             register_multi_wiki_tools(self._mcp, self.registry)
         elif self.wiki:
             register_wiki_tools(self._mcp, self.wiki)
+
+    def _remove_tool(self, name: str) -> None:
+        """Drop a same-named tool before the multi-wiki variant re-adds it.
+
+        fastmcp >=3.2 deprecates ``FastMCP.remove_tool`` in favour of
+        ``local_provider.remove_tool``; the pyproject range allows
+        ``>=3.0,<3.3``, so prefer the new path when present.
+        """
+        provider = getattr(self._mcp, "local_provider", None)
+        if provider is not None and hasattr(provider, "remove_tool"):
+            provider.remove_tool(name)
+        else:
+            self._mcp.remove_tool(name)
 
     @property
     def asgi_app(self) -> Any:

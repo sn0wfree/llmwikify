@@ -86,11 +86,16 @@ class WikiServer:
         # Unified architecture: always use WikiRegistry
         if isinstance(wiki, WikiRegistry):
             self.registry = wiki
+            # Explicit registry = multi-wiki intent: expose the 26-tool
+            # MCP surface (20 core + 6 registry-only). A single Wiki
+            # keeps the 20-tool surface. multi-wiki-mcp-reconnect §3.2.
+            self._multi_wiki = True
         else:
             # Single wiki mode: create a registry and auto-register the wiki
             from llmwikify.kernel.multi_wiki.instance import WikiType
 
             self.registry = WikiRegistry(config={})
+            self._multi_wiki = False
             # Path.name works cross-platform (handles \ on Windows);
             # str.split("/") only works on POSIX paths.
             wiki_id = Path(wiki.root).name or "default"
@@ -161,7 +166,10 @@ class WikiServer:
 
         # 1. Build MCP adapter
         if enable_mcp:
-            self.mcp = MCPAdapter(self.wiki, name=mcp_name)
+            self.mcp = MCPAdapter(
+                self.registry if self._multi_wiki else self.wiki,
+                name=mcp_name,
+            )
 
         # 2. Build FastAPI application
         self.app = self._build_app(cors_enabled=cors_enabled)
