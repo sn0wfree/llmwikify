@@ -946,3 +946,39 @@ create-user / list-users / disable-user / enable-user
 | `ui/webui/src/App.tsx` | 路由 `/agent/access` |
 | `ui/webui/src/components/shared/AppShell.tsx` | 导航项 Access（Shield 图标） |
 | `tests/test_interfaces_auth.py` | `TestGrantsAPIP5`（5 条）：矩阵 / CRUD / admin 校验 / users+groups / 校验 |
+
+### 12.8 P6 · share_tokens 独立表（2026-11-14，doc-first）
+
+**范围**（Q5 = a 的**数据层**落地；完整 share 功能 = roadmap Phase 3，另议）：
+
+| 项 | 内容 |
+|---|---|
+| **表** | `share_tokens`（roadmap §2.2，**去掉 `password_hash`** —— PAT-only 决策 25/28 已删密码栈，bcrypt 是新依赖；需要口令分享时再加） |
+| **`ShareTokenRepository`** | `create` / `list` / `get_by_hash` / `get_by_id` / `revoke` / `touch_view` |
+| **schema 位置** | 独立模块 `foundation/auth/share.py`（同 `grants.py` 模式）；M3 快路径 |
+| **expires_at** | 可空（NULL = 不过期，roadmap `--no-exp`） |
+
+**刻意不做**（→ roadmap Phase 3 完整功能）：
+
+| 不做 | 归属 |
+|---|---|
+| share JWT 生成（`_share_jwt`） | Phase 3 |
+| `GET /share/{slug}` 路由 | Phase 3 |
+| `share create/list/revoke` CLI | Phase 3 |
+| RemoteWiki 强制只读 | Phase 3 |
+| WebUI ShareView | Phase 3 |
+| 口令保护（`password_hash`） | 按需（PAT-only 世界里另议） |
+
+**与 `wiki_grants` 的关系**（Q5 定案）：
+
+| | `wiki_grants` | `share_tokens` |
+|---|---|---|
+| 主体 | user / group / public | **匿名链接持有者**（无 user 行） |
+| 生命周期 | 持久授权 | 有过期、可吊销、计浏览 |
+| 裁决 | `authorize_request` ⑥⑦ | 独立 share 路由（Phase 3），**不进** `authorize_request` |
+
+**验收**：
+
+- 建表 + `ShareTokenRepository` CRUD 全绿；`get_by_hash` 只返回活跃（未吊销、未过期）
+- `revoke` 幂等；`touch_view` 递增 `view_count`
+- 全量测试 + mypy + 架构门禁 0
