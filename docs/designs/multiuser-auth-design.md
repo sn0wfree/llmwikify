@@ -905,3 +905,32 @@ create-user / list-users / disable-user / enable-user
 | 测试 | `TestMiddlewareScope._make_token` → 真实 user；`test_no_token_returns_401_p4b`；`test_api_routes`/`test_wiki_server` 依赖匿名 GET 的用例改 401 或 local_mode；authorize 测试改用真实 user |
 
 **P4 至此收口**（P4a + P4b）：per-wiki 读写精确裁决 + 无 token 拒绝 + 列表一致 + 用户生命周期联动。
+
+### 12.7 P5 · WebUI 授权管理（2026-11-14，doc-first）
+
+**范围**（对应 §5.6 管理面的 HTTP/UI 侧；CLI 已在 P3/P3b 覆盖）：
+
+| 项 | 内容 |
+|---|---|
+| **`GET /api/auth/me` 增强** | 返回**权限矩阵**：`accessible_wikis`（live 可读集，`accessible_wikis()`）+ `wgrants`（快照）+ 既有 `wikis`/`can_edit` |
+| **Grants API（admin）** | `GET /api/auth/grants` 列表 · `POST /api/auth/grants` upsert · `DELETE /api/auth/grants` 删行（body: `principal_type/principal_id/wiki_id`） |
+| **下拉数据（admin）** | `GET /api/auth/users` · `GET /api/auth/groups`（管理页选主体用） |
+| **admin 校验** | 新增 `_require_admin(request)`：claims → user → `is_first_admin`，否则 403 `admin_required`（与 CLI `_require_admin` 对齐，Q4） |
+| **WebUI 页面** | `/agent/access`（挂在 agent 导航）：① 自己的权限矩阵（任何登录用户）② grants 表 + grant/revoke 表单（仅 admin，非 admin 隐藏） |
+
+**刻意不做**（本期）：
+
+| 不做 | 理由 |
+|---|---|
+| 用户创建/禁用的 UI | CLI 已有（P2）；UI 建号涉及注册流，另议 |
+| 组成员管理 UI | CLI 已有（P3b）；本期 UI 只读展示组 |
+| 分页 / 搜索 grants | 当前规模（<50 人）全量列表足够 |
+| i18n | WebUI 现状英文为主，跟随 |
+
+**验收**：
+
+- `/me` 返回 `accessible_wikis` + `wgrants`；非 admin 的 `/me` 矩阵与 `can-i` 一致
+- admin 调 grants API → 200；非 admin → 403 `admin_required`
+- grant → POST 后 GET 列表含该行；DELETE 后消失
+- WebUI：登录后 `/agent/access` 可见矩阵；admin 可 grant/revoke；非 admin 只读
+- 全量测试 + mypy + 架构门禁 0 + WebUI `tsc && vite build`
