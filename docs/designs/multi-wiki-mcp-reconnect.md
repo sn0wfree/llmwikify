@@ -1,10 +1,35 @@
 # 多 wiki MCP / Skill 能力接线（方案 B）
 
-> **日期**: 2026-11-16 · **状态**: 待实现
+> **日期**: 2026-11-16 · **状态**: ✅ **已实现**（commit `bc316bb8`）
 > **前置**: [docs/diagnostics/mcp-tool-surface-2026-11.md](../diagnostics/mcp-tool-surface-2026-11.md) §4
 > **拍板**: 用户选 **方案 B**（A 接线 + 动态解析）
 > **设计依据**: v0.31「MCP 工具集 20 → 26」（`docs/KNOWN_ISSUES.md:30`）、
 > `wiki_query_skill` 28-action 设计（`wiki_query_skill.py:1,487`）
+
+### 实现结果（V1–V8 全过）
+
+| 验收 | 结果 |
+|---|---|
+| V1 单 wiki 路径 | **20 工具**，`wiki_search` schema 仍是 `(query, limit, backend)`，**无 `wiki_id`** |
+| V2 多 wiki `WikiServer` | **26 工具**（含 6 个 registry 专属），启动**无** `Component already exists` 警告 |
+| V3/V4 `wiki_switch` | 调用后 `default_wiki_id` 更新，**不重启**核心工具读到新 wiki |
+| V5 skill 层 | `wiki_list` / `wiki_switch` / `wiki_search_cross` 全部 `status=ok`，不再报 `wiki_registry not configured` |
+| V7 四项门禁 | ruff 干净 · mypy 415 文件 0 错 · `check_architecture.py` 0 violation · **pytest 5201 passed** |
+
+### 实现中偏离本方案的两处
+
+| # | 方案原文 | 实际 | 理由 |
+|---|---|---|---|
+| **B4** | 默认 wiki 解析失败 → **返回 JSON 错误** | **改为 `raise`**（`RuntimeError` / `KeyError` / `ValueError`） | ① 本文件返回 JSON 的模式是**用户输入错误**（如 bad `wiki_id`），而"没有 default wiki / default 是 remote"是**服务端配置错误**；② 26 个核心工具都要加 `if isinstance(t, dict)` 判断，40 行样板违反简洁优先；③ FastMCP 会把异常转成结构化 tool error 交给客户端。**单 wiki 路径不受影响**（`registry is None` 时直接返回 `wiki`）。 |
+| **B3 附带** | 未涉及 | `core.py` 增加 `_multi_wiki` 标志：**只有显式传入 `WikiRegistry` 才给 26 工具**，`WikiServer(single_wiki)` 仍给 20 | 否则单 wiki 部署会因"内部也建 registry"而变成 26 工具，违背"单 wiki 20 / 多 wiki 26" |
+
+### 另一处实现细节
+
+`FastMCP.remove_tool()` 在 fastmcp 3.2 起被弃用（改用 `local_provider.remove_tool`），
+而 `pyproject.toml` 的约束是 `fastmcp>=3.0,<3.3` —— 所以 `MCPAdapter._remove_tool()`
+优先走 `local_provider`，没有则回落到 `remove_tool()`，两种版本都无警告。
+
+---
 
 ---
 

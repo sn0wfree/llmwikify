@@ -90,7 +90,7 @@ synthesize       watch         wikis          write_page
 | README 声明 | 实测 | 判定 |
 |---|---|---|
 | "50+ built-in skills" | 运行时注册 **38** 个（Skill 子类 41） | **已修** → README 改为 "38 built-in skills" |
-| "**26** MCP tools" 与 "**28** tools over stdio + HTTP" | `@mcp.tool` 装饰器 28 处 = 单 wiki 路径 20 + 多 wiki 路径 8；两条路径**互斥注册**，单 wiki 服务器暴露 **20** 个、多 wiki 服务器暴露 **8** 个，26 是**名字并集** | **已修** → 统一写"单 wiki 20 / 多 wiki 8（并集 26）"，并给出核实文档链接 |
+| "**26** MCP tools" 与 "**28** tools over stdio + HTTP" | `@mcp.tool` 装饰器 28 处；接线修复后（`bc316bb8`）单 wiki 服务器 **20** 个、多 wiki 服务器 **26** 个 | **已修** → 统一写"单 wiki 20 / 多 wiki 26"，并给出核实文档链接 |
 | "YAML frontmatter + **DuckDB storage**" | DuckDB 全仓仅出现在 `doctor_cmd.py:178` 的依赖检查里，**从未用于存储** | **已修** → 改为 "SQLite storage" |
 | "breaks down questions into **sub-queries**" | engine 路径真实；**skill 路径 A1 是占位**，不调 LLM | **部分不实**（代码问题，未动） |
 | "synthesizes **structured reports**" | engine 路径真实；**skill 路径 A2 claims 是固定模板** | **部分不实**（代码问题，未动） |

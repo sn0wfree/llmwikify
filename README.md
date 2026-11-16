@@ -253,7 +253,7 @@ New to llmwikify? Start with our **5 end-to-end scenarios**:
 | **Research Assistant** | Adaptive ReAct loop, multi-source synthesis, quality gates (general purpose) |
 | **Web UI** | React SPA: editor, graph, dashboard, chat pages |
 | **Extraction** | PDF, Word, Excel, PowerPoint, images, audio, web, YouTube |
-| **MCP Server** | 20 tools (single wiki) / 8 tools (multi-wiki registry), over stdio + HTTP |
+| **MCP Server** | 20 tools (single wiki) / 26 tools (multi-wiki registry), over stdio + HTTP |
 
 ---
 
@@ -428,8 +428,9 @@ pip install llmwikify[extractors]  # PDF/Office/media
 |---------|-------------|
 | `qmd` | QMD search engine (status / search / install / embed / mcp) |
 
-> **MCP tools**: 单 wiki 模式 **20** 个 / 多 wiki 注册表模式 **8** 个（两模式工具名并集 26 个，
-> 但**没有任何一个服务器同时暴露 26 个**）。See [docs/MCP_SETUP.md](docs/MCP_SETUP.md) ·
+> **MCP tools**: 单 wiki 模式 **20** 个 / 多 wiki 注册表模式 **26** 个
+> （20 核心 + 6 个 registry 专属；`wiki_status` / `wiki_search` 的多 wiki 版取代核心版）。
+> See [docs/MCP_SETUP.md](docs/MCP_SETUP.md) ·
 > [工具面核实](docs/diagnostics/mcp-tool-surface-2026-11.md).
 
 ---
@@ -481,11 +482,11 @@ server.run(host="0.0.0.0", port=8765)
 
 ---
 
-## MCP Server (26 Tools — single-wiki 20 / multi-wiki 8)
+## MCP Server (single-wiki 20 / multi-wiki 26)
 
-> The table below lists **all 26 unique tool names** across both registration
-> paths. A running server exposes **one** of them: **20** in single-wiki mode,
-> **8** in multi-wiki registry mode (the two paths are mutually exclusive).
+> The table below lists **all 26 unique tool names**. A running server exposes
+> **20** in single-wiki mode, or **26** in multi-wiki registry mode (20 core −
+> 2 same-named variants + 8 registry tools).
 > See [docs/diagnostics/mcp-tool-surface-2026-11.md](docs/diagnostics/mcp-tool-surface-2026-11.md).
 
 Wiki maintenance and query:

@@ -266,16 +266,29 @@ skill 层其实把两套都实现了（不同 action 名）：
 
 ---
 
-## 5. 修复方案（需拍板）
+## 5. 修复方案与落地结果
 
-| 方案 | 内容 | 成本 | 风险 |
+| 方案 | 内容 | 成本 | 状态 |
 |---|---|---|---|
-| **A · 最小接线** | ① `core.py:164` / `serve.py:383` 改为把 registry 传下去；② `MCPAdapter` 在 registry 分支**先注册 20 核心、再注册 8 multi-wiki**（同名由后者覆盖 → 恰好 26 唯一名字，对齐 v0.31 设计）；③ `wiki_switch` 补 `set_default_wiki`；④ `tool_adapter` 把 registry 注入 `ctx.config["wiki_registry"]` | 小（4 处） | 中：核心工具仍绑**构造时**的 default wiki，`wiki_switch` 后核心工具不跟随（需方案 B 才根治） |
-| **B · A + 动态解析** | 在 A 基础上，核心工具改为每次调用 `registry.get_wiki(registry.get_default_wiki_id())` 解析当前 wiki | 中（改 `register_wiki_tools` 签名/闭包） | 低：但影响单 wiki 路径，需回归测试 |
-| **C · 承认现状** | 不动代码；从 `KNOWN_ISSUES` / `MCP_SETUP` / README 删掉 26 工具的说法，明确"多 wiki 能力只承诺给 REST / WebUI / chat" | 极小 | 低：但 v0.31 的设计成果仍是半成品 |
+| **A · 最小接线** | ① `core.py` 把 registry 传下去；② `MCPAdapter` registry 分支**先注册 20 核心、再注册 8 multi-wiki**（同名由后者覆盖 → 26 唯一名字）；③ `wiki_switch` 补 `set_default_wiki`；④ `tool_adapter` 注入 `ctx.config["wiki_registry"]` | 小（4 处） | ⬜ 未单独做（被 B 吸收） |
+| **B · A + 动态解析** | 在 A 基础上，核心工具每次调用 `registry.get_wiki(registry.get_default_wiki_id())` 解析当前 wiki | 中 | ✅ **已落地** `bc316bb8` |
+| **C · 承认现状** | 不动代码；删掉文档里 26 工具的说法 | 极小 | ⬜ 未选 |
 
-**倾向 A**：skill 层 28 个 action 已写完，只差 config 注入；MCP 的 if/else 只差"两个都注册"。
-这是**接线问题，不是设计问题**。A 做完后再评估是否需要 B。
+**拍板：B** —— 这是接线问题不是设计问题（skill 层 28 个 action 已写完，MCP 的 if/else 只差"两个都注册"）。
+方案与验收记录见 [docs/designs/multi-wiki-mcp-reconnect.md](../designs/multi-wiki-mcp-reconnect.md)。
+
+### 落地后的真实工具面
+
+| 部署方式 | 工具数 |
+|---|---|
+| `WikiServer(Wiki)` —— 单 wiki | **20** |
+| `WikiServer(WikiRegistry)` —— 多 wiki | **26**（20 核心 − 2 同名 + 8 registry 专属） |
+
+> 本文 §1.4 与 §3.2 中「任何服务器都不暴露 26」的表述是**修复前**的事实，
+> 修复后多 wiki 服务器**确实暴露 26 个**（`register_wiki_tools` 单独仍是 20、
+> `register_multi_wiki_tools` 单独仍是 8，两函数并集 26）。
+>
+> 同时被证伪的还有 §4.4 的 **D1/D2**：多 wiki 版 `wiki_search` 现已带 `wiki_id` **和** `backend`。
 
 ---
 
