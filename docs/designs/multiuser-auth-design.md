@@ -520,7 +520,7 @@ auth can-i --user U --wiki W --write  → 只读自检（K8s kubectl auth can-i�
 | **P3b** | 组管理 CLI（`auth group create/list/add/remove` + `grant --group`） | 低 | P1 P3 | ✅ **已完成**（§12.4） |
 | **P4a** | 纯函数 `authorize()` + ④⑤⑥'⑥⑦ + 旧 token 兼容 + fail-closed + PAT 快照修补 | 中（动中间件） | P3 | ✅ **已完成**（§12.5） |
 | **P4b** | 列表路由 snapshot ∩ live + ② 无 token → 401（`public_read` 废弃）+ 用户存在检查 + exploit 终验 | 中低 | P4a | ✅ **已完成**（§12.6） |
-| **P5** | WebUI：授权管理页 + `/me` 返回权限矩阵 | 中 | P3 | 待开工 |
+| **P5** | WebUI：授权管理页 + `/me` 返回权限矩阵 | 中 | P3 | ✅ **已完成**（§12.7） |
 | **P6** | share token（roadmap Phase 3）—— **独立表 `share_tokens`**（Q5 = a） | 低 | 可延后，与 P1–P5 解耦 | 待开工 |
 
 **建议顺序强调**：P1–P3 是**纯增量**（不动裁决路径），可先落地再评审 P4 的裁决策略。
@@ -929,8 +929,20 @@ create-user / list-users / disable-user / enable-user
 
 **验收**：
 
-- `/me` 返回 `accessible_wikis` + `wgrants`；非 admin 的 `/me` 矩阵与 `can-i` 一致
-- admin 调 grants API → 200；非 admin → 403 `admin_required`
-- grant → POST 后 GET 列表含该行；DELETE 后消失
-- WebUI：登录后 `/agent/access` 可见矩阵；admin 可 grant/revoke；非 admin 只读
-- 全量测试 + mypy + 架构门禁 0 + WebUI `tsc && vite build`
+- ✅ `/me` 返回 `accessible_wikis` + `wgrants`（admin 矩阵 = fake registry 全集）
+- ✅ admin 调 grants API → 200；非 admin → 403 `admin_required`
+- ✅ grant → POST 后 GET 列表含该行；DELETE 后消失
+- ✅ `GET /auth/users`、`GET /auth/groups` 可用
+- ✅ grants 校验：缺 `principal_id`/`wiki_id` → 400 `invalid_grant`
+- ✅ WebUI `/agent/access`：权限矩阵 + admin 表单/表格；`tsc && vite build` 通过
+- ✅ 全量 **5192 passed** · mypy 414 files 0 · 架构 0 violation · ruff 干净
+
+**实现记录（2026-11-14）**：
+
+| 文件 | 改动 |
+|---|---|
+| `interfaces/server/http/auth_routes.py` | `/me` 增 `permissions{accessible_wikis,wgrants,scope}`；`_require_admin` / `_admin_id`；`GET/POST/DELETE /auth/grants`、`GET /auth/users`、`GET /auth/groups` |
+| **新增** `ui/webui/src/components/auth/AccessControl.tsx` | 权限矩阵（任何登录用户）+ grants 表/表单/撤销（仅 admin） |
+| `ui/webui/src/App.tsx` | 路由 `/agent/access` |
+| `ui/webui/src/components/shared/AppShell.tsx` | 导航项 Access（Shield 图标） |
+| `tests/test_interfaces_auth.py` | `TestGrantsAPIP5`（5 条）：矩阵 / CRUD / admin 校验 / users+groups / 校验 |

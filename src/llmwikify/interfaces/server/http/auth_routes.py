@@ -8,7 +8,12 @@ Endpoints:
   POST /auth/tokens     { name }               -> 200 { pat, key }       (authenticated)
   GET  /auth/tokens                               -> 200 { keys }         (authenticated)
   DELETE /auth/tokens/{id}                         -> 200 { ok }          (authenticated)
-  GET  /auth/me                                    -> 200 { user }        (authenticated)
+  GET  /auth/me                                    -> 200 { user, permissions } (authenticated)
+  GET  /auth/grants                                -> 200 { grants }      (admin, P5)
+  POST /auth/grants                                -> 200 { ok, grant }   (admin, P5)
+  DELETE /auth/grants                              -> 200 { ok, removed } (admin, P5)
+  GET  /auth/users                                 -> 200 { users }       (admin, P5)
+  GET  /auth/groups                                -> 200 { groups }      (admin, P5)
 
 Error response format: decision 10 — JSON {error, status_code, detail}.
 
@@ -414,10 +419,130 @@ def _build_router() -> APIRouter:
             UserRepository().touch_last_login(user.id)
         except Exception:
             logger.debug("touch_last_login failed", exc_info=True)
+
+        # P5: permission matrix — live readable set + snapshot.
+        from llmwikify.foundation.auth import accessible_wikis
+
+        known = _known_wiki_ids(request)
+        try:
+            accessible = sorted(accessible_wikis(claims, known))
+        except Exception:
+            logger.debug("accessible_wikis failed", exc_info=True)
+            accessible = []
         return {
             "authenticated": True,
             "user": _user_to_dict(user, claims, local_mode=False),
+            "permissions": {
+                "accessible_wikis": accessible,
+                "wgrants": dict(claims.wgrants),
+                "scope": claims.scope,
+            },
         }
+
+    # ── P5: grants management (admin-only, Q4) ──────────────────
+
+    @router.get("/grants")
+    async def list_grants(request: Request) -> dict[str, Any]:
+        """List all grant rows (admin only)."""
+        _require_admin(request)
+        from llmwikify.foundation.auth import GrantRepository
+
+        return {"grants": GrantRepository().list_grants()}
+
+    @router.post("/grants")
+    async def create_grant(request: Request) -> dict[str, Any]:
+        """Upsert one grant (admin only).
+
+        Body: {principal_type, principal_id, wiki_id, read?, write?}
+        """
+        _require_admin(request)
+        from llmwikify.foundation.auth import AuthError, GrantRepository
+
+        body = await request.json()
+        ptype = body.get("principal_type", "user")
+        pid = body.get("principal_id", "")
+        wiki_id = body.get("wiki_id", "")
+        read = bool(body.get("read", True))
+        write = bool(body.get("write", False))
+        if not pid or not wiki_id:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "invalid_grant",
+                    "detail": "principal_id and wiki_id are required.",
+                },
+            )
+        try:
+            GrantRepository().grant(
+                ptype,
+                pid,
+                wiki_id,
+                read=read,
+                write=write,
+                granted_by=_admin_id(request),
+            )
+        except AuthError as exc:
+            raise HTTPException(
+                status_code=exc.status_code,
+                detail={"error": exc.code, "detail": exc.detail},
+            ) from exc
+        return {
+            "ok": True,
+            "grant": {
+                "principal_type": ptype,
+                "principal_id": pid,
+                "wiki_id": wiki_id,
+                "read": read or write,
+                "write": write,
+            },
+        }
+
+    @router.delete("/grants")
+    async def revoke_grant(request: Request) -> dict[str, Any]:
+        """Delete one grant row (admin only). Body: same as POST."""
+        _require_admin(request)
+        from llmwikify.foundation.auth import GrantRepository
+
+        body = await request.json()
+        ptype = body.get("principal_type", "user")
+        pid = body.get("principal_id", "")
+        wiki_id = body.get("wiki_id", "")
+        if not pid or not wiki_id:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "invalid_grant",
+                    "detail": "principal_id and wiki_id are required.",
+                },
+            )
+        removed = GrantRepository().revoke(ptype, pid, wiki_id)
+        return {"ok": True, "removed": removed}
+
+    @router.get("/users")
+    async def list_users_route(request: Request) -> dict[str, Any]:
+        """List users (admin only) — for the management page dropdowns."""
+        _require_admin(request)
+        users = UserRepository().list_users()
+        return {
+            "users": [
+                {
+                    "id": u.id,
+                    "email": u.email,
+                    "username": u.username,
+                    "is_first_admin": u.is_first_admin,
+                    "disabled": u.disabled_at is not None,
+                }
+                for u in users
+            ]
+        }
+
+    @router.get("/groups")
+    async def list_groups_route(request: Request) -> dict[str, Any]:
+        """List groups with member counts (admin only)."""
+        _require_admin(request)
+        from llmwikify.foundation.auth import GrantRepository
+
+        return {"groups": GrantRepository().list_groups()}
 
     @router.post("/logout")
     async def logout(response: Response) -> dict[str, Any]:
@@ -440,6 +565,31 @@ def _require_auth(request: Request) -> TokenClaims:
             detail={"error": "not_authenticated", "detail": "Authentication required."},
         )
     return claims
+
+
+def _require_admin(request: Request) -> TokenClaims:
+    """Authenticated + is_first_admin (P5 / Q4). Raises 403 otherwise."""
+    claims = _require_auth(request)
+    if not claims.sub.startswith("user:"):
+        raise HTTPException(
+            status_code=403,
+            detail={"error": "admin_required", "detail": "Admin privileges required."},
+        )
+    user = UserRepository().get_by_id(claims.sub[len("user:") :])
+    if user is None or not user.is_first_admin:
+        raise HTTPException(
+            status_code=403,
+            detail={"error": "admin_required", "detail": "Admin privileges required."},
+        )
+    return claims
+
+
+def _admin_id(request: Request) -> str | None:
+    """id of the calling admin (for ``granted_by`` audit), or None."""
+    claims = getattr(request.state, "auth_claims", None)
+    if claims is None or not claims.sub.startswith("user:"):
+        return None
+    return claims.sub[len("user:") :]
 
 
 def _user_to_dict(user, claims: TokenClaims, *, local_mode: bool) -> dict[str, Any]:

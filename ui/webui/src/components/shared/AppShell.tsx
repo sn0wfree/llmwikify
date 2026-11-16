@@ -4,7 +4,7 @@ import {
   BookOpen, Sparkles, FileText, BarChart3, Lightbulb,
   MessageSquare, Search, CheckSquare, Settings,
   PanelLeftClose, PanelLeftOpen, Bot, Moon, Sun,
-  Database, AlertTriangle, Wrench,
+  Database, AlertTriangle, Wrench, Shield,
 } from 'lucide-react';
 import { Backdrop } from './Backdrop';
 import { Notifications } from '../wiki/Notifications';
@@ -27,6 +27,7 @@ const NAV_AGENT = [
   { to: '/agent/autoresearch', label: 'Research', icon: Search },
   { to: '/agent/confirmations', label: 'Confirmations', icon: AlertTriangle },
   { to: '/agent/tasks', label: 'Tasks', icon: CheckSquare },
+  { to: '/agent/access', label: 'Access', icon: Shield },
   { to: '/agent/settings', label: 'Settings', icon: Settings },
 ] as const;
 

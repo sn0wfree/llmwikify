@@ -538,3 +538,141 @@ class TestShareTokenRejection:
         body = resp.json()
         err = body.get("detail", body).get("error") if isinstance(body.get("detail", body), dict) else body.get("error")
         assert err in ("invalid_subject", "share_token_not_here")
+
+
+# ─── P5: grants API + permission matrix ─────────────────────────
+
+
+class TestGrantsAPIP5:
+    """P5: /me permissions + grants CRUD (admin-only)."""
+
+    @staticmethod
+    def _admin_client(email: str = "root@e.com") -> TestClient:
+        """Register first admin + verify PAT → cookie session."""
+        client = TestClient(_make_app())
+        resp = client.post("/api/auth/register", json={"email": email})
+        assert resp.status_code == 200
+        pat = resp.json()["pat"]
+        ver = client.post("/api/auth/verify", json={"pat": pat})
+        assert ver.status_code == 200
+        return client
+
+    def test_me_returns_permission_matrix(self):
+        client = self._admin_client()
+        me = client.get("/api/auth/me")
+        assert me.status_code == 200
+        body = me.json()
+        assert body["authenticated"] is True
+        perms = body.get("permissions")
+        assert perms is not None
+        # Admin → live accessible = all known wikis from the fake registry.
+        assert set(perms["accessible_wikis"]) == {"main", "side"}
+        assert perms["scope"] == "write"
+
+    def test_grants_crud(self):
+        client = self._admin_client()
+        # List (empty initially, or whatever exists).
+        r = client.get("/api/auth/grants")
+        assert r.status_code == 200
+        assert "grants" in r.json()
+
+        # Create a user to grant to.
+        from llmwikify.foundation.auth import UserRepository
+
+        u = UserRepository().create(email="bob@e.com", is_first_admin=False)
+
+        # Grant.
+        r2 = client.post(
+            "/api/auth/grants",
+            json={
+                "principal_type": "user",
+                "principal_id": u.id,
+                "wiki_id": "main",
+                "read": True,
+                "write": True,
+            },
+        )
+        assert r2.status_code == 200
+        assert r2.json()["ok"] is True
+
+        # List contains it.
+        r3 = client.get("/api/auth/grants")
+        grants = r3.json()["grants"]
+        assert any(
+            g["principal_id"] == u.id and g["wiki_id"] == "main" for g in grants
+        )
+
+        # Revoke.
+        r4 = client.request(
+            "DELETE",
+            "/api/auth/grants",
+            json={
+                "principal_type": "user",
+                "principal_id": u.id,
+                "wiki_id": "main",
+            },
+        )
+        assert r4.status_code == 200
+        assert r4.json()["removed"] is True
+
+        r5 = client.get("/api/auth/grants")
+        assert not any(
+            g["principal_id"] == u.id and g["wiki_id"] == "main"
+            for g in r5.json()["grants"]
+        )
+
+    def test_grants_require_admin(self):
+        """Non-admin → 403 admin_required (Q4)."""
+        from llmwikify.foundation.auth import UserRepository
+
+        # First make an admin (needed for registration_closed), then a user.
+        self._admin_client("root@e.com")
+        UserRepository().create(email="eve@e.com", is_first_admin=False)
+
+        # Build a session for the non-admin via a fresh app + verify.
+        client = TestClient(_make_app())
+        # Create a PAT for eve directly.
+        u = UserRepository().get_by_email("eve@e.com")
+        assert u is not None
+        from llmwikify.foundation.auth import ApiKeyRepository, generate_pat
+
+        plain, ph = generate_pat()
+        ApiKeyRepository().create(
+            user_id=u.id, key_prefix=plain[:12], key_hash=ph, name="eve"
+        )
+        ver = client.post("/api/auth/verify", json={"pat": plain})
+        assert ver.status_code == 200
+
+        r = client.get("/api/auth/grants")
+        assert r.status_code == 403
+        assert r.json()["detail"]["error"] == "admin_required"
+
+        r2 = client.post(
+            "/api/auth/grants",
+            json={
+                "principal_type": "user",
+                "principal_id": u.id,
+                "wiki_id": "main",
+                "read": True,
+            },
+        )
+        assert r2.status_code == 403
+
+    def test_users_and_groups_endpoints(self):
+        client = self._admin_client()
+        r = client.get("/api/auth/users")
+        assert r.status_code == 200
+        assert any(u["email"] == "root@e.com" for u in r.json()["users"])
+
+        r2 = client.get("/api/auth/groups")
+        assert r2.status_code == 200
+        assert "groups" in r2.json()
+
+    def test_grants_validation(self):
+        client = self._admin_client()
+        r = client.post(
+            "/api/auth/grants",
+            json={"principal_type": "user", "principal_id": "", "wiki_id": "x"},
+        )
+        assert r.status_code == 400
+        assert r.json()["detail"]["error"] == "invalid_grant"

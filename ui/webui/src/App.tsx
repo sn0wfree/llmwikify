@@ -38,6 +38,9 @@ const TaskMonitor = lazy(() =>
 const LLMSettings = lazy(() =>
   import('./components/agent/LLMSettings').then(m => ({ default: m.LLMSettings }))
 );
+const AccessControl = lazy(() =>
+  import('./components/auth/AccessControl').then(m => ({ default: m.AccessControl }))
+);
 // v0.40 BREAKING: removed quant panel routes (ReproductionPanel, PaperPanel,
 // FactorList, FactorFamilyList, FamilyDetail, FactorDetail, StrategyList,
 // StrategyDetail, BacktestPlatform). Quant UI now lives in quantnodes."
@@ -77,6 +80,7 @@ function App() {
               <Route path="confirmations" element={<Confirmations />} />
               <Route path="tasks" element={<TaskMonitor />} />
               <Route path="settings" element={<LLMSettings />} />
+              <Route path="access" element={<AccessControl />} />
             </Route>
           </Route>
         </Routes>
