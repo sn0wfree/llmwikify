@@ -416,6 +416,7 @@ class WikiRegistry:
         query: str,
         wiki_ids: list[str] | None = None,
         limit: int = 10,
+        backend: str = "fts5",
     ) -> list[dict[str, Any]]:
         """Search across multiple wikis, merge and rank results.
 
@@ -423,6 +424,8 @@ class WikiRegistry:
             query: Search query
             wiki_ids: Specific wikis to search (None = all)
             limit: Results per wiki
+            backend: Search backend for local wikis ("fts5" / "qmd").
+                Remote wikis always use their own backend.
 
         Returns:
             Merged and ranked search results
@@ -450,7 +453,7 @@ class WikiRegistry:
                 else:
                     # Search local wiki
                     wiki = self.get_wiki(wiki_id)
-                    local_results = wiki.search(query, limit)
+                    local_results = wiki.search(query, limit, backend=backend)
                     for r in local_results:
                         r["wiki_id"] = wiki_id
                         r["wiki_name"] = instance.name

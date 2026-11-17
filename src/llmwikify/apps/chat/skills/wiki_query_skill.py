@@ -415,34 +415,91 @@ async def _wiki_status_by_id(args: dict, ctx: SkillContext) -> SkillResult:
         return SkillResult.fail(f"Wiki not found: {wiki_id}")
 
 
-async def _wiki_search_by_id(args: dict, ctx: SkillContext) -> SkillResult:
+def _search_wikis(
+    registry: Any,
+    query: str,
+    limit: int,
+    *,
+    wiki_ids: str | None = None,
+    wiki_id: str | None = None,
+    backend: str = "fts5",
+) -> tuple[list[dict[str, Any]], list[str]]:
+    """The single search implementation behind wiki_search / wiki_search_cross.
+
+    Scope resolution (the deprecated ``wiki_id`` wins, for backwards
+    compatibility)::
+
+        wiki_id="a"        -> that wiki only
+        wiki_ids="a,b"    -> those wikis
+        wiki_ids=None/"*" -> every registered wiki
+
+    ``limit`` is a GLOBAL cap on the merged result set (not per wiki).
+
+    Raises:
+        ValueError: unknown wiki id, or no client available for a remote wiki.
+    """
+    known = [w.wiki_id for w in registry.list_wikis()]
+
+    if wiki_id:
+        targets = [wiki_id]
+    elif wiki_ids and wiki_ids.strip() and wiki_ids.strip() != "*":
+        targets = [x.strip() for x in wiki_ids.split(",") if x.strip()]
+    else:
+        targets = list(known)
+
+    valid = [t for t in targets if t in known]
+    if not valid:
+        raise ValueError(f"Wiki not found: {', '.join(targets)}")
+    if len(valid) != len(targets):
+        logger.warning("search skipped unknown wikis: %s", targets)
+
+    if len(valid) == 1:
+        wid = valid[0]
+        from llmwikify.kernel.multi_wiki.instance import WikiType
+
+        instance = registry.get_wiki_instance(wid)
+        if instance.wiki_type == WikiType.REMOTE:
+            client = registry._remote_clients.get(wid)
+            if not client:
+                raise ValueError("Remote wiki client not available")
+            results = client.search(query, limit)
+        else:
+            w = registry.get_wiki(wid)
+            results = w.search(query, limit, backend=backend)
+        # Tag the origin wiki, so a single-wiki search returns the same
+        # shape as a cross-wiki one.
+        for r in results:
+            r["wiki_id"] = wid
+            r["wiki_name"] = instance.name
+        return list(results)[:limit], valid
+
+    results = registry.cross_wiki_search(query, valid, limit, backend=backend)
+    return list(results)[:limit], valid
+
+
+async def _wiki_search(args: dict, ctx: SkillContext) -> SkillResult:
     registry = _registry(ctx)
     if isinstance(registry, SkillResult):
         return registry
     query = args.get("query", "")
     if not query:
         return SkillResult.fail("query is required")
-    wiki_id = args.get("wiki_id", "")
     limit = args.get("limit", 10)
+    backend = args.get("backend", "fts5")
+    wiki_id = args.get("wiki_id") or None
+    wiki_ids = args.get("wiki_ids") or None
     try:
-        if wiki_id:
-            from llmwikify.kernel.multi_wiki.instance import WikiType
-
-            instance = registry.get_wiki_instance(wiki_id)
-            if instance.wiki_type == WikiType.REMOTE:
-                client = registry._remote_clients.get(wiki_id)
-                if client:
-                    results = client.search(query, limit)
-                else:
-                    return SkillResult.fail("Remote wiki client not available")
-            else:
-                w = registry.get_wiki(wiki_id)
-                results = w.search(query, limit)
-        else:
-            results = registry.cross_wiki_search(query, limit=limit)
-        return SkillResult.ok({"result": results})
-    except KeyError:
-        return SkillResult.fail(f"Wiki not found: {wiki_id}")
+        results, _searched = _search_wikis(
+            registry,
+            query,
+            limit,
+            wiki_ids=wiki_ids,
+            wiki_id=wiki_id,
+            backend=backend,
+        )
+    except ValueError as exc:
+        return SkillResult.fail(str(exc))
+    return SkillResult.ok({"result": results})
 
 
 async def _wiki_search_cross(args: dict, ctx: SkillContext) -> SkillResult:
@@ -452,15 +509,17 @@ async def _wiki_search_cross(args: dict, ctx: SkillContext) -> SkillResult:
     query = args.get("query", "")
     if not query:
         return SkillResult.fail("query is required")
-    wiki_ids_str = args.get("wiki_ids", "")
-    ids = [x.strip() for x in wiki_ids_str.split(",")] if wiki_ids_str else None
+    wiki_ids_str = args.get("wiki_ids", "") or None
     limit = args.get("limit", 10)
-    results = registry.cross_wiki_search(query, ids, limit)
+    try:
+        results, searched = _search_wikis(registry, query, limit, wiki_ids=wiki_ids_str)
+    except ValueError as exc:
+        return SkillResult.fail(str(exc))
     return SkillResult.ok(
         {
             "results": results,
             "total_results": len(results),
-            "searched_wikis": ids or [w.wiki_id for w in registry.list_wikis()],
+            "searched_wikis": searched,
         }
     )
 
@@ -764,21 +823,39 @@ class WikiQuerySkill(Skill):
         ),
         "wiki_search": SkillAction(
             name="wiki_search",
-            description="Search wiki pages by wiki ID (or cross-wiki search)",
-            handler=_wiki_search_by_id,
+            description=(
+                "Search wiki pages (recommended). wiki_ids: comma-separated "
+                "wiki IDs — omitted/empty/\"*\" searches every registered "
+                "wiki, \"a\" searches wiki a, \"a,b\" searches a and b. "
+                "wiki_id is deprecated — use wiki_ids."
+            ),
+            handler=_wiki_search,
             input_schema={
                 "type": "object",
                 "properties": {
                     "query": {"type": "string"},
                     "limit": {"type": "integer", "default": 10},
-                    "wiki_id": {"type": "string"},
+                    "wiki_id": {
+                        "type": "string",
+                        "description": "Deprecated — use wiki_ids instead",
+                    },
+                    "backend": {"type": "string", "default": "fts5"},
+                    "wiki_ids": {
+                        "type": "string",
+                        "description": (
+                            "Comma-separated wiki IDs; empty or \"*\" = all wikis"
+                        ),
+                    },
                 },
                 "required": ["query"],
             },
         ),
         "wiki_search_cross": SkillAction(
             name="wiki_search_cross",
-            description="Search across multiple wikis",
+            description=(
+                "⚠️ Deprecated — use wiki_search(wiki_ids=...) instead. "
+                "Kept for backward compatibility; scope semantics are identical."
+            ),
             handler=_wiki_search_cross,
             input_schema={
                 "type": "object",

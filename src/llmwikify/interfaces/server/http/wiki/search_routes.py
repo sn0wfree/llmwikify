@@ -71,7 +71,7 @@ def register_search_routes(app, registry: WikiRegistry) -> None:
                     ),
                 },
             )
-        results = registry.cross_wiki_search(q, wiki_ids, limit)
+        results = registry.cross_wiki_search(q, wiki_ids, limit, backend=backend)
         return {
             "results": results,
             "total_results": len(results),
