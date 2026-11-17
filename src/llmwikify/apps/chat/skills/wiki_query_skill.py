@@ -50,7 +50,6 @@ Design ref: ``v0.32-skill-restructure.md`` §6.3
 from __future__ import annotations
 
 import json
-import logging
 from typing import Any
 
 from llmwikify.apps.chat.skills.base import (
@@ -59,9 +58,7 @@ from llmwikify.apps.chat.skills.base import (
     SkillContext,
     SkillResult,
 )
-
-logger = logging.getLogger(__name__)
-
+from llmwikify.kernel.multi_wiki.search import search_wikis
 
 # ─── Helper ──────────────────────────────────────────────────────
 
@@ -415,68 +412,6 @@ async def _wiki_status_by_id(args: dict, ctx: SkillContext) -> SkillResult:
         return SkillResult.fail(f"Wiki not found: {wiki_id}")
 
 
-def _search_wikis(
-    registry: Any,
-    query: str,
-    limit: int,
-    *,
-    wiki_ids: str | None = None,
-    wiki_id: str | None = None,
-    backend: str = "fts5",
-) -> tuple[list[dict[str, Any]], list[str]]:
-    """The single search implementation behind wiki_search / wiki_search_cross.
-
-    Scope resolution (the deprecated ``wiki_id`` wins, for backwards
-    compatibility)::
-
-        wiki_id="a"        -> that wiki only
-        wiki_ids="a,b"    -> those wikis
-        wiki_ids=None/"*" -> every registered wiki
-
-    ``limit`` is a GLOBAL cap on the merged result set (not per wiki).
-
-    Raises:
-        ValueError: unknown wiki id, or no client available for a remote wiki.
-    """
-    known = [w.wiki_id for w in registry.list_wikis()]
-
-    if wiki_id:
-        targets = [wiki_id]
-    elif wiki_ids and wiki_ids.strip() and wiki_ids.strip() != "*":
-        targets = [x.strip() for x in wiki_ids.split(",") if x.strip()]
-    else:
-        targets = list(known)
-
-    valid = [t for t in targets if t in known]
-    if not valid:
-        raise ValueError(f"Wiki not found: {', '.join(targets)}")
-    if len(valid) != len(targets):
-        logger.warning("search skipped unknown wikis: %s", targets)
-
-    if len(valid) == 1:
-        wid = valid[0]
-        from llmwikify.kernel.multi_wiki.instance import WikiType
-
-        instance = registry.get_wiki_instance(wid)
-        if instance.wiki_type == WikiType.REMOTE:
-            client = registry._remote_clients.get(wid)
-            if not client:
-                raise ValueError("Remote wiki client not available")
-            results = client.search(query, limit)
-        else:
-            w = registry.get_wiki(wid)
-            results = w.search(query, limit, backend=backend)
-        # Tag the origin wiki, so a single-wiki search returns the same
-        # shape as a cross-wiki one.
-        for r in results:
-            r["wiki_id"] = wid
-            r["wiki_name"] = instance.name
-        return list(results)[:limit], valid
-
-    results = registry.cross_wiki_search(query, valid, limit, backend=backend)
-    return list(results)[:limit], valid
-
-
 async def _wiki_search(args: dict, ctx: SkillContext) -> SkillResult:
     registry = _registry(ctx)
     if isinstance(registry, SkillResult):
@@ -489,7 +424,7 @@ async def _wiki_search(args: dict, ctx: SkillContext) -> SkillResult:
     wiki_id = args.get("wiki_id") or None
     wiki_ids = args.get("wiki_ids") or None
     try:
-        results, _searched = _search_wikis(
+        results, _searched = search_wikis(
             registry,
             query,
             limit,
@@ -512,7 +447,7 @@ async def _wiki_search_cross(args: dict, ctx: SkillContext) -> SkillResult:
     wiki_ids_str = args.get("wiki_ids", "") or None
     limit = args.get("limit", 10)
     try:
-        results, searched = _search_wikis(registry, query, limit, wiki_ids=wiki_ids_str)
+        results, searched = search_wikis(registry, query, limit, wiki_ids=wiki_ids_str)
     except ValueError as exc:
         return SkillResult.fail(str(exc))
     return SkillResult.ok(
