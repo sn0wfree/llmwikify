@@ -131,3 +131,52 @@ def test_tool_executor_toolspec_includes_skill_tools():
     assert "dynamic_workflow_list" in names
     assert "dynamic_workflow_run" in names
     assert "autoresearch_compound_run" in names
+
+
+# ── SkillContext.config assembly (multi-wiki-mcp-reconnect §3.5) ──
+
+
+class _SvcWithRegistry:
+    wiki_registry = "REGISTRY"
+
+
+class _SvcWithoutRegistry:
+    pass
+
+
+def test_skill_config_injects_wiki_registry():
+    adapter = SkillToolAdapter(
+        SkillService(), wiki_service=_SvcWithRegistry()  # type: ignore[arg-type]
+    )
+    assert adapter._skill_config()["wiki_registry"] == "REGISTRY"
+
+
+def test_skill_config_omits_registry_when_service_has_none():
+    """A wiki_service without a registry must not inject the key."""
+    adapter = SkillToolAdapter(
+        SkillService(), wiki_service=_SvcWithoutRegistry()  # type: ignore[arg-type]
+    )
+    assert "wiki_registry" not in adapter._skill_config()
+
+
+def test_skill_config_omits_registry_when_service_is_none():
+    adapter = SkillToolAdapter(SkillService())
+    assert "wiki_registry" not in adapter._skill_config()
+
+
+def test_skill_config_keeps_wiki_id_and_subagent_fields():
+    adapter = SkillToolAdapter(
+        SkillService(),
+        wiki_id="w1",
+        subagent_manager="SUBAGENT",  # type: ignore[arg-type]
+        child_tool_registry="CHILD",  # type: ignore[arg-type]
+    )
+    cfg = adapter._skill_config()
+    assert cfg["wiki_id"] == "w1"
+    assert cfg["subagent_manager"] == "SUBAGENT"
+    assert cfg["child_tool_registry"] == "CHILD"
+
+
+def test_skill_config_omits_wiki_id_when_unset():
+    adapter = SkillToolAdapter(SkillService())
+    assert "wiki_id" not in adapter._skill_config()
