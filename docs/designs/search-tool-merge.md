@@ -50,6 +50,8 @@ MCP（`interfaces/`）与 skill（`apps/`）都改为调用它 —— 这才是�
 新增测试：
 - `tests/test_kernel_multi_wiki_search.py` —— **17 个单元测试**（fake registry，不起服务）：
   作用域解析 6 项 + 单 wiki 分支 4 项 + 多 wiki 分支 3 项
+- `tests/test_kernel_multi_wiki_cross_search.py` —— **9 个单元测试**（stub registry）：
+  backend 透传 / 按 score 排序 / 未知 id 跳过 / 单 wiki 失败不中断 / 远程分支 / limit 语义
 - `tests/test_mcp_search_tool_merge.py` —— 8 个端到端验收（真实 server）
 
 ---
@@ -208,7 +210,7 @@ def search_wikis(
 | 3 | `interfaces/mcp/tools.py`（`register_multi_wiki_tools`） | `wiki_search` 加 `wiki_ids`（追加末尾）+ `wiki_id` 标 deprecated；`wiki_search_cross` 改为薄壳转调 + `annotations.deprecated` + `tags={"deprecated"}` + ⚠️ description；两者返回结构按 D13/D14 |
 | 4 | `apps/chat/skills/wiki_query_skill.py` | 同构：`wiki_search` 加 `wiki_ids` + `backend`；`wiki_search_cross` description 标 deprecated |
 | 5 | `README.md` / `docs/MCP_SETUP.md` / 核实文档 | `wiki_search` 描述补 `wiki_ids`；`wiki_search_cross` 标 deprecated；**工具数仍 26** |
-| 6 | 测试 | `tests/test_kernel_multi_wiki_search.py`（17 单元）+ `tests/test_mcp_search_tool_merge.py`（8 端到端） |
+| 6 | 测试 | `tests/test_kernel_multi_wiki_search.py`（17 单元）+ `tests/test_kernel_multi_wiki_cross_search.py`（9 单元）+ `tests/test_mcp_search_tool_merge.py`（8 端到端） |
 
 ---
 

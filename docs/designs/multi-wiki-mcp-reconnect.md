@@ -14,7 +14,18 @@
 | V2 多 wiki `WikiServer` | **26 工具**（含 6 个 registry 专属），启动**无** `Component already exists` 警告 |
 | V3/V4 `wiki_switch` | 调用后 `default_wiki_id` 更新，**不重启**核心工具读到新 wiki |
 | V5 skill 层 | `wiki_list` / `wiki_switch` / `wiki_search_cross` 全部 `status=ok`，不再报 `wiki_registry not configured` |
-| V7 四项门禁 | ruff 干净 · mypy 415 文件 0 错 · `check_architecture.py` 0 violation · **pytest 5201 passed** |
+| V7 四项门禁 | ruff 干净 · mypy 416 文件 0 错 · `check_architecture.py` 0 violation · **pytest 5252 passed** |
+
+### 后续补充的单元测试
+
+接线与搜索合并落地后，把关键分支补成可单独跑的单测（不起服务）：
+
+| 文件 | 项数 | 覆盖 |
+|---|---|---|
+| `tests/test_mcp_adapter_modes.py` | 12 | 单 wiki 20 / 多 wiki 26 工具面；同名替换；无 `remove_tool` 弃用警告；`WikiServer` 的 `_multi_wiki` 标志；**`wiki_switch` 真切换**；核心工具切换后跟随 |
+| `tests/test_kernel_multi_wiki_search.py` | 17 | 作用域解析（`wiki_id` 优先 / `wiki_ids` / `*` / 未知 id）+ 单/多/远程搜索分支 |
+| `tests/test_kernel_multi_wiki_cross_search.py` | 9 | `backend` 透传、按 score 排序、未知 id 跳过、**单 wiki 失败不中断**、远程分支、limit 语义 |
+| `tests/test_apps_agent_skill_tool_adapter.py` | +5 | `_skill_config()` 注入 `wiki_registry` / `wiki_id` / subagent 字段 |
 
 ### 实现中偏离本方案的两处
 
