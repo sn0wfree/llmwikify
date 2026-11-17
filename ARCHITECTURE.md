@@ -54,6 +54,7 @@ src/llmwikify/
 │   │   ├── registry.py
 │   │   ├── instance.py
 │   │   ├── discovery.py
+│   │   ├── search.py             # Shared multi-wiki search (scope + limit)
 │   │   └── remote.py             # HTTP client for remote llmwikify
 │   │
 │   ├── search/                   # QMD hybrid search client

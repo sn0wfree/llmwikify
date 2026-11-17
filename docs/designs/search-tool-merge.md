@@ -19,11 +19,12 @@
 | V10/V11 | `wiki_search_cross` 返回 `{results, total_results, searched_wikis}`（未变）；`wiki_search` 返回裸 list |
 | V12 | skill 层同构：`wiki_search` 支持 `wiki_ids`/`backend`；`wiki_search_cross` description 标 Deprecated |
 | V13 | REST `GET /api/search/cross?backend=qmd` 现在真的生效（bug 修复） |
-| V14 | ruff 干净 · mypy 415 文件 0 错 · 架构 0 violation · **pytest 5209 passed** |
+| V14 | ruff 干净 · mypy 416 文件 0 错 · 架构 0 violation · **pytest 5226 passed** |
+| V15 | 17 个单元测试覆盖 `kernel/multi_wiki/search.py` 的全部分支（fake registry） |
 
-### 实现中超出方案的一处增强
+### 实现中超出方案的两处改进
 
-**单 wiki 分支的结果也补上了 `wiki_id` / `wiki_name`**。
+**① 单 wiki 分支的结果也补上了 `wiki_id` / `wiki_name`。**
 
 方案里只说"多 wiki 场景补"，但实现时发现：合并后的 `wiki_search` 在只搜一个 wiki 时
 （`wiki_ids="a"` 或 `wiki_id="a"`）走的是单 wiki 分支，其结果原本**不带来源标记**，
@@ -31,7 +32,25 @@
 现在两条分支统一都带 `wiki_id` / `wiki_name`（老调用 `wiki_search(q, wiki_id="a")`
 的结果从"无标记"变成"有标记"，属**增强**，不破坏）。
 
-新增测试：`tests/test_mcp_search_tool_merge.py`（8 项）。
+**② 共享实现提到 kernel 层，可直接单元测试。**
+
+初版实现里搜索逻辑写了两份 —— MCP 侧是 `register_multi_wiki_tools` 内的**闭包**，
+skill 侧是**模块级函数**（同名不同处，逻辑相同）。闭包无法 import，也就无法单元测试。
+现已提取为 `src/llmwikify/kernel/multi_wiki/search.py`：
+
+```python
+resolve_scope(registry, *, wiki_ids=None, wiki_id=None) -> list[str]
+search_wikis(registry, query, limit=10, *, wiki_ids=None, wiki_id=None, backend="fts5")
+    -> tuple[results, searched_wiki_ids]
+```
+
+MCP（`interfaces/`）与 skill（`apps/`）都改为调用它 —— 这才是真正的"**一份实现**"，
+而且现在可以用 fake registry 做纯单元测试。
+
+新增测试：
+- `tests/test_kernel_multi_wiki_search.py` —— **17 个单元测试**（fake registry，不起服务）：
+  作用域解析 6 项 + 单 wiki 分支 4 项 + 多 wiki 分支 3 项
+- `tests/test_mcp_search_tool_merge.py` —— 8 个端到端验收（真实 server）
 
 ---
 
@@ -146,30 +165,33 @@ def wiki_search_cross(
 
 ## 5. 底层：一份实现
 
+落在 **`src/llmwikify/kernel/multi_wiki/search.py`**（L2，apps 与 interfaces 都能依赖）：
+
 ```python
-def _search_wikis(
+def resolve_scope(
+    registry: Any, *, wiki_ids: str | None = None, wiki_id: str | None = None
+) -> list[str]:
+    """Wiki ids to hit; raises ValueError when none of them exist."""
+
+
+def search_wikis(
     registry: Any,
     query: str,
-    limit: int,
+    limit: int = 10,
     *,
     wiki_ids: str | None = None,
     wiki_id: str | None = None,
     backend: str = "fts5",
-) -> list[dict[str, Any]]:
-    """The single search implementation behind wiki_search / wiki_search_cross.
-
-    Scope resolution:
-      wiki_id (deprecated)  → that wiki only
-      wiki_ids="a,b"       → those wikis
-      wiki_ids=None / "*"  → all registered wikis
-    """
+) -> tuple[list[dict[str, Any]], list[str]]:
+    """(results, searched_wiki_ids); raises ValueError on bad scope."""
 ```
 
 - 作用域解析：`wiki_id` 优先 → `wiki_ids` → 全部。
 - 全部 / 多个 → `registry.cross_wiki_search(query, ids, limit, backend=backend)`；
   单个 → `registry.get_wiki(wid).search(query, limit, backend=backend)`（远程 wiki 走 client，忽略 backend）。
 - 结果**截断到 `limit`**（全局上限，取代原来的 per-wiki 语义）。
-- 未知 id 跳过；**全部未知** → 返回 error。
+- 未知 id 跳过；**全部未知** → 抛 `ValueError`（MCP 层转 `{"error": ...}`，skill 层转 `SkillResult.fail`）。
+- 两条分支的结果都带 `wiki_id` / `wiki_name`。
 
 `registry.cross_wiki_search` 需加 `backend` 参数并透传给本地 `wiki.search(...)`。
 **REST 顺带把这个参数用上**（原本收了不传）。
@@ -181,11 +203,12 @@ def _search_wikis(
 | # | 文件 | 改动 |
 |---|---|---|
 | 1 | `kernel/multi_wiki/registry.py` | `cross_wiki_search` 加 `backend="fts5"` 并透传给本地 wiki |
+| 1b | **`kernel/multi_wiki/search.py`（新增）** | **共享实现 `resolve_scope` / `search_wikis`**（见上面改进 ②） |
 | 2 | `interfaces/server/http/wiki/search_routes.py` | 把 `backend` 传给 registry（**修 bug**，REST 语义不变） |
-| 3 | `interfaces/mcp/tools.py`（`register_multi_wiki_tools`） | 新增 `_search_wikis()` 共享实现；`wiki_search` 加 `wiki_ids`（追加末尾）+ `wiki_id` 标 deprecated；`wiki_search_cross` 改为薄壳转调 + `annotations.deprecated` + `tags={"deprecated"}` + ⚠️ description；两者返回结构按 D13/D14 |
-| 4 | `apps/chat/skills/wiki_query_skill.py` | 同构：共享 handler；`wiki_search` 加 `wiki_ids`/`backend`；`wiki_search_cross` description 标 deprecated |
+| 3 | `interfaces/mcp/tools.py`（`register_multi_wiki_tools`） | `wiki_search` 加 `wiki_ids`（追加末尾）+ `wiki_id` 标 deprecated；`wiki_search_cross` 改为薄壳转调 + `annotations.deprecated` + `tags={"deprecated"}` + ⚠️ description；两者返回结构按 D13/D14 |
+| 4 | `apps/chat/skills/wiki_query_skill.py` | 同构：`wiki_search` 加 `wiki_ids` + `backend`；`wiki_search_cross` description 标 deprecated |
 | 5 | `README.md` / `docs/MCP_SETUP.md` / 核实文档 | `wiki_search` 描述补 `wiki_ids`；`wiki_search_cross` 标 deprecated；**工具数仍 26** |
-| 6 | 测试 | 新增：兼容矩阵（老调用形态逐一验证）+ `wiki_ids` 语义 + limit 全局 + backend 透传 + deprecated 标注存在 |
+| 6 | 测试 | `tests/test_kernel_multi_wiki_search.py`（17 单元）+ `tests/test_mcp_search_tool_merge.py`（8 端到端） |
 
 ---
 
@@ -219,7 +242,8 @@ def _search_wikis(
 | **V11** | `wiki_search` 返回裸 list |
 | **V12** | skill：`wiki_query.wiki_search` 支持 `wiki_ids`/`backend`；`wiki_search_cross` description 含 Deprecated |
 | **V13** | REST `GET /api/search/cross?backend=qmd` 真的生效 |
-| **V14** | 四项门禁：ruff / mypy 415 文件 0 错 / 架构 0 violation / pytest 全过 |
+| **V14** | 四项门禁：ruff / mypy 416 文件 0 错 / 架构 0 violation / pytest 全过（**5226 passed**） |
+| **V15** | **单元测试**：`kernel/multi_wiki/search.py` 的作用域解析与单/多/远程分支各有覆盖（fake registry，不起服务）—— `tests/test_kernel_multi_wiki_search.py` 17 项 |
 
 ---
 
