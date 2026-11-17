@@ -1,10 +1,37 @@
 # 合并 `wiki_search` 与 `wiki_search_cross`（v2 · 保留兼容 + deprecated）
 
-> **日期**: 2026-11-16 · **状态**: 方案待拍板（**未实施**）
+> **日期**: 2026-11-16 · **状态**: ✅ **已实现**（commit `3c6aabfb`）
 > **v2 变更**: 用户定方向 —— **不删工具、不改老调用形态**，靠**默认参数保持原始功能** +
 > **deprecated 提示**引导新调用；**底层合并为一个实现**。
 > **前置**: [docs/diagnostics/mcp-tool-surface-2026-11.md](../diagnostics/mcp-tool-surface-2026-11.md)、
 > [docs/designs/multi-wiki-mcp-reconnect.md](multi-wiki-mcp-reconnect.md)
+
+### 实现结果
+
+| 验收 | 结果 |
+|---|---|
+| V1 | 单 wiki **20** 工具；`wiki_search` schema 仍 `(query, limit, backend)`，**无 `wiki_ids`** |
+| V2/V3 | 多 wiki **26** 工具（数量不变）；`wiki_search_cross` 仍在，带 `annotations.deprecated=true` + `tags={"deprecated"}` + ⚠️ description |
+| V4 | 兼容矩阵全绿：`wiki_search(q)` / `wiki_search(q, 20, "a")` / `wiki_search(q, wiki_id="a")` / `wiki_search_cross(q)` / `wiki_search_cross(q, 20, "a,b")` 全部与旧行为一致（除 limit 语义） |
+| V5–V7 | `wiki_ids` 作用域正确；`wiki_id` 优先于 `wiki_ids`；全未知 → error |
+| V8 | `limit` 为**全局上限**（两个工具都是） |
+| V9 | `backend` 透传到本地 `Wiki.search` |
+| V10/V11 | `wiki_search_cross` 返回 `{results, total_results, searched_wikis}`（未变）；`wiki_search` 返回裸 list |
+| V12 | skill 层同构：`wiki_search` 支持 `wiki_ids`/`backend`；`wiki_search_cross` description 标 Deprecated |
+| V13 | REST `GET /api/search/cross?backend=qmd` 现在真的生效（bug 修复） |
+| V14 | ruff 干净 · mypy 415 文件 0 错 · 架构 0 violation · **pytest 5209 passed** |
+
+### 实现中超出方案的一处增强
+
+**单 wiki 分支的结果也补上了 `wiki_id` / `wiki_name`**。
+
+方案里只说"多 wiki 场景补"，但实现时发现：合并后的 `wiki_search` 在只搜一个 wiki 时
+（`wiki_ids="a"` 或 `wiki_id="a"`）走的是单 wiki 分支，其结果原本**不带来源标记**，
+而跨 wiki 分支带 —— 同一个工具返回两种形状，LLM 会困惑。
+现在两条分支统一都带 `wiki_id` / `wiki_name`（老调用 `wiki_search(q, wiki_id="a")`
+的结果从"无标记"变成"有标记"，属**增强**，不破坏）。
+
+新增测试：`tests/test_mcp_search_tool_merge.py`（8 项）。
 
 ---
 

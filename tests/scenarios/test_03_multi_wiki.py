@@ -24,7 +24,7 @@ Each wiki can be local (path) or remote (HTTP URL with auth).
 ## Troubleshooting
 - wikis list shows only default: check discovery.scan_paths
 - Remote wiki unreachable: verify URL + API key + server running
-- wiki_search_cross returns 0: wiki_ids must match exactly (case-sensitive)
+- wiki_search returns 0: wiki_ids must match exactly (case-sensitive)
 """
 
 

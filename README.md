@@ -497,7 +497,7 @@ Wiki maintenance and query:
 | `wiki_ingest` | Ingest a source file |
 | `wiki_write_page` | Write/update a wiki page |
 | `wiki_read_page` | Read a wiki page |
-| `wiki_search` | Full-text search (FTS5; single-wiki mode also accepts `backend=qmd`) |
+| `wiki_search` | Full-text search (FTS5/QMD). Multi-wiki mode adds `wiki_ids` (comma-separated; empty/`*` = all wikis) |
 | `wiki_lint` | Health check |
 | `wiki_status` | Status overview |
 | `wiki_log` | Append an entry to the wiki log |
@@ -522,7 +522,7 @@ Multi-wiki management:
 | `wiki_switch` | Switch to a different wiki |
 | `wiki_register` | Register a new wiki |
 | `wiki_unregister` | Unregister a wiki |
-| `wiki_search_cross` | Search across multiple wikis |
+| `wiki_search_cross` | ⚠️ Deprecated — use `wiki_search(wiki_ids=...)` |
 | `wiki_scan` | Scan directories for wikis |
 
 ---

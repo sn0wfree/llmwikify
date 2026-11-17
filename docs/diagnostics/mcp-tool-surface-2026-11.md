@@ -250,7 +250,7 @@ return {"message": f"Switched to wiki: {instance.name}", "wiki": instance.to_dic
 
 | 原判断 | 复核结论 |
 |---|---|
-| **D1** 多 wiki `wiki_search` 与 `wiki_search_cross` 语义重叠 | **生产中不成立** —— 多 wiki 版 `wiki_search`（带 `wiki_id`）不可达；生产实际暴露的是单 wiki 版 |
+| **D1** 多 wiki `wiki_search` 与 `wiki_search_cross` 语义重叠 | ✅ **已处理**（`3c6aabfb`）—— 两者底层合并为一个实现，作用域统一由 `wiki_ids` 表达；`wiki_search_cross` 降级为 deprecated（MCP `annotations.deprecated=true`），能力完全并入 `wiki_search(wiki_ids=...)`。见 [search-tool-merge.md](../designs/search-tool-merge.md) |
 | **D2** 多 wiki `wiki_search` 缺 `backend` 参数 | **不成立** —— 生产走单 wiki 版，**有** `backend`（`fts5`/`qmd`） |
 | **D3** 多 wiki 模式 18 个核心工具不注册 | **反了** —— 多 wiki 部署暴露的是 20 个核心工具（绑 default wiki）；**缺的是 6 个多 wiki 专属工具** |
 

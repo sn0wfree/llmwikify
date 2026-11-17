@@ -226,7 +226,11 @@ curl -H "Authorization: Bearer <your-token>" http://server:8765/api/wiki/status
 
 > 仅在**多 wiki 注册表模式**下注册。另有两个工具在两种模式下同名但语义不同：
 > `wiki_status`（单 wiki 版 `wiki.status()` / 多 wiki 版走注册表）与
-> `wiki_search`（两种模式都支持 `backend=fts5|qmd`，多 wiki 版额外支持 `wiki_id`）。
+> `wiki_search`（两种模式都支持 `backend=fts5|qmd`，多 wiki 版额外支持
+> `wiki_ids` 与已废弃的 `wiki_id`）。
+>
+> ⚠️ `wiki_search_cross` 已**降级为 deprecated**（MCP `annotations.deprecated=true`），
+> 能力完全并入 `wiki_search(wiki_ids=...)`；保留它只是为了不破坏老客户端。
 
 | Tool | Description |
 |------|-------------|
@@ -234,13 +238,19 @@ curl -H "Authorization: Bearer <your-token>" http://server:8765/api/wiki/status
 | `wiki_switch` | 切换 active wiki |
 | `wiki_register` | 注册新 wiki（local 或 remote） |
 | `wiki_unregister` | 注销 wiki |
-| `wiki_search_cross` | 跨多 wiki 检索 |
+| `wiki_search_cross` | ⚠️ Deprecated — 改用 `wiki_search(wiki_ids=...)` |
 | `wiki_scan` | 扫描目录自动发现 wiki |
 
 ### Scoped variants
 
 `wiki_status` 和 `wiki_search` 都接受可选 `wiki_id` 参数，把请求限定到注册
 表中特定 wiki。
+
+> **搜索作用域统一说明**（`docs/designs/search-tool-merge.md`）：
+> `wiki_search` 用 `wiki_ids` 表达作用域 —— 逗号分隔；省略 / 空串 / `"*"` = 全部
+> 已注册 wiki；`"a"` = 只搜 a；`"a,b"` = 搜 a 与 b。旧的 `wiki_id` 参数保留但已废弃
+> （优先于 `wiki_ids`）。`limit` 现在是**合并后结果的全局上限**（原先是 per wiki）。
+> 两个工具的结果都带 `wiki_id` / `wiki_name`。
 
 ---
 
